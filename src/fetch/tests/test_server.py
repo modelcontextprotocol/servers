@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
-from mcp.shared.exceptions import McpError
+from mcp.shared.exceptions import MCPError
 
 from mcp_server_fetch.server import (
     extract_content_from_html,
@@ -121,7 +121,7 @@ class TestCheckMayAutonomouslyFetchUrl:
             mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
-            with pytest.raises(McpError):
+            with pytest.raises(MCPError):
                 await check_may_autonomously_fetch_url(
                     "https://example.com/page",
                     DEFAULT_USER_AGENT_AUTONOMOUS
@@ -139,7 +139,7 @@ class TestCheckMayAutonomouslyFetchUrl:
             mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
-            with pytest.raises(McpError):
+            with pytest.raises(MCPError):
                 await check_may_autonomously_fetch_url(
                     "https://example.com/page",
                     DEFAULT_USER_AGENT_AUTONOMOUS
@@ -177,7 +177,7 @@ class TestCheckMayAutonomouslyFetchUrl:
             mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
-            with pytest.raises(McpError):
+            with pytest.raises(MCPError):
                 await check_may_autonomously_fetch_url(
                     "https://example.com/page",
                     DEFAULT_USER_AGENT_AUTONOMOUS
@@ -268,7 +268,7 @@ class TestFetchUrl:
 
     @pytest.mark.asyncio
     async def test_fetch_404_raises_error(self):
-        """Test that 404 response raises McpError."""
+        """Test that 404 response raises MCPError."""
         mock_response = MagicMock()
         mock_response.status_code = 404
 
@@ -278,7 +278,7 @@ class TestFetchUrl:
             mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
-            with pytest.raises(McpError):
+            with pytest.raises(MCPError):
                 await fetch_url(
                     "https://example.com/notfound",
                     DEFAULT_USER_AGENT_AUTONOMOUS
@@ -286,7 +286,7 @@ class TestFetchUrl:
 
     @pytest.mark.asyncio
     async def test_fetch_500_raises_error(self):
-        """Test that 500 response raises McpError."""
+        """Test that 500 response raises MCPError."""
         mock_response = MagicMock()
         mock_response.status_code = 500
 
@@ -296,7 +296,7 @@ class TestFetchUrl:
             mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
-            with pytest.raises(McpError):
+            with pytest.raises(MCPError):
                 await fetch_url(
                     "https://example.com/error",
                     DEFAULT_USER_AGENT_AUTONOMOUS
