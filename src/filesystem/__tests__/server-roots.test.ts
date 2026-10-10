@@ -493,7 +493,13 @@ describe("roots/list_changed", () => {
     // Asked while the initial roots/list is still unanswered: the failed update
     // releases waiting calls instead of leaving them blocked on it.
     expect(await allowedDirectoriesOf(client)).toEqual([cliDir]);
+    // Let the stale initial answer finish before teardown removes its roots.
     releaseInitial();
+    await vi.waitFor(() =>
+      expect(stderr).toHaveBeenCalledWith(
+        "Discarded a stale roots/list answer: a newer roots update has started",
+      ),
+    );
   });
 
   it("logs and keeps the current directories when the re-fetch fails", async () => {
