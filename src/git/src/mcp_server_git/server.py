@@ -126,7 +126,15 @@ def git_diff(repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_L
     return repo.git.diff(f"--unified={context_lines}", target)
 
 def git_commit(repo: git.Repo, message: str) -> str:
-    commit = repo.index.commit(message)
+    # During a merge, keep the merged-in commits as parents and clear the merge state, like `git commit`.
+    merge_head = Path(repo.git_dir) / "MERGE_HEAD"
+    if merge_head.exists():
+        parents = [repo.head.commit, *(repo.commit(sha) for sha in merge_head.read_text().split())]
+        commit = repo.index.commit(message, parent_commits=parents)
+        for name in ("MERGE_HEAD", "MERGE_MSG", "MERGE_MODE"):
+            (Path(repo.git_dir) / name).unlink(missing_ok=True)
+    else:
+        commit = repo.index.commit(message)
     return f"Changes committed successfully with hash {commit.hexsha}"
 
 def git_add(repo: git.Repo, files: list[str]) -> str:
