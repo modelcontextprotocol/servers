@@ -486,7 +486,7 @@ describe("roots/list_changed", () => {
     await vi.waitFor(() =>
       expect(stderr).toHaveBeenCalledWith(
         "Failed to request roots from client:",
-        "gone",
+        "MCP error -32603: gone",
       ),
     );
 
