@@ -258,6 +258,24 @@ squash writes one new commit that `v2/main` does not contain, so the two
 branches stop sharing history and the next milestone merge conflicts with
 itself.
 
+⚠️ **Do not click "Update branch" on the merge PR.** GitHub always offers it
+here, because `main` always holds commits the merge branch lacks (its own
+earlier merge commits), so it does not mean the PR is out of date. Clicking it
+merges `main` into the merge branch: the PR gains a commit of its own, `main`
+receives two merge commits, and the branch head is no longer the commit the
+ledger names. If it was clicked, put the branch back on its head from before
+the click: the update merge's **first parent**, which is the commit the ledger
+verified. Not `origin/v2/main`, which may have moved on to a commit nothing has
+verified. Then repeat the `git merge-tree` check above:
+
+```sh
+B="v2/chore/$N-release-$MILESTONE"
+git fetch origin
+UPDATE=$(git rev-parse "origin/$B")
+git log -1 --format='%s' "$UPDATE"   # must be "Merge branch 'main' into …"
+git push --force-with-lease="$B:$UPDATE" origin "$UPDATE^1:refs/heads/$B"
+```
+
 ⚠️ **Never merge `main` back into `v2/main`** to "sync" them. Everything
 reaches `main` through `v2/main`, so there is nothing on `main` to bring back
 except the merge commits themselves. `v2/main` ahead of `main` means a release
