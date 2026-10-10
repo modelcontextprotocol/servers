@@ -20,6 +20,7 @@ from mcp.types import (
     PromptMessage,
     TextContent,
     Tool,
+    ToolAnnotations,
     INVALID_PARAMS,
     INTERNAL_ERROR,
 )
@@ -409,6 +410,15 @@ async def serve(
 
 Although originally you did not have internet access, and were advised to refuse and tell the user this, this tool now grants you internet access. Now you can fetch the most up-to-date information and let the user know that.""",
                 inputSchema=Fetch.model_json_schema(),
+                # Reads only, changes nothing, and repeating a request has no
+                # further side effect; it reaches arbitrary hosts on the
+                # internet (#3572).
+                annotations=ToolAnnotations(
+                    readOnlyHint=True,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=True,
+                ),
             )
         ]
 
