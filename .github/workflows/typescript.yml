@@ -1,8 +1,10 @@
 name: TypeScript
 
 on:
+  # Push only, as in the Inspector: with pull_request as well, every commit on a
+  # PR branch ran each workflow twice (once per event). PR checks still report
+  # from the push run of the head commit.
   push:
-  pull_request:
 
 # Superseded runs on the same ref are cancelled (e.g. rapid amend-pushes),
 # except on main, where every merge keeps its own CI run
@@ -11,7 +13,40 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  # Root-level guards: the checks over repo-wide tooling that no per-package
+  # matrix leg covers. Created by #4863 for the skills gates; #4864 extended it
+  # to run the root's whole `validate:guards` — the root tooling's format and
+  # lint, `verify:format-coverage`, `verify:skills`, `verify:typecheck-coverage`,
+  # the shared-devDependency guard `verify:dep-lockstep`, `verify:no-test-retries`,
+  # and `test:scripts` (the guard scripts' own unit tests, which include the
+  # workflow guard: no `local:*` script in a workflow, a timeout on every job).
+  # `scripts/verify-skills.mjs` asserts this job keeps running
+  # `verify:skills:cli` unconditionally, so do not gate these steps with `if:`.
+  root-guards:
+    timeout-minutes: 10
+    name: Root guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run the root guards
+        run: npm run validate:guards
+
+      # The authoritative `claude plugin validate`, at the pinned CLI version
+      # (fetched with npx when not installed). Needs no authentication.
+      - name: Validate skills with the pinned Claude Code CLI
+        run: npm run verify:skills:cli
+
   detect-packages:
+    timeout-minutes: 5
     runs-on: ubuntu-latest
     outputs:
       packages: ${{ steps.find-packages.outputs.packages }}
@@ -24,12 +59,18 @@ jobs:
           PACKAGES=$(find . -name package.json -not -path "*/node_modules/*" -exec dirname {} \; | sed 's/^\.\///' | jq -R -s -c 'split("\n")[:-1]')
           echo "packages=$PACKAGES" >> $GITHUB_OUTPUT
 
-  test:
+  # One leg per TypeScript server, each running ONLY its own package's
+  # `validate` (format:check -> lint -> typecheck -> build -> test). What no
+  # leg covers — the root tooling and the cross-workspace guards — is the
+  # root-guards job above; together they are the root `npm run validate`.
+  validate:
+    timeout-minutes: 15
     needs: [detect-packages]
     strategy:
+      fail-fast: false
       matrix:
         package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
-    name: Test ${{ matrix.package }}
+    name: Validate ${{ matrix.package }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -39,20 +80,91 @@ jobs:
           node-version: 22
           cache: npm
 
+      # This package plus the root: run from a workspace directory, `npm ci`
+      # installs only that workspace's dependencies, and the gate's tools
+      # (Prettier, ESLint) are root devDependencies. A bare root `npm ci` would
+      # instead run every workspace's `prepare` (a build), coupling the legs.
       - name: Install dependencies
+        run: npm ci --workspace src/${{ matrix.package }} --include-workspace-root
+
+      - name: Validate package
         working-directory: src/${{ matrix.package }}
-        run: npm ci
+        run: npm run validate
+
+  # The per-file coverage gate (#4854): one leg per TypeScript server, beside
+  # `validate` rather than inside it, as the Inspector's CI does (inspector#2159).
+  # Each server's `coverage` (`vitest run --coverage`) fails when any file is
+  # below 90% on lines, statements, functions or branches; the thresholds live
+  # in the server's `vitest.config.ts`. It re-runs the suite instrumented, so it
+  # is kept out of the fast `test`/`validate` loop and given its own runner.
+  # `npm run local:gate` runs the same check through the root `npm run coverage`.
+  coverage:
+    timeout-minutes: 15
+    needs: [detect-packages]
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
+    name: Coverage ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      # The same install as the `validate` leg: this package plus the root. Its
+      # `prepare` builds the package, so a test that launches `dist/` finds it.
+      - name: Install dependencies
+        run: npm ci --workspace src/${{ matrix.package }} --include-workspace-root
+
+      - name: Enforce the per-file coverage gate
+        working-directory: src/${{ matrix.package }}
+        run: npm run coverage
+
+  # The test suites on Windows (#1149). Every other job runs on Ubuntu, so
+  # Windows-only code paths (drive letters, UNC shares, no O_NOFOLLOW, rename
+  # over a locked file) were only ever exercised by mocking `path.win32`. This
+  # leg runs each server's own `npm test` on a real Windows runner. It is tests
+  # only: format, lint, typecheck and coverage do not depend on the OS and stay
+  # in the Ubuntu legs above.
+  test-windows:
+    timeout-minutes: 20
+    needs: [detect-packages]
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
+    name: Test ${{ matrix.package }} (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      # The same install as the `validate` leg; its `prepare` builds `dist/`.
+      - name: Install dependencies
+        run: npm ci --workspace src/${{ matrix.package }} --include-workspace-root
 
       - name: Run tests
         working-directory: src/${{ matrix.package }}
-        run: npm test --if-present
+        run: npm test
 
-  build:
-    needs: [detect-packages, test]
-    strategy:
-      matrix:
-        package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
-    name: Build ${{ matrix.package }}
+  # The boot smoke (#4871): every server started the way a client starts it —
+  # the built `dist/index.js` for the TypeScript servers, the console script
+  # through `uv run` for the Python ones — over each transport it implements,
+  # then one tool call. It is one job rather than a step in each matrix leg
+  # because it is a single client driving all seven servers, and it lives in
+  # this workflow because that client is Node. `npm run local:gate` runs the
+  # same `npm run smoke` as its last stage.
+  smoke:
+    name: Boot smoke
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -62,11 +174,22 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
-        working-directory: src/${{ matrix.package }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      # A root `npm ci` runs every workspace's `prepare`, which builds it, so
+      # the four `dist/` trees the smoke launches exist after this step.
+      - name: Install dependencies and build
         run: npm ci
 
-      - name: Build package
-        working-directory: src/${{ matrix.package }}
-        run: npm run build
+      # The smoke launches the Python servers with `uv run --no-sync`: it tests
+      # an environment, it does not create one. This is the sync `validate:py`
+      # does before the smoke in the local gate.
+      - name: Sync the Python servers
+        run: |
+          for server in fetch git time; do
+            (cd "src/$server" && uv sync --locked --all-extras --dev)
+          done
 
+      - name: Boot every server
+        run: npm run smoke

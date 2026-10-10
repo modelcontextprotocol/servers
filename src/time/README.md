@@ -20,6 +20,8 @@ Requires MCP Python SDK 1.x (`mcp>=1.29.0,<2`). SDK 2.0 renamed APIs this server
     - `time` (string): Time in 24-hour format (HH:MM)
     - `target_timezone` (string): Target IANA timezone name
 
+A timezone name, here and in `--local-timezone`, must be an exact IANA key, case included: `Europe/Warsaw` is accepted and `europe/warsaw` is rejected on every platform, including macOS, whose case-insensitive filesystem would otherwise resolve it.
+
 ## Installation
 
 ### Using uv (recommended)
@@ -274,6 +276,31 @@ npx @modelcontextprotocol/inspector uv run mcp-server-time
 3. "When it's 4 PM in New York, what time is it in London?"
 4. "Convert 9:30 AM Tokyo time to New York time"
 
+## Development
+
+Run the tests from `src/time`. They live in `tests/`: `test_protocol.py` drives
+the server through an MCP `ClientSession` in-process, `test_entrypoints.py`
+covers `main()`, `python -m mcp_server_time` and the console script, and
+`test_server.py` unit-tests the time helpers.
+
+```bash
+cd src/time
+uv run pytest
+```
+
+Coverage is a separate command. It measures line and branch coverage of
+`src/mcp_server_time`, prints the missing lines, and writes `coverage.json`
+(ignored by git):
+
+```bash
+cd src/time
+uv run --frozen pytest --cov --cov-report=term-missing --cov-report=json
+```
+
+Every file must reach 90% of its lines and 90% of its branches. Code that
+cannot be reached is marked `# pragma: no cover  # <reason>`, always with the
+reason, rather than lowering the bar.
+
 ## Build
 
 Docker build:
@@ -285,12 +312,12 @@ docker build -t mcp/time .
 
 ## Contributing
 
-We encourage contributions to help expand and improve mcp-server-time. Whether you want to add new time-related tools, enhance existing functionality, or improve documentation, your input is valuable.
+We encourage contributions to help improve mcp-server-time. Bug reports, ideas for new time-related tools, enhancements to existing functionality, and documentation improvements are all valuable.
 
 For examples of other MCP servers and implementation patterns, see:
 https://github.com/modelcontextprotocol/servers
 
-Pull requests are welcome! Feel free to contribute new ideas, bug fixes, or enhancements to make mcp-server-time even more powerful and useful.
+Contributions arrive as **issues, not pull requests**: the repository maintainers do the implementation. Open an issue with the [bug report or feature request form](https://github.com/modelcontextprotocol/servers/issues/new/choose), and if you have already prototyped a change, share the prompt you used rather than a diff. See [CONTRIBUTING.md](https://github.com/modelcontextprotocol/servers/blob/main/CONTRIBUTING.md) for the full policy.
 
 ## License
 

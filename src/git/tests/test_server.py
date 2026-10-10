@@ -18,21 +18,8 @@ from mcp_server_git.server import (
     validate_repo_path,
     serve,
 )
-import shutil
 import unittest.mock as mock
 
-@pytest.fixture
-def test_repository(tmp_path: Path):
-    repo_path = tmp_path / "temp_test_repo"
-    test_repo = git.Repo.init(repo_path)
-
-    Path(repo_path / "test.txt").write_text("test")
-    test_repo.index.add(["test.txt"])
-    test_repo.index.commit("initial commit")
-
-    yield test_repo
-
-    shutil.rmtree(repo_path)
 
 def test_git_checkout_existing_branch(test_repository):
     test_repository.git.branch("test-branch")
@@ -41,31 +28,82 @@ def test_git_checkout_existing_branch(test_repository):
     assert "Switched to branch 'test-branch'" in result
     assert test_repository.active_branch.name == "test-branch"
 
-def test_git_checkout_nonexistent_branch(test_repository):
 
+def test_git_checkout_nonexistent_branch(test_repository):
     with pytest.raises(BadName):
         git_checkout(test_repository, "nonexistent-branch")
+
+
+def test_git_checkout_sha_reports_detached_head(test_repository):
+    """rev_parse accepts a sha, so the reply must not claim a branch switch."""
+    sha = test_repository.head.commit.hexsha
+    result = git_checkout(test_repository, sha)
+
+    assert test_repository.head.is_detached
+    assert "detached" in result
+    assert "Switched to branch" not in result
+
+
+@pytest.mark.parametrize("revision", ["HEAD~1", "refs/heads/feature", "origin/main"])
+def test_git_checkout_non_branch_revisions_report_detached_head(
+    test_repository, tmp_path, revision
+):
+    """The revisions an agent is most likely to send: a relative ref, a full ref name, and a
+    remote-tracking ref. None of them is a branch, so none may be reported as a branch switch."""
+    test_repository.git.branch("feature")
+    test_repository.index.commit("second commit")
+    git.Repo.init(tmp_path / "remote.git", bare=True)
+    test_repository.create_remote("origin", str(tmp_path / "remote.git"))
+    test_repository.git.push("origin", "HEAD:refs/heads/main")
+
+    result = git_checkout(test_repository, revision)
+
+    assert test_repository.head.is_detached
+    assert result.startswith("HEAD is now detached at ")
+
+
+def test_git_checkout_tag_reports_detached_head(test_repository):
+    test_repository.create_tag("v1")
+    result = git_checkout(test_repository, "v1")
+
+    assert test_repository.head.is_detached
+    assert "detached" in result
+    assert "Switched to branch" not in result
+
+
+def test_git_checkout_branch_name_still_reports_branch(test_repository):
+    test_repository.git.branch("attached-checkout")
+    result = git_checkout(test_repository, "attached-checkout")
+
+    assert not test_repository.head.is_detached
+    assert result == "Switched to branch 'attached-checkout'"
+
 
 def test_git_branch_local(test_repository):
     test_repository.git.branch("new-branch-local")
     result = git_branch(test_repository, "local")
     assert "new-branch-local" in result
 
+
 def test_git_branch_remote(test_repository):
     result = git_branch(test_repository, "remote")
     assert "" == result.strip()  # Should be empty if no remote branches
+
 
 def test_git_branch_all(test_repository):
     test_repository.git.branch("new-branch-all")
     result = git_branch(test_repository, "all")
     assert "new-branch-all" in result
 
+
 def test_git_branch_contains(test_repository):
     # Get the default branch name (could be "main" or "master")
     default_branch = test_repository.active_branch.name
     # Create a new branch and commit to it
     test_repository.git.checkout("-b", "feature-branch")
-    Path(test_repository.working_dir / Path("feature.txt")).write_text("feature content")
+    Path(test_repository.working_dir / Path("feature.txt")).write_text(
+        "feature content"
+    )
     test_repository.index.add(["feature.txt"])
     commit = test_repository.index.commit("feature commit")
     test_repository.git.checkout(default_branch)
@@ -74,12 +112,15 @@ def test_git_branch_contains(test_repository):
     assert "feature-branch" in result
     assert default_branch not in result
 
+
 def test_git_branch_not_contains(test_repository):
     # Get the default branch name (could be "main" or "master")
     default_branch = test_repository.active_branch.name
     # Create a new branch and commit to it
     test_repository.git.checkout("-b", "another-feature-branch")
-    Path(test_repository.working_dir / Path("another_feature.txt")).write_text("another feature content")
+    Path(test_repository.working_dir / Path("another_feature.txt")).write_text(
+        "another feature content"
+    )
     test_repository.index.add(["another_feature.txt"])
     commit = test_repository.index.commit("another feature commit")
     test_repository.git.checkout(default_branch)
@@ -87,6 +128,7 @@ def test_git_branch_not_contains(test_repository):
     result = git_branch(test_repository, "local", not_contains=commit.hexsha)
     assert "another-feature-branch" not in result
     assert default_branch in result
+
 
 def test_git_add_all_files(test_repository):
     file_path = Path(test_repository.working_dir) / "all_file.txt"
@@ -97,6 +139,7 @@ def test_git_add_all_files(test_repository):
     staged_files = [item.a_path for item in test_repository.index.diff("HEAD")]
     assert "all_file.txt" in staged_files
     assert result == "Files staged successfully"
+
 
 def test_git_add_specific_files(test_repository):
     file1 = Path(test_repository.working_dir) / "file1.txt"
@@ -110,6 +153,36 @@ def test_git_add_specific_files(test_repository):
     assert "file1.txt" in staged_files
     assert "file2.txt" not in staged_files
     assert result == "Files staged successfully"
+
+
+def test_git_add_rejects_an_empty_file_list(test_repository):
+    # #4763: `git add --` with no pathspec is a no-op that exits 0.
+    with pytest.raises(ValueError, match="No files provided to stage"):
+        git_add(test_repository, [])
+
+
+def test_git_add_clean_tree_reports_nothing_staged(test_repository):
+    result = git_add(test_repository, ["."])
+
+    assert result.startswith("No changes were staged")
+    assert not test_repository.index.diff(test_repository.head.commit)
+
+
+def test_git_add_already_staged_file_reports_nothing_staged(test_repository):
+    # A change staged earlier must not make a no-op call read as a success.
+    Path(test_repository.working_dir, "staged.txt").write_text("staged")
+    test_repository.index.add(["staged.txt"])
+
+    assert git_add(test_repository, ["staged.txt"]).startswith("No changes were staged")
+    assert git_add(test_repository, ["."]).startswith("No changes were staged")
+
+
+def test_git_add_reports_a_staged_deletion(test_repository):
+    Path(test_repository.working_dir, "test.txt").unlink()
+
+    assert git_add(test_repository, ["test.txt"]) == "Files staged successfully"
+    assert "test.txt" not in [path for path, _stage in test_repository.index.entries]
+
 
 def test_git_add_rejects_path_traversal(test_repository):
     # Security invariant (CVE-2026-27735): a relative path escaping the
@@ -126,6 +199,7 @@ def test_git_add_rejects_path_traversal(test_repository):
     assert "../outside.txt" not in staged
     assert "outside.txt" not in staged
 
+
 def test_git_add_rejects_absolute_path_outside(test_repository):
     # An absolute path outside the repository must never be staged.
     outside = Path(test_repository.working_dir).parent / "abs_outside.txt"
@@ -137,11 +211,13 @@ def test_git_add_rejects_absolute_path_outside(test_repository):
     staged = [path for path, _stage in test_repository.index.entries]
     assert "abs_outside.txt" not in staged
 
+
 def test_git_status(test_repository):
     result = git_status(test_repository)
 
     assert result is not None
     assert "On branch" in result or "branch" in result.lower()
+
 
 def test_git_diff_unstaged(test_repository):
     file_path = Path(test_repository.working_dir) / "test.txt"
@@ -152,10 +228,12 @@ def test_git_diff_unstaged(test_repository):
     assert "test.txt" in result
     assert "modified content" in result
 
+
 def test_git_diff_unstaged_empty(test_repository):
     result = git_diff_unstaged(test_repository)
 
     assert result == ""
+
 
 def test_git_diff_staged(test_repository):
     file_path = Path(test_repository.working_dir) / "staged_file.txt"
@@ -167,10 +245,12 @@ def test_git_diff_staged(test_repository):
     assert "staged_file.txt" in result
     assert "staged content" in result
 
+
 def test_git_diff_staged_empty(test_repository):
     result = git_diff_staged(test_repository)
 
     assert result == ""
+
 
 def test_git_diff(test_repository):
     # Get the default branch name (could be "main" or "master")
@@ -186,6 +266,7 @@ def test_git_diff(test_repository):
     assert "test.txt" in result
     assert "feature changes" in result
 
+
 def test_git_commit(test_repository):
     file_path = Path(test_repository.working_dir) / "commit_test.txt"
     file_path.write_text("content to commit")
@@ -197,6 +278,169 @@ def test_git_commit(test_repository):
 
     latest_commit = test_repository.head.commit
     assert latest_commit.message.strip() == "test commit message"
+
+
+def test_git_commit_refuses_when_nothing_is_staged(test_repository):
+    # #4762: repo.index.commit() writes a tree unconditionally, so each of
+    # these used to come back as a hash for an empty commit.
+    head_before = test_repository.head.commit.hexsha
+    working_file = Path(test_repository.working_dir) / "test.txt"
+
+    # A clean tree.
+    with pytest.raises(ValueError, match="No changes staged for commit"):
+        git_commit(test_repository, "nothing to record")
+
+    # An untracked file, which git_add was never called for.
+    Path(test_repository.working_dir, "untracked.txt").write_text("never added")
+    with pytest.raises(ValueError, match="No changes staged for commit"):
+        git_commit(test_repository, "nothing to record")
+
+    # A tracked file edited but not staged.
+    working_file.write_text("edited but never staged")
+    with pytest.raises(ValueError, match="No changes staged for commit"):
+        git_commit(test_repository, "nothing to record")
+
+    assert test_repository.head.commit.hexsha == head_before
+    assert working_file.read_text() == "edited but never staged"
+
+
+def test_git_commit_records_a_staged_deletion(test_repository):
+    # A deletion leaves no file behind, so it must not read as an empty index.
+    test_repository.git.rm("test.txt")
+
+    result = git_commit(test_repository, "remove test.txt")
+
+    assert "Changes committed successfully with hash" in result
+    assert "test.txt" not in test_repository.head.commit.tree
+
+
+def test_git_commit_allows_the_first_commit_on_an_unborn_branch(tmp_path: Path):
+    repo = git.Repo.init(tmp_path / "unborn")
+    Path(repo.working_dir, "first.txt").write_text("first")
+    repo.index.add(["first.txt"])
+
+    result = git_commit(repo, "initial commit")
+
+    assert "Changes committed successfully with hash" in result
+    assert repo.head.commit.message.strip() == "initial commit"
+    repo.close()
+
+
+def test_git_commit_refuses_an_empty_unborn_branch(tmp_path: Path):
+    repo = git.Repo.init(tmp_path / "unborn")
+
+    with pytest.raises(ValueError, match="No changes staged for commit"):
+        git_commit(repo, "initial commit")
+
+    assert not repo.head.is_valid()
+    repo.close()
+
+
+def test_git_commit_allows_an_empty_merge_commit(repo):
+    # git permits an empty commit while a merge is in progress, so a merge
+    # whose result matches HEAD must still be committable. --no-commit sets
+    # MERGE_HEAD deterministically, without provoking a conflict.
+    starting_branch = repo.active_branch.name
+    repo.git.checkout("-b", "side")
+    Path(repo.working_dir, "side.txt").write_text("side only")
+    repo.git.add("side.txt")
+    side_sha = repo.index.commit("side change").hexsha
+
+    repo.git.checkout(starting_branch)
+    head_before = repo.head.commit.hexsha
+    repo.git.merge("side", "--no-commit", "--no-ff")
+    assert (Path(repo.git_dir) / "MERGE_HEAD").exists()
+
+    # Roll the index back to HEAD's own content: the pending merge commit
+    # records no change at all, which git allows.
+    repo.git.rm("side.txt", "--cached")
+    Path(repo.working_dir, "side.txt").unlink()
+    assert not repo.index.diff(repo.head.commit)
+
+    result = git_commit(repo, "merge side")
+
+    assert "Changes committed successfully with hash" in result
+    assert [p.hexsha for p in repo.head.commit.parents] == [head_before, side_sha]
+    assert not (Path(repo.git_dir) / "MERGE_HEAD").exists()
+
+
+def test_git_commit_concludes_a_merge_with_both_parents(repo):
+    # #5012: a merge commit records HEAD and MERGE_HEAD as parents and clears
+    # the merge state, as `git commit` does.
+    starting_branch = repo.active_branch.name
+    repo.git.checkout("-b", "side")
+    Path(repo.working_dir, "side.txt").write_text("side only")
+    repo.git.add("side.txt")
+    side_sha = repo.index.commit("side change").hexsha
+
+    repo.git.checkout(starting_branch)
+    head_before = repo.head.commit.hexsha
+    repo.git.merge("side", "--no-commit", "--no-ff")
+
+    result = git_commit(repo, "merge side")
+
+    commit = repo.head.commit
+    assert commit.hexsha in result
+    assert [p.hexsha for p in commit.parents] == [head_before, side_sha]
+    assert "side.txt" in commit.tree
+    git_dir = Path(repo.git_dir)
+    for name in ("MERGE_HEAD", "MERGE_MSG", "MERGE_MODE"):
+        assert not (git_dir / name).exists()
+    assert repo.active_branch.name == starting_branch
+
+
+def _start_autostash_merge(repo: git.Repo, dirty: str) -> str:
+    """Begin `git merge --no-commit --autostash side` over a dirty test.txt.
+
+    Returns the autostash's oid, read from MERGE_AUTOSTASH.
+    """
+    starting_branch = repo.active_branch.name
+    repo.git.checkout("-b", "side")
+    Path(repo.working_dir, "side.txt").write_text("side only")
+    repo.git.add("side.txt")
+    repo.index.commit("side change")
+
+    repo.git.checkout(starting_branch)
+    Path(repo.working_dir, "test.txt").write_text(dirty, newline="\n")
+    repo.git.merge("side", "--no-commit", "--no-ff", "--autostash")
+    autostash = Path(repo.git_dir) / "MERGE_AUTOSTASH"
+    assert autostash.exists()
+    # The merge stashed the edit away, so the tree is back at HEAD.
+    assert Path(repo.working_dir, "test.txt").read_text() != dirty
+    return autostash.read_text().strip()
+
+
+def test_git_commit_reapplies_a_merge_autostash(repo):
+    # #5050: concluding a `--autostash` merge restores the pre-merge edits and
+    # removes MERGE_AUTOSTASH, as `git commit` does.
+    dirty = "line 1\nline 2\nline 3\nline 4\nline 5\ndirty\n"
+    _start_autostash_merge(repo, dirty)
+
+    result = git_commit(repo, "merge side")
+
+    assert "Applied autostash." in result
+    assert len(repo.head.commit.parents) == 2
+    assert Path(repo.working_dir, "test.txt").read_text() == dirty
+    assert not (Path(repo.git_dir) / "MERGE_AUTOSTASH").exists()
+    assert repo.git.stash("list") == ""
+
+
+def test_git_commit_stores_a_conflicting_merge_autostash(repo):
+    # #5050: when reapplying the autostash conflicts, `git commit` keeps it in
+    # the stash list instead, so the edits are never lost.
+    stash_oid = _start_autostash_merge(repo, "dirty\n")
+    # Stage a different edit to the same line into the merge commit, so the
+    # stash no longer applies cleanly on top of it.
+    Path(repo.working_dir, "test.txt").write_text("merged\n", newline="\n")
+    repo.git.add("test.txt")
+
+    result = git_commit(repo, "merge side")
+
+    assert "Applying autostash resulted in conflicts" in result
+    assert len(repo.head.commit.parents) == 2
+    assert not (Path(repo.git_dir) / "MERGE_AUTOSTASH").exists()
+    assert repo.git.rev_parse("stash@{0}") == stash_oid
+
 
 def test_git_reset(test_repository):
     file_path = Path(test_repository.working_dir) / "reset_test.txt"
@@ -212,6 +456,7 @@ def test_git_reset(test_repository):
 
     staged_after = [item.a_path for item in test_repository.index.diff("HEAD")]
     assert "reset_test.txt" not in staged_after
+
 
 def test_git_log(test_repository):
     for i in range(3):
@@ -229,12 +474,14 @@ def test_git_log(test_repository):
     assert "Date:" in result[0]
     assert "Message:" in result[0]
 
+
 def test_git_log_default(test_repository):
     result = git_log(test_repository)
 
     assert isinstance(result, list)
     assert len(result) >= 1
     assert "initial commit" in result[0]
+
 
 def test_git_create_branch(test_repository):
     result = git_create_branch(test_repository, "new-feature-branch")
@@ -243,6 +490,7 @@ def test_git_create_branch(test_repository):
 
     branches = [ref.name for ref in test_repository.references]
     assert "new-feature-branch" in branches
+
 
 def test_git_create_branch_from_base(test_repository):
     test_repository.git.checkout("-b", "base-branch")
@@ -255,6 +503,7 @@ def test_git_create_branch_from_base(test_repository):
 
     assert "Created branch 'derived-branch' from 'base-branch'" in result
 
+
 def test_git_show(test_repository):
     file_path = Path(test_repository.working_dir) / "show_test.txt"
     file_path.write_text("show content")
@@ -265,22 +514,48 @@ def test_git_show(test_repository):
 
     result = git_show(test_repository, commit_sha)
 
-    assert "Commit:" in result
+    assert result.startswith("commit ")
     assert "Author:" in result
     assert "show test commit" in result
     assert "show_test.txt" in result
+
 
 def test_git_show_initial_commit(test_repository):
     initial_commit = list(test_repository.iter_commits())[-1]
 
     result = git_show(test_repository, initial_commit.hexsha)
 
-    assert "Commit:" in result
+    assert result.startswith("commit ")
     assert "initial commit" in result
     assert "test.txt" in result
 
 
+def test_git_show_blob_object_spec(test_repository):
+    file_path = Path(test_repository.working_dir) / "logic" / "infos.py"
+    file_path.parent.mkdir()
+    file_path.write_bytes(b"print('infos')\n")
+    test_repository.index.add(["logic/infos.py"])
+    test_repository.index.commit("add infos")
+
+    result = git_show(test_repository, "HEAD:logic/infos.py")
+
+    assert result == "print('infos')\n"
+
+
+def test_git_show_tree_object_spec(test_repository):
+    file_path = Path(test_repository.working_dir) / "logic" / "infos.py"
+    file_path.parent.mkdir()
+    file_path.write_text("print('infos')\n")
+    test_repository.index.add(["logic/infos.py"])
+    test_repository.index.commit("add infos")
+
+    result = git_show(test_repository, "HEAD:")
+
+    assert result == "logic/\ntest.txt"
+
+
 # Tests for validate_repo_path (repository scoping security fix)
+
 
 def test_validate_repo_path_no_restriction():
     """When no repository restriction is configured, any path should be allowed."""
@@ -341,7 +616,10 @@ def test_validate_repo_path_symlink_escape(tmp_path: Path):
     with pytest.raises(ValueError) as exc_info:
         validate_repo_path(symlink, allowed)
     assert "outside the allowed repository" in str(exc_info.value)
+
+
 # Tests for argument injection protection
+
 
 def test_git_diff_rejects_flag_injection(test_repository):
     """git_diff should reject flags that could be used for argument injection."""
@@ -457,6 +735,7 @@ def test_git_checkout_rejects_malicious_refs(test_repository):
 # git_log, and git_branch — matching the existing guards on git_diff and
 # git_checkout.
 
+
 def test_git_show_rejects_flag_injection(test_repository):
     """git_show should reject revisions starting with '-'."""
     with pytest.raises(BadName):
@@ -517,7 +796,9 @@ def test_git_log_formatting_no_repr(test_repository):
     file_path = Path(test_repository.working_dir) / "multiline.txt"
     file_path.write_text("multiline test")
     test_repository.index.add(["multiline.txt"])
-    test_repository.index.commit("Subject line\n\nDetailed body line 1\nDetailed body line 2")
+    test_repository.index.commit(
+        "Subject line\n\nDetailed body line 1\nDetailed body line 2"
+    )
 
     result = git_log(test_repository, max_count=1)
     entry = result[0]
@@ -538,7 +819,9 @@ def test_git_log_filtered_unfiltered_parity(test_repository):
     file_path = Path(test_repository.working_dir) / "parity_test.txt"
     file_path.write_text("parity test")
     test_repository.index.add(["parity_test.txt"])
-    test_repository.index.commit("Parity subject\n\nParity body line 1\nParity body line 2")
+    test_repository.index.commit(
+        "Parity subject\n\nParity body line 1\nParity body line 2"
+    )
 
     unfiltered = git_log(test_repository, max_count=1)
     filtered_since = git_log(test_repository, max_count=1, start_timestamp="yesterday")
@@ -549,7 +832,9 @@ def test_git_log_filtered_unfiltered_parity(test_repository):
     assert unfiltered == filtered_until
 
     # Multi-line commit message preserved in filtered results
-    assert "Parity subject\n\nParity body line 1\nParity body line 2" in filtered_since[0]
+    assert (
+        "Parity subject\n\nParity body line 1\nParity body line 2" in filtered_since[0]
+    )
 
 
 def test_git_log_date_filtering(test_repository):
@@ -567,24 +852,21 @@ def test_git_log_date_filtering(test_repository):
     assert len(valid_result) == 1
 
 
-def test_serve_run_does_not_raise_exceptions(tmp_path: Path):
+async def test_serve_run_does_not_raise_exceptions(tmp_path: Path):
     """Verify that serve() runs server.run without raise_exceptions=True."""
-    import anyio
-
     repo_path = tmp_path / "serve_test_repo"
-    git.Repo.init(repo_path)
+    git.Repo.init(repo_path).close()
 
-    async def _run():
-        with mock.patch("mcp_server_git.server.stdio_server") as mock_stdio:
-            mock_read = mock.AsyncMock()
-            mock_write = mock.AsyncMock()
-            mock_stdio.return_value.__aenter__.return_value = (mock_read, mock_write)
-            mock_stdio.return_value.__aexit__.return_value = None
+    with mock.patch("mcp_server_git.server.stdio_server") as mock_stdio:
+        mock_read = mock.AsyncMock()
+        mock_write = mock.AsyncMock()
+        mock_stdio.return_value.__aenter__.return_value = (mock_read, mock_write)
+        mock_stdio.return_value.__aexit__.return_value = None
 
-            with mock.patch("mcp_server_git.server.Server.run", new_callable=mock.AsyncMock) as mock_run:
-                await serve(repo_path)
-                mock_run.assert_awaited_once()
-                _, kwargs = mock_run.call_args
-                assert kwargs.get("raise_exceptions") is not True
-
-    anyio.run(_run)
+        with mock.patch(
+            "mcp_server_git.server.Server.run", new_callable=mock.AsyncMock
+        ) as mock_run:
+            await serve(repo_path)
+            mock_run.assert_awaited_once()
+            _, kwargs = mock_run.call_args
+            assert kwargs.get("raise_exceptions") is not True

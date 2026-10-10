@@ -4,6 +4,7 @@ import logging
 import sys
 from .server import serve
 
+
 @click.command()
 @click.option("--repository", "-r", type=Path, help="Git repository path")
 @click.option("-v", "--verbose", count=True)
@@ -20,5 +21,8 @@ def main(repository: Path | None, verbose: bool) -> None:
     logging.basicConfig(level=logging_level, stream=sys.stderr)
     asyncio.run(serve(repository))
 
-if __name__ == "__main__":
+
+if (
+    __name__ == "__main__"
+):  # pragma: no cover  # `python -m` runs __main__.py; running this file directly fails on the relative import
     main()

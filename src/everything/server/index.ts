@@ -13,6 +13,7 @@ import { registerResources, readInstructions } from "../resources/index.js";
 import { registerPrompts } from "../prompts/index.js";
 import { stopSimulatedLogging } from "./logging.js";
 import { syncRoots } from "./roots.js";
+import { SERVER_VERSION } from "../version.js";
 
 // Server Factory response
 export type ServerFactoryResponse = {
@@ -48,7 +49,7 @@ export const createServer: () => ServerFactoryResponse = () => {
     {
       name: "mcp-servers/everything",
       title: "Everything Reference Server",
-      version: "2.0.0",
+      version: SERVER_VERSION,
     },
     {
       capabilities: {
@@ -76,7 +77,7 @@ export const createServer: () => ServerFactoryResponse = () => {
       instructions,
       taskStore,
       taskMessageQueue,
-    }
+    },
   );
 
   // Register the tools

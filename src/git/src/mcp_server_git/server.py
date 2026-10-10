@@ -1,15 +1,12 @@
 import logging
+from importlib.metadata import version
 from pathlib import Path
-from typing import Any, Optional, Sequence
+from typing import Any, Optional
 from mcp.server import Server
-from mcp.server.session import ServerSession
 from mcp.server.stdio import stdio_server
 from mcp.types import (
-    ClientCapabilities,
     TextContent,
     Tool,
-    ListRootsResult,
-    RootsCapability,
     ToolAnnotations,
 )
 from enum import Enum
@@ -17,61 +14,88 @@ import git
 from git.exc import BadName
 from pydantic import BaseModel, Field
 
+# The version this server reports in serverInfo, read from the installed
+# distribution's metadata (pyproject.toml) so it cannot drift from the
+# published version (#360). Without it the SDK reports its own `mcp` version.
+SERVER_VERSION = version("mcp-server-git")
+
 # Default number of context lines to show in diff output
 DEFAULT_CONTEXT_LINES = 3
 
+
+class FlagInjectionError(BadName):
+    """A flag-injection guard's rejection of a value starting with '-'.
+
+    Still a BadName, but BadName's __str__ wraps its argument as a ref name
+    ("Ref '...' did not resolve to an object"), which garbles the guard's own
+    message. The message is already complete, so report it as written.
+    """
+
+    def __str__(self) -> str:
+        return str(self.args[0])
+
+
 class GitStatus(BaseModel):
     repo_path: str
+
 
 class GitDiffUnstaged(BaseModel):
     repo_path: str
     context_lines: int = DEFAULT_CONTEXT_LINES
 
+
 class GitDiffStaged(BaseModel):
     repo_path: str
     context_lines: int = DEFAULT_CONTEXT_LINES
+
 
 class GitDiff(BaseModel):
     repo_path: str
     target: str
     context_lines: int = DEFAULT_CONTEXT_LINES
 
+
 class GitCommit(BaseModel):
     repo_path: str
     message: str
 
+
 class GitAdd(BaseModel):
     repo_path: str
-    files: list[str]
+    files: list[str] = Field(..., min_length=1)
+
 
 class GitReset(BaseModel):
     repo_path: str
+
 
 class GitLog(BaseModel):
     repo_path: str
     max_count: int = 10
     start_timestamp: Optional[str] = Field(
         None,
-        description="Start timestamp for filtering commits. Accepts: ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')"
+        description="Start timestamp for filtering commits. Accepts: ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')",
     )
     end_timestamp: Optional[str] = Field(
         None,
-        description="End timestamp for filtering commits. Accepts: ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')"
+        description="End timestamp for filtering commits. Accepts: ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')",
     )
+
 
 class GitCreateBranch(BaseModel):
     repo_path: str
     branch_name: str
     base_branch: str | None = None
 
+
 class GitCheckout(BaseModel):
     repo_path: str
     branch_name: str
 
+
 class GitShow(BaseModel):
     repo_path: str
     revision: str
-
 
 
 class GitBranch(BaseModel):
@@ -108,29 +132,112 @@ class GitTools(str, Enum):
 
     BRANCH = "git_branch"
 
+
 def git_status(repo: git.Repo) -> str:
     return repo.git.status()
 
-def git_diff_unstaged(repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
+
+def git_diff_unstaged(
+    repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES
+) -> str:
     return repo.git.diff(f"--unified={context_lines}")
+
 
 def git_diff_staged(repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
     return repo.git.diff(f"--unified={context_lines}", "--cached")
 
-def git_diff(repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
+
+def git_diff(
+    repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_LINES
+) -> str:
     # Defense in depth: reject targets starting with '-' to prevent flag injection,
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
     if target.startswith("-"):
-        raise BadName(f"Invalid target: '{target}' - cannot start with '-'")
+        raise FlagInjectionError(f"Invalid target: '{target}' - cannot start with '-'")
     repo.rev_parse(target)  # Validates target is a real git ref, throws BadName if not
     return repo.git.diff(f"--unified={context_lines}", target)
 
+
+def _has_staged_changes(repo: git.Repo) -> bool:
+    """Whether the index holds anything git would record as a commit.
+
+    Mirrors `git commit`, which refuses to create an empty commit unless
+    --allow-empty is given, but permits one while a merge is in progress.
+    """
+    if (Path(repo.git_dir) / "MERGE_HEAD").exists():
+        return True
+    if not repo.head.is_valid():
+        # Unborn branch: the first commit, so anything in the index counts.
+        return bool(repo.index.entries)
+    return bool(repo.index.diff(repo.head.commit))
+
+
 def git_commit(repo: git.Repo, message: str) -> str:
-    commit = repo.index.commit(message)
-    return f"Changes committed successfully with hash {commit.hexsha}"
+    # repo.index.commit() writes a tree unconditionally, so without this check
+    # a caller that forgot to stage gets a hash back for an empty commit and no
+    # way to tell it apart from a real one.
+    if not _has_staged_changes(repo):
+        raise ValueError(
+            "No changes staged for commit. Use git_add to stage changes first; "
+            "git_status shows what is currently staged."
+        )
+    git_dir = Path(repo.git_dir)
+    merge_head = git_dir / "MERGE_HEAD"
+    if merge_head.exists():
+        # Conclude the merge as `git commit` does: HEAD plus every MERGE_HEAD
+        # commit as parents, then clear the merge state. index.commit() alone
+        # records only HEAD and leaves the repository mid-merge.
+        parents = [repo.head.commit] + [
+            repo.commit(sha) for sha in merge_head.read_text().split()
+        ]
+        commit = repo.index.commit(message, parent_commits=parents)
+        for name in ("MERGE_HEAD", "MERGE_MSG", "MERGE_MODE", "AUTO_MERGE"):
+            (git_dir / name).unlink(missing_ok=True)
+        autostash_note = _apply_merge_autostash(repo)
+    else:
+        commit = repo.index.commit(message)
+        autostash_note = ""
+    return f"Changes committed successfully with hash {commit.hexsha}{autostash_note}"
+
+
+def _apply_merge_autostash(repo: git.Repo) -> str:
+    """Reapply a `git merge --autostash` stash, as `git commit` does.
+
+    Mirrors git's sequencer: apply the stash, store it in the stash list if
+    that conflicts, then remove MERGE_AUTOSTASH. Returns a note for the reply,
+    empty when the merge had no autostash.
+    """
+    autostash = Path(repo.git_dir) / "MERGE_AUTOSTASH"
+    if not autostash.exists():
+        return ""
+    stash_oid = autostash.read_text().strip()
+    try:
+        repo.git.stash("apply", stash_oid)
+        note = "\nApplied autostash."
+    except git.GitCommandError:
+        repo.git.stash("store", "-m", "autostash", "-q", stash_oid)
+        note = (
+            "\nApplying autostash resulted in conflicts. Your changes are safe "
+            'in the stash; run "git stash pop" or "git stash drop" at any time.'
+        )
+    autostash.unlink()
+    return note
+
+
+def _index_entries(repo: git.Repo, files: list[str]) -> str:
+    """Mode, blob and stage of the index entries matching the pathspecs."""
+    return repo.git.ls_files("--stage", "--", *files)
+
 
 def git_add(repo: git.Repo, files: list[str]) -> str:
+    if not files:
+        # `git add --` with no pathspec is a no-op that exits 0.
+        raise ValueError(
+            "No files provided to stage. Pass one or more paths, "
+            "or ['.'] to stage everything."
+        )
     if files == ["."]:
+        before = _index_entries(repo, files)
         repo.git.add(".")
     else:
         # Defense in depth: validate each path resolves within the repository
@@ -145,23 +252,40 @@ def git_add(repo: git.Repo, files: list[str]) -> str:
             try:
                 resolved.relative_to(repo_root)
             except ValueError:
-                raise ValueError(
-                    f"Path '{f}' is outside the repository '{repo_root}'"
-                )
+                raise ValueError(f"Path '{f}' is outside the repository '{repo_root}'")
+        before = _index_entries(repo, files)
         # Use '--' to prevent files starting with '-' from being interpreted as options
         repo.git.add("--", *files)
+    # `git add` exits 0 when it stages nothing (e.g. '.' on a clean tree), so
+    # read the outcome back from the index rather than the exit status.
+    if _index_entries(repo, files) == before:
+        return (
+            "No changes were staged: the given paths had nothing new to stage. "
+            "git_status shows what is modified or untracked."
+        )
     return "Files staged successfully"
+
 
 def git_reset(repo: git.Repo) -> str:
     repo.index.reset()
     return "All staged changes reset"
 
-def git_log(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] = None, end_timestamp: Optional[str] = None) -> list[str]:
+
+def git_log(
+    repo: git.Repo,
+    max_count: int = 10,
+    start_timestamp: Optional[str] = None,
+    end_timestamp: Optional[str] = None,
+) -> list[str]:
     # Defense in depth: reject timestamps starting with '-' to prevent flag injection
     if start_timestamp and start_timestamp.startswith("-"):
-        raise ValueError(f"Invalid start_timestamp: '{start_timestamp}' - cannot start with '-'")
+        raise ValueError(
+            f"Invalid start_timestamp: '{start_timestamp}' - cannot start with '-'"
+        )
     if end_timestamp and end_timestamp.startswith("-"):
-        raise ValueError(f"Invalid end_timestamp: '{end_timestamp}' - cannot start with '-'")
+        raise ValueError(
+            f"Invalid end_timestamp: '{end_timestamp}' - cannot start with '-'"
+        )
 
     kwargs: dict[str, Any] = {"max_count": max_count}
     if start_timestamp:
@@ -180,42 +304,81 @@ def git_log(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] 
         )
     return log
 
-def git_create_branch(repo: git.Repo, branch_name: str, base_branch: str | None = None) -> str:
+
+def git_create_branch(
+    repo: git.Repo, branch_name: str, base_branch: str | None = None
+) -> str:
     # Defense in depth: reject names starting with '-' to prevent flag injection
     if branch_name.startswith("-"):
-        raise BadName(f"Invalid branch name: '{branch_name}' - cannot start with '-'")
+        raise FlagInjectionError(
+            f"Invalid branch name: '{branch_name}' - cannot start with '-'"
+        )
     if base_branch and base_branch.startswith("-"):
-        raise BadName(f"Invalid base branch: '{base_branch}' - cannot start with '-'")
+        raise FlagInjectionError(
+            f"Invalid base branch: '{base_branch}' - cannot start with '-'"
+        )
     if base_branch:
         base = repo.references[base_branch]
     else:
         base = repo.active_branch
 
+    # GitPython's create_head accepts a name that already points at the base
+    # commit, so check first rather than report a branch that was not created.
+    # Compare names: `in repo.heads` also matches IterableList attributes
+    # such as "append".
+    if any(head.name == branch_name for head in repo.heads):
+        raise ValueError(
+            f"Cannot create branch '{branch_name}': refs/heads/{branch_name} already exists"
+        )
     repo.create_head(branch_name, base)
     return f"Created branch '{branch_name}' from '{base.name}'"
+
 
 def git_checkout(repo: git.Repo, branch_name: str) -> str:
     # Defense in depth: reject branch names starting with '-' to prevent flag injection,
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
     if branch_name.startswith("-"):
-        raise BadName(f"Invalid branch name: '{branch_name}' - cannot start with '-'")
-    repo.rev_parse(branch_name)  # Validates branch_name is a real git ref, throws BadName if not
+        raise FlagInjectionError(
+            f"Invalid branch name: '{branch_name}' - cannot start with '-'"
+        )
+    repo.rev_parse(
+        branch_name
+    )  # Validates branch_name is a real git ref, throws BadName if not
     repo.git.checkout(branch_name)
-    return f"Switched to branch '{branch_name}'"
-
+    # rev_parse accepts any revision, so branch_name may have been a sha, tag or
+    # remote-tracking ref rather than a branch. Report what actually happened instead of
+    # claiming a branch switch; a detached HEAD is easy to commit onto by mistake.
+    if repo.head.is_detached:
+        return f"HEAD is now detached at {repo.head.commit.hexsha[:7]}"
+    return f"Switched to branch '{repo.active_branch.name}'"
 
 
 def git_show(repo: git.Repo, revision: str) -> str:
     # Defense in depth: reject revisions starting with '-' to prevent flag injection,
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
     if revision.startswith("-"):
-        raise BadName(f"Invalid revision: '{revision}' - cannot start with '-'")
+        raise FlagInjectionError(
+            f"Invalid revision: '{revision}' - cannot start with '-'"
+        )
+    obj = repo.rev_parse(revision)
+    if isinstance(obj, git.Blob):
+        return obj.data_stream.read().decode("utf-8", errors="replace")
+    if isinstance(obj, git.Tree):
+        return "\n".join(
+            f"{item.name}/" if isinstance(item, git.Tree) else item.name for item in obj
+        )
     commit = repo.commit(revision)
+    message = commit.message
+    if isinstance(message, bytes):  # pragma: no cover
+        # GitPython already decodes the message, falling back to errors="replace".
+        message = message.decode("utf-8", errors="replace")
+    # The header follows `git show --date=iso`: the sha, `Name <email>`, an
+    # ISO date, and the message indented by four spaces.
     output = [
-        f"Commit: {commit.hexsha!r}\n"
-        f"Author: {commit.author!r}\n"
-        f"Date: {commit.authored_datetime!r}\n"
-        f"Message: {commit.message!r}\n"
+        f"commit {commit.hexsha}\n"
+        f"Author: {commit.author.name} <{commit.author.email}>\n"
+        f"Date:   {commit.authored_datetime.strftime('%Y-%m-%d %H:%M:%S %z')}\n"
+        "\n" + "".join(f"    {line}\n" for line in message.rstrip("\n").split("\n"))
     ]
     if commit.parents:
         parent = commit.parents[0]
@@ -223,14 +386,19 @@ def git_show(repo: git.Repo, revision: str) -> str:
     else:
         diff = commit.diff(git.NULL_TREE, create_patch=True)
     for d in diff:
-        output.append(f"\n--- {d.a_path}\n+++ {d.b_path}\n")
+        # git prints /dev/null for the missing side of an added or deleted file.
+        a_path = "/dev/null" if d.new_file or d.a_path is None else d.a_path
+        b_path = "/dev/null" if d.deleted_file or d.b_path is None else d.b_path
+        output.append(f"\n--- {a_path}\n+++ {b_path}\n")
         if d.diff is None:
-            continue
+            continue  # pragma: no cover  # with create_patch=True GitPython always assigns the patch as bytes
         if isinstance(d.diff, bytes):
-            output.append(d.diff.decode('utf-8'))
-        else:
+            # A non-UTF-8 file (Latin-1, say) must not fail the whole call.
+            output.append(d.diff.decode("utf-8", errors="replace"))
+        else:  # pragma: no cover  # with create_patch=True GitPython always assigns the patch as bytes
             output.append(d.diff)
     return "".join(output)
+
 
 def validate_repo_path(repo_path: Path, allowed_repository: Path | None) -> None:
     """Validate that repo_path is within the allowed repository path."""
@@ -253,12 +421,21 @@ def validate_repo_path(repo_path: Path, allowed_repository: Path | None) -> None
         )
 
 
-def git_branch(repo: git.Repo, branch_type: str, contains: str | None = None, not_contains: str | None = None) -> str:
+def git_branch(
+    repo: git.Repo,
+    branch_type: str,
+    contains: str | None = None,
+    not_contains: str | None = None,
+) -> str:
     # Defense in depth: reject values starting with '-' to prevent flag injection
     if contains and contains.startswith("-"):
-        raise BadName(f"Invalid contains value: '{contains}' - cannot start with '-'")
+        raise FlagInjectionError(
+            f"Invalid contains value: '{contains}' - cannot start with '-'"
+        )
     if not_contains and not_contains.startswith("-"):
-        raise BadName(f"Invalid not_contains value: '{not_contains}' - cannot start with '-'")
+        raise FlagInjectionError(
+            f"Invalid not_contains value: '{not_contains}' - cannot start with '-'"
+        )
 
     match contains:
         case None:
@@ -273,14 +450,14 @@ def git_branch(repo: git.Repo, branch_type: str, contains: str | None = None, no
             not_contains_sha = ("--no-contains", not_contains)
 
     match branch_type:
-        case 'local':
+        case "local":
             b_type = None
-        case 'remote':
+        case "remote":
             b_type = "-r"
-        case 'all':
+        case "all":
             b_type = "-a"
         case _:
-            return f"Invalid branch type: {branch_type}"
+            raise ValueError(f"Invalid branch type: {branch_type}")
 
     # None value will be auto deleted by GitPython
     branch_info = repo.git.branch(b_type, *contains_sha, *not_contains_sha)
@@ -293,13 +470,23 @@ async def serve(repository: Path | None) -> None:
 
     if repository is not None:
         try:
-            git.Repo(repository)
-            logger.info(f"Using repository at {repository}")
+            # Walk up to the enclosing working tree, like `git rev-parse
+            # --show-toplevel`, so `--repository .` works from a subdirectory.
+            root = Path(
+                git.Repo(repository, search_parent_directories=True).working_dir
+            )
+        except git.NoSuchPathError:
+            logger.error(f"{repository} does not exist")
+            raise SystemExit(1)
         except git.InvalidGitRepositoryError:
             logger.error(f"{repository} is not a valid Git repository")
             return
+        if root != repository:
+            logger.info(f"Resolved --repository {repository} to repository root {root}")
+        repository = root
+        logger.info(f"Using repository at {repository}")
 
-    server = Server("mcp-git")
+    server = Server("mcp-git", version=SERVER_VERSION)
 
     @server.list_tools()
     async def list_tools() -> list[Tool]:
@@ -416,7 +603,7 @@ async def serve(repository: Path | None) -> None:
             ),
             Tool(
                 name=GitTools.SHOW,
-                description="Shows the contents of a commit",
+                description="Shows the contents of a commit, or of a file or directory given as <revision>:<path>",
                 inputSchema=GitShow.model_json_schema(),
                 annotations=ToolAnnotations(
                     readOnlyHint=True,
@@ -435,40 +622,16 @@ async def serve(repository: Path | None) -> None:
                     idempotentHint=True,
                     openWorldHint=False,
                 ),
-            )
+            ),
         ]
-
-    async def list_repos() -> Sequence[str]:
-        async def by_roots() -> Sequence[str]:
-            if not isinstance(server.request_context.session, ServerSession):
-                raise TypeError("server.request_context.session must be a ServerSession")
-
-            if not server.request_context.session.check_client_capability(
-                ClientCapabilities(roots=RootsCapability())
-            ):
-                return []
-
-            roots_result: ListRootsResult = await server.request_context.session.list_roots()
-            logger.debug(f"Roots result: {roots_result}")
-            repo_paths = []
-            for root in roots_result.roots:
-                path = root.uri.path
-                try:
-                    git.Repo(path)
-                    repo_paths.append(str(path))
-                except git.InvalidGitRepositoryError:
-                    pass
-            return repo_paths
-
-        def by_commandline() -> Sequence[str]:
-            return [str(repository)] if repository is not None else []
-
-        cmd_repos = by_commandline()
-        root_repos = await by_roots()
-        return [*root_repos, *cmd_repos]
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+        # Reject an unknown tool before reading its arguments, so a call
+        # without repo_path still reports "Unknown tool" (#4994).
+        if name not in {tool.value for tool in GitTools}:
+            raise ValueError(f"Unknown tool: {name}")
+
         repo_path = Path(arguments["repo_path"])
 
         # Validate repo_path is within allowed repository
@@ -480,52 +643,43 @@ async def serve(repository: Path | None) -> None:
         match name:
             case GitTools.STATUS:
                 status = git_status(repo)
-                return [TextContent(
-                    type="text",
-                    text=f"Repository status:\n{status}"
-                )]
+                return [TextContent(type="text", text=f"Repository status:\n{status}")]
 
             case GitTools.DIFF_UNSTAGED:
-                diff = git_diff_unstaged(repo, arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
-                return [TextContent(
-                    type="text",
-                    text=f"Unstaged changes:\n{diff}"
-                )]
+                diff = git_diff_unstaged(
+                    repo, arguments.get("context_lines", DEFAULT_CONTEXT_LINES)
+                )
+                return [TextContent(type="text", text=f"Unstaged changes:\n{diff}")]
 
             case GitTools.DIFF_STAGED:
-                diff = git_diff_staged(repo, arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
-                return [TextContent(
-                    type="text",
-                    text=f"Staged changes:\n{diff}"
-                )]
+                diff = git_diff_staged(
+                    repo, arguments.get("context_lines", DEFAULT_CONTEXT_LINES)
+                )
+                return [TextContent(type="text", text=f"Staged changes:\n{diff}")]
 
             case GitTools.DIFF:
-                diff = git_diff(repo, arguments["target"], arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
-                return [TextContent(
-                    type="text",
-                    text=f"Diff with {arguments['target']}:\n{diff}"
-                )]
+                diff = git_diff(
+                    repo,
+                    arguments["target"],
+                    arguments.get("context_lines", DEFAULT_CONTEXT_LINES),
+                )
+                return [
+                    TextContent(
+                        type="text", text=f"Diff with {arguments['target']}:\n{diff}"
+                    )
+                ]
 
             case GitTools.COMMIT:
                 result = git_commit(repo, arguments["message"])
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
+                return [TextContent(type="text", text=result)]
 
             case GitTools.ADD:
                 result = git_add(repo, arguments["files"])
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
+                return [TextContent(type="text", text=result)]
 
             case GitTools.RESET:
                 result = git_reset(repo)
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
+                return [TextContent(type="text", text=result)]
 
             # Update the LOG case:
             case GitTools.LOG:
@@ -533,51 +687,37 @@ async def serve(repository: Path | None) -> None:
                     repo,
                     arguments.get("max_count", 10),
                     arguments.get("start_timestamp"),
-                    arguments.get("end_timestamp")
+                    arguments.get("end_timestamp"),
                 )
-                return [TextContent(
-                    type="text",
-                    text="Commit history:\n" + "\n".join(log)
-                )]
+                return [
+                    TextContent(type="text", text="Commit history:\n" + "\n".join(log))
+                ]
 
             case GitTools.CREATE_BRANCH:
                 result = git_create_branch(
-                    repo,
-                    arguments["branch_name"],
-                    arguments.get("base_branch")
+                    repo, arguments["branch_name"], arguments.get("base_branch")
                 )
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
+                return [TextContent(type="text", text=result)]
 
             case GitTools.CHECKOUT:
                 result = git_checkout(repo, arguments["branch_name"])
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
+                return [TextContent(type="text", text=result)]
 
             case GitTools.SHOW:
                 result = git_show(repo, arguments["revision"])
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
+                return [TextContent(type="text", text=result)]
 
             case GitTools.BRANCH:
                 result = git_branch(
                     repo,
-                    arguments.get("branch_type", 'local'),
+                    arguments.get("branch_type", "local"),
                     arguments.get("contains", None),
                     arguments.get("not_contains", None),
                 )
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
+                return [TextContent(type="text", text=result)]
 
-            case _:
+            # Unreachable: unknown names are rejected before the repo is opened.
+            case _:  # pragma: no cover
                 raise ValueError(f"Unknown tool: {name}")
 
     options = server.create_initialization_options()

@@ -1,17 +1,33 @@
 from datetime import datetime, timedelta
+from functools import cache
+from importlib.metadata import version
 from enum import Enum
 import json
+import sys
 from typing import Sequence
 
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError, available_timezones
 from tzlocal import get_localzone_name  # ← returns "Europe/Paris", etc.
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import Tool, ToolAnnotations, TextContent, ImageContent, EmbeddedResource, ErrorData, INVALID_PARAMS
+from mcp.types import (
+    Tool,
+    ToolAnnotations,
+    TextContent,
+    ImageContent,
+    EmbeddedResource,
+    ErrorData,
+    INVALID_PARAMS,
+)
 from mcp.shared.exceptions import McpError
 
 from pydantic import BaseModel
+
+# The version this server reports in serverInfo, read from the installed
+# distribution's metadata (pyproject.toml) so it cannot drift from the
+# published version (#360). Without it the SDK reports its own `mcp` version.
+SERVER_VERSION = version("mcp-server-time")
 
 
 class TimeTools(str, Enum):
@@ -50,11 +66,34 @@ def get_local_tz(local_tz_override: str | None = None) -> ZoneInfo:
     return ZoneInfo("UTC")
 
 
+@cache
+def known_timezones() -> frozenset[str]:
+    """The exact IANA keys this host's tz database holds, read once."""
+    return frozenset(available_timezones())
+
+
+def load_zoneinfo(timezone_name: str) -> ZoneInfo:
+    """`ZoneInfo(timezone_name)`, accepting only an exact IANA key.
+
+    zoneinfo looks a key up as a file path, so on a case-insensitive
+    filesystem (macOS's APFS) `europe/warsaw` resolves to `Europe/Warsaw`
+    while Linux rejects it (#5060). Checking the key against the database's
+    own list makes every platform reject it. `ZoneInfo` runs first so a path
+    or a directory keeps the error zoneinfo gives it.
+    """
+    zone = ZoneInfo(timezone_name)
+    if timezone_name not in known_timezones():
+        raise ZoneInfoNotFoundError(f"No time zone found with key {timezone_name}")
+    return zone
+
+
 def get_zoneinfo(timezone_name: str) -> ZoneInfo:
     try:
-        return ZoneInfo(timezone_name)
+        return load_zoneinfo(timezone_name)
     except Exception as e:
-        raise McpError(ErrorData(code=INVALID_PARAMS, message=f"Invalid timezone: {str(e)}"))
+        raise McpError(
+            ErrorData(code=INVALID_PARAMS, message=f"Invalid timezone: {str(e)}")
+        )
 
 
 class TimeServer:
@@ -92,6 +131,15 @@ class TimeServer:
             tzinfo=source_timezone,
         )
 
+        # A wall-clock time skipped by a clock change (e.g. 02:30 on a DST
+        # spring-forward day) does not survive a round trip through UTC.
+        round_trip = datetime.fromtimestamp(source_time.timestamp(), source_timezone)
+        if round_trip.replace(tzinfo=None) != source_time.replace(tzinfo=None):
+            raise ValueError(
+                f"Invalid time: {time_str} does not exist in {source_tz} on "
+                f"{source_time.date().isoformat()} (skipped by a clock change)"
+            )
+
         target_time = source_time.astimezone(target_timezone)
         source_offset = source_time.utcoffset() or timedelta()
         target_offset = target_time.utcoffset() or timedelta()
@@ -121,8 +169,20 @@ class TimeServer:
 
 
 async def serve(local_timezone: str | None = None) -> None:
-    server = Server("mcp-time")
+    server = Server("mcp-time", version=SERVER_VERSION)
     time_server = TimeServer()
+    if local_timezone:
+        # Fail before the transport opens, with one line naming the bad value
+        # rather than a traceback. zoneinfo raises a different type per kind of
+        # bad key (unknown name, a tzdata directory, a path, a null byte), and
+        # its messages can carry a filesystem path, so none of them is shown.
+        try:
+            load_zoneinfo(local_timezone)
+        except (ZoneInfoNotFoundError, ValueError, OSError):
+            sys.exit(
+                f"Error: invalid --local-timezone {local_timezone!r}: "
+                "not a known IANA timezone name"
+            )
     local_tz = str(get_local_tz(local_timezone))
 
     @server.list_tools()
@@ -198,7 +258,12 @@ async def serve(local_timezone: str | None = None) -> None:
                         k in arguments
                         for k in ["source_timezone", "time", "target_timezone"]
                     ):
-                        raise ValueError("Missing required arguments")
+                        raise ValueError(  # pragma: no cover  # unreachable: the SDK rejects a missing key against inputSchema first
+                            "Missing required arguments"
+                        )
+                    for key in ["source_timezone", "target_timezone"]:
+                        if not arguments[key]:
+                            raise ValueError(f"Missing required argument: {key}")
 
                     result = time_server.convert_time(
                         arguments["source_timezone"],

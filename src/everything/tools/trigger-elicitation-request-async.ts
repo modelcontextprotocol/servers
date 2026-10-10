@@ -22,8 +22,12 @@ const config = {
 // Poll interval in milliseconds
 const POLL_INTERVAL = 1000;
 
-// Maximum poll attempts before timeout (10 minutes for user input)
-const MAX_POLL_ATTEMPTS = 600;
+// Time-to-live requested for the client's task (10 minutes for user input)
+const TASK_TTL = 600000;
+
+// Stop polling this long before the TTL runs out, so the last tasks/get
+// reaches the client while it still holds the task
+const TTL_SAFETY_MARGIN = 5000;
 
 /**
  * Registers the 'trigger-elicitation-request-async' tool.
@@ -38,14 +42,18 @@ const MAX_POLL_ATTEMPTS = 600;
  * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
 export const registerTriggerElicitationRequestAsyncTool = (
-  server: McpServer
+  server: McpServer,
 ) => {
   // Check client capabilities
   const clientCapabilities = server.server.getClientCapabilities() || {};
 
-  // Client must support elicitation AND tasks.requests.elicitation
+  // Client must support form-mode elicitation AND tasks.requests.elicitation.
+  // The request is form mode, so a URL-only client cannot answer it (#4985):
+  // form mode is `elicitation.form`, or `elicitation` with neither mode.
+  const elicitation = clientCapabilities.elicitation;
   const clientSupportsElicitation =
-    clientCapabilities.elicitation !== undefined;
+    elicitation !== undefined &&
+    (elicitation.form !== undefined || elicitation.url === undefined);
   const clientTasksCapability = clientCapabilities.tasks as
     | {
         requests?: { elicitation?: { create?: object } };
@@ -59,13 +67,19 @@ export const registerTriggerElicitationRequestAsyncTool = (
       name,
       config,
       async (args, extra): Promise<CallToolResult> => {
+        // Polling must end before the client may expire the task. The client
+        // starts the TTL when it creates the task, after this point, so a
+        // deadline measured from here is conservative. performance.now() is
+        // monotonic, so a wall-clock adjustment cannot stretch the deadline.
+        const pollDeadline = performance.now() + TASK_TTL - TTL_SAFETY_MARGIN;
+
         // Create the elicitation request WITH task metadata
         // Using z.any() schema to avoid complex type matching with _meta
         const request = {
           method: "elicitation/create" as const,
           params: {
             task: {
-              ttl: 600000, // 10 minutes (user input may take a while)
+              ttl: TASK_TTL, // 10 minutes (user input may take a while)
             },
             message:
               "Please provide inputs for the following fields (async task demo):",
@@ -115,7 +129,7 @@ export const registerTriggerElicitationRequestAsyncTool = (
               action: z.string(),
               content: z.any().optional(),
             }),
-          ])
+          ]),
         );
 
         // Check if client returned CreateTaskResult (has task object)
@@ -129,7 +143,7 @@ export const registerTriggerElicitationRequestAsyncTool = (
                 text: `[SYNC] Client executed synchronously:\n${JSON.stringify(
                   elicitResponse,
                   null,
-                  2
+                  2,
                 )}`,
               },
             ],
@@ -143,16 +157,26 @@ export const registerTriggerElicitationRequestAsyncTool = (
         // Poll for task completion
         let attempts = 0;
         let taskStatus = elicitResponse.task.status;
-        let taskStatusMessage: string | undefined;
+        // A task that is already finished when created is never polled, so
+        // its status message has to come from the CreateTaskResult
+        let taskStatusMessage = elicitResponse.task.statusMessage;
+        let timedOut = false;
 
         while (
           taskStatus !== "completed" &&
           taskStatus !== "failed" &&
-          taskStatus !== "cancelled" &&
-          attempts < MAX_POLL_ATTEMPTS
+          taskStatus !== "cancelled"
         ) {
           // Wait before polling
           await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
+
+          // Give up rather than poll past the TTL the task was created with.
+          // Checked after the wait, so a timer that fires late cannot slip a
+          // poll in after the deadline.
+          if (performance.now() > pollDeadline) {
+            timedOut = true;
+            break;
+          }
           attempts++;
 
           // Get task status from client
@@ -164,7 +188,7 @@ export const registerTriggerElicitationRequestAsyncTool = (
             z.looseObject({
               status: z.string(),
               statusMessage: z.string().optional(),
-            })
+            }),
           );
 
           taskStatus = pollResult.status;
@@ -179,19 +203,21 @@ export const registerTriggerElicitationRequestAsyncTool = (
             statusMessages.push(
               `Poll ${attempts}: ${taskStatus}${
                 taskStatusMessage ? ` - ${taskStatusMessage}` : ""
-              }`
+              }`,
             );
           }
         }
 
         // Check for timeout
-        if (attempts >= MAX_POLL_ATTEMPTS) {
+        if (timedOut) {
           return {
             content: [
               {
                 type: "text",
-                text: `[TIMEOUT] Task timed out after ${MAX_POLL_ATTEMPTS} poll attempts\n\nProgress:\n${statusMessages.join(
-                  "\n"
+                text: `[TIMEOUT] Task timed out after ${attempts} poll attempts, before its ${
+                  TASK_TTL / 60000
+                }-minute TTL expired\n\nProgress:\n${statusMessages.join(
+                  "\n",
                 )}`,
               },
             ],
@@ -218,7 +244,7 @@ export const registerTriggerElicitationRequestAsyncTool = (
             method: "tasks/result",
             params: { taskId },
           },
-          z.any()
+          z.any(),
         );
 
         // Format the elicitation result
@@ -258,12 +284,12 @@ export const registerTriggerElicitationRequestAsyncTool = (
         content.push({
           type: "text",
           text: `\nProgress:\n${statusMessages.join(
-            "\n"
+            "\n",
           )}\n\nRaw result: ${JSON.stringify(result, null, 2)}`,
         });
 
         return { content };
-      }
+      },
     );
   }
 };

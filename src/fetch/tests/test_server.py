@@ -1,15 +1,20 @@
-"""Tests for the fetch MCP server."""
+"""Unit tests for the pure helpers in server.py.
 
+Behavior a client can observe is tested through the protocol in
+test_protocol.py.
+"""
+
+import os
+
+import httpx
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
-from mcp.shared.exceptions import McpError
 
 from mcp_server_fetch.server import (
+    PROXY_ENV_VARS,
     extract_content_from_html,
     get_robots_txt_url,
-    check_may_autonomously_fetch_url,
-    fetch_url,
-    DEFAULT_USER_AGENT_AUTONOMOUS,
+    normalize_proxy_env,
+    normalize_proxy_url,
 )
 
 
@@ -81,6 +86,7 @@ class TestExtractContentFromHtml:
         result = extract_content_from_html(html)
         assert "Example" in result
 
+    @pytest.mark.usefixtures("node_readability")
     def test_empty_content_returns_error(self):
         """Test that empty/invalid HTML returns error message."""
         html = ""
@@ -88,239 +94,40 @@ class TestExtractContentFromHtml:
         assert "<error>" in result
 
 
-class TestCheckMayAutonomouslyFetchUrl:
-    """Tests for check_may_autonomously_fetch_url function."""
+class TestNormalizeProxyUrl:
+    """Tests for normalize_proxy_url and normalize_proxy_env (#767)."""
 
-    @pytest.mark.asyncio
-    async def test_allows_when_robots_txt_404(self):
-        """Test that fetching is allowed when robots.txt returns 404."""
-        mock_response = MagicMock()
-        mock_response.status_code = 404
+    @pytest.mark.parametrize(
+        ("given", "expected"),
+        [
+            ("socks://127.0.0.1:2080/", "socks5://127.0.0.1:2080/"),
+            ("SOCKS://127.0.0.1:2080", "socks5://127.0.0.1:2080"),
+            ("socks5://127.0.0.1:2080", "socks5://127.0.0.1:2080"),
+            ("http://proxy.example.com:8080", "http://proxy.example.com:8080"),
+            ("ftp://proxy.example.com", "ftp://proxy.example.com"),
+        ],
+    )
+    def test_only_the_socks_alias_is_rewritten(self, given, expected):
+        assert normalize_proxy_url(given) == expected
 
-        with patch("httpx.AsyncClient") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+    def test_environment_socks_alias_is_rewritten(self, monkeypatch):
+        for name in PROXY_ENV_VARS:
+            monkeypatch.delenv(name, raising=False)
+        monkeypatch.setenv("ALL_PROXY", "socks://127.0.0.1:2080/")
+        monkeypatch.setenv("https_proxy", "http://proxy.example.com:8080")
+        normalize_proxy_env()
+        assert os.environ["ALL_PROXY"] == "socks5://127.0.0.1:2080/"
+        assert os.environ["https_proxy"] == "http://proxy.example.com:8080"
+        assert "HTTP_PROXY" not in os.environ
 
-            # Should not raise
-            await check_may_autonomously_fetch_url(
-                "https://example.com/page",
-                DEFAULT_USER_AGENT_AUTONOMOUS
-            )
-
-    @pytest.mark.asyncio
-    async def test_blocks_when_robots_txt_401(self):
-        """Test that fetching is blocked when robots.txt returns 401."""
-        mock_response = MagicMock()
-        mock_response.status_code = 401
-
-        with patch("httpx.AsyncClient") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
-
-            with pytest.raises(McpError):
-                await check_may_autonomously_fetch_url(
-                    "https://example.com/page",
-                    DEFAULT_USER_AGENT_AUTONOMOUS
-                )
-
-    @pytest.mark.asyncio
-    async def test_blocks_when_robots_txt_403(self):
-        """Test that fetching is blocked when robots.txt returns 403."""
-        mock_response = MagicMock()
-        mock_response.status_code = 403
-
-        with patch("httpx.AsyncClient") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
-
-            with pytest.raises(McpError):
-                await check_may_autonomously_fetch_url(
-                    "https://example.com/page",
-                    DEFAULT_USER_AGENT_AUTONOMOUS
-                )
-
-    @pytest.mark.asyncio
-    async def test_allows_when_robots_txt_allows_all(self):
-        """Test that fetching is allowed when robots.txt allows all."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.text = "User-agent: *\nAllow: /"
-
-        with patch("httpx.AsyncClient") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
-
-            # Should not raise
-            await check_may_autonomously_fetch_url(
-                "https://example.com/page",
-                DEFAULT_USER_AGENT_AUTONOMOUS
-            )
-
-    @pytest.mark.asyncio
-    async def test_blocks_when_robots_txt_disallows_all(self):
-        """Test that fetching is blocked when robots.txt disallows all."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.text = "User-agent: *\nDisallow: /"
-
-        with patch("httpx.AsyncClient") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
-
-            with pytest.raises(McpError):
-                await check_may_autonomously_fetch_url(
-                    "https://example.com/page",
-                    DEFAULT_USER_AGENT_AUTONOMOUS
-                )
-
-
-class TestFetchUrl:
-    """Tests for fetch_url function."""
-
-    @pytest.mark.asyncio
-    async def test_fetch_html_page(self):
-        """Test fetching an HTML page returns markdown content."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.text = """
-        <html>
-        <body>
-            <article>
-                <h1>Test Page</h1>
-                <p>Hello World</p>
-            </article>
-        </body>
-        </html>
-        """
-        mock_response.headers = {"content-type": "text/html"}
-
-        with patch("httpx.AsyncClient") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
-
-            content, prefix = await fetch_url(
-                "https://example.com/page",
-                DEFAULT_USER_AGENT_AUTONOMOUS
-            )
-
-            # HTML is processed, so we check it returns something
-            assert isinstance(content, str)
-            assert prefix == ""
-
-    @pytest.mark.asyncio
-    async def test_fetch_html_page_raw(self):
-        """Test fetching an HTML page with raw=True returns original HTML."""
-        html_content = "<html><body><h1>Test</h1></body></html>"
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.text = html_content
-        mock_response.headers = {"content-type": "text/html"}
-
-        with patch("httpx.AsyncClient") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
-
-            content, prefix = await fetch_url(
-                "https://example.com/page",
-                DEFAULT_USER_AGENT_AUTONOMOUS,
-                force_raw=True
-            )
-
-            assert content == html_content
-            assert "cannot be simplified" in prefix
-
-    @pytest.mark.asyncio
-    async def test_fetch_json_returns_raw(self):
-        """Test fetching JSON content returns raw content."""
-        json_content = '{"key": "value"}'
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.text = json_content
-        mock_response.headers = {"content-type": "application/json"}
-
-        with patch("httpx.AsyncClient") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
-
-            content, prefix = await fetch_url(
-                "https://api.example.com/data",
-                DEFAULT_USER_AGENT_AUTONOMOUS
-            )
-
-            assert content == json_content
-            assert "cannot be simplified" in prefix
-
-    @pytest.mark.asyncio
-    async def test_fetch_404_raises_error(self):
-        """Test that 404 response raises McpError."""
-        mock_response = MagicMock()
-        mock_response.status_code = 404
-
-        with patch("httpx.AsyncClient") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
-
-            with pytest.raises(McpError):
-                await fetch_url(
-                    "https://example.com/notfound",
-                    DEFAULT_USER_AGENT_AUTONOMOUS
-                )
-
-    @pytest.mark.asyncio
-    async def test_fetch_500_raises_error(self):
-        """Test that 500 response raises McpError."""
-        mock_response = MagicMock()
-        mock_response.status_code = 500
-
-        with patch("httpx.AsyncClient") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
-
-            with pytest.raises(McpError):
-                await fetch_url(
-                    "https://example.com/error",
-                    DEFAULT_USER_AGENT_AUTONOMOUS
-                )
-
-    @pytest.mark.asyncio
-    async def test_fetch_with_proxy(self):
-        """Test that proxy URL is passed to client."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.text = '{"data": "test"}'
-        mock_response.headers = {"content-type": "application/json"}
-
-        with patch("httpx.AsyncClient") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
-
-            await fetch_url(
-                "https://example.com/data",
-                DEFAULT_USER_AGENT_AUTONOMOUS,
-                proxy_url="http://proxy.example.com:8080"
-            )
-
-            # Verify AsyncClient was called with proxy
-            mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080")
+    def test_normalized_socks_environment_builds_a_client(self, monkeypatch):
+        # #767 and #1401 together: httpx rejects socks:// outright, and a
+        # socks5:// proxy needs socksio, which httpx[socks] now installs.
+        for name in PROXY_ENV_VARS:
+            monkeypatch.delenv(name, raising=False)
+        monkeypatch.setenv("ALL_PROXY", "socks://127.0.0.1:2080/")
+        with pytest.raises(ValueError, match="Unknown scheme for proxy URL"):
+            httpx.AsyncClient()
+        normalize_proxy_env()
+        httpx.AsyncClient()
+        httpx.AsyncClient(proxy="socks5://127.0.0.1:2080/")

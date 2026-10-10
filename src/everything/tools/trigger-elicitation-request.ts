@@ -21,7 +21,11 @@ const config = {
 /**
  * Registers the 'trigger-elicitation-request' tool.
  *
- * If the client does not support the elicitation capability, the tool is not registered.
+ * The tool sends a form-mode request, so it is registered only when the client
+ * supports form-mode elicitation: it declared `elicitation.form`, or an
+ * `elicitation` object with neither `form` nor `url`, which the spec treats as
+ * form mode for backwards compatibility. A client that declared only
+ * `elicitation.url` does not get it (#4985).
  *
  * The registered tool sends an elicitation request for the user to provide information
  * based on a pre-defined schema of fields including text inputs, booleans, numbers,
@@ -37,13 +41,15 @@ const config = {
  * @param {McpServer} server - TThe McpServer instance where the tool will be registered.
  */
 export const registerTriggerElicitationRequestTool = (server: McpServer) => {
-  // Does the client support elicitation?
+  // Does the client support form-mode elicitation?
   const clientCapabilities = server.server.getClientCapabilities() || {};
-  const clientSupportsElicitation: boolean =
-    clientCapabilities.elicitation !== undefined;
+  const elicitation = clientCapabilities.elicitation;
+  const clientSupportsFormElicitation: boolean =
+    elicitation !== undefined &&
+    (elicitation.form !== undefined || elicitation.url === undefined);
 
   // If so, register tool
-  if (clientSupportsElicitation) {
+  if (clientSupportsFormElicitation) {
     server.registerTool(
       name,
       config,
@@ -174,7 +180,7 @@ export const registerTriggerElicitationRequestTool = (server: McpServer) => {
             },
           },
           ElicitResultSchema,
-          { timeout: 10 * 60 * 1000 /* 10 minutes */ }
+          { timeout: 10 * 60 * 1000 /* 10 minutes */ },
         );
 
         // Handle different response actions
@@ -229,7 +235,7 @@ export const registerTriggerElicitationRequestTool = (server: McpServer) => {
         });
 
         return { content };
-      }
+      },
     );
   }
 };

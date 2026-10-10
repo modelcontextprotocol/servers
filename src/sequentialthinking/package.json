@@ -1,6 +1,6 @@
 {
   "name": "@modelcontextprotocol/server-sequential-thinking",
-  "version": "0.6.2",
+  "version": "1.0.0",
   "description": "MCP server for sequential thinking and problem solving",
   "license": "SEE LICENSE IN LICENSE",
   "mcpName": "io.github.modelcontextprotocol/server-sequential-thinking",
@@ -22,10 +22,16 @@
     "build": "tsc && shx chmod +x dist/*.js",
     "prepare": "npm run build",
     "watch": "tsc --watch",
-    "test": "vitest run --coverage"
+    "test": "vitest run",
+    "format": "prettier --write \"**/*.{ts,mts,cts,js,mjs,cjs}\" --ignore-path ../../.prettierignore",
+    "format:check": "prettier --check \"**/*.{ts,mts,cts,js,mjs,cjs}\" --ignore-path ../../.prettierignore",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "coverage": "vitest run --coverage",
+    "validate": "npm run format:check && npm run lint && npm run typecheck && npm run build && npm run test"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "chalk": "^5.3.0",
     "yargs": "^17.7.2",
     "zod": "^4.0.0"
@@ -33,9 +39,9 @@
   "devDependencies": {
     "@types/node": "^22",
     "@types/yargs": "^17.0.32",
-    "@vitest/coverage-v8": "^4.1.8",
+    "@vitest/coverage-v8": "^4.1.11",
     "shx": "^0.4.0",
-    "typescript": "^5.3.3",
-    "vitest": "^4.1.8"
+    "typescript": "^5.8.2",
+    "vitest": "^4.1.11"
   }
 }

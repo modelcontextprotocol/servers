@@ -26,7 +26,7 @@ const config = {
  * @returns {void}
  */
 export const registerGetEnvTool = (server: McpServer) => {
-  server.registerTool(name, config, async (args): Promise<CallToolResult> => {
+  server.registerTool(name, config, async (): Promise<CallToolResult> => {
     return {
       content: [
         {

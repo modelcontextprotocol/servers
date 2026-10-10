@@ -1,0 +1,212 @@
+# The quality gate
+
+This is the reference for what is checked before code reaches `v2/main`: the
+stages of the pre-push gate, what GitHub CI runs and where, and how the two
+relate. The rule itself (run the gate before every push) is in
+[`AGENTS.md`](../AGENTS.md#before-pushing). Diagnosing a failing stage is the
+`pre-push-gate` skill. This file is the only place the stage list is written
+out; everything else points here.
+
+## Two tiers, one set of checks
+
+| Tier | Command | Where | When |
+| --- | --- | --- | --- |
+| Inner loop | `npm run validate -w src/<server>`, `npm run validate:py -- <server>` | Your machine | While iterating on one server |
+| Pre-push gate | `npm run local:gate` | Your machine, under a lease | Before every push |
+| CI | `.github/workflows/typescript.yml`, `python.yml`; `dco.yml` | GitHub, on every push and pull request; `dco.yml` on pull requests only | Before merge |
+
+**`npm run local:gate` runs every check CI runs.** CI splits the same checks
+into parallel jobs on a fresh install; the gate runs them in sequence on your
+checkout. So a green gate means every check CI applies has already passed on
+your machine. It is the strongest predictor of a green CI there is here, though
+not a proof: CI runs on Linux, on a fresh `npm ci`, with Node 22 and each
+Python server's pinned interpreter.
+
+**The one exception is the Windows legs** (#1149): `test-windows` in both
+workflows runs each server's test suite (`npm test`, `pytest`) on a
+`windows-latest` runner. The gate runs the same suites, but only on your
+machine's OS, so a Windows-only failure (a drive letter, a UNC path, a missing
+`O_NOFOLLOW`, a locked file) shows up first in CI. When a PR touches
+platform-specific code, wait for those legs, not just the gate.
+
+The inner-loop commands are subsets. They are for speed while working, and are
+never a substitute for the gate.
+
+## The stages of `local:gate`
+
+`local:gate` is exactly `node scripts/gate-lease.mjs npm run local:gate:stages`:
+the [lease](#the-gate-lease) around the stages, and nothing else. The stages run
+in this order, and the first failure stops the run.
+
+| # | Stage | What it checks | CI counterpart |
+| --- | --- | --- | --- |
+| 1 | `verify:install-fresh` | Every package in `node_modules` is at the version `package-lock.json` records, and every `package.json` declares what the lockfile says it does | None needed: CI installs with `npm ci` |
+| 2 | `verify:dco` | Every commit in `origin/v2/main..HEAD` carries a `Signed-off-by:` trailer matching its author or committer (merge and bot commits exempt) | `dco.yml` → **DCO signoff**, over the pull request's `base.sha..head.sha` |
+| 3 | `validate` → `validate:guards` | The root guards, listed [below](#the-root-guards) | `typescript.yml` → **Root guards** |
+| 4 | `validate` → each workspace's `validate` | Per TypeScript server: `format:check`, `lint` (`--max-warnings 0`), `typecheck`, `build`, `test` | `typescript.yml` → **Validate \<server\>** (one leg each) |
+| 5 | `coverage` | Per TypeScript server: `vitest run --coverage`, failing when any file is below 90% on lines, statements, functions or branches | `typescript.yml` → **Coverage \<server\>** (one leg each) |
+| 6 | `validate:py` | Per Python server: `uv sync --locked`, `ruff check`, `ruff format --check`, `pyright`, `pytest`, `uv build` | `python.yml` → **Test \<server\>** (one leg each) |
+| 7 | `coverage:py` | Per Python server: `uv sync --locked`, then `uv run --frozen pytest --cov --cov-report=term-missing --cov-report=json`; then **every file** in `coverage.json` must reach **90% on lines and 90% on branches** | `python.yml` → **Coverage \<server\>** (one leg each) |
+| 8 | `verify:skills:cli` | `claude plugin validate` on `.claude/skills`, at the pinned CLI version | `typescript.yml` → **Root guards** |
+| 9 | `smoke` | Every server boots over each transport it implements and answers one tool call | `typescript.yml` → **Boot smoke** |
+
+Notes on the stages:
+
+- **`verify:install-fresh` is first on purpose.** The gate never runs
+  `npm ci`, so a checkout whose `node_modules` predates a pulled dependency
+  bump would be tested against dependencies CI does not use, and the failure
+  would show up later as a test reporting the old dependency's behavior. The
+  Python servers need no counterpart: stage 6 begins each server with
+  `uv sync --locked`, which brings its environment to its lockfile.
+- **`verify:dco` checks the commits you are about to push**, the same rule
+  CI's **DCO signoff** job applies to a pull request (`scripts/verify-dco.mjs`
+  for both). It needs `origin/v2/main` to exist locally, and on a stacked
+  branch it also checks the lower branch's commits
+  (`npm run verify:dco -- --base <rev>` checks a range of your choosing). A
+  failure names each unsigned commit and the `git rebase --signoff` repair.
+- **`coverage` is the TypeScript test suite run a second time, instrumented.**
+  It is a separate command from `test` and `validate` so the inner loop stays
+  fast, and a separate CI job so it gets its own runner. The 90% per-file
+  thresholds are set in each server's `vitest.config.ts`
+  (`coverage.thresholds`, `perFile: true`), not on the command line, so
+  `npm run coverage -w src/<server>` enforces exactly what the gate does. The
+  root `npm run coverage` runs every workspace even after one fails, and exits
+  non-zero if any did, so the failing workspace's report is not necessarily
+  the last thing printed.
+- **`validate:py` carries on after a failing server**, so one run reports all
+  three verdicts, and exits non-zero if any failed. Within a server it stops
+  at the first failing step.
+- **`coverage:py` is per file, not a total.** coverage.py's own `fail_under`
+  compares the sum across a package, so one well-tested module can carry an
+  untested one; `scripts/lib/py-coverage.mjs` reads `coverage.json` and checks
+  each file on its own. Lines and branches are the two dimensions coverage.py
+  measures (it has no function dimension); a file with no branches counts as
+  100% on them. What is measured is each server's `[tool.coverage.run]`
+  (`branch = true`, `source` set to its package). Like `validate:py` it carries
+  on after a failing server, and its summary names every file and dimension
+  below 90. It runs after `validate:py`, so a failing test has already been
+  reported on the fast, uninstrumented run.
+- **`verify:skills:cli` needs the network** when the pinned Claude Code CLI is
+  not the one installed: it fetches it with `npx`. `validate:py` needs it too
+  when a server's environment is missing or behind its lockfile, since
+  `uv sync --locked` then downloads packages (and the pinned interpreter, if
+  `uv` does not have it); `coverage:py` begins with the same sync, which is a
+  no-op once `validate:py` has run. With warm caches those are the only stages
+  that can fail offline.
+- **`smoke` launches what a user launches**: the built `dist/index.js` for a
+  TypeScript server, the console script through `uv run --no-sync` for a Python
+  one. stdio for all seven; HTTP+SSE and Streamable HTTP as well for
+  `everything`. The servers are given nothing outside the machine to talk to
+  and none of your files: `fetch` is pointed at a page the smoke serves on the
+  loopback interface, and the HTTP transports listen on a free port rather
+  than the default 3001. It runs after `validate` and `validate:py` because it
+  needs the build and each Python server's synced environment; it creates
+  neither.
+- `python.yml` also has a **Build \<server\>** job per server that re-runs
+  pyright and `uv build` and uploads the built distribution. It checks nothing
+  stage 6 does not.
+
+### The root guards
+
+`npm run validate:guards` is the part of `validate` that no per-server check
+covers: the repo-wide tooling and the guards that keep the gate itself honest.
+
+| Guard | Fails when |
+| --- | --- |
+| `format:check:root`, `lint:root` | A file under `scripts/` or a root config is unformatted or has a lint finding |
+| `verify:format-coverage` | A tracked source file is covered by no `format:check` glob |
+| `verify:skills` | A skill's frontmatter does not parse, declares no invocation mode, lacks eval cases, or the listing exceeds its budget; or a skills gate has come unwired |
+| `verify:typecheck-coverage` | A tracked TypeScript file lands in no `tsc` program |
+| `verify:dep-lockstep` | Two workspaces declare different ranges of a shared toolchain package |
+| `verify:no-test-retries` | A test declares a retry (Vitest's `retry`, a pytest rerun plugin or marker) |
+| `verify:action-pins` | A job that holds a credential (`id-token: write`, `packages: write`, a secret other than `GITHUB_TOKEN`), or whose artifact such a job downloads, or whose outputs such a job reads (`detect-packages` in `release.yml`), uses an action that is not pinned to a commit SHA with a `# vX.Y.Z` comment |
+| `test:scripts` | A guard's own unit tests fail. These include the workflow guard: a workflow invokes a `local:*` script, a CI job has no `timeout-minutes`, or `local:gate` is no longer exactly the lease wrapper around stages that include every check above |
+
+## What is in neither tier
+
+- **`npm run skills:eval`** spends real model calls and is non-deterministic,
+  so it is in neither the gate nor CI. Run the whole suite when adding a skill
+  or editing a description ([`skill-authoring.md`](./skill-authoring.md)).
+- **Coverage is not in this list: it is in both tiers.** The per-file gates are stages above: `coverage`
+  (stage 5) for the TypeScript servers and `coverage:py` (stage 7) for the
+  Python servers, each with its own CI job. They are also the coverage
+  commands: `npm run coverage -w src/<server>` and
+  `npm run coverage:py -- <server>` for one server. They stay out of
+  `validate`, `validate:py` and the plain `uv run pytest` loop on purpose,
+  since an instrumented run is slower and a per-file floor judges a finished
+  change, not each edit.
+- **`npm run pack:verify`** builds each package's publish artifact (the npm
+  tarball, the wheel), installs it into an empty directory and boots the
+  installed server. It catches what the boot smoke cannot, since the smoke
+  runs the checkout: a file missing from the tarball, a dependency that only
+  resolves inside the workspace. It also fails an npm tarball that ships a
+  test, a test helper or a test runner's config. It needs the network, so it is not a gate
+  stage. `release.yml` runs it before anything publishes, and the `release`
+  skill runs it by hand for the release ledger.
+- **`npm run format`** rewrites files, so it is something you run, not
+  something the gate does. The gate only checks.
+- **Publishing** (`release.yml`) runs only when a maintainer publishes a
+  GitHub Release. Before it publishes anything it re-runs each package's
+  tests and `pack:verify` on the released commit, in jobs that hold no
+  credential. The two workflows that open version PRs
+  (`version-packages.yml`, `prepare-python-release.yml`) check nothing. See
+  [`RELEASING.md`](../RELEASING.md).
+
+## Keeping the two tiers in step
+
+The claim "the gate runs every check CI runs" is only worth something if it
+cannot go stale quietly, so the script tests hold it in place:
+
+- **A check added to CI is added to `local:gate:stages` in the same change.**
+  `scripts/lib/workflow-gate.test.mjs` derives this from the workflows: every
+  npm script and every `scripts/*.mjs` that a push or pull-request workflow
+  runs must be reached by `local:gate`, so a check added to CI alone fails the
+  script tests. It reads script names, so a check written as a bare command in
+  a workflow step (not behind an npm script) is outside what it can see; put
+  new checks behind a script.
+- **No workflow invokes a `local:*` script.** The prefix means local-only. CI
+  runs the same checks as separate jobs, and a workflow that ran the gate
+  itself would queue on a lease nothing else shares and collapse the parallel
+  legs into one.
+- **Every CI job declares `timeout-minutes`**, so a hung job goes red in
+  minutes instead of holding a runner for GitHub's six-hour default. The
+  current values are 10 to 30 times the observed run time of each job.
+- **No test retries**, in either language. A retry turns a test that fails
+  some of the time into a green one, on the only gate between that test and
+  `v2/main`.
+
+## The gate lease
+
+Agent sessions work in separate worktrees of one checkout, and each runs the
+gate before pushing. Two gates at once compete for every core, so both slow
+down and any time-sensitive test is measured on a machine it was not written
+for. `local:gate` therefore runs under a **machine-wide lease**
+(`scripts/gate-lease.mjs`, ported from the MCP Inspector): one gate runs, and
+any other started meanwhile waits its turn.
+
+What you see when another gate holds the lease:
+
+```
+gate-lease: pid 12345 in /path/to/other-worktree, running for 40s holds the gate lease; waiting for its turn so the gates do not contend. SERVERS_SKIP_GATE_LEASE=1 runs anyway.
+```
+
+- **Waiters start in arrival order.** A waiting gate re-checks every 2 seconds
+  and prints `still waiting` once a minute.
+- **A holder that is killed releases by itself.** It stops refreshing its lock,
+  which goes stale after 30 seconds and is taken over by the next waiter.
+  Nothing needs cleaning up by hand, with one exception: a dead holder's lock
+  directory that cannot be removed (a stray file in it, or permissions). The
+  waiter then names the path when it gives up.
+- **A waiter gives up after 45 minutes** in total, with a message naming the
+  holder. That budget is not reset as the queue ahead drains.
+- **A lease that cannot be set up does not fail the gate.** If the lease
+  directory cannot be created or written, the gate runs without it and says
+  so. A waiter that gives up (above) is the one way the lease ends a run.
+- **`SERVERS_SKIP_GATE_LEASE=1`** runs without the lease. It does not get a
+  result sooner than waiting would: an overlapped run is slower than a queued
+  one. `SERVERS_GATE_LEASE_DIR` moves the lease directory, which lives under
+  `$XDG_RUNTIME_DIR` or the system temp directory by default, never inside a
+  worktree.
+
+The lease covers `local:gate` only. A bare `npm run validate` or `npm test` in
+another session does not take it.

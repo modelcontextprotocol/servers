@@ -47,14 +47,14 @@ Please note that mcp-server-git is currently in early development. The functiona
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `message` (string): Commit message
-   - Returns: Confirmation with new commit hash
+   - Returns: Confirmation with new commit hash; an error if nothing is staged (as `git commit` without `--allow-empty`), except while a merge is in progress (`MERGE_HEAD` present), where git also allows an empty commit. While a merge is in progress the commit concludes it: its parents are `HEAD` and every `MERGE_HEAD` commit, and the merge state is cleared
 
 6. `git_add`
    - Adds file contents to the staging area
    - Inputs:
      - `repo_path` (string): Path to Git repository
-     - `files` (string[]): Array of file paths to stage
-   - Returns: Confirmation of staged files
+     - `files` (string[]): Non-empty array of file paths to stage; `["."]` stages everything
+   - Returns: Confirmation of staged files, or a message saying nothing was staged when the call left the index unchanged
 
 7. `git_reset`
    - Unstages all staged changes
@@ -83,13 +83,13 @@ Please note that mcp-server-git is currently in early development. The functiona
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `branch_name` (string): Name of branch to checkout
-   - Returns: Confirmation of branch switch
+   - Returns: Confirmation of branch switch, or `HEAD is now detached at <short sha>` when `branch_name` is not a branch (a sha, tag or other revision)
 11. `git_show`
-   - Shows the contents of a commit
+   - Shows the contents of a commit, or of a file or directory at a revision
    - Inputs:
      - `repo_path` (string): Path to Git repository
-     - `revision` (string): The revision (commit hash, branch name, tag) to show
-   - Returns: Contents of the specified commit
+     - `revision` (string): The revision (commit hash, branch name, tag) or object spec (`HEAD:path/to/file`) to show
+   - Returns: Contents of the specified commit, file content, or directory listing
 
 12. `git_branch`
    - List Git branches
@@ -122,6 +122,8 @@ python -m mcp_server_git
 ```
 
 ## Configuration
+
+`--repository` (`-r`) accepts any path inside a Git working tree. At startup the server walks up to the enclosing repository root, the way `git rev-parse --show-toplevel` does, so `--repository .` works when a shared config is launched from any subdirectory of the repository. A path inside the repository therefore allows tool calls anywhere in that repository, not only under the subdirectory given. A path that does not exist, or is not inside a Git repository, is logged as a one-line error at startup.
 
 ### Usage with Claude Desktop
 
@@ -290,7 +292,24 @@ help you debug any issues.
 
 ## Development
 
-If you are doing local development, there are two ways to test your changes:
+### Tests and coverage
+
+The test suite drives `serve()` in-process through an MCP `ClientSession`
+(see `tests/conftest.py`). From `src/git`:
+
+```bash
+uv run --frozen pytest                 # the tests
+uv run --frozen pytest --cov --cov-report=term-missing --cov-report=json
+```
+
+The second command adds branch coverage of `src/mcp_server_git`, printed per
+file and written to `coverage.json` (ignored by git). Every file must stay at
+or above 90% of its lines and 90% of its branches. Code that cannot be reached
+is marked `# pragma: no cover  # <reason>` rather than lowering that bar.
+
+### Trying changes in a client
+
+There are two ways to try your changes in a client:
 
 1. Run the MCP inspector to test your changes. See [Debugging](#debugging) for run instructions.
 
