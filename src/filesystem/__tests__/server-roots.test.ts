@@ -274,7 +274,7 @@ describe("roots/list_changed", () => {
     const result = await call(client, "list_directory", { path: rootDir });
     expect(result.isError).toBe(true);
     expect(textOf(result)).toMatch(
-      /^Access denied - no allowed directories: the client's roots expose none/,
+      /^Access denied - no allowed directories: the client exposes no valid roots/,
     );
     // The command-line directories do not come back either.
     expect(
