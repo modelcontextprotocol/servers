@@ -4,13 +4,14 @@ import { z } from "zod";
 // Tool input schema
 export const EchoSchema = z.object({
   message: z.string().describe("Message to echo"),
+  shout: z.boolean().optional().describe("Uppercase the reply"),
 });
 
 // Tool configuration
 const name = "echo";
 const config = {
   title: "Echo Tool",
-  description: "Echoes back the input string",
+  description: "Echoes back the input string, verbatim",
   inputSchema: EchoSchema,
   annotations: {
     readOnlyHint: true,
