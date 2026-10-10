@@ -183,15 +183,20 @@ export class KnowledgeGraphManager {
     // complete old file or the complete new one, never a partial state.
     // The temp file is kept in the same directory so the rename stays on one
     // filesystem — renaming across mount points fails with EXDEV.
-    const directory = path.dirname(this.memoryFilePath);
+    // Resolve symlinks so the rename replaces the link's target, not the link.
+    const targetPath = await fs.realpath(this.memoryFilePath).catch(async () => {
+      const link = await fs.readlink(this.memoryFilePath).catch(() => undefined);
+      return link ? path.resolve(path.dirname(this.memoryFilePath), link) : this.memoryFilePath;
+    });
+    const directory = path.dirname(targetPath);
     const tempFilePath = path.join(
       directory,
-      `${path.basename(this.memoryFilePath)}.${randomBytes(16).toString('hex')}.tmp`
+      `${path.basename(targetPath)}.${randomBytes(16).toString('hex')}.tmp`
     );
 
     try {
       await fs.writeFile(tempFilePath, lines.join("\n") + "\n");
-      await fs.rename(tempFilePath, this.memoryFilePath);
+      await fs.rename(tempFilePath, targetPath);
     } catch (error) {
       // Never leave a stray temp file behind on failure.
       await fs.unlink(tempFilePath).catch(() => {});
