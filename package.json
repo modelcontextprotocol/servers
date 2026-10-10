@@ -72,6 +72,7 @@
   "overrides": {
     "qs": ">=6.15.2",
     "hono": ">=4.12.21",
-    "proxy-addr": "^2.0.8"
+    "proxy-addr": "^2.0.8",
+    "ip-address": "^10.7.1"
   }
 }
