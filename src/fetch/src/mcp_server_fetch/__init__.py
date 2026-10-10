@@ -16,9 +16,15 @@ def main():
         help="Ignore robots.txt restrictions",
     )
     parser.add_argument("--proxy-url", type=str, help="Proxy URL to use for requests")
+    parser.add_argument(
+        "--allow-internal-ips",
+        action="store_true",
+        help="Allow fetching loopback, private, link-local, and cloud-metadata "
+        "addresses. Disables SSRF protection; only use in trusted environments.",
+    )
 
     args = parser.parse_args()
-    asyncio.run(serve(args.user_agent, args.ignore_robots_txt, args.proxy_url))
+    asyncio.run(serve(args.user_agent, args.ignore_robots_txt, args.proxy_url, args.allow_internal_ips))
 
 
 if __name__ == "__main__":

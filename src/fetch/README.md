@@ -9,7 +9,7 @@ Source: https://github.com/modelcontextprotocol/servers/tree/main/src/fetch
 Requires MCP Python SDK 1.x (`mcp>=1.29.0,<2`). SDK 2.0 renamed APIs this server uses. The port to v2 is in progress.
 
 > [!CAUTION]
-> This server can access local/internal IP addresses and may represent a security risk. Exercise caution when using this MCP server to ensure this does not expose any sensitive data.
+> By default this server refuses to fetch loopback, private (RFC1918), link-local, and cloud-metadata IP addresses to mitigate server-side request forgery (SSRF). If you deliberately need to fetch internal hosts, you can re-enable this with `--allow-internal-ips` (see [Customization - Internal IPs](#customization---internal-ips)) — doing so may expose internal services and cloud instance metadata to the model, so only use it in trusted environments. This protection does not apply when requests are routed through a proxy; see [Customization - Proxy](#customization---proxy).
 
 The fetch tool will truncate the response, but by using the `start_index` argument, you can specify where to start the content extraction. This lets models read a webpage in chunks, until they find the information they need.
 
@@ -173,6 +173,15 @@ This can be customized by adding the argument `--user-agent=YourUserAgent` to th
 ### Customization - Proxy
 
 The server can be configured to use a proxy by using the `--proxy-url` argument.
+
+> [!IMPORTANT]
+> The SSRF protection described below cannot be enforced when requests go through a proxy. The server resolves each destination itself, but the proxy resolves the hostname again for the forwarded request, and an attacker-controlled hostname can return a public address to the server and an internal one to the proxy. Note that this applies to `HTTP_PROXY`, `HTTPS_PROXY`, and `ALL_PROXY` in the environment as well as to `--proxy-url`, because the HTTP client honors those by default. The server warns on startup when it detects either. Restrict internal destinations at the proxy in that case.
+
+### Customization - Internal IPs
+
+By default the server blocks requests to loopback, private (RFC1918), link-local, cloud-metadata (169.254.169.254), and other non-public IP addresses to prevent SSRF, and it re-validates the destination on every redirect hop. If you need to fetch internal hosts (for example a service on `localhost`), add the argument `--allow-internal-ips` to the `args` list in the configuration. This disables the SSRF protection, so only enable it in trusted environments.
+
+Two limitations are worth knowing about. The destination is validated before the request and resolved again when the connection is made, so a hostname whose DNS answer changes between those two points can still be reached (DNS rebinding). And when a proxy is configured the guard cannot enforce the destination at all — see [Customization - Proxy](#customization---proxy).
 
 ## Windows Configuration
 
