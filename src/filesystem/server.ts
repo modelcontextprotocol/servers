@@ -189,19 +189,25 @@ export function createServer(
     version: SERVER_VERSION,
   });
 
-  // Settles once the post-initialize setup (fetching the client's initial
-  // roots) has finished, successfully or not; it never rejects. Every tool call
-  // waits for it, so a call that arrives while the initial roots/list is still
-  // outstanding is checked against the client's roots rather than against the
-  // command-line directories (#3204). It is replaced in oninitialized, which
-  // the SDK runs before any request sent after notifications/initialized.
-  let initialization: Promise<void> = Promise.resolve();
-  // True from the initial roots/list until a refresh's answer has been
-  // applied or the newest refresh has failed. A roots/list_changed that
-  // overtakes the initial load while this holds replaces `initialization`, so
-  // waiting tool calls keep waiting for the refresh that will actually apply
-  // rather than running against the command-line directories (#5097).
-  let initialRootsPending = false;
+  // The barrier every tool call waits on, so a call that arrives while roots are
+  // being fetched is checked against the roots that come back rather than the
+  // ones being replaced: the command-line directories while the initial
+  // roots/list is outstanding (#3204), or a root the client has just withdrawn
+  // while a roots/list_changed refresh is pending (#5101). Each refresh (the
+  // initial load included) installs a new barrier before it sends roots/list,
+  // and settles it when it finishes, successfully or not. Installing one also
+  // settles the barrier it replaces, so calls waiting on an older refresh wake
+  // at once and move on to the newer one instead of waiting for the older
+  // one's answer (#5097, #5101).
+  let barrier = { settled: Promise.resolve(), settle: () => {} };
+  function installBarrier(): () => void {
+    let settle!: () => void;
+    const settled = new Promise<void>((resolve) => (settle = resolve));
+    const replaced = barrier;
+    barrier = { settled, settle };
+    replaced.settle();
+    return settle;
+  }
   const registerTool = server.registerTool.bind(server);
   server.registerTool = ((
     name: string,
@@ -209,11 +215,11 @@ export function createServer(
     handler: (...args: unknown[]) => unknown,
   ) =>
     registerTool(name, config, (async (...args: unknown[]) => {
-      let awaited: Promise<void>;
+      let awaited: typeof barrier;
       do {
-        awaited = initialization;
-        await awaited;
-      } while (awaited !== initialization);
+        awaited = barrier;
+        await awaited.settled;
+      } while (awaited !== barrier);
       return handler(...args);
     }) as never)) as typeof server.registerTool;
 
@@ -813,41 +819,41 @@ export function createServer(
     RootsListChangedNotificationSchema,
     async () => {
       const generation = ++rootsGeneration;
-      const refresh = (async () => {
-        try {
-          // Request the updated roots list from the client
-          const response = await server.server.listRoots();
-          /* v8 ignore else -- the SDK validates the roots/list result against ListRootsResultSchema, which requires roots, so the implicit else cannot run */
-          if (response && "roots" in response) {
-            await updateAllowedDirectoriesFromRoots(response.roots, generation);
-          }
-        } catch (error) {
-          console.error(
-            "Failed to request roots from client:",
-            error instanceof Error ? error.message : String(error),
-          );
-        } finally {
-          if (generation === rootsGeneration) initialRootsPending = false;
+      const settle = installBarrier();
+      try {
+        // Request the updated roots list from the client
+        const response = await server.server.listRoots();
+        /* v8 ignore else -- the SDK validates the roots/list result against ListRootsResultSchema, which requires roots, so the implicit else cannot run */
+        if (response && "roots" in response) {
+          await updateAllowedDirectoriesFromRoots(response.roots, generation);
         }
-      })();
-      // Overtaking the initial load: tool calls wait for this refresh instead.
-      if (initialRootsPending) initialization = refresh;
-      await refresh;
+      } catch (error) {
+        console.error(
+          "Failed to request roots from client:",
+          error instanceof Error ? error.message : String(error),
+        );
+      } finally {
+        settle();
+      }
     },
   );
 
   // Handles post-initialization setup, specifically checking for and fetching
-  // MCP roots. Tool calls wait for it (see `initialization` above).
+  // MCP roots. The initial load claims its generation and installs its barrier
+  // here, synchronously, before any roots/list_changed handled afterwards can
+  // claim a newer one.
   server.server.oninitialized = () => {
-    initialization = initialize();
+    const generation = ++rootsGeneration;
+    const settle = installBarrier();
+    // Not awaited: oninitialized is synchronous. Tool calls wait on the
+    // barrier, which settles when initialize() finishes; it never rejects.
+    void initialize(generation).finally(settle);
   };
 
-  async function initialize(): Promise<void> {
+  async function initialize(generation: number): Promise<void> {
     const clientCapabilities = server.server.getClientCapabilities();
 
     if (clientCapabilities?.roots) {
-      const generation = ++rootsGeneration;
-      initialRootsPending = true;
       try {
         const response = await server.server.listRoots();
         /* v8 ignore else -- the SDK validates the roots/list result against ListRootsResultSchema, which requires roots, so the else cannot run */
@@ -863,8 +869,6 @@ export function createServer(
           "Failed to request initial roots from client:",
           error instanceof Error ? error.message : String(error),
         );
-      } finally {
-        if (generation === rootsGeneration) initialRootsPending = false;
       }
     } else {
       if (allowedDirectories.length > 0) {
