@@ -660,6 +660,48 @@ describe("roots/list_changed", () => {
     expect(await allowedDirectoriesOf(client)).toEqual([cliDir]);
   });
 
+  // A call waiting on an older refresh must not stay blocked on it once a newer
+  // refresh has applied the client's current roots (#5101).
+  it("wakes a call waiting on an older refresh once a newer one finishes (#5101)", async () => {
+    await fs.writeFile(path.join(rootDir, "a.txt"), "a");
+    let calls = 0;
+    let releaseOlder!: () => void;
+    const olderHeld = new Promise<void>((resolve) => (releaseOlder = resolve));
+    const { client } = await connectTracked([], {
+      capabilities: ROOTS,
+      listRoots: async () => {
+        calls += 1;
+        if (calls === 1) return [rootOf(rootDir)];
+        if (calls === 2) {
+          await olderHeld; // not answered until the end of the test
+          return [];
+        }
+        return [rootOf(rootDir)];
+      },
+    });
+    await vi.waitFor(async () =>
+      expect(await allowedDirectoriesOf(client)).toEqual([rootDir]),
+    );
+
+    await client.sendRootsListChanged();
+    await vi.waitFor(() => expect(calls).toBe(2));
+    const pending = call(client, "list_directory", { path: rootDir });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await client.sendRootsListChanged();
+
+    expect(textOf(await pending)).toBe("[FILE] a.txt");
+    expect(calls).toBe(3);
+
+    // Cleanup: the older answer arrives last and is discarded as stale.
+    releaseOlder();
+    await vi.waitFor(() =>
+      expect(stderr).toHaveBeenCalledWith(
+        "Discarded a stale roots/list answer: a newer roots update has started",
+      ),
+    );
+    expect(await allowedDirectoriesOf(client)).toEqual([rootDir]);
+  });
+
   it("logs and keeps the current directories when the re-fetch fails", async () => {
     let fail = false;
     const { client } = await connectTracked([], {
