@@ -186,19 +186,25 @@ export function createServer(
     version: SERVER_VERSION,
   });
 
-  // Settles once the newest roots refresh has finished, successfully or not; it
-  // never rejects. Every tool call waits for it, so a call that arrives while
-  // roots are being fetched is checked against the roots that come back rather
-  // than the ones being replaced: the command-line directories while the
-  // initial roots/list is outstanding (#3204), or a root the client has just
-  // withdrawn while a roots/list_changed refresh is pending (#5101). The
-  // initial load (oninitialized, which the SDK runs before any request sent
-  // after notifications/initialized) and every refresh replace it, and a
-  // waiting call follows each replacement until it stops changing (#5097).
-  // Each one is installed before its roots/list is sent: a transport that
-  // delivers that request synchronously can let the client announce a newer
-  // change at once, and that newer barrier must not be overwritten by this one.
-  let initialization: Promise<void> = Promise.resolve();
+  // The barrier every tool call waits on, so a call that arrives while roots are
+  // being fetched is checked against the roots that come back rather than the
+  // ones being replaced: the command-line directories while the initial
+  // roots/list is outstanding (#3204), or a root the client has just withdrawn
+  // while a roots/list_changed refresh is pending (#5101). Each refresh (the
+  // initial load included) installs a new barrier before it sends roots/list,
+  // and settles it when it finishes, successfully or not. Installing one also
+  // settles the barrier it replaces, so calls waiting on an older refresh wake
+  // at once and move on to the newer one instead of waiting for the older
+  // one's answer (#5097, #5101).
+  let barrier = { settled: Promise.resolve(), settle: () => {} };
+  function installBarrier(): () => void {
+    let settle!: () => void;
+    const settled = new Promise<void>((resolve) => (settle = resolve));
+    const replaced = barrier;
+    barrier = { settled, settle };
+    replaced.settle();
+    return settle;
+  }
   const registerTool = server.registerTool.bind(server);
   server.registerTool = ((
     name: string,
@@ -206,11 +212,11 @@ export function createServer(
     handler: (...args: unknown[]) => unknown,
   ) =>
     registerTool(name, config, (async (...args: unknown[]) => {
-      let awaited: Promise<void>;
+      let awaited: typeof barrier;
       do {
-        awaited = initialization;
-        await awaited;
-      } while (awaited !== initialization);
+        awaited = barrier;
+        await awaited.settled;
+      } while (awaited !== barrier);
       return handler(...args);
     }) as never)) as typeof server.registerTool;
 
@@ -810,38 +816,35 @@ export function createServer(
     "notifications/roots/list_changed",
     async () => {
       const generation = ++rootsGeneration;
-      // Deferred a microtask, so the barrier below is installed before
-      // roots/list is sent (see `initialization` above).
-      const refresh = Promise.resolve().then(async () => {
-        try {
-          // Request the updated roots list from the client
-          const response = await server.server.listRoots();
-          /* v8 ignore else -- the SDK validates the roots/list result against ListRootsResultSchema, which requires roots, so the implicit else cannot run */
-          if (response && "roots" in response) {
-            await updateAllowedDirectoriesFromRoots(response.roots, generation);
-          }
-        } catch (error) {
-          console.error(
-            "Failed to request roots from client:",
-            error instanceof Error ? error.message : String(error),
-          );
+      const settle = installBarrier();
+      try {
+        // Request the updated roots list from the client
+        const response = await server.server.listRoots();
+        /* v8 ignore else -- the SDK validates the roots/list result against ListRootsResultSchema, which requires roots, so the implicit else cannot run */
+        if (response && "roots" in response) {
+          await updateAllowedDirectoriesFromRoots(response.roots, generation);
         }
-      });
-      // Tool calls wait for this refresh, so none runs against a root the
-      // client has just withdrawn while its answer is pending (#5101).
-      initialization = refresh;
-      await refresh;
+      } catch (error) {
+        console.error(
+          "Failed to request roots from client:",
+          error instanceof Error ? error.message : String(error),
+        );
+      } finally {
+        settle();
+      }
     },
   );
 
   // Handles post-initialization setup, specifically checking for and fetching
-  // MCP roots. Tool calls wait for it (see `initialization` above), which is
-  // installed before initialize() sends its roots/list. The initial load claims
-  // its generation here, synchronously, so a roots/list_changed handled before
-  // the deferred request runs takes a newer one and is not discarded as stale.
+  // MCP roots. The initial load claims its generation and installs its barrier
+  // here, synchronously, before any roots/list_changed handled afterwards can
+  // claim a newer one.
   server.server.oninitialized = () => {
     const generation = ++rootsGeneration;
-    initialization = Promise.resolve().then(() => initialize(generation));
+    const settle = installBarrier();
+    // Not awaited: oninitialized is synchronous. Tool calls wait on the
+    // barrier, which settles when initialize() finishes; it never rejects.
+    void initialize(generation).finally(settle);
   };
 
   async function initialize(generation: number): Promise<void> {
