@@ -539,7 +539,7 @@ def test_get_zoneinfo_rejects_a_key_the_tz_database_does_not_list():
     without_warsaw = known_timezones() - {"Europe/Warsaw"}
     with patch("mcp_server_time.server.known_timezones", return_value=without_warsaw):
         with pytest.raises(
-            MCPError,
+            McpError,
             match="Invalid timezone: 'No time zone found with key Europe/Warsaw'",
         ):
             get_zoneinfo("Europe/Warsaw")
