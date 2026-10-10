@@ -1,5 +1,15 @@
 # @modelcontextprotocol/server-filesystem
 
+## 1.0.1
+
+### Patch Changes
+
+- [#5095](https://github.com/modelcontextprotocol/servers/pull/5095) [`5ea217b`](https://github.com/modelcontextprotocol/servers/commit/5ea217b57e042714c6cb29bb03502ce1c6d638c4) Thanks [@cliffhall](https://github.com/cliffhall)! - A `roots/list_changed` update that leaves no valid root now revokes access once the client's roots are in force, instead of keeping the previous allowed directories, so a client that withdraws its roots withdraws the server's access too ([#5094](https://github.com/modelcontextprotocol/servers/issues/5094)). Every path is then refused with "Access denied - no allowed directories" until the client exposes a root again. Before any root has been in force, such an update still keeps the command-line directories.
+
+- [#5102](https://github.com/modelcontextprotocol/servers/pull/5102) [`92f9558`](https://github.com/modelcontextprotocol/servers/commit/92f9558fbf0dbd0f1fb67d223a02c3ad5c3ad6bf) Thanks [@cliffhall](https://github.com/cliffhall)! - Tool calls that arrive while a `roots/list_changed` refresh is fetching the client's roots now wait for it, as they already did for the initial roots, so a call can no longer reach a root the client has just withdrawn while the answer is pending ([#5101](https://github.com/modelcontextprotocol/servers/issues/5101)).
+
+- [#5098](https://github.com/modelcontextprotocol/servers/pull/5098) [`423fe6b`](https://github.com/modelcontextprotocol/servers/commit/423fe6b7fca01b186443b5e21bc7440fe431bb64) Thanks [@cliffhall](https://github.com/cliffhall)! - Overlapping roots refreshes now take effect in the order they started: when a client sends `roots/list_changed` again before the previous `roots/list` answer arrived (or while the initial roots are still loading), an answer that arrives after a newer refresh has started is discarded instead of overwriting it, so a stale answer can no longer undo a newer update such as a revocation ([#5097](https://github.com/modelcontextprotocol/servers/issues/5097)).
+
 ## 1.0.0
 
 The first semantic version, resuming semver after the date-stamped releases (last `2026.8.31`). It describes everything since `2026.8.31`, and is the last release of the legacy-era server.
