@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { getValidRootDirectories } from '../roots-utils.js';
+import { getValidRootDirectories, mergeAllowedDirectories } from '../roots-utils.js';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, realpathSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -80,5 +80,34 @@ describe('getValidRootDirectories', () => {
       expect(result).not.toContain(invalidPath);
       expect(result).toHaveLength(1);
     });
+  });
+});
+
+describe('mergeAllowedDirectories', () => {
+  it('preserves CLI directories while adding current client roots', () => {
+    const result = mergeAllowedDirectories(
+      ['/cli/one', '/cli/two'],
+      ['/roots/current']
+    );
+
+    expect(result).toEqual(['/cli/one', '/cli/two', '/roots/current']);
+  });
+
+  it('deduplicates directories shared by CLI args and client roots', () => {
+    const result = mergeAllowedDirectories(
+      ['/shared', '/cli/only'],
+      ['/shared', '/roots/only']
+    );
+
+    expect(result).toEqual(['/shared', '/cli/only', '/roots/only']);
+  });
+
+  it('falls back to the CLI baseline when the client provides no valid roots', () => {
+    const result = mergeAllowedDirectories(
+      ['/cli/one', '/cli/two'],
+      []
+    );
+
+    expect(result).toEqual(['/cli/one', '/cli/two']);
   });
 });
