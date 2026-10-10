@@ -9,13 +9,14 @@
 # loop only; serving 2026-07-28 is #4853.
 
 from datetime import datetime, timedelta
+from functools import cache
 from importlib.metadata import version
 from enum import Enum
 import json
 import sys
 from typing import Any
 
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError, available_timezones
 from tzlocal import get_localzone_name  # ← returns "Europe/Paris", etc.
 
 import jsonschema
@@ -79,9 +80,30 @@ def get_local_tz(local_tz_override: str | None = None) -> ZoneInfo:
     return ZoneInfo("UTC")
 
 
+@cache
+def known_timezones() -> frozenset[str]:
+    """The exact IANA keys this host's tz database holds, read once."""
+    return frozenset(available_timezones())
+
+
+def load_zoneinfo(timezone_name: str) -> ZoneInfo:
+    """`ZoneInfo(timezone_name)`, accepting only an exact IANA key.
+
+    zoneinfo looks a key up as a file path, so on a case-insensitive
+    filesystem (macOS's APFS) `europe/warsaw` resolves to `Europe/Warsaw`
+    while Linux rejects it (#5060). Checking the key against the database's
+    own list makes every platform reject it. `ZoneInfo` runs first so a path
+    or a directory keeps the error zoneinfo gives it.
+    """
+    zone = ZoneInfo(timezone_name)
+    if timezone_name not in known_timezones():
+        raise ZoneInfoNotFoundError(f"No time zone found with key {timezone_name}")
+    return zone
+
+
 def get_zoneinfo(timezone_name: str) -> ZoneInfo:
     try:
-        return ZoneInfo(timezone_name)
+        return load_zoneinfo(timezone_name)
     except Exception as e:
         raise MCPError(code=INVALID_PARAMS, message=f"Invalid timezone: {str(e)}")
 
@@ -173,7 +195,7 @@ async def serve(local_timezone: str | None = None) -> None:
         # bad key (unknown name, a tzdata directory, a path, a null byte), and
         # its messages can carry a filesystem path, so none of them is shown.
         try:
-            ZoneInfo(local_timezone)
+            load_zoneinfo(local_timezone)
         except (ZoneInfoNotFoundError, ValueError, OSError):
             sys.exit(
                 f"Error: invalid --local-timezone {local_timezone!r}: "
