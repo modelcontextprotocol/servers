@@ -1,3 +1,15 @@
+// The `gzip-file-as-resource` tool: fetches a file, gzips it, and returns the
+// result as an embedded resource or as a link to a resource the client can
+// read later.
+//
+// Where that later resource lives depends on the protocol era (#4852). For a
+// 2025-era client it is registered on the server instance serving the
+// client's connection or session (resources/session.ts), and lasts as long as
+// that does. The 2026-07-28 revision has no sessions, and on its HTTP path
+// each request gets a fresh instance, so for a 2026-07-28 client the resource
+// is stored under a URI with a server-minted id that every instance can serve
+// (resources/minted.ts), and expires after ten minutes.
+
 import { z } from "zod";
 import {
   McpServer,
@@ -5,10 +17,12 @@ import {
   Resource,
 } from "@modelcontextprotocol/server";
 import { gzipSync } from "node:zlib";
+import { mintBlobResource } from "../resources/minted.js";
 import {
   getSessionResourceURI,
   registerSessionResource,
 } from "../resources/session.js";
+import type { ServerContext } from "../server/context.js";
 
 // Maximum input file size - 10 MB default
 const GZIP_MAX_FETCH_SIZE = Number(
@@ -48,7 +62,7 @@ const name = "gzip-file-as-resource";
 const config = {
   title: "GZip File as Resource Tool",
   description:
-    "Compresses a single file using gzip compression. Depending upon the selected output type, returns either the compressed data as a gzipped resource or a resource link, allowing it to be downloaded in a subsequent request during the current session.",
+    "Compresses a single file using gzip compression. Depending upon the selected output type, returns either the compressed data as a gzipped resource or a resource link, allowing it to be downloaded in a subsequent request: during the current session for a 2025-era client, or for ten minutes at a minted URI on protocol version 2026-07-28.",
   inputSchema: GZipFileAsResourceSchema,
   annotations: {
     readOnlyHint: false,
@@ -71,9 +85,13 @@ const config = {
  * If an unrecognized `outputType` is provided, the tool throws an error.
  *
  * @param {McpServer} server - The McpServer instance where the tool will be registered.
+ * @param {ServerContext} context - The protocol era the instance serves.
  * @throws {Error} Throws an error if an unknown output type is specified.
  */
-export const registerGZipFileAsResourceTool = (server: McpServer) => {
+export const registerGZipFileAsResourceTool = (
+  server: McpServer,
+  context: ServerContext,
+) => {
   server.registerTool(name, config, async (args): Promise<CallToolResult> => {
     const {
       name,
@@ -100,14 +118,6 @@ export const registerGZipFileAsResourceTool = (server: McpServer) => {
     const mimeType = "application/gzip";
     const resource = <Resource>{ uri, name, mimeType };
 
-    // Register resource, get resource link in return
-    const resourceLink = registerSessionResource(
-      server,
-      resource,
-      "blob",
-      blob,
-    );
-
     // Return the resource or a resource link that can be used to access this resource later
     if (outputType === "resource") {
       return {
@@ -119,6 +129,11 @@ export const registerGZipFileAsResourceTool = (server: McpServer) => {
         ],
       };
     } else if (outputType === "resourceLink") {
+      // Make the resource readable later, where this era can reach it
+      const resourceLink =
+        context.era === "modern"
+          ? mintBlobResource(name, mimeType, blob)
+          : registerSessionResource(server, resource, "blob", blob);
       return {
         content: [resourceLink],
       };

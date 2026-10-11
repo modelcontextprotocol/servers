@@ -14,7 +14,6 @@ import type {
   ElicitRequest,
   ElicitResult,
 } from "@modelcontextprotocol/server";
-import { __resetIssuedErrorPathElicitations } from "../tools/trigger-url-elicitation.js";
 import {
   connect,
   contentOf,
@@ -26,7 +25,6 @@ import {
 let session: Session | undefined;
 
 afterEach(async () => {
-  __resetIssuedErrorPathElicitations();
   await session?.close();
   session = undefined;
 });

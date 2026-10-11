@@ -61,6 +61,6 @@ describe("registerSessionResource", () => {
 describe("syncRoots", () => {
   it("does nothing for a server whose client has not initialized", async () => {
     const server = new McpServer({ name: "s", version: "0" });
-    expect(await syncRoots(server, "no-client")).toBeUndefined();
+    expect(await syncRoots(server)).toBeUndefined();
   });
 });

@@ -8,13 +8,18 @@
  * `extra` objects, so the SDK v2 codemod can update these tests with import
  * and type changes alone.
  *
- * Several server modules keep per-session state in module-level maps keyed by
- * the transport's session id (logging, subscriptions, roots, the toggles).
- * `InMemoryTransport` has no session id of its own, so every in-memory session
- * would share the `undefined` key and leak state between tests. `connect()`
- * therefore gives each server transport a fresh `sessionId` before `connect`
- * (pass `sessionId: null` to keep it undefined, as stdio does), and `close()`
- * runs the server's `cleanup(sessionId)` the way the HTTP transports do.
+ * `connect()` serves a 2025-era client: the server is connected to the
+ * transport directly and the client opens with `initialize`. Per-connection
+ * state lives on the server instance (#4852), so each session is isolated by
+ * construction; `close()` runs the server's `cleanup()` the way the
+ * transports do when a connection ends. The transport still gets a session id
+ * (pass `sessionId: null` to leave it undefined, as stdio does), for the tests
+ * that look at one.
+ *
+ * `connectModern()` serves a 2026-07-28 client: it hands the factory to the
+ * SDK's `serveStdio` entry over the in-memory pair, as the stdio transport
+ * does, and the client negotiates the era with `server/discover`, so every
+ * request carries its capabilities in `_meta`.
  */
 import { randomUUID } from "node:crypto";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
@@ -23,6 +28,7 @@ import type {
   ContentBlock,
   ServerNotification,
 } from "@modelcontextprotocol/client";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { createServer } from "../server/index.js";
 
 /** Options for one in-process session. */
@@ -77,7 +83,60 @@ export async function connect(options: ConnectOptions = {}): Promise<Session> {
     notifications,
     close: async () => {
       await client.close();
-      cleanup(sessionId);
+      cleanup();
+    },
+  };
+}
+
+/** Options for one in-process 2026-07-28 session. */
+export type ModernConnectOptions = {
+  /** The capabilities the client declares with each request. */
+  capabilities?: ClientCapabilities;
+  /** Install request handlers on the client before it connects. */
+  setup?: (client: Client) => void;
+};
+
+/**
+ * Connect a fresh 2026-07-28 client to a server built for the modern era,
+ * served the way the stdio transport serves it.
+ */
+export async function connectModern(
+  options: ModernConnectOptions = {},
+): Promise<Session> {
+  const cleanups: Array<() => void> = [];
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
+  const handle = serveStdio(
+    ({ era }) => {
+      const { server, cleanup } = createServer({ era });
+      cleanups.push(cleanup);
+      return server;
+    },
+    { transport: serverTransport },
+  );
+
+  const client = new Client(
+    { name: "everything-test-client", version: "0.0.0" },
+    {
+      capabilities: options.capabilities ?? {},
+      versionNegotiation: { mode: { pin: "2026-07-28" } },
+    },
+  );
+  const notifications: ServerNotification[] = [];
+  client.fallbackNotificationHandler = async (notification) => {
+    notifications.push(notification as ServerNotification);
+  };
+  options.setup?.(client);
+  await client.connect(clientTransport);
+
+  return {
+    client,
+    sessionId: undefined,
+    notifications,
+    close: async () => {
+      await client.close();
+      await handle.close();
+      for (const cleanup of cleanups) cleanup();
     },
   };
 }
@@ -121,10 +180,10 @@ export const ALL_CAPABILITIES: ClientCapabilities = {
   roots: { listChanged: true },
   sampling: {},
   elicitation: { form: {}, url: {} },
-  tasks: {
-    requests: {
-      sampling: { createMessage: {} },
-      elicitation: { create: {} },
-    },
-  },
+};
+
+/** Every client capability, plus the tasks extension (2026-07-28). */
+export const MODERN_CAPABILITIES: ClientCapabilities = {
+  ...ALL_CAPABILITIES,
+  extensions: { "io.modelcontextprotocol/tasks": {} },
 };

@@ -1,11 +1,11 @@
 # Everything MCP Server
+
 **[Architecture](docs/architecture.md)
 | [Project Structure](docs/structure.md)
 | [Startup Process](docs/startup.md)
 | [Server Features](docs/features.md)
 | [Extension Points](docs/extension.md)
 | [How It Works](docs/how-it-works.md)**
-
 
 This MCP server attempts to exercise all the features of the MCP protocol. It is not intended to be a useful server, but rather a test server for builders of MCP clients. It implements prompts, tools, resources, sampling, and more to showcase MCP capabilities.
 
@@ -28,10 +28,7 @@ Add to your `claude_desktop_config.json`:
   "mcpServers": {
     "everything": {
       "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-everything"
-      ]
+      "args": ["-y", "@modelcontextprotocol/server-everything"]
     }
   }
 }
@@ -44,12 +41,7 @@ On Windows, use `cmd /c` to launch `npx`:
   "mcpServers": {
     "everything": {
       "command": "cmd",
-      "args": [
-        "/c",
-        "npx",
-        "-y",
-        "@modelcontextprotocol/server-everything"
-      ]
+      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-everything"]
     }
   }
 }
@@ -116,27 +108,33 @@ npm run start:streamableHttp
 ```
 
 ## Running as an installed package
-### Install 
+
+### Install
+
 ```shell
 npm install -g @modelcontextprotocol/server-everything@latest
 ```
 
 ### Run the default (stdio) server
+
 ```shell
 npx @modelcontextprotocol/server-everything
 ```
 
 ### Or specify stdio explicitly
+
 ```shell
 npx @modelcontextprotocol/server-everything stdio
 ```
 
 ### Run the SSE server
+
 ```shell
 npx @modelcontextprotocol/server-everything sse
 ```
 
 ### Run the streamable HTTP server
+
 ```shell
 npx @modelcontextprotocol/server-everything streamableHttp
 ```
