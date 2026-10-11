@@ -26,6 +26,7 @@ Typically, each MCP server is implemented with an MCP SDK:
 
 These servers aim to demonstrate MCP features and the official SDKs.
 
+* **[NoBrainner](https://app.nobrainner.xyz/docs/mcp)** - Spaced repetition flashcards, study analytics, weak card targeting, and multi-language AI deck creation with TTS audio (Remote MCP).
 - **[Everything](src/everything)** - Reference / test server with prompts, resources, and tools.
 - **[Fetch](src/fetch)** - Web content fetching and conversion for efficient LLM usage.
 - **[Filesystem](src/filesystem)** - Secure file operations with configurable access controls.
