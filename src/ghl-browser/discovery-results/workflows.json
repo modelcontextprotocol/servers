@@ -1,0 +1,73 @@
+{
+  "path": "/automation/workflows",
+  "url": "https://app.leadconnectorhq.com/automation/workflows",
+  "total": 5,
+  "byStatus": {
+    "200": 3,
+    "429": 1,
+    "pending": 1
+  },
+  "endpoints": [
+    "GET /latest/manifest.json",
+    "GET /localization/en-US/",
+    "POST /api/1723141/envelope/",
+    "POST /j/collect"
+  ],
+  "requests": [
+    {
+      "method": "GET",
+      "url": "https://production.app-manifest.leadconnectorhq.com/latest/manifest.json",
+      "resourceType": "fetch",
+      "status": 200,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787083833302,
+        "finishedAt": 1787083833303
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://o176457.ingest.sentry.io/api/1723141/envelope/?sentry_version=7&sentry_key=c67431ff70d6440fb529c2705792425f&sentry_client=sentry.javascript.vue%2F10.19.0",
+      "resourceType": "fetch",
+      "status": 200,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787083834316,
+        "finishedAt": 1787083834338
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://www.google-analytics.com/j/collect?v=1&_v=j102&a=1266133340&t=pageview&_s=1&dl=https%3A%2F%2Fapp.leadconnectorhq.com%2Fautomation%2Fworkflows&ul=en-us&sr=1440x900&vp=1440x900&_u=SACAAEABEAAAACAAI~&jid=&gjid=&cid=342809228.1787083827&tid=UA-115177999-2&_gid=178827312.1787083827&_slc=1&z=226779792",
+      "resourceType": "xhr",
+      "status": null,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787083834316,
+        "finishedAt": null
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://backend.leadconnectorhq.com/localization/en-US/?module=common,smartList,contactDetail,copilot",
+      "resourceType": "xhr",
+      "status": 200,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787083834323,
+        "finishedAt": 1787083834417
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://o176457.ingest.sentry.io/api/1723141/envelope/?sentry_version=7&sentry_key=c67431ff70d6440fb529c2705792425f&sentry_client=sentry.javascript.vue%2F10.19.0",
+      "resourceType": "fetch",
+      "status": 429,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787083839344,
+        "finishedAt": 1787083839396
+      }
+    }
+  ]
+}

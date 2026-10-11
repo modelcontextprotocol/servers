@@ -1,0 +1,11 @@
+node_modules/
+dist/
+screenshots/
+browser-state/*
+!browser-state/.gitkeep
+.env
+.env.local
+*.tsbuildinfo
+discovery-results/bundles/
+Thumbs.db
+.DS_Store
