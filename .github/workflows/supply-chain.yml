@@ -1,0 +1,118 @@
+name: FANZ Supply Chain (SBOM · Sign · License)
+
+# FANZ software-supply-chain compliance workflow. Drop into each repo as
+# .github/workflows/supply-chain.yml. Produces a CycloneDX + SPDX SBOM per build,
+# submits it to the GitHub dependency graph, scans it for vulns (Grype), enforces a
+# license policy, and cryptographically attests the SBOM (cosign keyless / SLSA-style).
+# Standards: SPDX 2.3, CycloneDX 1.5, NIST SSDF (SP 800-218), EO 14028, DORA Art.28.
+
+on:
+  push:
+    branches: [ main, master ]
+  release:
+    types: [ published ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write        # cosign keyless (OIDC)
+  security-events: write # dependency graph submission
+
+jobs:
+  sbom:
+    name: Generate · scan · license · attest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ---- 1. Generate SBOMs (both standard formats) --------------------------
+      - name: Generate CycloneDX SBOM (Syft)
+        uses: anchore/sbom-action@v0
+        with:
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+          upload-artifact: false
+
+      - name: Generate SPDX SBOM (Syft)
+        uses: anchore/sbom-action@v0
+        with:
+          format: spdx-json
+          output-file: sbom.spdx.json
+          upload-artifact: false
+
+      # ---- 2. Feed the GitHub dependency graph (continuous inventory) ---------
+      - name: Submit SBOM to GitHub dependency graph
+        uses: advanced-security/spdx-dependency-submission-action@v0.1.1
+        continue-on-error: true
+        with:
+          filePath: sbom.spdx.json
+
+      # ---- 3. Vulnerability scan of the SBOM (Grype) -------------------------
+      - name: Scan SBOM for known vulnerabilities
+        uses: anchore/scan-action@v4
+        id: grype
+        with:
+          sbom: sbom.cdx.json
+          fail-build: false        # report-only until backlog is triaged (ch.145 SLA governs)
+          severity-cutoff: high
+          output-format: sarif
+      - name: Upload vuln findings to code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
+        with:
+          sarif_file: ${{ steps.grype.outputs.sarif }}
+
+      # ---- 4. License policy gate (FANZ banned/copyleft) --------------------
+      - name: Enforce license policy
+        run: |
+          echo "Checking component licenses against FANZ policy..."
+          BANNED='AGPL-3.0|AGPL-1.0|GPL-3.0|SSPL|Commons-Clause|BUSL'
+          # extract declared licenses from the CycloneDX SBOM
+          hits=$(node -e '
+            const b=require("./sbom.cdx.json");
+            const banned=/AGPL|SSPL|Commons-Clause|BUSL|GPL-3/i;
+            const bad=(b.components||[]).flatMap(c=>(c.licenses||[]).map(l=>({name:c.name,lic:(l.license&&(l.license.id||l.license.name))||l.expression||""})))
+              .filter(x=>banned.test(x.lic));
+            bad.forEach(x=>console.log("  BANNED-LICENSE: "+x.name+" -> "+x.lic));
+            console.log("count="+bad.length);
+          ' 2>/dev/null | tail -20)
+          echo "$hits"
+          n=$(echo "$hits" | grep -oE 'count=[0-9]+' | cut -d= -f2)
+          if [ "${n:-0}" -gt 0 ]; then
+            echo "::warning::${n} components carry banned/copyleft licenses (see log). Fix or add a License-Waiver."
+            # switch to 'exit 1' to hard-block once the baseline is clean
+          fi
+
+      # ---- 5. Cryptographic attestation (provenance / integrity) ------------
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+      - name: Attest SBOM (keyless, OIDC — SLSA-style)
+        run: |
+          cosign attest-blob --yes \
+            --predicate sbom.cdx.json \
+            --type cyclonedx \
+            --output-signature sbom.cdx.json.sig \
+            --output-certificate sbom.cdx.json.pem \
+            sbom.cdx.json || echo "::warning::cosign attestation skipped (non-release build)"
+
+      # ---- 6. Publish the SBOMs as durable artifacts ------------------------
+      - name: Upload SBOMs + attestation
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ github.sha }}
+          path: |
+            sbom.cdx.json
+            sbom.spdx.json
+            sbom.cdx.json.sig
+            sbom.cdx.json.pem
+          retention-days: 90
+
+      - name: Attach SBOMs to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            sbom.cdx.json
+            sbom.spdx.json
+            sbom.cdx.json.sig

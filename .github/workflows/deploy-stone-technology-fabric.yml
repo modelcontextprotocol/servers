@@ -1,0 +1,93 @@
+name: Deploy Stone technology fabric to fanz-global
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/deploy-stone-technology-fabric.yml"
+  workflow_dispatch:
+    inputs:
+      stone_sha:
+        description: "Exact FanzCEO/StoneAiOmniRoute SHA"
+        required: false
+        default: "10f65fa6b38b00d97961ab38f07e0c4db8a48833"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-stone-technology-fabric
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Exact-SHA deploy and verify
+    runs-on: self-hosted
+    timeout-minutes: 90
+    env:
+      STONE_SHA: ${{ inputs.stone_sha || '10f65fa6b38b00d97961ab38f07e0c4db8a48833' }}
+      STONE_REPO: https://github.com/FanzCEO/StoneAiOmniRoute.git
+    steps:
+      - name: Preflight deployment channel
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Runner: $(hostname)"
+          echo "Stone SHA: $STONE_SHA"
+          command -v git >/dev/null
+          command -v curl >/dev/null
+
+          if ssh -o BatchMode=yes -o ConnectTimeout=8 fanz-global 'printf reachable' 2>/dev/null | grep -q reachable; then
+            echo "mode=ssh" >> "$GITHUB_ENV"
+            echo "Deployment target reachable through ssh alias fanz-global."
+          elif [ "$(hostname -s)" = "server" ] || [ "$(hostname -s)" = "fanz-global" ]; then
+            echo "mode=local" >> "$GITHUB_ENV"
+            echo "Runner appears to be the deployment target."
+          else
+            echo "::error::Self-hosted runner cannot reach fanz-global and is not the target host."
+            exit 70
+          fi
+
+      - name: Deploy exact Stone fork revision
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          deploy_cmd='set -euo pipefail
+          export STONE_OMNIROUTE_REPO_URL="https://github.com/FanzCEO/StoneAiOmniRoute.git"
+          export STONE_OMNIROUTE_SHA="'"$STONE_SHA"'"
+          export STONE_DEPLOY_ROOT="$HOME/.stone/omniroute"
+          tmp="$(mktemp -d)"
+          trap '\''rm -rf "$tmp"'\'' EXIT
+          git clone -q --filter=blob:none --no-checkout "$STONE_OMNIROUTE_REPO_URL" "$tmp/repo"
+          git -C "$tmp/repo" fetch -q --depth 1 origin "$STONE_OMNIROUTE_SHA"
+          git -C "$tmp/repo" checkout -q --detach FETCH_HEAD
+          test "$(git -C "$tmp/repo" rev-parse HEAD)" = "$STONE_OMNIROUTE_SHA"
+          bash "$tmp/repo/scripts/ops/deploy-stone-fork.sh"'
+
+          if [ "$mode" = "ssh" ]; then
+            ssh -o BatchMode=yes fanz-global "bash -lc $(printf '%q' "$deploy_cmd")"
+          else
+            bash -lc "$deploy_cmd"
+          fi
+
+      - name: Verify deployed SHA and live fabric
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          verify_cmd='set -euo pipefail
+          test -f "$HOME/.stone/omniroute/DEPLOYED_SHA"
+          DEPLOYED="$(cat "$HOME/.stone/omniroute/DEPLOYED_SHA")"
+          test "$DEPLOYED" = "'"$STONE_SHA"'"
+          curl -fsS http://127.0.0.1:20128/api/health | grep -q '\''"status":"ok"'\''
+          FABRIC="$(curl -fsS http://127.0.0.1:20128/api/health/technology-fabric)"
+          printf "%s\n" "$FABRIC"
+          printf "%s" "$FABRIC" | grep -q '\''"authority":"stone"'\''
+          echo "DEPLOY_OK $DEPLOYED"'
+
+          if [ "$mode" = "ssh" ]; then
+            ssh -o BatchMode=yes fanz-global "bash -lc $(printf '%q' "$verify_cmd")"
+          else
+            bash -lc "$verify_cmd"
+          fi
