@@ -1,16 +1,17 @@
 // Tests for `verify-main-source.mjs` (#5119): the arguments and the report,
-// then the guard end to end against throwaway repositories shaped like the
-// release flow: a merge PR from a branch pushed off `v2/main` passes, as does
+// the guard end to end against throwaway repositories shaped like the
+// release flow, a merge PR from a branch pushed off `v2/main` passes, as does
 // one `v2/main` has since moved past; a branch with a commit of its own, or a
-// merge of `v2/main` into something else, fails. Run via `npm run
-// test:scripts`.
+// merge of `v2/main` into something else, fails. Last, the properties of
+// `main-source.yml` its safety rests on. Run via `npm run test:scripts`.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { devNull, tmpdir } from "node:os";
 import path from "node:path";
+import { parse } from "yaml";
 import {
   DEFAULT_SOURCE,
   MAX_LISTED,
@@ -161,4 +162,58 @@ test("verifyMainSource: run as a script, a bad argument exits 2", () => {
   );
   assert.equal(r.status, 2);
   assert.match(r.stderr, /--head is required/);
+});
+
+// The workflow's safety rests on properties of its YAML; pin them, so an edit
+// that would run the PR's code, or stop wiring the guard, fails here.
+const workflow = parse(
+  readFileSync(
+    path.join(import.meta.dirname, "..", ".github/workflows/main-source.yml"),
+    "utf8",
+  ),
+);
+const job = workflow.jobs["main-source"];
+
+test("main-source.yml: runs main's copy, on PRs into main only, read-only", () => {
+  assert.deepEqual(Object.keys(workflow.on), ["pull_request_target"]);
+  assert.deepEqual(workflow.on.pull_request_target.branches, ["main"]);
+  assert.ok(workflow.on.pull_request_target.types.includes("edited"));
+  assert.deepEqual(workflow.permissions, { contents: "read" });
+  assert.equal(job.permissions, undefined);
+  assert.deepEqual(Object.keys(workflow.jobs), ["main-source"]);
+  assert.equal(job.name, "Source is v2/main");
+  assert.ok(job["timeout-minutes"]);
+});
+
+test("main-source.yml: checks out main, never the PR, and fetches the PR as objects only", () => {
+  const checkout = job.steps.filter((s) =>
+    /actions\/checkout/.test(s.uses ?? ""),
+  );
+  assert.equal(checkout.length, 1);
+  assert.equal(checkout[0].with?.ref, undefined);
+  assert.equal(checkout[0].with?.repository, undefined);
+  assert.equal(checkout[0].with["persist-credentials"], false);
+  const runs = job.steps.map((s) => s.run ?? "").join("\n");
+  const refspec = '"+refs/pull/${PR_NUMBER}/head:refs/remotes/pr/head"';
+  assert.ok(runs.includes(refspec), "the PR head is fetched");
+  // Past that fetch, nothing names the PR's ref, or switches to, installs or
+  // executes a tree.
+  const rest = runs.replace(refspec, "");
+  assert.doesNotMatch(rest, /pr\/head|refs\/pull/);
+  assert.doesNotMatch(rest, /git (checkout|switch|reset|worktree)|npm |npx /);
+  // No step reads a secret; expressions reach the shell only through env.
+  for (const step of job.steps) {
+    assert.doesNotMatch(JSON.stringify(step), /secrets\./);
+    assert.doesNotMatch(step.run ?? "", /\$\{\{/);
+  }
+});
+
+test("main-source.yml: hands the event's head SHA to the guard", () => {
+  const step = job.steps.find((s) =>
+    /verify-main-source\.mjs/.test(s.run ?? ""),
+  );
+  assert.ok(step, "a step runs the guard");
+  assert.equal(step.env.HEAD_SHA, "${{ github.event.pull_request.head.sha }}");
+  assert.match(step.run, /--head "\$HEAD_SHA"/);
+  assert.doesNotMatch(step.run, /--source/);
 });
