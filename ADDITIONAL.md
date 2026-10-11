@@ -88,6 +88,7 @@ This is a curated collection of community-built frameworks and resources that si
 - **[MCP.ing](https://mcp.ing/)** - A list of MCP services for discovering MCP servers in the community and providing a convenient search function for MCP services by **[iiiusky](https://github.com/iiiusky)**
 - **[MCP Hunt](https://mcp-hunt.com)** - Realtime platform for discovering trending MCP servers with momentum tracking, upvoting, and community discussions - like Product Hunt meets Reddit for MCP
 - **[Smithery](https://smithery.ai/)** - A registry of MCP servers to find the right tools for your LLM agents by **[Henry Mao](https://github.com/calclavia)**
+- **[SRI](https://sri-test.biz)** - Reads the published source of MCP servers and reports what they actually do, with every finding quoted at `file:line`. 2,000+ registry servers already read; free, no key, no signup. [Method and raw counts](https://github.com/SRITEST0001/sri/tree/main/research)
 - **[Toolbase](https://gettoolbase.ai)** - Desktop application that manages tools and MCP servers with just a few clicks - no coding required by **[gching](https://github.com/gching)**
 - **[ToolHive](https://github.com/StacklokLabs/toolhive)** - A lightweight utility designed to simplify the deployment and management of MCP servers, ensuring ease of use, consistency, and security through containerization by **[StacklokLabs](https://github.com/StacklokLabs)**
 - **[NetMind](https://www.netmind.ai/AIServices)** - Access powerful AI services via simple APIs or MCP servers to supercharge your productivity.
