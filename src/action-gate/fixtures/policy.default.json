@@ -1,0 +1,21 @@
+{
+  "allowed_tools": [
+    "search",
+    "get_identity",
+    "ticket.create",
+    "shell.exec",
+    "edr.disable",
+    "iam.create_user",
+    "vpc.delete"
+  ],
+  "denied_tools": ["connector.canary_override"],
+  "tool_tiers": {
+    "search": "read",
+    "get_identity": "read",
+    "ticket.create": "write",
+    "shell.exec": "destructive",
+    "edr.disable": "destructive",
+    "iam.create_user": "provision",
+    "vpc.delete": "decommission"
+  }
+}

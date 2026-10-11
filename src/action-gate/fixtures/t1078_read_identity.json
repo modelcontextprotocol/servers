@@ -1,0 +1,9 @@
+{
+  "actor": {"id": "agent-support", "type": "mcp_tool"},
+  "request": {
+    "tool": "get_identity",
+    "tier": "read",
+    "args": {"note": "ATT&CK T1078 valid-account lookup. Read only."},
+    "attack_technique": "T1078"
+  }
+}
