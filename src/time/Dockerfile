@@ -38,5 +38,7 @@ ENV PATH="/app/.venv/bin:$PATH"
 # Set the LOCAL_TIMEZONE environment variable
 ENV LOCAL_TIMEZONE=${LOCAL_TIMEZONE:-"UTC"}
 
+USER app
+
 # when running the container, add --local-timezone and a bind mount to the host's db file
 ENTRYPOINT ["mcp-server-time", "--local-timezone", "${LOCAL_TIMEZONE}"]
