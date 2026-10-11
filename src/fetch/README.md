@@ -31,6 +31,10 @@ The fetch tool will truncate the response, but by using the `start_index` argume
   - Arguments:
     - `url` (string, required): URL to fetch
 
+### Protocol versions
+
+The server speaks both eras of the Model Context Protocol over stdio, with nothing to configure: a **2026-07-28** client (discovered with `server/discover`, no session) and a **2025-11-25** client (the `initialize` handshake). The client's first request decides which. Tools and prompts behave the same in both. Methods the 2026-07-28 specification removes, such as `ping`, are answered only on a 2025-11-25 connection.
+
 ## Installation
 
 Optionally: Install node.js, this will cause the fetch server to use a different HTML simplifier that is more robust.
@@ -259,7 +263,7 @@ uv sync --frozen --all-extras --dev
 uv run --frozen pytest
 ```
 
-The tests drive `serve()` through an MCP `ClientSession` in-process, with HTTP mocked, so they need no network. The HTML extraction tests need Node.js on `PATH` (readabilipy uses Readability.js when Node is present and a pure-Python fallback when it is not).
+The tests drive `serve()` through an MCP `ClientSession` in-process (and, in `tests/test_eras.py`, through a `Client` as a 2026-07-28 and as a 2025-11-25 client), with HTTP mocked, so they need no network. The HTML extraction tests need Node.js on `PATH` (readabilipy uses Readability.js when Node is present and a pure-Python fallback when it is not).
 
 Coverage, measured per file with branch coverage:
 

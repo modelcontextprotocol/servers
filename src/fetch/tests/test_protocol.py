@@ -29,7 +29,7 @@ from mcp import ClientSession
 from mcp.shared.exceptions import MCPError
 from mcp.shared.memory import create_client_server_memory_streams
 from mcp.shared.message import SessionMessage
-from mcp.types import INVALID_PARAMS, METHOD_NOT_FOUND, CallToolResult, JSONRPCRequest
+from mcp.types import INVALID_PARAMS, CallToolResult, JSONRPCRequest
 
 from mcp_server_fetch.server import (
     DEFAULT_USER_AGENT_AUTONOMOUS,
@@ -1019,16 +1019,16 @@ async def test_get_prompt_does_not_validate_the_url(
 # ---------------------------------------------------------------------------
 
 
-async def test_modern_era_is_not_served() -> None:
-    # #4851: the SDK v2 port serves the 2025-11-25 handshake era only.
-    # Server.run() would also open a 2026-07-28 connection for a request that
-    # carries the per-request `_meta` envelope; adopting that era is #4853.
-    # Until then such a request is refused as an unknown method.
+async def test_server_discover_answers_the_2026_07_28_era() -> None:
+    # #4853: serve() serves the 2026-07-28 era beside the 2025-11-25 handshake.
+    # A `server/discover` carrying the per-request `_meta` envelope opens it.
+    # Asserted on the raw JSON-RPC response, so the fields the 2026-07-28
+    # spec requires on a result (resultType, ttlMs, cacheScope) are pinned as
+    # the server sends them, not as a client model would default them. Era by
+    # era behavior through a real client is in test_eras.py.
     #
-    # Behavior change in the SDK v2 port: SDK v1 answered every unknown
-    # method with -32602 "Invalid request parameters" (its request union
-    # failed to parse); SDK v2 answers -32601 "Method not found", the code
-    # JSON-RPC defines for it.
+    # Replaces #4851's test_modern_era_is_not_served, which pinned this request
+    # being refused with -32601 "Method not found" until this issue landed.
     discover = JSONRPCRequest(
         jsonrpc="2.0",
         id=1,
@@ -1063,9 +1063,20 @@ async def test_modern_era_is_not_served() -> None:
     assert response.message.model_dump(by_alias=True, exclude_none=True) == {
         "jsonrpc": "2.0",
         "id": 1,
-        "error": {
-            "code": METHOD_NOT_FOUND,
-            "message": "Method not found",
-            "data": "server/discover",
+        "result": {
+            "capabilities": {
+                "prompts": {"listChanged": False},
+                "tools": {"listChanged": False},
+            },
+            "supportedVersions": ["2026-07-28"],
+            "resultType": "complete",
+            "ttlMs": 0,
+            "cacheScope": "private",
+            "_meta": {
+                "io.modelcontextprotocol/serverInfo": {
+                    "name": "mcp-fetch",
+                    "version": version("mcp-server-fetch"),
+                }
+            },
         },
     }
