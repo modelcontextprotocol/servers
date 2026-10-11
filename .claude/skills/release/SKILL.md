@@ -256,12 +256,14 @@ This is the one PR in the repository that targets `main`.
 ⚠️ **It is merged with "Create a merge commit", never squashed or rebased.** A
 squash writes one new commit that `v2/main` does not contain, so the two
 branches stop sharing history and the next milestone merge conflicts with
-itself.
+itself. `main`'s ruleset allows only merge commits, so the other two buttons
+are not offered.
 
 ⚠️ **Do not click "Update branch" on the merge PR.** GitHub always offers it
 here, because `main` always holds commits the merge branch lacks (its own
 earlier merge commits), so it does not mean the PR is out of date. Clicking it
-merges `main` into the merge branch: the PR gains a commit of its own, `main`
+merges `main` into the merge branch: the PR gains a commit of its own (which
+fails the required **Source is v2/main** check, `main-source.yml`), `main`
 receives two merge commits, and the branch head is no longer the commit the
 ledger names. If it was clicked, put the branch back on its head from before
 the click: the update merge's **first parent**, which is the commit the ledger

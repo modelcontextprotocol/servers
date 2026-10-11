@@ -13,7 +13,7 @@ out; everything else points here.
 | --- | --- | --- | --- |
 | Inner loop | `npm run validate -w src/<server>`, `npm run validate:py -- <server>` | Your machine | While iterating on one server |
 | Pre-push gate | `npm run local:gate` | Your machine, under a lease | Before every push |
-| CI | `.github/workflows/typescript.yml`, `python.yml`, `everything-mcp-diff.yml`; `dco.yml` | GitHub, on every push and pull request (`everything-mcp-diff.yml`: when `everything` or what builds it changes); `dco.yml` on pull requests only | Before merge |
+| CI | `.github/workflows/typescript.yml`, `python.yml`, `everything-mcp-diff.yml`; `dco.yml`; `main-source.yml` | GitHub, on every push and pull request (`everything-mcp-diff.yml`: when `everything` or what builds it changes); `dco.yml` on pull requests only; `main-source.yml` on pull requests into `main` only, and not mirrored by a gate stage, since no local push targets `main` | Before merge |
 
 **`npm run local:gate` runs every check CI runs.** CI splits the same checks
 into parallel jobs on a fresh install; the gate runs them in sequence on your
