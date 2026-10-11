@@ -1,0 +1,46 @@
+{
+  "name": "@modelcontextprotocol/server-co-lleague",
+  "version": "0.1.0",
+  "description": "MCP server for co-lleague — AGI co-worker: screen analysis, tabular prediction, intent execution",
+  "license": "MIT",
+  "mcpName": "io.github.modelcontextprotocol/server-co-lleague",
+  "author": "Aimino GmbH",
+  "homepage": "https://co-lleague.ai",
+  "bugs": "https://github.com/Aimino-Tech/co-lleague/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Aimino-Tech/co-lleague.git"
+  },
+  "type": "module",
+  "bin": {
+    "mcp-server-co-lleague": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/*.js",
+    "prepare": "npm run build",
+    "watch": "tsc --watch",
+    "test": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@vitest/coverage-v8": "^4.1.8",
+    "shx": "^0.3.4",
+    "typescript": "^5.8.2",
+    "vitest": "^4.1.8"
+  },
+  "keywords": [
+    "mcp",
+    "co-lleague",
+    "ai-agent",
+    "prediction",
+    "screen-analysis",
+    "intent-execution"
+  ]
+}
