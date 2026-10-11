@@ -62,6 +62,7 @@ servers/
 ├── .github/workflows/        typescript.yml, python.yml (per-package CI), release.yml (publishes on a GitHub Release),
 │                             version-packages.yml (the changesets PR), prepare-python-release.yml (the CalVer PR),
 │                             claude.yml (@claude mentions), everything-mcp-diff.yml (everything's interface diff on PRs),
+│                             main-source.yml (a PR into main must bring nothing that is not on v2/main),
 │                             and the scheduled sweeps that file issues: dependency-refresh.yml, dependabot-alerts.yml, sdk-watch.yml
 ├── .github/ISSUE_TEMPLATE/   Bug and feature issue forms; config.yml routes security and new servers away
 ├── .github/pull_request_template.md   The "issues, not PRs" banner that turns outside PRs away
@@ -153,6 +154,10 @@ diagnosing a red stage is the `pre-push-gate` skill.
   publish artifact into an empty directory and boots it, which needs the
   network. `release.yml` runs it before anything publishes, and the `release`
   skill runs it by hand for the ledger.
+- **`verify-main-source` is not a gate stage either.** It applies only to a
+  pull request into `main` (see the merge PR exception under
+  [Contributing](#contributing)), and every local push targets a v2 branch.
+  `main-source.yml` runs it.
 - **`local:*` scripts never run in a workflow, and every CI job declares
   `timeout-minutes`.** The script tests enforce both
   (`scripts/lib/workflow-gate.mjs`). A check added to CI is added to
@@ -353,8 +358,14 @@ holds for a maintainer's own one-line fix as much as for a feature.
   default branch a closing keyword would close that issue at merge, before
   anything is published. The release issue is closed by hand once the Release
   is published. In place of the checklist it links the **release ledger**. It
-  is merged with a merge commit, never squashed. The flow is the `release`
-  skill.
+  is merged with a merge commit, never squashed. Both are enforced on `main`:
+  its ruleset allows only merge commits, and requires the **Source is
+  v2/main** check (`main-source.yml`), which fails a PR whose head carries
+  any commit not already on `v2/main`. That ruleset has no bypass actors; a
+  release that cannot be a pure merge (a release branch, a hotfix) goes
+  through only by a repo admin disabling it for that one merge and
+  re-enabling it at once, which is never automated. The flow is the
+  `release` skill.
 - **Exception: the two version PRs that automation opens.** Each changes
   version metadata only, so neither answers the PR checklist below, and each
   is tied to its milestone's **release issue** rather than to an issue of its

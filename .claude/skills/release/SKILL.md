@@ -256,12 +256,14 @@ This is the one PR in the repository that targets `main`.
 ⚠️ **It is merged with "Create a merge commit", never squashed or rebased.** A
 squash writes one new commit that `v2/main` does not contain, so the two
 branches stop sharing history and the next milestone merge conflicts with
-itself.
+itself. `main`'s ruleset allows only merge commits, so the other two buttons
+are not offered.
 
 ⚠️ **Do not click "Update branch" on the merge PR.** GitHub always offers it
 here, because `main` always holds commits the merge branch lacks (its own
 earlier merge commits), so it does not mean the PR is out of date. Clicking it
-merges `main` into the merge branch: the PR gains a commit of its own, `main`
+merges `main` into the merge branch: the PR gains a commit of its own (which
+fails the required **Source is v2/main** check, `main-source.yml`), `main`
 receives two merge commits, and the branch head is no longer the commit the
 ledger names. If it was clicked, put the branch back on its head from before
 the click: the update merge's **first parent**, which is the commit the ledger
@@ -280,6 +282,55 @@ git push --force-with-lease="$B:$UPDATE" origin "$UPDATE^1:refs/heads/$B"
 reaches `main` through `v2/main`, so there is nothing on `main` to bring back
 except the merge commits themselves. `v2/main` ahead of `main` means a release
 is in flight; that is the normal state.
+
+### A release that cannot be a pure merge
+
+Sometimes `v2/main` holds work that must not ship yet, and the release has to
+come from a branch of its own: a release branch with cherry-picks (1.0.0
+shipped that way, from `v2/release/1.0.0` in #5090), or a hotfix. The required
+**Source is v2/main** check fails that PR, by design, and nobody can bypass
+it, admins included. The only way through is a deliberate act by a repo
+admin: disable the `main: milestone merges only` ruleset for that one merge,
+and turn it straight back on.
+
+The disable, the merge and the re-enable run as one command, in a subshell
+whose exit trap re-enables the ruleset however it ends: the merge failing, an
+error, or Ctrl-C. Approve the PR first; the other rulesets on `main` still
+require that.
+
+```sh
+PR=<the release PR's number>
+RS=$(gh api repos/modelcontextprotocol/servers/rulesets \
+  --jq '.[] | select(.name == "main: milestone merges only") | .id')
+[ -n "$RS" ] || echo "ruleset not found by name; list them and look" >&2
+[ -n "$RS" ] && (
+  set -e
+  restore() {
+    gh api -X PUT "repos/modelcontextprotocol/servers/rulesets/$RS" \
+      -f enforcement=active --jq '"ruleset: \(.enforcement)"'
+  }
+  trap restore EXIT
+  trap 'exit 130' INT TERM HUP   # exit, so the EXIT trap restores
+  gh api -X PUT "repos/modelcontextprotocol/servers/rulesets/$RS" \
+    -f enforcement=disabled >/dev/null
+  # --merge: with the ruleset off, squash and rebase are allowed again.
+  gh pr merge "$PR" --repo modelcontextprotocol/servers --merge
+)
+gh api "repos/modelcontextprotocol/servers/rulesets/$RS" --jq .enforcement   # must print "active"
+```
+
+A trap cannot run if the machine itself dies mid-command, so the last line
+is not optional: if it prints anything but `active`, set it back by hand
+(Settings → Rules → Rulesets) before doing anything else.
+
+- **Only a human admin does this**, and only for a PR whose diff has been
+  reviewed as the release. Never disable the ruleset outside the command
+  above.
+- **Record it in the release ledger**: the PR, why it could not be a pure
+  merge, and the times the ruleset was disabled and re-enabled.
+- **Then merge the release branch back into `v2/main`** through a PR of its
+  own (#5118 did this for 1.0.0), so its commits are on `v2/main` and the
+  next milestone merge is a pure one again.
 
 ## 4. Verify the release candidate, and write the ledger
 

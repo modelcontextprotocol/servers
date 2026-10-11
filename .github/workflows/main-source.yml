@@ -1,0 +1,59 @@
+# A pull request into `main` brings nothing that is not already on `v2/main`
+# (#5119). `main` only ever receives a milestone's merge PR, a pure merge of
+# `v2/main`; GitHub rulesets cannot restrict a PR's source branch, so this
+# check, required by the `main` ruleset, is what does. The rule and why it is
+# on the head commit rather than the branch name are in
+# `scripts/verify-main-source.mjs`.
+#
+# On `pull_request_target`, unlike dco.yml: it runs `main`'s copy of this
+# workflow and of the script, so a PR cannot edit the guard into passing. That
+# is safe here because nothing from the PR runs: the checkout is `main`, and
+# the PR's head is only fetched as git objects for `git merge-base` to read.
+# Never add a step that checks out, installs or runs the PR's code.
+# `edited` is there so retargeting a PR onto `main` runs the check.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited]
+    branches: [main]
+
+# Read-only, and handed no secret, so this job holds no credential and stays
+# outside the SHA-pin rule (`verify:action-pins`).
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  main-source:
+    timeout-minutes: 5
+    name: Source is v2/main
+    runs-on: ubuntu-latest
+    steps:
+      # The base branch (`main`), which `pull_request_target` checks out by
+      # default; never the PR's ref.
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # The PR's head and `v2/main`, as objects only. A fork PR's head is
+      # reachable here through `refs/pull/<n>/head`. Full history, so
+      # `git merge-base` can walk both.
+      - name: Fetch the PR head and v2/main
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          git fetch --no-tags --unshallow origin \
+            "+refs/heads/v2/main:refs/remotes/origin/v2/main" \
+            "+refs/pull/${PR_NUMBER}/head:refs/remotes/pr/head"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      # Node built-ins and git only, so no `npm ci`.
+      - name: Check the head is already on v2/main
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/verify-main-source.mjs --head "$HEAD_SHA"

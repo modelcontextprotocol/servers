@@ -13,7 +13,7 @@ out; everything else points here.
 | --- | --- | --- | --- |
 | Inner loop | `npm run validate -w src/<server>`, `npm run validate:py -- <server>` | Your machine | While iterating on one server |
 | Pre-push gate | `npm run local:gate` | Your machine, under a lease | Before every push |
-| CI | `.github/workflows/typescript.yml`, `python.yml`, `everything-mcp-diff.yml`; `dco.yml` | GitHub, on every push and pull request (`everything-mcp-diff.yml`: when `everything` or what builds it changes); `dco.yml` on pull requests only | Before merge |
+| CI | `.github/workflows/typescript.yml`, `python.yml`, `everything-mcp-diff.yml`; `dco.yml`; `main-source.yml` | GitHub, on every push and pull request (`everything-mcp-diff.yml`: when `everything` or what builds it changes); `dco.yml` on pull requests only; `main-source.yml` on pull requests into `main` only, and not mirrored by a gate stage, since no local push targets `main` | Before merge |
 
 **`npm run local:gate` runs every check CI runs.** CI splits the same checks
 into parallel jobs on a fresh install; the gate runs them in sequence on your
@@ -22,12 +22,17 @@ your machine. It is the strongest predictor of a green CI there is here, though
 not a proof: CI runs on Linux, on a fresh `npm ci`, with Node 22 and each
 Python server's pinned interpreter.
 
-**The one exception is the Windows legs** (#1149): `test-windows` in both
+**There are two exceptions.** The first is the Windows legs (#1149): `test-windows` in both
 workflows runs each server's test suite (`npm test`, `pytest`) on a
 `windows-latest` runner. The gate runs the same suites, but only on your
 machine's OS, so a Windows-only failure (a drive letter, a UNC path, a missing
 `O_NOFOLLOW`, a locked file) shows up first in CI. When a PR touches
 platform-specific code, wait for those legs, not just the gate.
+
+The second is **Source is v2/main** (`main-source.yml`), which runs only on a
+pull request into `main` and checks that its head is already on `v2/main`. No
+local push targets `main`, so the gate has nothing to check there and no stage
+mirrors it.
 
 The inner-loop commands are subsets. They are for speed while working, and are
 never a substitute for the gate.
