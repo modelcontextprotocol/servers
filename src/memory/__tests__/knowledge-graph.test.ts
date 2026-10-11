@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { promises as fs } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { KnowledgeGraphManager, Entity, Relation, KnowledgeGraph } from '../index.js';
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { promises as fs } from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import { KnowledgeGraphManager, Entity, Relation } from "../index.js";
 
-describe('KnowledgeGraphManager', () => {
+describe("KnowledgeGraphManager", () => {
   let manager: KnowledgeGraphManager;
   let testFilePath: string;
 
@@ -12,7 +12,7 @@ describe('KnowledgeGraphManager', () => {
     // Create a temporary test file path
     testFilePath = path.join(
       path.dirname(fileURLToPath(import.meta.url)),
-      `test-memory-${Date.now()}.jsonl`
+      `test-memory-${Date.now()}.jsonl`,
     );
     manager = new KnowledgeGraphManager(testFilePath);
   });
@@ -21,16 +21,24 @@ describe('KnowledgeGraphManager', () => {
     // Clean up test file
     try {
       await fs.unlink(testFilePath);
-    } catch (error) {
+    } catch (_error) {
       // Ignore errors if file doesn't exist
     }
   });
 
-  describe('createEntities', () => {
-    it('should create new entities', async () => {
+  describe("createEntities", () => {
+    it("should create new entities", async () => {
       const entities: Entity[] = [
-        { name: 'Alice', entityType: 'person', observations: ['works at Acme Corp'] },
-        { name: 'Bob', entityType: 'person', observations: ['likes programming'] },
+        {
+          name: "Alice",
+          entityType: "person",
+          observations: ["works at Acme Corp"],
+        },
+        {
+          name: "Bob",
+          entityType: "person",
+          observations: ["likes programming"],
+        },
       ];
 
       const newEntities = await manager.createEntities(entities);
@@ -41,9 +49,13 @@ describe('KnowledgeGraphManager', () => {
       expect(graph.entities).toHaveLength(2);
     });
 
-    it('should not create duplicate entities', async () => {
+    it("should not create duplicate entities", async () => {
       const entities: Entity[] = [
-        { name: 'Alice', entityType: 'person', observations: ['works at Acme Corp'] },
+        {
+          name: "Alice",
+          entityType: "person",
+          observations: ["works at Acme Corp"],
+        },
       ];
 
       await manager.createEntities(entities);
@@ -55,15 +67,15 @@ describe('KnowledgeGraphManager', () => {
       expect(graph.entities).toHaveLength(1);
     });
 
-    it('should handle empty entity arrays', async () => {
+    it("should handle empty entity arrays", async () => {
       const newEntities = await manager.createEntities([]);
       expect(newEntities).toHaveLength(0);
     });
 
-    it('should ignore duplicate entity names within a single batch', async () => {
+    it("should ignore duplicate entity names within a single batch", async () => {
       const entities: Entity[] = [
-        { name: 'Alice', entityType: 'person', observations: ['first'] },
-        { name: 'Alice', entityType: 'person', observations: ['second'] },
+        { name: "Alice", entityType: "person", observations: ["first"] },
+        { name: "Alice", entityType: "person", observations: ["second"] },
       ];
 
       const newEntities = await manager.createEntities(entities);
@@ -71,19 +83,19 @@ describe('KnowledgeGraphManager', () => {
 
       const graph = await manager.readGraph();
       expect(graph.entities).toHaveLength(1);
-      expect(graph.entities[0].name).toBe('Alice');
+      expect(graph.entities[0].name).toBe("Alice");
     });
   });
 
-  describe('createRelations', () => {
-    it('should create new relations', async () => {
+  describe("createRelations", () => {
+    it("should create new relations", async () => {
       await manager.createEntities([
-        { name: 'Alice', entityType: 'person', observations: [] },
-        { name: 'Bob', entityType: 'person', observations: [] },
+        { name: "Alice", entityType: "person", observations: [] },
+        { name: "Bob", entityType: "person", observations: [] },
       ]);
 
       const relations: Relation[] = [
-        { from: 'Alice', to: 'Bob', relationType: 'knows' },
+        { from: "Alice", to: "Bob", relationType: "knows" },
       ];
 
       const newRelations = await manager.createRelations(relations);
@@ -94,14 +106,14 @@ describe('KnowledgeGraphManager', () => {
       expect(graph.relations).toHaveLength(1);
     });
 
-    it('should not create duplicate relations', async () => {
+    it("should not create duplicate relations", async () => {
       await manager.createEntities([
-        { name: 'Alice', entityType: 'person', observations: [] },
-        { name: 'Bob', entityType: 'person', observations: [] },
+        { name: "Alice", entityType: "person", observations: [] },
+        { name: "Bob", entityType: "person", observations: [] },
       ]);
 
       const relations: Relation[] = [
-        { from: 'Alice', to: 'Bob', relationType: 'knows' },
+        { from: "Alice", to: "Bob", relationType: "knows" },
       ];
 
       await manager.createRelations(relations);
@@ -113,52 +125,52 @@ describe('KnowledgeGraphManager', () => {
       expect(graph.relations).toHaveLength(1);
     });
 
-    it('should reject relations from non-existent entities', async () => {
+    it("should reject relations from non-existent entities", async () => {
       await manager.createEntities([
-        { name: 'Alice', entityType: 'person', observations: [] },
+        { name: "Alice", entityType: "person", observations: [] },
       ]);
 
       await expect(
         manager.createRelations([
-          { from: 'Ghost', to: 'Alice', relationType: 'knows' },
-        ])
-      ).rejects.toThrow('Entity with name Ghost not found');
+          { from: "Ghost", to: "Alice", relationType: "knows" },
+        ]),
+      ).rejects.toThrow("Entity with name Ghost not found");
 
       const graph = await manager.readGraph();
       expect(graph.relations).toHaveLength(0);
     });
 
-    it('should reject relation batches that reference non-existent target entities', async () => {
+    it("should reject relation batches that reference non-existent target entities", async () => {
       await manager.createEntities([
-        { name: 'Alice', entityType: 'person', observations: [] },
-        { name: 'Bob', entityType: 'person', observations: [] },
+        { name: "Alice", entityType: "person", observations: [] },
+        { name: "Bob", entityType: "person", observations: [] },
       ]);
 
       await expect(
         manager.createRelations([
-          { from: 'Alice', to: 'Bob', relationType: 'knows' },
-          { from: 'Alice', to: 'Ghost', relationType: 'knows' },
-        ])
-      ).rejects.toThrow('Entity with name Ghost not found');
+          { from: "Alice", to: "Bob", relationType: "knows" },
+          { from: "Alice", to: "Ghost", relationType: "knows" },
+        ]),
+      ).rejects.toThrow("Entity with name Ghost not found");
 
       const graph = await manager.readGraph();
       expect(graph.relations).toHaveLength(0);
     });
 
-    it('should handle empty relation arrays', async () => {
+    it("should handle empty relation arrays", async () => {
       const newRelations = await manager.createRelations([]);
       expect(newRelations).toHaveLength(0);
     });
 
-    it('should skip duplicate relations within a single batch', async () => {
+    it("should skip duplicate relations within a single batch", async () => {
       await manager.createEntities([
-        { name: 'Alice', entityType: 'person', observations: [] },
-        { name: 'Bob', entityType: 'person', observations: [] },
+        { name: "Alice", entityType: "person", observations: [] },
+        { name: "Bob", entityType: "person", observations: [] },
       ]);
 
       const relations: Relation[] = [
-        { from: 'Alice', to: 'Bob', relationType: 'knows' },
-        { from: 'Alice', to: 'Bob', relationType: 'knows' },
+        { from: "Alice", to: "Bob", relationType: "knows" },
+        { from: "Alice", to: "Bob", relationType: "knows" },
       ];
 
       const newRelations = await manager.createRelations(relations);
@@ -169,114 +181,126 @@ describe('KnowledgeGraphManager', () => {
     });
   });
 
-  describe('addObservations', () => {
-    it('should add observations to existing entities', async () => {
+  describe("addObservations", () => {
+    it("should add observations to existing entities", async () => {
       await manager.createEntities([
-        { name: 'Alice', entityType: 'person', observations: ['works at Acme Corp'] },
+        {
+          name: "Alice",
+          entityType: "person",
+          observations: ["works at Acme Corp"],
+        },
       ]);
 
       const results = await manager.addObservations([
-        { entityName: 'Alice', contents: ['likes coffee', 'has a dog'] },
+        { entityName: "Alice", contents: ["likes coffee", "has a dog"] },
       ]);
 
       expect(results).toHaveLength(1);
-      expect(results[0].entityName).toBe('Alice');
+      expect(results[0].entityName).toBe("Alice");
       expect(results[0].addedObservations).toHaveLength(2);
 
       const graph = await manager.readGraph();
-      const alice = graph.entities.find(e => e.name === 'Alice');
+      const alice = graph.entities.find((e) => e.name === "Alice");
       expect(alice?.observations).toHaveLength(3);
     });
 
-    it('should not add duplicate observations', async () => {
+    it("should not add duplicate observations", async () => {
       await manager.createEntities([
-        { name: 'Alice', entityType: 'person', observations: ['works at Acme Corp'] },
+        {
+          name: "Alice",
+          entityType: "person",
+          observations: ["works at Acme Corp"],
+        },
       ]);
 
       await manager.addObservations([
-        { entityName: 'Alice', contents: ['likes coffee'] },
+        { entityName: "Alice", contents: ["likes coffee"] },
       ]);
 
       const results = await manager.addObservations([
-        { entityName: 'Alice', contents: ['likes coffee', 'has a dog'] },
+        { entityName: "Alice", contents: ["likes coffee", "has a dog"] },
       ]);
 
       expect(results[0].addedObservations).toHaveLength(1);
-      expect(results[0].addedObservations).toContain('has a dog');
+      expect(results[0].addedObservations).toContain("has a dog");
 
       const graph = await manager.readGraph();
-      const alice = graph.entities.find(e => e.name === 'Alice');
+      const alice = graph.entities.find((e) => e.name === "Alice");
       expect(alice?.observations).toHaveLength(3);
     });
 
-    it('should throw error for non-existent entity', async () => {
+    it("should throw error for non-existent entity", async () => {
       await expect(async () => {
         await manager.addObservations([
-          { entityName: 'NonExistent', contents: ['some observation'] },
+          { entityName: "NonExistent", contents: ["some observation"] },
         ]);
-      }).rejects.toThrow('Entity with name NonExistent not found');
+      }).rejects.toThrow("Entity with name NonExistent not found");
     });
   });
 
-  describe('deleteEntities', () => {
-    it('should delete entities', async () => {
+  describe("deleteEntities", () => {
+    it("should delete entities", async () => {
       await manager.createEntities([
-        { name: 'Alice', entityType: 'person', observations: [] },
-        { name: 'Bob', entityType: 'person', observations: [] },
+        { name: "Alice", entityType: "person", observations: [] },
+        { name: "Bob", entityType: "person", observations: [] },
       ]);
 
-      await manager.deleteEntities(['Alice']);
+      await manager.deleteEntities(["Alice"]);
 
       const graph = await manager.readGraph();
       expect(graph.entities).toHaveLength(1);
-      expect(graph.entities[0].name).toBe('Bob');
+      expect(graph.entities[0].name).toBe("Bob");
     });
 
-    it('should cascade delete relations when deleting entities', async () => {
+    it("should cascade delete relations when deleting entities", async () => {
       await manager.createEntities([
-        { name: 'Alice', entityType: 'person', observations: [] },
-        { name: 'Bob', entityType: 'person', observations: [] },
-        { name: 'Charlie', entityType: 'person', observations: [] },
+        { name: "Alice", entityType: "person", observations: [] },
+        { name: "Bob", entityType: "person", observations: [] },
+        { name: "Charlie", entityType: "person", observations: [] },
       ]);
 
       await manager.createRelations([
-        { from: 'Alice', to: 'Bob', relationType: 'knows' },
-        { from: 'Bob', to: 'Charlie', relationType: 'knows' },
+        { from: "Alice", to: "Bob", relationType: "knows" },
+        { from: "Bob", to: "Charlie", relationType: "knows" },
       ]);
 
-      await manager.deleteEntities(['Bob']);
+      await manager.deleteEntities(["Bob"]);
 
       const graph = await manager.readGraph();
       expect(graph.entities).toHaveLength(2);
       expect(graph.relations).toHaveLength(0);
     });
 
-    it('should handle deleting non-existent entities', async () => {
-      await manager.deleteEntities(['NonExistent']);
+    it("should handle deleting non-existent entities", async () => {
+      await manager.deleteEntities(["NonExistent"]);
       const graph = await manager.readGraph();
       expect(graph.entities).toHaveLength(0);
     });
   });
 
-  describe('deleteObservations', () => {
-    it('should delete observations from entities', async () => {
+  describe("deleteObservations", () => {
+    it("should delete observations from entities", async () => {
       await manager.createEntities([
-        { name: 'Alice', entityType: 'person', observations: ['works at Acme Corp', 'likes coffee'] },
+        {
+          name: "Alice",
+          entityType: "person",
+          observations: ["works at Acme Corp", "likes coffee"],
+        },
       ]);
 
       await manager.deleteObservations([
-        { entityName: 'Alice', observations: ['likes coffee'] },
+        { entityName: "Alice", observations: ["likes coffee"] },
       ]);
 
       const graph = await manager.readGraph();
-      const alice = graph.entities.find(e => e.name === 'Alice');
+      const alice = graph.entities.find((e) => e.name === "Alice");
       expect(alice?.observations).toHaveLength(1);
-      expect(alice?.observations).toContain('works at Acme Corp');
+      expect(alice?.observations).toContain("works at Acme Corp");
     });
 
-    it('should handle deleting from non-existent entities', async () => {
+    it("should handle deleting from non-existent entities", async () => {
       await manager.deleteObservations([
-        { entityName: 'NonExistent', observations: ['some observation'] },
+        { entityName: "NonExistent", observations: ["some observation"] },
       ]);
       // Should not throw error
       const graph = await manager.readGraph();
@@ -284,42 +308,46 @@ describe('KnowledgeGraphManager', () => {
     });
   });
 
-  describe('deleteRelations', () => {
-    it('should delete specific relations', async () => {
+  describe("deleteRelations", () => {
+    it("should delete specific relations", async () => {
       await manager.createEntities([
-        { name: 'Alice', entityType: 'person', observations: [] },
-        { name: 'Bob', entityType: 'person', observations: [] },
+        { name: "Alice", entityType: "person", observations: [] },
+        { name: "Bob", entityType: "person", observations: [] },
       ]);
 
       await manager.createRelations([
-        { from: 'Alice', to: 'Bob', relationType: 'knows' },
-        { from: 'Alice', to: 'Bob', relationType: 'works_with' },
+        { from: "Alice", to: "Bob", relationType: "knows" },
+        { from: "Alice", to: "Bob", relationType: "works_with" },
       ]);
 
       await manager.deleteRelations([
-        { from: 'Alice', to: 'Bob', relationType: 'knows' },
+        { from: "Alice", to: "Bob", relationType: "knows" },
       ]);
 
       const graph = await manager.readGraph();
       expect(graph.relations).toHaveLength(1);
-      expect(graph.relations[0].relationType).toBe('works_with');
+      expect(graph.relations[0].relationType).toBe("works_with");
     });
   });
 
-  describe('readGraph', () => {
-    it('should return empty graph when file does not exist', async () => {
+  describe("readGraph", () => {
+    it("should return empty graph when file does not exist", async () => {
       const graph = await manager.readGraph();
       expect(graph.entities).toHaveLength(0);
       expect(graph.relations).toHaveLength(0);
     });
 
-    it('should return complete graph with entities and relations', async () => {
+    it("should return complete graph with entities and relations", async () => {
       await manager.createEntities([
-        { name: 'Alice', entityType: 'person', observations: ['works at Acme Corp'] },
+        {
+          name: "Alice",
+          entityType: "person",
+          observations: ["works at Acme Corp"],
+        },
       ]);
 
       await manager.createRelations([
-        { from: 'Alice', to: 'Alice', relationType: 'self' },
+        { from: "Alice", to: "Alice", relationType: "self" },
       ]);
 
       const graph = await manager.readGraph();
@@ -328,141 +356,165 @@ describe('KnowledgeGraphManager', () => {
     });
   });
 
-  describe('searchNodes', () => {
+  describe("searchNodes", () => {
     beforeEach(async () => {
       await manager.createEntities([
-        { name: 'Alice', entityType: 'person', observations: ['works at Acme Corp', 'likes programming'] },
-        { name: 'Bob', entityType: 'person', observations: ['works at TechCo'] },
-        { name: 'Acme Corp', entityType: 'company', observations: ['tech company'] },
+        {
+          name: "Alice",
+          entityType: "person",
+          observations: ["works at Acme Corp", "likes programming"],
+        },
+        {
+          name: "Bob",
+          entityType: "person",
+          observations: ["works at TechCo"],
+        },
+        {
+          name: "Acme Corp",
+          entityType: "company",
+          observations: ["tech company"],
+        },
       ]);
 
       await manager.createRelations([
-        { from: 'Alice', to: 'Acme Corp', relationType: 'works_at' },
-        { from: 'Bob', to: 'Acme Corp', relationType: 'competitor' },
+        { from: "Alice", to: "Acme Corp", relationType: "works_at" },
+        { from: "Bob", to: "Acme Corp", relationType: "competitor" },
       ]);
     });
 
-    it('should search by entity name', async () => {
-      const result = await manager.searchNodes('Alice');
+    it("should search by entity name", async () => {
+      const result = await manager.searchNodes("Alice");
       expect(result.entities).toHaveLength(1);
-      expect(result.entities[0].name).toBe('Alice');
+      expect(result.entities[0].name).toBe("Alice");
     });
 
-    it('should search by entity type', async () => {
-      const result = await manager.searchNodes('company');
+    it("should search by entity type", async () => {
+      const result = await manager.searchNodes("company");
       expect(result.entities).toHaveLength(1);
-      expect(result.entities[0].name).toBe('Acme Corp');
+      expect(result.entities[0].name).toBe("Acme Corp");
     });
 
-    it('should search by observation content', async () => {
-      const result = await manager.searchNodes('programming');
+    it("should search by observation content", async () => {
+      const result = await manager.searchNodes("programming");
       expect(result.entities).toHaveLength(1);
-      expect(result.entities[0].name).toBe('Alice');
+      expect(result.entities[0].name).toBe("Alice");
     });
 
-    it('should be case insensitive', async () => {
-      const result = await manager.searchNodes('ALICE');
+    it("should be case insensitive", async () => {
+      const result = await manager.searchNodes("ALICE");
       expect(result.entities).toHaveLength(1);
-      expect(result.entities[0].name).toBe('Alice');
+      expect(result.entities[0].name).toBe("Alice");
     });
 
-    it('should include relations where at least one endpoint matches', async () => {
-      const result = await manager.searchNodes('Acme');
+    it("should include relations where at least one endpoint matches", async () => {
+      const result = await manager.searchNodes("Acme");
       expect(result.entities).toHaveLength(2); // Alice and Acme Corp
       // Both relations included: Alice → Acme Corp (Alice matched) and Bob → Acme Corp (Acme Corp matched)
       expect(result.relations).toHaveLength(2);
     });
 
-    it('should include outgoing relations to unmatched entities', async () => {
-      const result = await manager.searchNodes('Alice');
+    it("should include outgoing relations to unmatched entities", async () => {
+      const result = await manager.searchNodes("Alice");
       expect(result.entities).toHaveLength(1);
       // Alice → Acme Corp relation included because Alice is the source
       expect(result.relations).toHaveLength(1);
-      expect(result.relations[0].from).toBe('Alice');
-      expect(result.relations[0].to).toBe('Acme Corp');
+      expect(result.relations[0].from).toBe("Alice");
+      expect(result.relations[0].to).toBe("Acme Corp");
     });
 
-    it('should return empty graph for no matches', async () => {
-      const result = await manager.searchNodes('NonExistent');
+    it("should return empty graph for no matches", async () => {
+      const result = await manager.searchNodes("NonExistent");
       expect(result.entities).toHaveLength(0);
       expect(result.relations).toHaveLength(0);
     });
   });
 
-  describe('openNodes', () => {
+  describe("openNodes", () => {
     beforeEach(async () => {
       await manager.createEntities([
-        { name: 'Alice', entityType: 'person', observations: [] },
-        { name: 'Bob', entityType: 'person', observations: [] },
-        { name: 'Charlie', entityType: 'person', observations: [] },
+        { name: "Alice", entityType: "person", observations: [] },
+        { name: "Bob", entityType: "person", observations: [] },
+        { name: "Charlie", entityType: "person", observations: [] },
       ]);
 
       await manager.createRelations([
-        { from: 'Alice', to: 'Bob', relationType: 'knows' },
-        { from: 'Bob', to: 'Charlie', relationType: 'knows' },
+        { from: "Alice", to: "Bob", relationType: "knows" },
+        { from: "Bob", to: "Charlie", relationType: "knows" },
       ]);
     });
 
-    it('should open specific nodes by name', async () => {
-      const result = await manager.openNodes(['Alice', 'Bob']);
+    it("should open specific nodes by name", async () => {
+      const result = await manager.openNodes(["Alice", "Bob"]);
       expect(result.entities).toHaveLength(2);
-      expect(result.entities.map(e => e.name)).toContain('Alice');
-      expect(result.entities.map(e => e.name)).toContain('Bob');
+      expect(result.entities.map((e) => e.name)).toContain("Alice");
+      expect(result.entities.map((e) => e.name)).toContain("Bob");
     });
 
-    it('should include all relations connected to opened nodes', async () => {
-      const result = await manager.openNodes(['Alice', 'Bob']);
+    it("should include all relations connected to opened nodes", async () => {
+      const result = await manager.openNodes(["Alice", "Bob"]);
       // Alice → Bob (both endpoints opened) and Bob → Charlie (Bob is opened)
       expect(result.relations).toHaveLength(2);
-      expect(result.relations.some(r => r.from === 'Alice' && r.to === 'Bob')).toBe(true);
-      expect(result.relations.some(r => r.from === 'Bob' && r.to === 'Charlie')).toBe(true);
+      expect(
+        result.relations.some((r) => r.from === "Alice" && r.to === "Bob"),
+      ).toBe(true);
+      expect(
+        result.relations.some((r) => r.from === "Bob" && r.to === "Charlie"),
+      ).toBe(true);
     });
 
-    it('should include relations connected to opened nodes', async () => {
-      const result = await manager.openNodes(['Bob']);
+    it("should include relations connected to opened nodes", async () => {
+      const result = await manager.openNodes(["Bob"]);
       // Bob has two relations: Alice → Bob and Bob → Charlie
       expect(result.relations).toHaveLength(2);
-      expect(result.relations.some(r => r.from === 'Alice' && r.to === 'Bob')).toBe(true);
-      expect(result.relations.some(r => r.from === 'Bob' && r.to === 'Charlie')).toBe(true);
+      expect(
+        result.relations.some((r) => r.from === "Alice" && r.to === "Bob"),
+      ).toBe(true);
+      expect(
+        result.relations.some((r) => r.from === "Bob" && r.to === "Charlie"),
+      ).toBe(true);
     });
 
-    it('should include outgoing relations to nodes not in the open set', async () => {
+    it("should include outgoing relations to nodes not in the open set", async () => {
       // This is the core bug fix for #3137: open_nodes should return
       // relations FROM the opened node, even if the target is not opened
-      const result = await manager.openNodes(['Alice']);
+      const result = await manager.openNodes(["Alice"]);
       expect(result.entities).toHaveLength(1);
-      expect(result.entities[0].name).toBe('Alice');
+      expect(result.entities[0].name).toBe("Alice");
       // Alice → Bob relation is included because Alice is opened
       expect(result.relations).toHaveLength(1);
-      expect(result.relations[0].from).toBe('Alice');
-      expect(result.relations[0].to).toBe('Bob');
+      expect(result.relations[0].from).toBe("Alice");
+      expect(result.relations[0].to).toBe("Bob");
     });
 
-    it('should include incoming relations from nodes not in the open set', async () => {
-      const result = await manager.openNodes(['Charlie']);
+    it("should include incoming relations from nodes not in the open set", async () => {
+      const result = await manager.openNodes(["Charlie"]);
       expect(result.entities).toHaveLength(1);
       // Bob → Charlie relation is included because Charlie is opened
       expect(result.relations).toHaveLength(1);
-      expect(result.relations[0].from).toBe('Bob');
-      expect(result.relations[0].to).toBe('Charlie');
+      expect(result.relations[0].from).toBe("Bob");
+      expect(result.relations[0].to).toBe("Charlie");
     });
 
-    it('should handle opening non-existent nodes', async () => {
-      const result = await manager.openNodes(['NonExistent']);
+    it("should handle opening non-existent nodes", async () => {
+      const result = await manager.openNodes(["NonExistent"]);
       expect(result.entities).toHaveLength(0);
     });
 
-    it('should handle empty node list', async () => {
+    it("should handle empty node list", async () => {
       const result = await manager.openNodes([]);
       expect(result.entities).toHaveLength(0);
       expect(result.relations).toHaveLength(0);
     });
   });
 
-  describe('file persistence', () => {
-    it('should persist data across manager instances', async () => {
+  describe("file persistence", () => {
+    it("should persist data across manager instances", async () => {
       await manager.createEntities([
-        { name: 'Alice', entityType: 'person', observations: ['persistent data'] },
+        {
+          name: "Alice",
+          entityType: "person",
+          observations: ["persistent data"],
+        },
       ]);
 
       // Create new manager instance with same file path
@@ -470,36 +522,36 @@ describe('KnowledgeGraphManager', () => {
       const graph = await manager2.readGraph();
 
       expect(graph.entities).toHaveLength(1);
-      expect(graph.entities[0].name).toBe('Alice');
+      expect(graph.entities[0].name).toBe("Alice");
     });
 
-    it('should handle JSONL format correctly', async () => {
+    it("should handle JSONL format correctly", async () => {
       await manager.createEntities([
-        { name: 'Alice', entityType: 'person', observations: [] },
+        { name: "Alice", entityType: "person", observations: [] },
       ]);
       await manager.createRelations([
-        { from: 'Alice', to: 'Alice', relationType: 'self' },
+        { from: "Alice", to: "Alice", relationType: "self" },
       ]);
 
       // Read file directly
-      const fileContent = await fs.readFile(testFilePath, 'utf-8');
-      const lines = fileContent.split('\n').filter(line => line.trim());
+      const fileContent = await fs.readFile(testFilePath, "utf-8");
+      const lines = fileContent.split("\n").filter((line) => line.trim());
 
       expect(lines).toHaveLength(2);
-      expect(JSON.parse(lines[0])).toHaveProperty('type', 'entity');
-      expect(JSON.parse(lines[1])).toHaveProperty('type', 'relation');
+      expect(JSON.parse(lines[0])).toHaveProperty("type", "entity");
+      expect(JSON.parse(lines[1])).toHaveProperty("type", "relation");
     });
 
-    it('should write a trailing newline to produce valid JSONL', async () => {
+    it("should write a trailing newline to produce valid JSONL", async () => {
       await manager.createEntities([
-        { name: 'Alice', entityType: 'person', observations: ['test'] },
+        { name: "Alice", entityType: "person", observations: ["test"] },
       ]);
 
-      const fileContent = await fs.readFile(testFilePath, 'utf-8');
-      expect(fileContent.endsWith('\n')).toBe(true);
+      const fileContent = await fs.readFile(testFilePath, "utf-8");
+      expect(fileContent.endsWith("\n")).toBe(true);
     });
 
-    it('should produce a file where every line is individually valid JSON', async () => {
+    it("should produce a file where every line is individually valid JSON", async () => {
       // This test catches the bug where saveGraph wrote lines.join("\n")
       // without a trailing newline. When the file was later appended to
       // (e.g. by a concurrent process or external tool), the last JSON
@@ -509,24 +561,24 @@ describe('KnowledgeGraphManager', () => {
       // which fails with: "Unexpected non-whitespace character after JSON
       // at position N"
       await manager.createEntities([
-        { name: 'Alice', entityType: 'person', observations: ['test'] },
-        { name: 'Bob', entityType: 'person', observations: [] },
+        { name: "Alice", entityType: "person", observations: ["test"] },
+        { name: "Bob", entityType: "person", observations: [] },
       ]);
       await manager.createRelations([
-        { from: 'Alice', to: 'Bob', relationType: 'knows' },
+        { from: "Alice", to: "Bob", relationType: "knows" },
       ]);
 
-      const fileContent = await fs.readFile(testFilePath, 'utf-8');
-      const allLines = fileContent.split('\n');
+      const fileContent = await fs.readFile(testFilePath, "utf-8");
+      const allLines = fileContent.split("\n");
 
       // Every non-empty line must be valid JSON on its own
       for (const line of allLines) {
-        if (line.trim() === '') continue;
+        if (line.trim() === "") continue;
         expect(() => JSON.parse(line)).not.toThrow();
       }
     });
 
-    it('should not corrupt JSONL when content is appended to the file externally', async () => {
+    it("should not corrupt JSONL when content is appended to the file externally", async () => {
       // Simulate the real-world corruption scenario:
       // 1. saveGraph writes entities to the file
       // 2. An external process appends a new JSON line to the file
@@ -536,19 +588,19 @@ describe('KnowledgeGraphManager', () => {
       // step 2 lands on the same line as the last entity, producing
       // invalid JSONL that breaks loadGraph.
       await manager.createEntities([
-        { name: 'Alice', entityType: 'person', observations: ['original'] },
+        { name: "Alice", entityType: "person", observations: ["original"] },
       ]);
 
       // Simulate an external append (e.g. another process, a script, or
       // a crash-recovery replay). This is what triggers the bug: without
       // a trailing newline, this JSON object concatenates onto line 1.
       const externalLine = JSON.stringify({
-        type: 'entity',
-        name: 'External',
-        entityType: 'person',
-        observations: ['appended externally'],
+        type: "entity",
+        name: "External",
+        entityType: "person",
+        observations: ["appended externally"],
       });
-      await fs.appendFile(testFilePath, externalLine + '\n');
+      await fs.appendFile(testFilePath, externalLine + "\n");
 
       // A new manager instance forces a fresh loadGraph from disk
       const manager2 = new KnowledgeGraphManager(testFilePath);
@@ -556,30 +608,34 @@ describe('KnowledgeGraphManager', () => {
 
       // Both entities must load without a JSON parse error
       expect(graph.entities).toHaveLength(2);
-      expect(graph.entities.map(e => e.name)).toContain('Alice');
-      expect(graph.entities.map(e => e.name)).toContain('External');
+      expect(graph.entities.map((e) => e.name)).toContain("Alice");
+      expect(graph.entities.map((e) => e.name)).toContain("External");
     });
 
-    it('should strip type field from entities when loading from file', async () => {
+    it("should strip type field from entities when loading from file", async () => {
       // Create entities and relations (these get saved with type field)
       await manager.createEntities([
-        { name: 'Alice', entityType: 'person', observations: ['test observation'] },
-        { name: 'Bob', entityType: 'person', observations: [] },
+        {
+          name: "Alice",
+          entityType: "person",
+          observations: ["test observation"],
+        },
+        { name: "Bob", entityType: "person", observations: [] },
       ]);
       await manager.createRelations([
-        { from: 'Alice', to: 'Bob', relationType: 'knows' },
+        { from: "Alice", to: "Bob", relationType: "knows" },
       ]);
 
       // Verify file contains type field (order may vary)
-      const fileContent = await fs.readFile(testFilePath, 'utf-8');
-      const fileLines = fileContent.split('\n').filter(line => line.trim());
-      const fileItems = fileLines.map(line => JSON.parse(line));
-      const fileEntity = fileItems.find(item => item.type === 'entity');
-      const fileRelation = fileItems.find(item => item.type === 'relation');
+      const fileContent = await fs.readFile(testFilePath, "utf-8");
+      const fileLines = fileContent.split("\n").filter((line) => line.trim());
+      const fileItems = fileLines.map((line) => JSON.parse(line));
+      const fileEntity = fileItems.find((item) => item.type === "entity");
+      const fileRelation = fileItems.find((item) => item.type === "relation");
       expect(fileEntity).toBeDefined();
-      expect(fileEntity).toHaveProperty('type', 'entity');
+      expect(fileEntity).toHaveProperty("type", "entity");
       expect(fileRelation).toBeDefined();
-      expect(fileRelation).toHaveProperty('type', 'relation');
+      expect(fileRelation).toHaveProperty("type", "relation");
 
       // Create new manager instance to force reload from file
       const manager2 = new KnowledgeGraphManager(testFilePath);
@@ -587,132 +643,209 @@ describe('KnowledgeGraphManager', () => {
 
       // Verify loaded entities don't have type field
       expect(graph.entities).toHaveLength(2);
-      graph.entities.forEach(entity => {
-        expect(entity).not.toHaveProperty('type');
-        expect(entity).toHaveProperty('name');
-        expect(entity).toHaveProperty('entityType');
-        expect(entity).toHaveProperty('observations');
+      graph.entities.forEach((entity) => {
+        expect(entity).not.toHaveProperty("type");
+        expect(entity).toHaveProperty("name");
+        expect(entity).toHaveProperty("entityType");
+        expect(entity).toHaveProperty("observations");
       });
 
       // Verify loaded relations don't have type field
       expect(graph.relations).toHaveLength(1);
-      graph.relations.forEach(relation => {
-        expect(relation).not.toHaveProperty('type');
-        expect(relation).toHaveProperty('from');
-        expect(relation).toHaveProperty('to');
-        expect(relation).toHaveProperty('relationType');
+      graph.relations.forEach((relation) => {
+        expect(relation).not.toHaveProperty("type");
+        expect(relation).toHaveProperty("from");
+        expect(relation).toHaveProperty("to");
+        expect(relation).toHaveProperty("relationType");
       });
     });
 
-    it('should strip type field from searchNodes results', async () => {
+    it("should strip type field from searchNodes results", async () => {
       await manager.createEntities([
-        { name: 'Alice', entityType: 'person', observations: ['works at Acme'] },
+        {
+          name: "Alice",
+          entityType: "person",
+          observations: ["works at Acme"],
+        },
       ]);
       await manager.createRelations([
-        { from: 'Alice', to: 'Alice', relationType: 'self' },
+        { from: "Alice", to: "Alice", relationType: "self" },
       ]);
 
       // Create new manager instance to force reload from file
       const manager2 = new KnowledgeGraphManager(testFilePath);
-      const result = await manager2.searchNodes('Alice');
+      const result = await manager2.searchNodes("Alice");
 
       // Verify search results don't have type field
       expect(result.entities).toHaveLength(1);
-      expect(result.entities[0]).not.toHaveProperty('type');
-      expect(result.entities[0].name).toBe('Alice');
+      expect(result.entities[0]).not.toHaveProperty("type");
+      expect(result.entities[0].name).toBe("Alice");
 
       expect(result.relations).toHaveLength(1);
-      expect(result.relations[0]).not.toHaveProperty('type');
-      expect(result.relations[0].from).toBe('Alice');
+      expect(result.relations[0]).not.toHaveProperty("type");
+      expect(result.relations[0].from).toBe("Alice");
     });
 
-    it('should strip type field from openNodes results', async () => {
+    it("should strip type field from openNodes results", async () => {
       await manager.createEntities([
-        { name: 'Alice', entityType: 'person', observations: [] },
-        { name: 'Bob', entityType: 'person', observations: [] },
+        { name: "Alice", entityType: "person", observations: [] },
+        { name: "Bob", entityType: "person", observations: [] },
       ]);
       await manager.createRelations([
-        { from: 'Alice', to: 'Bob', relationType: 'knows' },
+        { from: "Alice", to: "Bob", relationType: "knows" },
       ]);
 
       // Create new manager instance to force reload from file
       const manager2 = new KnowledgeGraphManager(testFilePath);
-      const result = await manager2.openNodes(['Alice', 'Bob']);
+      const result = await manager2.openNodes(["Alice", "Bob"]);
 
       // Verify open results don't have type field
       expect(result.entities).toHaveLength(2);
-      result.entities.forEach(entity => {
-        expect(entity).not.toHaveProperty('type');
+      result.entities.forEach((entity) => {
+        expect(entity).not.toHaveProperty("type");
       });
 
       expect(result.relations).toHaveLength(1);
-      expect(result.relations[0]).not.toHaveProperty('type');
+      expect(result.relations[0]).not.toHaveProperty("type");
     });
   });
 
-  describe('loadGraph validation', () => {
-    it('skips corrupt entities instead of crashing search', async () => {
+  describe("loadGraph validation", () => {
+    it("skips corrupt entities instead of crashing search", async () => {
       const lines = [
-        JSON.stringify({ type: 'entity', name: 'Alice', entityType: 'person', observations: ['works at Acme Corp'] }),
-        JSON.stringify({ type: 'entity', name: 'Broken', observations: ['missing entityType'] }),
-        JSON.stringify({ type: 'entity', name: 'BadObs', entityType: 'person', observations: ['ok', null] }),
+        JSON.stringify({
+          type: "entity",
+          name: "Alice",
+          entityType: "person",
+          observations: ["works at Acme Corp"],
+        }),
+        JSON.stringify({
+          type: "entity",
+          name: "Broken",
+          observations: ["missing entityType"],
+        }),
+        JSON.stringify({
+          type: "entity",
+          name: "BadObs",
+          entityType: "person",
+          observations: ["ok", null],
+        }),
       ];
-      await fs.writeFile(testFilePath, lines.join('\n') + '\n');
+      await fs.writeFile(testFilePath, lines.join("\n") + "\n");
 
       const graph = await manager.readGraph();
       expect(graph.entities).toHaveLength(1);
-      expect(graph.entities[0].name).toBe('Alice');
+      expect(graph.entities[0].name).toBe("Alice");
 
       // searchNodes must not throw even though the file contains corrupt entries
-      const result = await manager.searchNodes('Acme');
+      const result = await manager.searchNodes("Acme");
       expect(result.entities).toHaveLength(1);
-      expect(result.entities[0].name).toBe('Alice');
+      expect(result.entities[0].name).toBe("Alice");
     });
 
-    it('skips corrupt relations', async () => {
+    it("skips corrupt relations", async () => {
       const lines = [
-        JSON.stringify({ type: 'entity', name: 'Alice', entityType: 'person', observations: [] }),
-        JSON.stringify({ type: 'relation', from: 'Alice', to: 'Bob' }), // missing relationType
-        JSON.stringify({ type: 'relation', from: 'Alice', to: 'Bob', relationType: 'knows' }),
+        JSON.stringify({
+          type: "entity",
+          name: "Alice",
+          entityType: "person",
+          observations: [],
+        }),
+        JSON.stringify({ type: "relation", from: "Alice", to: "Bob" }), // missing relationType
+        JSON.stringify({
+          type: "relation",
+          from: "Alice",
+          to: "Bob",
+          relationType: "knows",
+        }),
       ];
-      await fs.writeFile(testFilePath, lines.join('\n') + '\n');
+      await fs.writeFile(testFilePath, lines.join("\n") + "\n");
 
       const graph = await manager.readGraph();
       expect(graph.entities).toHaveLength(1);
       expect(graph.relations).toHaveLength(1);
-      expect(graph.relations[0].relationType).toBe('knows');
+      expect(graph.relations[0].relationType).toBe("knows");
     });
 
-    it('skips malformed JSON lines', async () => {
+    it("skips malformed JSON lines", async () => {
       const lines = [
-        JSON.stringify({ type: 'entity', name: 'Alice', entityType: 'person', observations: [] }),
-        '{this is not valid json',
-        JSON.stringify({ type: 'entity', name: 'Bob', entityType: 'person', observations: [] }),
+        JSON.stringify({
+          type: "entity",
+          name: "Alice",
+          entityType: "person",
+          observations: [],
+        }),
+        "{this is not valid json",
+        JSON.stringify({
+          type: "entity",
+          name: "Bob",
+          entityType: "person",
+          observations: [],
+        }),
       ];
-      await fs.writeFile(testFilePath, lines.join('\n') + '\n');
+      await fs.writeFile(testFilePath, lines.join("\n") + "\n");
 
       const graph = await manager.readGraph();
       expect(graph.entities).toHaveLength(2);
-      expect(graph.entities.map(e => e.name)).toEqual(['Alice', 'Bob']);
+      expect(graph.entities.map((e) => e.name)).toEqual(["Alice", "Bob"]);
+    });
+
+    it("keeps lines it cannot read when an unrelated write saves the graph", async () => {
+      const unreadable = [
+        JSON.stringify({
+          type: "entity",
+          name: "Broken",
+          observations: ["missing entityType"],
+        }),
+        JSON.stringify({
+          type: "entity",
+          name: "BadObs",
+          entityType: "person",
+          observations: ["allergic to penicillin", null],
+        }),
+        "{this is not valid json",
+        JSON.stringify({ type: "note", text: "written by another tool" }),
+      ];
+      const lines = [
+        JSON.stringify({
+          type: "entity",
+          name: "Alice",
+          entityType: "person",
+          observations: [],
+        }),
+        ...unreadable,
+      ];
+      await fs.writeFile(testFilePath, lines.join("\n") + "\n");
+
+      await manager.createEntities([
+        { name: "Carol", entityType: "person", observations: [] },
+      ]);
+
+      const saved = (await fs.readFile(testFilePath, "utf-8")).split("\n");
+      for (const line of unreadable) {
+        expect(saved).toContain(line);
+      }
+      const graph = await manager.readGraph();
+      expect(graph.entities.map((e) => e.name)).toEqual(["Alice", "Carol"]);
     });
   });
 
-  describe('concurrent mutations', () => {
+  describe("concurrent mutations", () => {
     // Regression test for #1819: concurrent tool calls each independently
     // load the graph, mutate their own copy, and write it back. Without
     // serialization, whichever write lands last silently discards the
     // other's changes. All mutations below are fired without awaiting each
     // other first, simulating multiple tool calls landing close together.
 
-    it('should not lose entities created concurrently', async () => {
+    it("should not lose entities created concurrently", async () => {
       const batch1: Entity[] = Array.from({ length: 10 }, (_, i) => ({
         name: `batch1-entity-${i}`,
-        entityType: 'test',
+        entityType: "test",
         observations: [],
       }));
       const batch2: Entity[] = Array.from({ length: 10 }, (_, i) => ({
         name: `batch2-entity-${i}`,
-        entityType: 'test',
+        entityType: "test",
         observations: [],
       }));
 
@@ -724,42 +857,48 @@ describe('KnowledgeGraphManager', () => {
 
       const graph = await manager.readGraph();
       expect(graph.entities).toHaveLength(20);
-      expect(graph.entities.map(e => e.name).sort()).toEqual(
-        [...batch1, ...batch2].map(e => e.name).sort()
+      expect(graph.entities.map((e) => e.name).sort()).toEqual(
+        [...batch1, ...batch2].map((e) => e.name).sort(),
       );
     });
 
-    it('should not lose relations created concurrently with entity creation', async () => {
+    it("should not lose relations created concurrently with entity creation", async () => {
       await manager.createEntities([
-        { name: 'Alice', entityType: 'person', observations: [] },
-        { name: 'Bob', entityType: 'person', observations: [] },
-        { name: 'Carol', entityType: 'person', observations: [] },
+        { name: "Alice", entityType: "person", observations: [] },
+        { name: "Bob", entityType: "person", observations: [] },
+        { name: "Carol", entityType: "person", observations: [] },
       ]);
 
       await Promise.all([
-        manager.createRelations([{ from: 'Alice', to: 'Bob', relationType: 'knows' }]),
-        manager.createRelations([{ from: 'Bob', to: 'Carol', relationType: 'knows' }]),
+        manager.createRelations([
+          { from: "Alice", to: "Bob", relationType: "knows" },
+        ]),
+        manager.createRelations([
+          { from: "Bob", to: "Carol", relationType: "knows" },
+        ]),
         manager.addObservations([
-          { entityName: 'Alice', contents: ['likes coffee'] },
+          { entityName: "Alice", contents: ["likes coffee"] },
         ]),
       ]);
 
       const graph = await manager.readGraph();
       expect(graph.relations).toHaveLength(2);
-      expect(graph.entities.find(e => e.name === 'Alice')?.observations).toContain('likes coffee');
+      expect(
+        graph.entities.find((e) => e.name === "Alice")?.observations,
+      ).toContain("likes coffee");
     });
 
-    it('should keep the file valid JSONL after many concurrent mutations', async () => {
+    it("should keep the file valid JSONL after many concurrent mutations", async () => {
       const operations = Array.from({ length: 25 }, (_, i) =>
         manager.createEntities([
-          { name: `stress-entity-${i}`, entityType: 'test', observations: [] },
-        ])
+          { name: `stress-entity-${i}`, entityType: "test", observations: [] },
+        ]),
       );
 
       await Promise.all(operations);
 
-      const raw = await fs.readFile(testFilePath, 'utf-8');
-      const lines = raw.split('\n').filter(line => line.trim() !== '');
+      const raw = await fs.readFile(testFilePath, "utf-8");
+      const lines = raw.split("\n").filter((line) => line.trim() !== "");
 
       // Every line must parse as valid JSON; a corrupted interleaved write
       // would produce a truncated or malformed line here.

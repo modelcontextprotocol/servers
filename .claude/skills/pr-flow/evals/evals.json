@@ -1,0 +1,34 @@
+[
+  {
+    "prompt": "I've finished the fix for issue 4810. Take it through to a pull request.",
+    "expect": "pr-flow"
+  },
+  {
+    "prompt": "gh pr edit --add-reviewer copilot didn't request anything on my PR. How do I get Copilot to review it in this repo?",
+    "expect": "pr-flow"
+  },
+  {
+    "prompt": "I forgot to sign off the last three commits on a branch I already pushed. How do I fix them?",
+    "expect": "pr-flow"
+  },
+  {
+    "prompt": "What evidence should my PR body show for a change to the memory server's search_nodes tool? There's no UI to screenshot.",
+    "expect": "pr-flow"
+  },
+  {
+    "prompt": "Copilot left eight comments on my PR, two of them in a Suppressed comments block. How do I answer them so nothing gets lost?",
+    "expect": "pr-flow"
+  },
+  {
+    "prompt": "My PR into v2/main just merged. What do I still need to do to close it out?",
+    "expect": "pr-flow"
+  },
+  {
+    "prompt": "What does this regex match? /^[a-z]+$/",
+    "expect": null
+  },
+  {
+    "prompt": "Translate 'good morning' into Spanish.",
+    "expect": null
+  }
+]

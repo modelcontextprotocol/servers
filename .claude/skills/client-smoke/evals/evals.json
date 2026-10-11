@@ -1,0 +1,34 @@
+[
+  {
+    "prompt": "Smoke-test my change to the time server with the Inspector CLI.",
+    "expect": "client-smoke"
+  },
+  {
+    "prompt": "How do I call a tool on my locally built server from the command line and get JSON back?",
+    "expect": "client-smoke"
+  },
+  {
+    "prompt": "The Inspector CLI says 'Multiple servers found in config file' when I pass it my server command. How do I fix it?",
+    "expect": "client-smoke"
+  },
+  {
+    "prompt": "How do I check my server change against a 2026-07-28 client?",
+    "expect": "client-smoke"
+  },
+  {
+    "prompt": "How do I get Claude Code to call a tool on my local build of the everything server in one headless command?",
+    "expect": "client-smoke"
+  },
+  {
+    "prompt": "How do I open the Inspector web UI against my local build of the git server?",
+    "expect": "client-smoke"
+  },
+  {
+    "prompt": "Summarize the plot of Hamlet in two sentences.",
+    "expect": null
+  },
+  {
+    "prompt": "Convert 5 kilometers to miles.",
+    "expect": null
+  }
+]

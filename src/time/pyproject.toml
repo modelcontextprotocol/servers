@@ -1,6 +1,6 @@
 [project]
 name = "mcp-server-time"
-version = "0.6.2"
+version = "2026.10.10"
 description = "A Model Context Protocol server providing tools for time queries and timezone conversions for LLMs"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -39,5 +39,18 @@ dev-dependencies = [
     "freezegun>=1.5.1",
     "pyright>=1.1.389",
     "pytest>=8.3.3",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
     "ruff>=0.8.1",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+branch = true
+source = ["src/mcp_server_time"]
+
+[tool.coverage.report]
+show_missing = true

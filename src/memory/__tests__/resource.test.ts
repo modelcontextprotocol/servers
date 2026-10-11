@@ -1,97 +1,223 @@
-import { describe, it, expect, vi } from 'vitest';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { SubscribeRequestSchema, UnsubscribeRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import {
-  KnowledgeGraphManager,
-  registerKnowledgeGraphResource,
-  registerKnowledgeGraphSubscriptions,
-} from '../index.js';
+// Characterization tests for the memory server's knowledge-graph resource,
+// driven through an SDK Client over an in-memory transport (#4854): listing
+// and reading it, subscribing to it, and the notifications/resources/updated
+// that mutation tools send (notifyGraphUpdated). They replace the earlier
+// tests that called the register functions with a mocked McpServer.
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
+import { ResourceUpdatedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
+import { call, connect, makeTempGraph } from "./helpers.js";
+import type { Connection } from "./helpers.js";
 
-describe('knowledge-graph resource', () => {
-  it('registers with kebab-case name, correct URI, and JSON mime type', () => {
-    const mockServer = { registerResource: vi.fn() } as unknown as McpServer;
-    const manager = {} as KnowledgeGraphManager;
+const URI = "memory://knowledge-graph";
 
-    registerKnowledgeGraphResource(mockServer, manager);
+const alice = { name: "Alice", entityType: "person", observations: ["a"] };
+const bob = { name: "Bob", entityType: "person", observations: ["b"] };
+const aliceKnowsBob = { from: "Alice", to: "Bob", relationType: "knows" };
 
-    expect(mockServer.registerResource).toHaveBeenCalledWith(
-      'knowledge-graph',
-      'memory://knowledge-graph',
-      expect.objectContaining({
-        title: 'Knowledge Graph',
-        mimeType: 'application/json',
-      }),
-      expect.any(Function),
+describe("knowledge-graph resource over the protocol", () => {
+  let conn: Connection;
+  let client: Client;
+  let filePath: string;
+  let cleanup: () => Promise<void>;
+  let updates: { uri: string }[];
+
+  beforeEach(async () => {
+    const graph = await makeTempGraph();
+    filePath = graph.filePath;
+    cleanup = graph.cleanup;
+    conn = await connect(filePath);
+    client = conn.client;
+    updates = [];
+    client.setNotificationHandler(
+      ResourceUpdatedNotificationSchema,
+      (notification) => {
+        updates.push(notification.params);
+      },
     );
   });
 
-  it('handler returns the graph as JSON in the contents array', async () => {
-    const mockServer = { registerResource: vi.fn() } as unknown as McpServer;
-    const fakeGraph = {
-      entities: [{ name: 'Alice', entityType: 'person', observations: ['engineer'] }],
-      relations: [{ from: 'Alice', to: 'Acme', relationType: 'works_at' }],
-    };
-    const manager = {
-      readGraph: vi.fn().mockResolvedValue(fakeGraph),
-    } as unknown as KnowledgeGraphManager;
-
-    registerKnowledgeGraphResource(mockServer, manager);
-
-    const handler = (mockServer.registerResource as ReturnType<typeof vi.fn>).mock.calls[0][3];
-    const result = await handler(new URL('memory://knowledge-graph'));
-
-    expect(result.contents).toHaveLength(1);
-    expect(result.contents[0].uri).toBe('memory://knowledge-graph');
-    expect(result.contents[0].mimeType).toBe('application/json');
-    expect(JSON.parse(result.contents[0].text)).toEqual(fakeGraph);
-    expect(manager.readGraph).toHaveBeenCalledOnce();
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    await conn.close();
+    await cleanup();
   });
-});
 
-describe('knowledge-graph resource subscriptions', () => {
-  function makeMockServer() {
-    const inner = {
-      registerCapabilities: vi.fn(),
-      setRequestHandler: vi.fn(),
-      sendResourceUpdated: vi.fn(),
-    };
-    const mockServer = { server: inner } as unknown as McpServer;
-    return { mockServer, inner };
+  // A round trip after the call under test, so any notification it sent has
+  // been delivered before the test looks at `updates`.
+  async function settle() {
+    await client.ping();
   }
 
-  function handlerFor(inner: ReturnType<typeof makeMockServer>['inner'], schema: unknown) {
-    const call = inner.setRequestHandler.mock.calls.find((c) => c[0] === schema);
-    if (!call) throw new Error('handler not registered');
-    return call[1] as (request: { params: { uri: string } }) => Promise<unknown>;
-  }
+  describe("listing and reading", () => {
+    it("lists the knowledge-graph resource and no templates", async () => {
+      expect(await client.listResources()).toEqual({
+        resources: [
+          {
+            name: "knowledge-graph",
+            title: "Knowledge Graph",
+            uri: URI,
+            description:
+              "The full knowledge graph with all entities and relations",
+            mimeType: "application/json",
+          },
+        ],
+      });
+      expect(await client.listResourceTemplates()).toEqual({
+        resourceTemplates: [],
+      });
+    });
 
-  it('declares the resources.subscribe capability', () => {
-    const { mockServer, inner } = makeMockServer();
+    it("reads an empty graph before anything is written", async () => {
+      expect(await client.readResource({ uri: URI })).toEqual({
+        contents: [
+          {
+            uri: URI,
+            mimeType: "application/json",
+            text: JSON.stringify({ entities: [], relations: [] }, null, 2),
+          },
+        ],
+      });
+    });
 
-    registerKnowledgeGraphSubscriptions(mockServer);
+    it("reads the current graph as pretty-printed JSON", async () => {
+      await call(client, "create_entities", { entities: [alice, bob] });
+      await call(client, "create_relations", { relations: [aliceKnowsBob] });
 
-    expect(inner.registerCapabilities).toHaveBeenCalledWith({
-      resources: { subscribe: true },
+      const { contents } = await client.readResource({ uri: URI });
+      expect(contents).toEqual([
+        {
+          uri: URI,
+          mimeType: "application/json",
+          text: JSON.stringify(
+            { entities: [alice, bob], relations: [aliceKnowsBob] },
+            null,
+            2,
+          ),
+        },
+      ]);
+    });
+
+    it("rejects a URI it does not serve", async () => {
+      await expect(
+        client.readResource({ uri: "memory://other" }),
+      ).rejects.toThrow("Resource memory://other not found");
     });
   });
 
-  it('registers subscribe and unsubscribe request handlers', () => {
-    const { mockServer, inner } = makeMockServer();
+  describe("subscriptions", () => {
+    it("acknowledges subscribe and unsubscribe with an empty result", async () => {
+      expect(await client.subscribeResource({ uri: URI })).toEqual({});
+      expect(await client.unsubscribeResource({ uri: URI })).toEqual({});
+    });
 
-    registerKnowledgeGraphSubscriptions(mockServer);
+    it("sends no update to a client that has not subscribed", async () => {
+      await call(client, "create_entities", { entities: [alice] });
+      await settle();
+      expect(updates).toEqual([]);
+    });
 
-    const schemas = inner.setRequestHandler.mock.calls.map((c) => c[0]);
-    expect(schemas).toContain(SubscribeRequestSchema);
-    expect(schemas).toContain(UnsubscribeRequestSchema);
-  });
+    it("sends one update per successful mutation tool call", async () => {
+      await client.subscribeResource({ uri: URI });
 
-  it('subscribe and unsubscribe handlers acknowledge with an empty result', async () => {
-    const { mockServer, inner } = makeMockServer();
+      await call(client, "create_entities", { entities: [alice, bob] });
+      await call(client, "create_relations", { relations: [aliceKnowsBob] });
+      await call(client, "add_observations", {
+        observations: [{ entityName: "Alice", contents: ["c"] }],
+      });
+      await call(client, "delete_observations", {
+        deletions: [{ entityName: "Alice", observations: ["c"] }],
+      });
+      await call(client, "delete_relations", { relations: [aliceKnowsBob] });
+      await call(client, "delete_entities", { entityNames: ["Bob"] });
+      await settle();
 
-    registerKnowledgeGraphSubscriptions(mockServer);
+      expect(updates).toEqual(Array.from({ length: 6 }, () => ({ uri: URI })));
+    });
 
-    const req = { params: { uri: 'memory://knowledge-graph' } };
-    await expect(handlerFor(inner, SubscribeRequestSchema)(req)).resolves.toEqual({});
-    await expect(handlerFor(inner, UnsubscribeRequestSchema)(req)).resolves.toEqual({});
+    it("notifies even when a mutation changed nothing", async () => {
+      await client.subscribeResource({ uri: URI });
+      await call(client, "delete_entities", { entityNames: ["Nobody"] });
+      await settle();
+      expect(updates).toEqual([{ uri: URI }]);
+    });
+
+    it("does not notify for read-only tools or a failed mutation", async () => {
+      await call(client, "create_entities", { entities: [alice] });
+      await client.subscribeResource({ uri: URI });
+
+      await call(client, "read_graph");
+      await call(client, "search_nodes", { query: "Alice" });
+      await call(client, "open_nodes", { names: ["Alice"] });
+      await client.readResource({ uri: URI });
+      const failed = await call(client, "create_relations", {
+        relations: [{ from: "Alice", to: "Zed", relationType: "x" }],
+      });
+      await settle();
+
+      expect(failed.isError).toBe(true);
+      expect(updates).toEqual([]);
+    });
+
+    it("does not notify a client subscribed only to another URI", async () => {
+      await client.subscribeResource({ uri: "memory://something-else" });
+      await call(client, "create_entities", { entities: [alice] });
+      await settle();
+      expect(updates).toEqual([]);
+    });
+
+    it("stops notifying after unsubscribe", async () => {
+      await client.subscribeResource({ uri: URI });
+      await call(client, "create_entities", { entities: [alice] });
+      await client.unsubscribeResource({ uri: URI });
+      await call(client, "create_entities", { entities: [bob] });
+      await settle();
+      expect(updates).toEqual([{ uri: URI }]);
+    });
+
+    it("keeps each server's subscribers to itself", async () => {
+      const other = await connect(filePath);
+      try {
+        await other.client.subscribeResource({ uri: URI });
+        await call(client, "create_entities", { entities: [alice] });
+        await settle();
+        expect(updates).toEqual([]);
+      } finally {
+        await other.close();
+      }
+    });
+
+    it("logs a failed notification and still returns the tool result", async () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const transport = conn.serverTransport;
+      const send = transport.send.bind(transport);
+      transport.send = async (message: JSONRPCMessage) => {
+        if (
+          "method" in message &&
+          message.method === "notifications/resources/updated"
+        ) {
+          throw new Error("delivery failed");
+        }
+        return send(message);
+      };
+      await client.subscribeResource({ uri: URI });
+
+      const result = await call(client, "create_entities", {
+        entities: [alice],
+      });
+      await settle();
+
+      expect(result.isError).toBeUndefined();
+      expect(result.structuredContent).toEqual({ entities: [alice] });
+      expect(updates).toEqual([]);
+      // The failure is logged from a detached .catch, so wait for it.
+      await vi.waitFor(() =>
+        expect(errorSpy).toHaveBeenCalledWith(
+          "Failed to send resource updated notification:",
+          expect.objectContaining({ message: "delivery failed" }),
+        ),
+      );
+    });
   });
 });

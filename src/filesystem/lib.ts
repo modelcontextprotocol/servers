@@ -1,25 +1,10 @@
 import fs from "fs/promises";
 import path from "path";
-import os from 'os';
-import { randomBytes } from 'crypto';
-import { StringDecoder } from 'string_decoder';
-import { diffLines, createTwoFilesPatch } from 'diff';
-import { minimatch } from 'minimatch';
-import { normalizePath, expandHome } from './path-utils.js';
-import { isPathWithinAllowedDirectories } from './path-validation.js';
-
-// Global allowed directories - set by the main module
-let allowedDirectories: string[] = [];
-
-// Function to set allowed directories from the main module
-export function setAllowedDirectories(directories: string[]): void {
-  allowedDirectories = [...directories];
-}
-
-// Function to get current allowed directories
-export function getAllowedDirectories(): string[] {
-  return [...allowedDirectories];
-}
+import { StringDecoder } from "string_decoder";
+import { createTwoFilesPatch } from "diff";
+import { minimatch } from "minimatch";
+import { normalizePath, expandHome } from "./path-utils.js";
+import { isPathWithinAllowedDirectories } from "./path-validation.js";
 
 // Type definitions
 interface FileInfo {
@@ -43,22 +28,26 @@ export interface SearchResult {
 
 // Pure Utility Functions
 export function formatSize(bytes: number): string {
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  if (bytes <= 0) return '0 B';
-  
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  if (bytes <= 0) return "0 B";
+
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  
+
   if (i < 0 || i === 0) return `${bytes} ${units[0]}`;
-  
+
   const unitIndex = Math.min(i, units.length - 1);
   return `${(bytes / Math.pow(1024, unitIndex)).toFixed(2)} ${units[unitIndex]}`;
 }
 
 export function normalizeLineEndings(text: string): string {
-  return text.replace(/\r\n/g, '\n');
+  return text.replace(/\r\n/g, "\n");
 }
 
-export function createUnifiedDiff(originalContent: string, newContent: string, filepath: string = 'file'): string {
+export function createUnifiedDiff(
+  originalContent: string,
+  newContent: string,
+  filepath: string = "file",
+): string {
   // Ensure consistent line endings for diff
   const normalizedOriginal = normalizeLineEndings(originalContent);
   const normalizedNew = normalizeLineEndings(newContent);
@@ -68,13 +57,16 @@ export function createUnifiedDiff(originalContent: string, newContent: string, f
     filepath,
     normalizedOriginal,
     normalizedNew,
-    'original',
-    'modified'
+    "original",
+    "modified",
   );
 }
 
 // Helper function to resolve relative paths against allowed directories
-function resolveRelativePathAgainstAllowedDirectories(relativePath: string): string {
+function resolveRelativePathAgainstAllowedDirectories(
+  relativePath: string,
+  allowedDirectories: readonly string[],
+): string {
   if (allowedDirectories.length === 0) {
     // Fallback to process.cwd() if no allowed directories are set
     return path.resolve(process.cwd(), relativePath);
@@ -84,38 +76,93 @@ function resolveRelativePathAgainstAllowedDirectories(relativePath: string): str
   for (const allowedDir of allowedDirectories) {
     const candidate = path.resolve(allowedDir, relativePath);
     const normalizedCandidate = normalizePath(candidate);
-    
+
     // Check if the resulting path lies within any allowed directory
-    if (isPathWithinAllowedDirectories(normalizedCandidate, allowedDirectories)) {
+    if (
+      isPathWithinAllowedDirectories(normalizedCandidate, allowedDirectories)
+    ) {
       return candidate;
     }
   }
-  
+
   // If no valid resolution found, use the first allowed directory as base
   // This provides a consistent fallback behavior
   return path.resolve(allowedDirectories[0], relativePath);
 }
 
 // Security & Validation Functions
-async function resolveUnicodeEquivalentPath(absolutePath: string): Promise<string> {
+
+// The form two path components are compared in when the exact spelling is not
+// on disk (#1970): canonically equivalent spellings (NFC/NFD, as macOS stores
+// "é" or Japanese dakuten) match, and so do the Unicode space separators
+// (U+00A0, the U+202F macOS puts before "PM" in a screenshot's name, ...),
+// which a client typing the name back almost always sends as U+0020.
+function unicodeMatchKey(component: string): string {
+  return component.normalize("NFC").replace(/\p{Zs}/gu, " ");
+}
+
+// An allowed directory whose own name is spelled differently on disk (NFD)
+// from the request (NFC) fails the allow-list check, which compares strings
+// (#1970). Map such a request onto the allowed directory's own spelling, so
+// the result is inside that directory by construction and every later check
+// still runs against the real allow-list. A request that does not spell an
+// allowed directory is returned unchanged and is refused as before.
+function respellAllowedDirectoryPrefix(
+  absolutePath: string,
+  allowedDirectories: readonly string[],
+): string {
+  const requestedParts = absolutePath.split(path.sep).filter(Boolean);
+  const candidates = allowedDirectories
+    .map((directory) => path.resolve(directory))
+    .sort((left, right) => right.length - left.length);
+  for (const directory of candidates) {
+    const directoryParts = directory.split(path.sep).filter(Boolean);
+    if (
+      directoryParts.length <= requestedParts.length &&
+      directoryParts.every(
+        (part, index) =>
+          unicodeMatchKey(part) === unicodeMatchKey(requestedParts[index]),
+      )
+    ) {
+      return path.join(
+        directory,
+        ...requestedParts.slice(directoryParts.length),
+      );
+    }
+  }
+  return absolutePath;
+}
+
+async function resolveUnicodeEquivalentPath(
+  absolutePath: string,
+  allowedDirectories: readonly string[],
+): Promise<string> {
   const allowedDirectory = [...allowedDirectories]
     .sort((left, right) => right.length - left.length)
-    .find(directory => isPathWithinAllowedDirectories(normalizePath(absolutePath), [directory]));
+    .find((directory) =>
+      isPathWithinAllowedDirectories(normalizePath(absolutePath), [directory]),
+    );
 
+  /* v8 ignore next -- validatePath calls this only after the same allow-list check passed, so a containing directory always exists */
   if (!allowedDirectory) {
     return absolutePath;
   }
 
   let currentPath = await fs.realpath(allowedDirectory);
-  const relativeParts = path.relative(allowedDirectory, absolutePath).split(path.sep).filter(Boolean);
+  const relativeParts = path
+    .relative(allowedDirectory, absolutePath)
+    .split(path.sep)
+    .filter(Boolean);
 
   for (let index = 0; index < relativeParts.length; index++) {
     const requestedPart = relativeParts[index];
     const entries = (await fs.readdir(currentPath)) ?? [];
-    const exactMatch = entries.find(entry => entry === requestedPart);
+    const exactMatch = entries.find((entry) => entry === requestedPart);
     const equivalentMatches = exactMatch
       ? [exactMatch]
-      : entries.filter(entry => entry.normalize('NFC') === requestedPart.normalize('NFC'));
+      : entries.filter(
+          (entry) => unicodeMatchKey(entry) === unicodeMatchKey(requestedPart),
+        );
 
     if (equivalentMatches.length > 1) {
       throw new Error(`Ambiguous Unicode path component: ${requestedPart}`);
@@ -128,33 +175,68 @@ async function resolveUnicodeEquivalentPath(absolutePath: string): Promise<strin
       return path.join(currentPath, ...relativeParts.slice(index));
     }
 
-    currentPath = await fs.realpath(path.join(currentPath, equivalentMatches[0]));
-    if (!isPathWithinAllowedDirectories(normalizePath(currentPath), allowedDirectories)) {
-      throw new Error(`Access denied - symlink target outside allowed directories: ${currentPath} not in ${allowedDirectories.join(', ')}`);
+    currentPath = await fs.realpath(
+      path.join(currentPath, equivalentMatches[0]),
+    );
+    if (
+      !isPathWithinAllowedDirectories(
+        normalizePath(currentPath),
+        allowedDirectories,
+      )
+    ) {
+      throw new Error(
+        `Access denied - symlink target outside allowed directories: ${currentPath} not in ${allowedDirectories.join(", ")}`,
+      );
     }
   }
 
   return currentPath;
 }
 
-export async function validatePath(requestedPath: string): Promise<string> {
+// The allow-list is passed in rather than read from module state, so each
+// server instance (see server.ts) validates against its own directories and two
+// instances can coexist in one process (#4854).
+export async function validatePath(
+  requestedPath: string,
+  allowedDirectories: readonly string[],
+): Promise<string> {
   const expandedPath = expandHome(requestedPath);
   // Do not silently reinterpret a Windows drive path as a relative POSIX path.
   // This would create a literal filename such as `C:\\Users\\...` inside the
   // allowed root and report success for the wrong location.
-  if (process.platform !== 'win32' && /^(?:[A-Za-z]:)(?:[\\/]|$)/.test(expandedPath)) {
-    throw new Error(`Access denied - Windows-style path received on a POSIX host: ${requestedPath}`);
+  if (
+    process.platform !== "win32" &&
+    /^(?:[A-Za-z]:)(?:[\\/]|$)/.test(expandedPath)
+  ) {
+    throw new Error(
+      `Access denied - Windows-style path received on a POSIX host: ${requestedPath}`,
+    );
   }
-  const absolute = path.isAbsolute(expandedPath)
+  let absolute = path.isAbsolute(expandedPath)
     ? path.resolve(expandedPath)
-    : resolveRelativePathAgainstAllowedDirectories(expandedPath);
+    : resolveRelativePathAgainstAllowedDirectories(
+        expandedPath,
+        allowedDirectories,
+      );
+  if (
+    !isPathWithinAllowedDirectories(normalizePath(absolute), allowedDirectories)
+  ) {
+    absolute = respellAllowedDirectoryPrefix(absolute, allowedDirectories);
+  }
 
   const normalizedRequested = normalizePath(absolute);
 
   // Security: Check if path is within allowed directories before any file operations
-  const isAllowed = isPathWithinAllowedDirectories(normalizedRequested, allowedDirectories);
+  const isAllowed = isPathWithinAllowedDirectories(
+    normalizedRequested,
+    allowedDirectories,
+  );
   if (!isAllowed) {
-    throw new Error(`Access denied - path outside allowed directories: ${absolute} not in ${allowedDirectories.join(', ')}`);
+    throw new Error(
+      allowedDirectories.length === 0
+        ? `Access denied - no allowed directories: the client exposes no valid roots (${absolute})`
+        : `Access denied - path outside allowed directories: ${absolute} not in ${allowedDirectories.join(", ")}`,
+    );
   }
 
   // Security: Handle symlinks by checking their real path to prevent symlink attacks
@@ -163,18 +245,23 @@ export async function validatePath(requestedPath: string): Promise<string> {
     const realPath = await fs.realpath(absolute);
     const normalizedReal = normalizePath(realPath);
     if (!isPathWithinAllowedDirectories(normalizedReal, allowedDirectories)) {
-      throw new Error(`Access denied - symlink target outside allowed directories: ${realPath} not in ${allowedDirectories.join(', ')}`);
+      throw new Error(
+        `Access denied - symlink target outside allowed directories: ${realPath} not in ${allowedDirectories.join(", ")}`,
+      );
     }
     return realPath;
   } catch (error) {
     // Security: For new files that don't exist yet, verify parent directory
     // This ensures we can't create files in unauthorized locations
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       try {
-        return await resolveUnicodeEquivalentPath(absolute);
+        return await resolveUnicodeEquivalentPath(absolute, allowedDirectories);
       } catch (resolutionError) {
-        if ((resolutionError as NodeJS.ErrnoException).code === 'ENOENT') {
-          throw new Error(`Parent directory does not exist: ${path.dirname(absolute)}`);
+        if ((resolutionError as NodeJS.ErrnoException).code === "ENOENT") {
+          throw new Error(
+            `Parent directory does not exist: ${path.dirname(absolute)}`,
+            { cause: resolutionError },
+          );
         }
         throw resolutionError;
       }
@@ -182,7 +269,6 @@ export async function validatePath(requestedPath: string): Promise<string> {
     throw error;
   }
 }
-
 
 // File Operations
 export async function getFileStats(filePath: string): Promise<FileInfo> {
@@ -198,46 +284,89 @@ export async function getFileStats(filePath: string): Promise<FileInfo> {
   };
 }
 
-export async function readFileContent(filePath: string, encoding: string = 'utf-8'): Promise<string> {
+export async function readFileContent(
+  filePath: string,
+  encoding: string = "utf-8",
+): Promise<string> {
   return await fs.readFile(filePath, encoding as BufferEncoding);
 }
 
-export async function writeFileContent(filePath: string, content: string): Promise<void> {
+export async function writeFileContent(
+  filePath: string,
+  content: string,
+): Promise<void> {
   try {
     // Security: 'wx' flag ensures exclusive creation - fails if file/symlink exists,
     // preventing writes through pre-existing symlinks
-    await fs.writeFile(filePath, content, { encoding: "utf-8", flag: 'wx' });
+    await fs.writeFile(filePath, content, { encoding: "utf-8", flag: "wx" });
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-      // Security: Use atomic rename to prevent race conditions where symlinks
-      // could be created between validation and write. Rename operations
-      // replace the target file atomically and don't follow symlinks.
-      const origStats = await fs.stat(filePath);
-      const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
-      try {
-        await fs.writeFile(tempPath, content, 'utf-8');
-        await fs.rename(tempPath, filePath);
-      } catch (renameError) {
-        try {
-          await fs.unlink(tempPath);
-        } catch {}
-        throw renameError;
-      }
-      // Restore original permission bits since the atomic rename replaces the
-      // inode and the temp file has default (0644) permissions. Mask off the
-      // file-type bits; POSIX leaves them unspecified for chmod. A chmod
-      // failure must not fail the write, which has already succeeded.
-      try {
-        await fs.chmod(filePath, origStats.mode & 0o777);
-      } catch {}
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      await overwriteInPlace(filePath, content);
     } else {
       throw error;
     }
   }
 }
 
+/**
+ * Replace an existing file's content in place, through a single handle.
+ *
+ * Writing through the existing file, rather than renaming a temp file over it,
+ * keeps its identity: the inode, creation time (birthtime), hard links,
+ * permission bits and anything watching it by inode all survive (#4512). It
+ * also never renames over the target, which on Windows fails with EPERM when
+ * another process holds the file open without FILE_SHARE_DELETE (#3199).
+ *
+ * Security: the path was validated before this runs, so a symlink swapped in
+ * since then must not be written through (TOCTOU). Three checks hold that:
+ * - lstat refuses anything at the path that is not a regular file, a symlink
+ *   included;
+ * - O_NOFOLLOW makes the open itself fail with ELOOP on a symlink. It exists
+ *   only on POSIX: fs.constants.O_NOFOLLOW is undefined on Windows;
+ * - the opened handle must be the very file lstat saw (same device and inode),
+ *   which catches a swap between the lstat and the open on every platform,
+ *   Windows included. Once the handle is verified, every write goes through
+ *   it, so a later swap of the path cannot redirect it.
+ *
+ * The trade-off is crash-atomicity: a crash mid-write leaves a partly written
+ * file, where the rename left either the old content or the new.
+ */
+async function overwriteInPlace(
+  filePath: string,
+  content: string,
+): Promise<void> {
+  const expected = await fs.lstat(filePath);
+  if (!expected.isFile()) {
+    throw new Error(`Refusing to write: not a regular file: ${filePath}`);
+  }
+  // O_RDWR rather than O_WRONLY: opening a FIFO swapped in after the lstat for
+  // writing only would block until a reader arrives.
+  const handle = await fs.open(
+    filePath,
+    fs.constants.O_RDWR | (fs.constants.O_NOFOLLOW ?? 0),
+  );
+  try {
+    const opened = await handle.stat();
+    if (
+      !opened.isFile() ||
+      opened.dev !== expected.dev ||
+      opened.ino !== expected.ino
+    ) {
+      throw new Error(
+        `Refusing to write: ${filePath} was replaced while it was being opened`,
+      );
+    }
+    await handle.truncate(0);
+    await handle.writeFile(content, "utf-8");
+  } finally {
+    await handle.close();
+  }
+}
 
-export async function moveFile(sourcePath: string, destinationPath: string): Promise<void> {
+export async function moveFile(
+  sourcePath: string,
+  destinationPath: string,
+): Promise<void> {
   // The move_file tool contract (and README) state the operation fails if the
   // destination already exists. fs.rename would silently overwrite it, which is
   // a data-loss bug, so reject up front when anything - file, directory, or
@@ -246,7 +375,7 @@ export async function moveFile(sourcePath: string, destinationPath: string): Pro
   try {
     await fs.lstat(destinationPath);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       await fs.rename(sourcePath, destinationPath);
       return;
     }
@@ -255,20 +384,95 @@ export async function moveFile(sourcePath: string, destinationPath: string): Pro
   throw new Error(`Destination already exists: ${destinationPath}`);
 }
 
-
 // File Editing Functions
 interface FileEdit {
   oldText: string;
   newText: string;
 }
 
+/**
+ * The line ending a file predominantly uses: CRLF when more of its line breaks
+ * are CRLF than bare LF, otherwise LF. A file with mixed endings is written
+ * back with its predominant one.
+ */
+export function detectLineEnding(text: string): "\r\n" | "\n" {
+  const crlf = text.match(/\r\n/g)?.length ?? 0;
+  const lf = (text.match(/\n/g)?.length ?? 0) - crlf;
+  return crlf > lf ? "\r\n" : "\n";
+}
+
+function leadingWhitespace(line: string): string {
+  return line.slice(0, line.length - line.trimStart().length);
+}
+
+/**
+ * The indentation unit of some lines: a tab when any indented line starts
+ * with one, otherwise the narrowest run of leading spaces, or "" when no line
+ * is indented.
+ */
+function indentUnit(lines: string[]): string {
+  let narrowest = Infinity;
+  for (const line of lines) {
+    const indent = leadingWhitespace(line);
+    if (indent === "" || line.trim() === "") continue;
+    if (indent.includes("\t")) return "\t";
+    narrowest = Math.min(narrowest, indent.length);
+  }
+  return narrowest === Infinity ? "" : " ".repeat(narrowest);
+}
+
+/**
+ * Reindents one replacement line for the whitespace-tolerant matcher: it gets
+ * the indentation of `fileLine` (the file line it replaces), plus or minus the
+ * difference between its own indentation and `oldLine`'s (the oldText line
+ * that matched `fileLine`). A dedent never goes below no indentation. A blank
+ * line is kept as given.
+ *
+ * When the edit and the file indent with different characters (tabs in one,
+ * spaces in the other), the difference is counted in indent levels of the
+ * edit's unit and applied in the file's unit, so four spaces of extra
+ * indent in the edit become one tab in a tab-indented file.
+ */
+function reindentLine(
+  line: string,
+  fileLine: string,
+  oldLine: string,
+  editUnit: string,
+  fileUnit: string,
+): string {
+  const body = line.trimStart();
+  if (body === "") return line;
+  const fileIndent = leadingWhitespace(fileLine);
+  const newIndent = leadingWhitespace(line);
+  const delta = newIndent.length - leadingWhitespace(oldLine).length;
+  if (editUnit && fileUnit && (editUnit === "\t") !== (fileUnit === "\t")) {
+    const levels = Math.trunc(delta / editUnit.length);
+    const indent =
+      levels >= 0
+        ? fileIndent + fileUnit.repeat(levels)
+        : fileIndent.slice(
+            0,
+            Math.max(0, fileIndent.length + levels * fileUnit.length),
+          );
+    return indent + body;
+  }
+  const indent =
+    delta >= 0
+      ? fileIndent + newIndent.slice(newIndent.length - delta)
+      : fileIndent.slice(0, Math.max(0, fileIndent.length + delta));
+  return indent + body;
+}
+
 export async function applyFileEdits(
   filePath: string,
   edits: FileEdit[],
-  dryRun: boolean = false
+  dryRun: boolean = false,
 ): Promise<string> {
-  // Read file content and normalize line endings
-  const content = normalizeLineEndings(await fs.readFile(filePath, 'utf-8'));
+  // Read file content and normalize line endings, remembering which ending
+  // the file uses so the edited file is written back with it (#4991).
+  const rawContent = await fs.readFile(filePath, "utf-8");
+  const eol = detectLineEnding(rawContent);
+  const content = normalizeLineEndings(rawContent);
 
   // Apply edits sequentially
   let modifiedContent = content;
@@ -278,13 +482,16 @@ export async function applyFileEdits(
 
     // If exact match exists, use it
     if (modifiedContent.includes(normalizedOld)) {
-      modifiedContent = modifiedContent.replace(normalizedOld, () => normalizedNew);
+      modifiedContent = modifiedContent.replace(
+        normalizedOld,
+        () => normalizedNew,
+      );
       continue;
     }
 
     // Otherwise, try line-by-line matching with flexibility for whitespace
-    const oldLines = normalizedOld.split('\n');
-    const contentLines = modifiedContent.split('\n');
+    const oldLines = normalizedOld.split("\n");
+    const contentLines = modifiedContent.split("\n");
     let matchFound = false;
 
     for (let i = 0; i <= contentLines.length - oldLines.length; i++) {
@@ -297,22 +504,28 @@ export async function applyFileEdits(
       });
 
       if (isMatch) {
-        // Preserve original indentation of first line
-        const originalIndent = contentLines[i].match(/^\s*/)?.[0] || '';
-        const newLines = normalizedNew.split('\n').map((line, j) => {
-          if (j === 0) return originalIndent + line.trimStart();
-          // For subsequent lines, try to preserve relative indentation
-          const oldIndent = oldLines[j]?.match(/^\s*/)?.[0] || '';
-          const newIndent = line.match(/^\s*/)?.[0] || '';
-          if (oldIndent && newIndent) {
-            const relativeIndent = newIndent.length - oldIndent.length;
-            return originalIndent + ' '.repeat(Math.max(0, relativeIndent)) + line.trimStart();
-          }
-          return line;
+        // Each replacement line takes the indentation of the file line it
+        // replaces, shifted by however much the edit indents or dedents it
+        // relative to the matching oldText line (#4990). Lines beyond
+        // oldText's length are placed relative to its last line.
+        const editUnit = indentUnit([
+          ...oldLines,
+          ...normalizedNew.split("\n"),
+        ]);
+        const fileUnit = indentUnit(contentLines);
+        const newLines = normalizedNew.split("\n").map((line, j) => {
+          const k = Math.min(j, oldLines.length - 1);
+          return reindentLine(
+            line,
+            potentialMatch[k],
+            oldLines[k],
+            editUnit,
+            fileUnit,
+          );
         });
 
         contentLines.splice(i, oldLines.length, ...newLines);
-        modifiedContent = contentLines.join('\n');
+        modifiedContent = contentLines.join("\n");
         matchFound = true;
         break;
       }
@@ -326,61 +539,49 @@ export async function applyFileEdits(
   // Create unified diff
   const diff = createUnifiedDiff(content, modifiedContent, filePath);
 
+  // Write the file back with the line ending it was read with (#4991).
+  if (eol === "\r\n") {
+    modifiedContent = modifiedContent.replace(/\n/g, "\r\n");
+  }
+
   // Format diff with appropriate number of backticks
   let numBackticks = 3;
-  while (diff.includes('`'.repeat(numBackticks))) {
+  while (diff.includes("`".repeat(numBackticks))) {
     numBackticks++;
   }
-  const formattedDiff = `${'`'.repeat(numBackticks)}diff\n${diff}${'`'.repeat(numBackticks)}\n\n`;
+  const formattedDiff = `${"`".repeat(numBackticks)}diff\n${diff}${"`".repeat(numBackticks)}\n\n`;
 
   if (!dryRun) {
-    // Security: Use atomic rename to prevent race conditions where symlinks
-    // could be created between validation and write. Rename operations
-    // replace the target file atomically and don't follow symlinks.
-    const origStats = await fs.stat(filePath);
-    const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
-    try {
-      await fs.writeFile(tempPath, modifiedContent, 'utf-8');
-      await fs.rename(tempPath, filePath);
-    } catch (error) {
-      try {
-        await fs.unlink(tempPath);
-      } catch {}
-      throw error;
-    }
-    // Restore original permission bits since the atomic rename replaces the
-    // inode and the temp file has default (0644) permissions. Mask off the
-    // file-type bits; POSIX leaves them unspecified for chmod. A chmod
-    // failure must not fail the write, which has already succeeded.
-    try {
-      await fs.chmod(filePath, origStats.mode & 0o777);
-    } catch {}
+    await overwriteInPlace(filePath, modifiedContent);
   }
 
   return formattedDiff;
 }
 
 // Memory-efficient implementation to get the last N lines of a file
-export async function tailFile(filePath: string, numLines: number): Promise<string> {
+export async function tailFile(
+  filePath: string,
+  numLines: number,
+): Promise<string> {
   const CHUNK_SIZE = 1024; // Read 1KB at a time
   const stats = await fs.stat(filePath);
   const fileSize = stats.size;
-  
-  if (fileSize === 0) return '';
-  
+
+  if (fileSize === 0) return "";
+
   // Open file for reading
-  const fileHandle = await fs.open(filePath, 'r');
+  const fileHandle = await fs.open(filePath, "r");
   try {
     const chunks: Buffer[] = [];
     let position = fileSize;
     const chunk = Buffer.alloc(CHUNK_SIZE);
     let newlinesFound = 0;
-    
+
     // Read chunks from the end of the file until we have enough lines
     while (position > 0 && newlinesFound < numLines) {
       const size = Math.min(CHUNK_SIZE, position);
       position -= size;
-      
+
       const { bytesRead } = await fileHandle.read(chunk, 0, size, position);
       if (!bytesRead) break;
 
@@ -391,33 +592,36 @@ export async function tailFile(filePath: string, numLines: number): Promise<stri
       }
     }
 
-    const text = normalizeLineEndings(Buffer.concat(chunks).toString('utf-8'));
-    return text.split('\n').slice(-numLines).join('\n');
+    const text = normalizeLineEndings(Buffer.concat(chunks).toString("utf-8"));
+    return text.split("\n").slice(-numLines).join("\n");
   } finally {
     await fileHandle.close();
   }
 }
 
 // New function to get the first N lines of a file
-export async function headFile(filePath: string, numLines: number): Promise<string> {
-  const fileHandle = await fs.open(filePath, 'r');
+export async function headFile(
+  filePath: string,
+  numLines: number,
+): Promise<string> {
+  const fileHandle = await fs.open(filePath, "r");
   try {
     const lines: string[] = [];
-    let buffer = '';
+    let buffer = "";
     let bytesRead = 0;
     const chunk = Buffer.alloc(1024); // 1KB buffer
-    const decoder = new StringDecoder('utf-8');
-    
+    const decoder = new StringDecoder("utf-8");
+
     // Read chunks and count lines until we have enough or reach EOF
     while (lines.length < numLines) {
       const result = await fileHandle.read(chunk, 0, chunk.length, bytesRead);
       if (result.bytesRead === 0) break; // End of file
       bytesRead += result.bytesRead;
       buffer += decoder.write(chunk.subarray(0, result.bytesRead));
-      
-      const newLineIndex = buffer.lastIndexOf('\n');
+
+      const newLineIndex = buffer.lastIndexOf("\n");
       if (newLineIndex !== -1) {
-        const completeLines = buffer.slice(0, newLineIndex).split('\n');
+        const completeLines = buffer.slice(0, newLineIndex).split("\n");
         buffer = buffer.slice(newLineIndex + 1);
         for (const line of completeLines) {
           lines.push(line);
@@ -427,13 +631,13 @@ export async function headFile(filePath: string, numLines: number): Promise<stri
     }
 
     buffer += decoder.end();
-    
+
     // If there is leftover content and we still need lines, add it
     if (buffer.length > 0 && lines.length < numLines) {
       lines.push(buffer);
     }
-    
-    return lines.join('\n');
+
+    return lines.join("\n");
   } finally {
     await fileHandle.close();
   }
@@ -442,8 +646,8 @@ export async function headFile(filePath: string, numLines: number): Promise<stri
 export async function searchFilesWithValidation(
   rootPath: string,
   pattern: string,
-  allowedDirectories: string[],
-  options: SearchOptions = {}
+  allowedDirectories: readonly string[],
+  options: SearchOptions = {},
 ): Promise<string[]> {
   const { excludePatterns = [] } = options;
   const results: string[] = [];
@@ -455,11 +659,11 @@ export async function searchFilesWithValidation(
       const fullPath = path.join(currentPath, entry.name);
 
       try {
-        await validatePath(fullPath);
+        await validatePath(fullPath, allowedDirectories);
 
         const relativePath = path.relative(rootPath, fullPath);
-        const shouldExclude = excludePatterns.some(excludePattern =>
-          minimatch(relativePath, excludePattern, { dot: true })
+        const shouldExclude = excludePatterns.some((excludePattern) =>
+          minimatch(relativePath, excludePattern, { dot: true }),
         );
 
         if (shouldExclude) continue;

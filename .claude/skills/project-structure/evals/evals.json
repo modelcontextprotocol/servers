@@ -1,0 +1,30 @@
+[
+  {
+    "prompt": "I need to add a command-line flag to the time server. Does that go in the same file as the tool handlers or somewhere else?",
+    "expect": "project-structure"
+  },
+  {
+    "prompt": "Does a new helper for the filesystem server's path checks belong in its entry file or in a module of its own?",
+    "expect": "project-structure"
+  },
+  {
+    "prompt": "I'm adding a new transport to the everything server. Which files do I need to create or touch?",
+    "expect": "project-structure"
+  },
+  {
+    "prompt": "How do I add a second tool to the git server? Is there a tools directory to put it in?",
+    "expect": "project-structure"
+  },
+  {
+    "prompt": "Two of the servers need the same small helper. Does it go in a shared package or do I put a copy in each?",
+    "expect": "project-structure"
+  },
+  {
+    "prompt": "Explain the difference between a mutex and a semaphore.",
+    "expect": null
+  },
+  {
+    "prompt": "What is the capital of Australia?",
+    "expect": null
+  }
+]

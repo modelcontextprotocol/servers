@@ -1,6 +1,6 @@
 {
   "name": "@modelcontextprotocol/server-memory",
-  "version": "0.6.3",
+  "version": "1.0.0",
   "description": "MCP server for enabling memory for Claude through a knowledge graph",
   "license": "SEE LICENSE IN LICENSE",
   "mcpName": "io.github.modelcontextprotocol/server-memory",
@@ -22,17 +22,23 @@
     "build": "tsc && shx chmod +x dist/*.js",
     "prepare": "npm run build",
     "watch": "tsc --watch",
-    "test": "vitest run --coverage"
+    "test": "vitest run",
+    "format": "prettier --write \"**/*.{ts,mts,cts,js,mjs,cjs}\" --ignore-path ../../.prettierignore",
+    "format:check": "prettier --check \"**/*.{ts,mts,cts,js,mjs,cjs}\" --ignore-path ../../.prettierignore",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "coverage": "vitest run --coverage",
+    "validate": "npm run format:check && npm run lint && npm run typecheck && npm run build && npm run test"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^22",
-    "@vitest/coverage-v8": "^4.1.8",
+    "@vitest/coverage-v8": "^4.1.11",
     "shx": "^0.4.0",
-    "typescript": "^5.6.2",
-    "vitest": "^4.1.8"
+    "typescript": "^5.8.2",
+    "vitest": "^4.1.11"
   }
 }

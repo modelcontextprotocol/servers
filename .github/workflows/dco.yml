@@ -1,0 +1,52 @@
+name: DCO
+
+# Every commit a pull request adds carries a DCO signoff (#4919). It replaces
+# the probot DCO app, which never ran on this repo. The rule and its two
+# exemptions (merge commits, bot-authored commits) are in
+# `scripts/verify-dco.mjs`; `local:gate` runs the same script over
+# `origin/v2/main..HEAD` before a push.
+#
+# On `pull_request`, unlike typescript.yml and python.yml: only a PR knows its
+# base, and the range to check is exactly `base.sha..head.sha`. `edited` is
+# there so retargeting a stacked PR re-checks its new range. PRs into `main`
+# are skipped: the only one is a milestone merge, whose commits were each
+# checked on their way into `v2/main`, and whose range reaches back past the
+# adoption of the rule.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+    branches-ignore: [main]
+
+# Read-only, and handed no secret, so this job holds no credential and stays
+# outside the SHA-pin rule (`verify:action-pins`).
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  dco:
+    timeout-minutes: 5
+    name: DCO signoff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          # The whole history, so both ends of the range and their merge base
+          # are present.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      # Node built-ins and git only, so no `npm ci`.
+      - name: Check every commit is signed off
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: npm run verify:dco -- --base "$BASE_SHA" --head "$HEAD_SHA"

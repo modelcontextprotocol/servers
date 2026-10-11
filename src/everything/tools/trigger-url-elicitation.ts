@@ -28,7 +28,7 @@ const TriggerUrlElicitationSchema = z.object({
         "When true, throws a UrlElicitationRequiredError (MCP error code -32042) so the client handles " +
         "the URL elicitation via the error path rather than waiting for a response. " +
         "To clear the error, satisfy the prerequisite and retry this call with the same arguments; the " +
-        "retry ignores errorPath and proceeds, so the client does not loop on the same error."
+        "retry ignores errorPath and proceeds, so the client does not loop on the same error.",
     ),
 });
 
@@ -164,7 +164,7 @@ export const registerTriggerUrlElicitationTool = (server: McpServer) => {
             };
             throw new UrlElicitationRequiredError(
               [prerequisiteElicitation],
-              "This request requires browser-based authorization."
+              "This request requires browser-based authorization.",
             );
           }
         }
@@ -176,7 +176,7 @@ export const registerTriggerUrlElicitationTool = (server: McpServer) => {
             params: elicitationParams,
           },
           ElicitResultSchema,
-          { timeout: 10 * 60 * 1000 /* 10 minutes */ }
+          { timeout: 10 * 60 * 1000 /* 10 minutes */ },
         );
 
         // Handle different response actions
@@ -209,7 +209,7 @@ export const registerTriggerUrlElicitationTool = (server: McpServer) => {
         });
 
         return { content };
-      }
+      },
     );
   }
 };

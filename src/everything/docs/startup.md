@@ -43,6 +43,9 @@
       - **DELETE** (termination)
     - Uses an event store for resumability and stores transports by `sessionId`.
     - Calls `cleanup(sessionId)` on **DELETE**.
+  - **SSE** and **Streamable HTTP** bind their port (`PORT`, default `3001`) through `listenOrExit()` in `transports/listen.ts`.
+    - The listening line is printed only once the port is bound.
+    - A bind failure, such as a port already in use, is reported on stderr and the process exits non-zero.
 
 ## 3. The Server Factory
 

@@ -1,408 +1,279 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
+/**
+ * Characterizes the everything server's resources through the protocol
+ * (#4854): reading the static documents and the dynamic templates, the errors
+ * for bad template ids, and resource subscriptions with the simulated
+ * `notifications/resources/updated` stream that `toggle-subscriber-updates`
+ * drives. Session resources (from `gzip-file-as-resource`) are in
+ * `gzip-file-as-resource.test.ts`.
+ */
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  textResource,
-  blobResource,
-  textResourceUri,
-  blobResourceUri,
-  RESOURCE_TYPE_TEXT,
-  RESOURCE_TYPE_BLOB,
-  RESOURCE_TYPES,
-  resourceTypeCompleter,
-  resourceIdForPromptCompleter,
-  resourceIdForResourceTemplateCompleter,
-  registerResourceTemplates,
-} from '../resources/templates.js';
-import {
-  getSessionResourceURI,
-  registerSessionResource,
-} from '../resources/session.js';
-import { registerFileResources } from '../resources/files.js';
-import {
-  SubscribeRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
-import {
-  setSubscriptionHandlers,
-  beginSimulatedResourceUpdates,
-  stopSimulatedResourceUpdates,
-  removeSubscriber,
-} from '../resources/subscriptions.js';
+  connect,
+  ofMethod,
+  textOf,
+  contentOf,
+  type Session,
+} from "./harness.js";
 
-describe('Resource Templates', () => {
-  describe('Constants', () => {
-    it('should include both types in RESOURCE_TYPES array', () => {
-      expect(RESOURCE_TYPES).toContain(RESOURCE_TYPE_TEXT);
-      expect(RESOURCE_TYPES).toContain(RESOURCE_TYPE_BLOB);
-      expect(RESOURCE_TYPES).toHaveLength(2);
-    });
-  });
+const DOCS_DIR = join(import.meta.dirname, "..", "docs");
 
-  describe('textResourceUri', () => {
-    it('should create URL for text resource', () => {
-      const uri = textResourceUri(1);
-      expect(uri.toString()).toBe('demo://resource/dynamic/text/1');
-    });
+let session: Session;
 
-    it('should handle different resource IDs', () => {
-      expect(textResourceUri(5).toString()).toBe('demo://resource/dynamic/text/5');
-      expect(textResourceUri(100).toString()).toBe('demo://resource/dynamic/text/100');
-    });
-  });
+beforeEach(async () => {
+  session = await connect();
+});
 
-  describe('blobResourceUri', () => {
-    it('should create URL for blob resource', () => {
-      const uri = blobResourceUri(1);
-      expect(uri.toString()).toBe('demo://resource/dynamic/blob/1');
-    });
+afterEach(async () => {
+  vi.useRealTimers();
+  await session.close();
+});
 
-    it('should handle different resource IDs', () => {
-      expect(blobResourceUri(5).toString()).toBe('demo://resource/dynamic/blob/5');
-      expect(blobResourceUri(100).toString()).toBe('demo://resource/dynamic/blob/100');
-    });
-  });
-
-  describe('textResource', () => {
-    it('should create text resource with correct structure', () => {
-      const uri = textResourceUri(1);
-      const resource = textResource(uri, 1);
-
-      expect(resource.uri).toBe(uri.toString());
-      expect(resource.mimeType).toBe('text/plain');
-      expect(resource.text).toContain('Resource 1');
-      expect(resource.text).toContain('plaintext');
-    });
-
-    it('should include timestamp in content', () => {
-      const uri = textResourceUri(2);
-      const resource = textResource(uri, 2);
-
-      // Timestamp format varies, just check it contains time-related content
-      expect(resource.text).toMatch(/\d/);
-    });
-  });
-
-  describe('blobResource', () => {
-    it('should create blob resource with correct structure', () => {
-      const uri = blobResourceUri(1);
-      const resource = blobResource(uri, 1);
-
-      expect(resource.uri).toBe(uri.toString());
-      expect(resource.mimeType).toBe('text/plain');
-      expect(resource.blob).toBeDefined();
-    });
-
-    it('should create valid base64 encoded content', () => {
-      const uri = blobResourceUri(3);
-      const resource = blobResource(uri, 3);
-
-      // Decode and verify content
-      const decoded = Buffer.from(resource.blob, 'base64').toString();
-      expect(decoded).toContain('Resource 3');
-      expect(decoded).toContain('base64 blob');
-    });
-  });
-
-  describe('resourceTypeCompleter', () => {
-    it('should be defined as a completable schema', () => {
-      // The completer is a zod schema wrapped with completable
-      expect(resourceTypeCompleter).toBeDefined();
-      // It should have the zod parse method
-      expect(typeof (resourceTypeCompleter as any).parse).toBe('function');
-    });
-
-    it('should validate string resource types', () => {
-      // Test that valid strings pass validation
-      expect(() => (resourceTypeCompleter as any).parse('Text')).not.toThrow();
-      expect(() => (resourceTypeCompleter as any).parse('Blob')).not.toThrow();
-    });
-  });
-
-  describe('resourceIdForPromptCompleter', () => {
-    it('should be defined as a completable schema', () => {
-      expect(resourceIdForPromptCompleter).toBeDefined();
-      expect(typeof (resourceIdForPromptCompleter as any).parse).toBe('function');
-    });
-
-    it('should validate string IDs', () => {
-      // Test that valid strings pass validation
-      expect(() => (resourceIdForPromptCompleter as any).parse('1')).not.toThrow();
-      expect(() => (resourceIdForPromptCompleter as any).parse('100')).not.toThrow();
-    });
-  });
-
-  describe('resourceIdForResourceTemplateCompleter', () => {
-    it('should validate positive integer IDs', () => {
-      expect(resourceIdForResourceTemplateCompleter('1')).toEqual(['1']);
-      expect(resourceIdForResourceTemplateCompleter('50')).toEqual(['50']);
-    });
-
-    it('should reject invalid IDs', () => {
-      expect(resourceIdForResourceTemplateCompleter('0')).toEqual([]);
-      expect(resourceIdForResourceTemplateCompleter('-5')).toEqual([]);
-      expect(resourceIdForResourceTemplateCompleter('not-a-number')).toEqual([]);
-    });
-  });
-
-  describe('registerResourceTemplates', () => {
-    it('should register text and blob resource templates', () => {
-      const registeredResources: any[] = [];
-
-      const mockServer = {
-        registerResource: vi.fn((...args) => {
-          registeredResources.push(args);
-        }),
-      } as unknown as McpServer;
-
-      registerResourceTemplates(mockServer);
-
-      expect(mockServer.registerResource).toHaveBeenCalledTimes(2);
-
-      // Check text resource registration
-      const textRegistration = registeredResources.find((r) =>
-        r[0].includes('Text')
-      );
-      expect(textRegistration).toBeDefined();
-      expect(textRegistration[1]).toBeInstanceOf(ResourceTemplate);
-
-      // Check blob resource registration
-      const blobRegistration = registeredResources.find((r) =>
-        r[0].includes('Blob')
-      );
-      expect(blobRegistration).toBeDefined();
-    });
+describe("static document resources", () => {
+  it("serves each file in docs/ as markdown", async () => {
+    for (const file of readdirSync(DOCS_DIR)) {
+      const uri = `demo://resource/static/document/${encodeURIComponent(file)}`;
+      const { contents } = await session.client.readResource({ uri });
+      expect(contents).toEqual([
+        {
+          uri,
+          mimeType: "text/markdown",
+          text: readFileSync(join(DOCS_DIR, file), "utf-8"),
+        },
+      ]);
+    }
   });
 });
 
-describe('Session Resources', () => {
-  describe('getSessionResourceURI', () => {
-    it('should generate correct URI for resource name', () => {
-      expect(getSessionResourceURI('test')).toBe('demo://resource/session/test');
-    });
-
-    it('should handle various resource names', () => {
-      expect(getSessionResourceURI('my-file')).toBe('demo://resource/session/my-file');
-      expect(getSessionResourceURI('document_123')).toBe(
-        'demo://resource/session/document_123'
-      );
-    });
+describe("dynamic resource templates", () => {
+  it("fabricates a text resource from its id", async () => {
+    const uri = "demo://resource/dynamic/text/42";
+    const { contents } = await session.client.readResource({ uri });
+    expect(contents).toEqual([
+      {
+        uri,
+        mimeType: "text/plain",
+        text: expect.stringMatching(
+          /^Resource 42: This is a plaintext resource created at /,
+        ),
+      },
+    ]);
   });
 
-  describe('registerSessionResource', () => {
-    it('should register text resource and return resource link', () => {
-      const registrations: any[] = [];
-      const mockServer = {
-        registerResource: vi.fn((...args) => {
-          registrations.push(args);
-        }),
-      } as unknown as McpServer;
+  it("fabricates a blob resource from its id, labelled application/octet-stream", async () => {
+    // The content's type matches the one the blob template advertises.
+    const uri = "demo://resource/dynamic/blob/9";
+    const { contents } = await session.client.readResource({ uri });
+    expect(contents).toEqual([
+      { uri, mimeType: "application/octet-stream", blob: expect.any(String) },
+    ]);
+    const blob = "blob" in contents[0] ? contents[0].blob : "";
+    expect(Buffer.from(blob, "base64").toString()).toMatch(
+      /^Resource 9: This is a base64 blob created at /,
+    );
+  });
 
-      const resource = {
-        uri: 'demo://resource/session/test-file',
-        name: 'test-file',
-        mimeType: 'text/plain',
-        description: 'A test file',
-      };
+  it.each(["0", "-2", "1.5", "abc"])("rejects resource id %s", async (id) => {
+    const uri = `demo://resource/dynamic/text/${id}`;
+    await expect(session.client.readResource({ uri })).rejects.toThrow(
+      `Unknown resource: ${uri}`,
+    );
+  });
 
-      const result = registerSessionResource(
-        mockServer,
-        resource,
-        'text',
-        'Hello, World!'
-      );
-
-      expect(result.type).toBe('resource_link');
-      expect(result.uri).toBe(resource.uri);
-      expect(result.name).toBe(resource.name);
-
-      expect(mockServer.registerResource).toHaveBeenCalledWith(
-        'test-file',
-        'demo://resource/session/test-file',
-        expect.objectContaining({
-          mimeType: 'text/plain',
-          description: 'A test file',
-        }),
-        expect.any(Function)
-      );
-    });
-
-    it('should register blob resource correctly', () => {
-      const mockServer = {
-        registerResource: vi.fn(),
-      } as unknown as McpServer;
-
-      const resource = {
-        uri: 'demo://resource/session/binary-file',
-        name: 'binary-file',
-        mimeType: 'application/octet-stream',
-      };
-
-      const blobContent = Buffer.from('binary data').toString('base64');
-      const result = registerSessionResource(mockServer, resource, 'blob', blobContent);
-
-      expect(result.type).toBe('resource_link');
-      expect(mockServer.registerResource).toHaveBeenCalled();
-    });
-
-    it('should return resource handler that provides correct content', async () => {
-      let capturedHandler: Function | null = null;
-      const mockServer = {
-        registerResource: vi.fn((_name, _uri, _config, handler) => {
-          capturedHandler = handler;
-        }),
-      } as unknown as McpServer;
-
-      const resource = {
-        uri: 'demo://resource/session/content-test',
-        name: 'content-test',
-        mimeType: 'text/plain',
-      };
-
-      registerSessionResource(mockServer, resource, 'text', 'Test content here');
-
-      expect(capturedHandler).not.toBeNull();
-
-      const handlerResult = await capturedHandler!(new URL(resource.uri));
-      expect(handlerResult.contents).toHaveLength(1);
-      expect(handlerResult.contents[0].text).toBe('Test content here');
-      expect(handlerResult.contents[0].mimeType).toBe('text/plain');
-    });
+  it("rejects a URI that matches no resource or template", async () => {
+    await expect(
+      session.client.readResource({ uri: "demo://resource/nowhere" }),
+    ).rejects.toThrow("Resource demo://resource/nowhere not found");
   });
 });
 
-describe('File Resources', () => {
-  describe('registerFileResources', () => {
-    it('should register file resources when docs directory exists', () => {
-      const mockServer = {
-        registerResource: vi.fn(),
-      } as unknown as McpServer;
+describe("resource subscriptions", () => {
+  const URI = "demo://resource/dynamic/text/1";
 
-      registerFileResources(mockServer);
+  function logData(): unknown[] {
+    return ofMethod(session.notifications, "notifications/message").map(
+      (n) => n.params.data,
+    );
+  }
 
-      // The docs folder exists in the everything server and contains files
-      // so registerResource should have been called
-      expect(mockServer.registerResource).toHaveBeenCalled();
-    });
-  });
-});
+  function updates(): string[] {
+    return ofMethod(
+      session.notifications,
+      "notifications/resources/updated",
+    ).map((n) => n.params.uri);
+  }
 
-describe('Subscriptions', () => {
-  describe('setSubscriptionHandlers', () => {
-    it('should set request handlers on server', () => {
-      const mockServer = {
-        server: {
-          setRequestHandler: vi.fn(),
-        },
-        sendLoggingMessage: vi.fn(),
-      } as unknown as McpServer;
-
-      setSubscriptionHandlers(mockServer);
-
-      // Should set both subscribe and unsubscribe handlers
-      expect(mockServer.server.setRequestHandler).toHaveBeenCalledTimes(2);
-    });
+  it("acknowledges subscribe and unsubscribe with a log message", async () => {
+    await session.client.subscribeResource({ uri: URI });
+    await session.client.unsubscribeResource({ uri: URI });
+    // Unsubscribing from a URI with no subscriber set is accepted too.
+    await session.client.unsubscribeResource({ uri: "demo://never" });
+    expect(logData()).toEqual([
+      `Received Subscribe Resource request for URI: ${URI} from session ${session.sessionId}`,
+      `Received Unsubscribe Resource request: ${URI} from session ${session.sessionId}`,
+      `Received Unsubscribe Resource request: demo://never from session ${session.sessionId}`,
+    ]);
   });
 
-  describe('removeSubscriber', () => {
-    const testUri = 'demo://resource/dynamic/text/1';
-    const sessionId = 'disconnect-test-session';
-
-    let subscribeHandler: (
-      request: { params: { uri: string } },
-      extra: { sessionId: string }
-    ) => Promise<unknown>;
-
-    beforeEach(() => {
-      const handlers = new Map<unknown, typeof subscribeHandler>();
-      const mockServer = {
-        server: {
-          setRequestHandler: vi.fn((schema, handler) => {
-            handlers.set(schema, handler);
-          }),
-          notification: vi.fn(),
-        },
-        sendLoggingMessage: vi.fn(),
-      } as unknown as McpServer;
-
-      setSubscriptionHandlers(mockServer);
-      subscribeHandler = handlers.get(SubscribeRequestSchema)!;
-    });
-
-    afterEach(() => {
-      stopSimulatedResourceUpdates(sessionId);
-      removeSubscriber(sessionId);
-    });
-
-    it('should drop a disconnected session from all subscriptions', async () => {
-      const notification = vi.fn();
-      const mockServer = {
-        server: {
-          notification,
-        },
-      } as unknown as McpServer;
-
-      await subscribeHandler({ params: { uri: testUri } }, { sessionId });
-
-      beginSimulatedResourceUpdates(mockServer, sessionId);
-      expect(notification).toHaveBeenCalled();
-
-      notification.mockClear();
-      removeSubscriber(sessionId);
-      stopSimulatedResourceUpdates(sessionId);
-
-      beginSimulatedResourceUpdates(mockServer, sessionId);
-      expect(notification).not.toHaveBeenCalled();
-    });
-
-    it('should not affect other sessions subscribed to the same URI', async () => {
-      const otherSessionId = 'other-session';
-      const notification = vi.fn();
-      const mockServer = {
-        server: {
-          notification,
-        },
-      } as unknown as McpServer;
-
-      await subscribeHandler({ params: { uri: testUri } }, { sessionId });
-      await subscribeHandler(
-        { params: { uri: testUri } },
-        { sessionId: otherSessionId }
+  it("keeps another session's subscription when this one unsubscribes from the same URI", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    const other = await connect();
+    try {
+      await other.client.subscribeResource({ uri: URI });
+      // This session never subscribed; its unsubscribe changes nothing.
+      await session.client.unsubscribeResource({ uri: URI });
+      await other.client.callTool({
+        name: "toggle-subscriber-updates",
+        arguments: {},
+      });
+      await vi.waitFor(() =>
+        expect(
+          ofMethod(other.notifications, "notifications/resources/updated"),
+        ).toHaveLength(1),
       );
-
-      removeSubscriber(sessionId);
-
-      beginSimulatedResourceUpdates(mockServer, otherSessionId);
-      expect(notification).toHaveBeenCalled();
-
-      stopSimulatedResourceUpdates(otherSessionId);
-      removeSubscriber(otherSessionId);
-    });
+    } finally {
+      await other.close();
+    }
   });
 
-  describe('simulated resource updates lifecycle', () => {
-    afterEach(() => {
-      // Clean up any intervals
-      stopSimulatedResourceUpdates('lifecycle-test-session');
-      removeSubscriber('lifecycle-test-session');
+  it("omits the session from the acknowledgement when there is none (stdio)", async () => {
+    await session.close();
+    session = await connect({ sessionId: null });
+    await session.client.subscribeResource({ uri: URI });
+    await session.client.unsubscribeResource({ uri: URI });
+    expect(logData()).toEqual([
+      `Received Subscribe Resource request for URI: ${URI} `,
+      `Received Unsubscribe Resource request: ${URI} `,
+    ]);
+  });
+
+  it("sends updates for subscribed URIs every 5 seconds while toggled on", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    await session.client.subscribeResource({ uri: URI });
+    await session.client.subscribeResource({ uri: URI }); // idempotent
+
+    const on = await session.client.callTool({
+      name: "toggle-subscriber-updates",
+      arguments: {},
     });
+    expect(textOf(contentOf(on)[0])).toBe(
+      `Started simulated resource updated notifications for session ${session.sessionId} at a 5 second pace. Client will receive updates for any resources the it is subscribed to.`,
+    );
+    await vi.waitFor(() => expect(updates()).toEqual([URI]));
 
-    it('should start and stop updates without errors', () => {
-      const mockServer = {
-        server: {
-          notification: vi.fn(),
-        },
-      } as unknown as McpServer;
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(updates()).toEqual([URI, URI]);
 
-      // Start updates - should work for both defined and undefined sessionId
-      beginSimulatedResourceUpdates(mockServer, 'lifecycle-test-session');
-      beginSimulatedResourceUpdates(mockServer, undefined);
+    // Unsubscribing stops updates for that URI while the interval runs on.
+    await session.client.unsubscribeResource({ uri: URI });
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(updates()).toEqual([URI, URI]);
 
-      // Stop updates - should handle all cases gracefully
-      stopSimulatedResourceUpdates('lifecycle-test-session');
-      stopSimulatedResourceUpdates('non-existent-session');
-      stopSimulatedResourceUpdates(undefined);
-
-      // If we got here without throwing, the lifecycle works correctly
-      expect(true).toBe(true);
+    const off = await session.client.callTool({
+      name: "toggle-subscriber-updates",
+      arguments: {},
     });
+    expect(textOf(contentOf(off)[0])).toBe(
+      `Stopped simulated resource updates for session ${session.sessionId}`,
+    );
+  });
+
+  it("stops sending updates once the toggle is turned off", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    await session.client.subscribeResource({ uri: URI });
+    await session.client.callTool({
+      name: "toggle-subscriber-updates",
+      arguments: {},
+    });
+    await vi.waitFor(() => expect(updates()).toHaveLength(1));
+    await session.client.callTool({
+      name: "toggle-subscriber-updates",
+      arguments: {},
+    });
+    await vi.advanceTimersByTimeAsync(15000);
+    expect(updates()).toHaveLength(1);
+  });
+
+  it("sends updates only to the sessions subscribed to a URI", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    const other = await connect();
+    try {
+      await other.client.subscribeResource({ uri: "demo://other" });
+      await session.client.subscribeResource({ uri: URI });
+      await session.client.callTool({
+        name: "toggle-subscriber-updates",
+        arguments: {},
+      });
+      await other.client.callTool({
+        name: "toggle-subscriber-updates",
+        arguments: {},
+      });
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(new Set(updates())).toEqual(new Set([URI]));
+      expect(
+        new Set(
+          ofMethod(other.notifications, "notifications/resources/updated").map(
+            (n) => n.params.uri,
+          ),
+        ),
+      ).toEqual(new Set(["demo://other"]));
+    } finally {
+      await other.close();
+    }
+  });
+
+  it("drops a closed session's subscriptions without touching another session's (#4712)", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    const leaving = await connect();
+    await leaving.client.subscribeResource({ uri: URI });
+    await session.client.subscribeResource({ uri: URI });
+    await leaving.close();
+
+    // A new client under the departed session's id, which never subscribed:
+    // if cleanup had left the old subscription behind, its updates would
+    // reach this client.
+    const returning = await connect({ sessionId: leaving.sessionId });
+    try {
+      await returning.client.callTool({
+        name: "toggle-subscriber-updates",
+        arguments: {},
+      });
+      await session.client.callTool({
+        name: "toggle-subscriber-updates",
+        arguments: {},
+      });
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(updates()).toEqual([URI, URI]);
+      expect(
+        ofMethod(returning.notifications, "notifications/resources/updated"),
+      ).toEqual([]);
+    } finally {
+      await returning.close();
+    }
+  });
+
+  it("logs, rather than throws, an update that cannot be sent", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await session.client.subscribeResource({ uri: URI });
+      await session.client.callTool({
+        name: "toggle-subscriber-updates",
+        arguments: {},
+      });
+      // Close the client without the server-side cleanup, so the interval
+      // outlives the transport, as when a connection drops.
+      await session.client.close();
+      await vi.advanceTimersByTimeAsync(5000);
+      await vi.waitFor(() =>
+        expect(errorSpy).toHaveBeenCalledWith(
+          "Simulated resource update failed:",
+          expect.any(Error),
+        ),
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 });

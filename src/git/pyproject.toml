@@ -1,6 +1,6 @@
 [project]
 name = "mcp-server-git"
-version = "0.6.2"
+version = "2026.10.10"
 description = "A Model Context Protocol server providing tools to read, search, and manipulate Git repositories programmatically via LLMs"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -17,7 +17,7 @@ classifiers = [
 ]
 dependencies = [
     "click>=8.1.7",
-    "gitpython>=3.1.50",
+    "gitpython>=3.1.60",
     "mcp>=1.29.0,<2",
     "pydantic>=2.0.0",
 ]
@@ -34,10 +34,25 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
-dev = ["pyright>=1.1.407", "ruff>=0.7.3", "pytest>=8.0.0"]
+dev = [
+    "pyright>=1.1.407",
+    "ruff>=0.7.3",
+    "pytest>=8.0.0",
+    "pytest-cov>=7.1.0",
+    "pytest-asyncio>=1.4.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.coverage.run]
+branch = true
+source = ["src/mcp_server_git"]
+
+[tool.coverage.report]
+show_missing = true
