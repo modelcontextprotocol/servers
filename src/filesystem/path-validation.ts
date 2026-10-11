@@ -36,6 +36,18 @@ export function isPathWithinAllowedDirectories(
     return false;
   }
 
+  // Reject Windows Alternate Data Streams (ADS) to prevent path validation bypasses
+  if (process.platform === 'win32' || path.sep === '\\') {
+    const firstColonIndex = normalizedPath.indexOf(':');
+    if (firstColonIndex !== -1) {
+      const hasMoreThanOneColon = normalizedPath.indexOf(':', firstColonIndex + 1) !== -1;
+      const isValidDriveColon = firstColonIndex === 1 && /^[A-Za-z]$/.test(normalizedPath[0]);
+      if (hasMoreThanOneColon || !isValidDriveColon) {
+        return false;
+      }
+    }
+  }
+
   // Verify it's absolute after normalization
   /* v8 ignore next -- path.resolve always returns an absolute path, so this cannot fire */
   if (!path.isAbsolute(normalizedPath)) {
