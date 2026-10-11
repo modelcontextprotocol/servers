@@ -361,7 +361,11 @@ holds for a maintainer's own one-line fix as much as for a feature.
   is merged with a merge commit, never squashed. Both are enforced on `main`:
   its ruleset allows only merge commits, and requires the **Source is
   v2/main** check (`main-source.yml`), which fails a PR whose head carries
-  any commit not already on `v2/main`. The flow is the `release` skill.
+  any commit not already on `v2/main`. That ruleset has no bypass actors; a
+  release that cannot be a pure merge (a release branch, a hotfix) goes
+  through only by a repo admin disabling it for that one merge and
+  re-enabling it at once, which is never automated. The flow is the
+  `release` skill.
 - **Exception: the two version PRs that automation opens.** Each changes
   version metadata only, so neither answers the PR checklist below, and each
   is tied to its milestone's **release issue** rather than to an issue of its

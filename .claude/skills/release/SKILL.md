@@ -283,6 +283,35 @@ reaches `main` through `v2/main`, so there is nothing on `main` to bring back
 except the merge commits themselves. `v2/main` ahead of `main` means a release
 is in flight; that is the normal state.
 
+### A release that cannot be a pure merge
+
+Sometimes `v2/main` holds work that must not ship yet, and the release has to
+come from a branch of its own: a release branch with cherry-picks (1.0.0
+shipped that way, from `v2/release/1.0.0` in #5090), or a hotfix. The required
+**Source is v2/main** check fails that PR, by design, and nobody can bypass
+it, admins included. The only way through is a deliberate act by a repo
+admin: disable the `main: milestone merges only` ruleset for that one merge,
+and turn it straight back on.
+
+```sh
+RS=$(gh api repos/modelcontextprotocol/servers/rulesets \
+  --jq '.[] | select(.name == "main: milestone merges only") | .id')
+[ -n "$RS" ] || echo "ruleset not found by name; list them and look" >&2
+gh api -X PUT "repos/modelcontextprotocol/servers/rulesets/$RS" -f enforcement=disabled
+# Merge the PR now, with "Create a merge commit". With the ruleset off,
+# squash and rebase are offered again; do not use them.
+gh api -X PUT "repos/modelcontextprotocol/servers/rulesets/$RS" -f enforcement=active
+gh api "repos/modelcontextprotocol/servers/rulesets/$RS" --jq .enforcement   # must print "active"
+```
+
+- **Only a human admin does this**, and only for a PR whose diff has been
+  reviewed as the release. Never leave the ruleset disabled between steps.
+- **Record it in the release ledger**: the PR, why it could not be a pure
+  merge, and the times the ruleset was disabled and re-enabled.
+- **Then merge the release branch back into `v2/main`** through a PR of its
+  own (#5118 did this for 1.0.0), so its commits are on `v2/main` and the
+  next milestone merge is a pure one again.
+
 ## 4. Verify the release candidate, and write the ledger
 
 Work from a **dedicated worktree** with its own install, so nothing stale from
