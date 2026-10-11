@@ -1,0 +1,16 @@
+{
+  "name": "@obito/hybrid-math-solver",
+  "version": "1.0.0",
+  "description": "Fixes Claude's math hallucination - stops averaging inconsistent linear systems",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": ["mcp", "claude", "math", "solver", "hybrid", "verification"],
+  "author": "Faissal Ait Jana",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}
