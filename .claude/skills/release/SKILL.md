@@ -293,19 +293,39 @@ it, admins included. The only way through is a deliberate act by a repo
 admin: disable the `main: milestone merges only` ruleset for that one merge,
 and turn it straight back on.
 
+The disable, the merge and the re-enable run as one command, in a subshell
+whose exit trap re-enables the ruleset however it ends: the merge failing, an
+error, or Ctrl-C. Approve the PR first; the other rulesets on `main` still
+require that.
+
 ```sh
+PR=<the release PR's number>
 RS=$(gh api repos/modelcontextprotocol/servers/rulesets \
   --jq '.[] | select(.name == "main: milestone merges only") | .id')
 [ -n "$RS" ] || echo "ruleset not found by name; list them and look" >&2
-gh api -X PUT "repos/modelcontextprotocol/servers/rulesets/$RS" -f enforcement=disabled
-# Merge the PR now, with "Create a merge commit". With the ruleset off,
-# squash and rebase are offered again; do not use them.
-gh api -X PUT "repos/modelcontextprotocol/servers/rulesets/$RS" -f enforcement=active
+[ -n "$RS" ] && (
+  set -e
+  restore() {
+    gh api -X PUT "repos/modelcontextprotocol/servers/rulesets/$RS" \
+      -f enforcement=active --jq '"ruleset: \(.enforcement)"'
+  }
+  trap restore EXIT
+  trap 'exit 130' INT TERM HUP   # exit, so the EXIT trap restores
+  gh api -X PUT "repos/modelcontextprotocol/servers/rulesets/$RS" \
+    -f enforcement=disabled >/dev/null
+  # --merge: with the ruleset off, squash and rebase are allowed again.
+  gh pr merge "$PR" --repo modelcontextprotocol/servers --merge
+)
 gh api "repos/modelcontextprotocol/servers/rulesets/$RS" --jq .enforcement   # must print "active"
 ```
 
+A trap cannot run if the machine itself dies mid-command, so the last line
+is not optional: if it prints anything but `active`, set it back by hand
+(Settings → Rules → Rulesets) before doing anything else.
+
 - **Only a human admin does this**, and only for a PR whose diff has been
-  reviewed as the release. Never leave the ruleset disabled between steps.
+  reviewed as the release. Never disable the ruleset outside the command
+  above.
 - **Record it in the release ledger**: the PR, why it could not be a pure
   merge, and the times the ruleset was disabled and re-enabled.
 - **Then merge the release branch back into `v2/main`** through a PR of its
