@@ -7,6 +7,7 @@ This is a curated collection of community-built frameworks and resources that si
 ### For servers
 
 * **[Anubis MCP](https://github.com/zoedsoupe/anubis-mcp)** (Elixir) - A high-performance and high-level Model Context Protocol (MCP) implementation in Elixir. Think like "Live View" for MCP.
+* **[aw1-breaker](https://github.com/MvikManners/aw1-circuit-breaker)** (Python) - Deterministic, sub-millisecond (<0.5ms) out-of-band execution circuit breaker and strict schema guard for MCP tool servers.
 * **[ModelFetch](https://github.com/phuctm97/modelfetch/)** (TypeScript) - Runtime-agnostic SDK to create and deploy MCP servers anywhere TypeScript/JavaScript runs
 * **[EasyMCP](https://github.com/zcaceres/easy-mcp/)** (TypeScript)
 * **[FastAPI to MCP auto generator](https://github.com/tadata-org/fastapi_mcp)** – A zero-configuration tool for automatically exposing FastAPI endpoints as MCP tools by **[Tadata](https://tadata.com/)**
