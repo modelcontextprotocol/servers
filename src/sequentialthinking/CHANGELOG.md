@@ -2,11 +2,7 @@
 
 ## 1.0.0
 
-The first semantic version, resuming semver after the date-stamped releases (last `2026.8.31`). It describes everything since `2026.8.31`, and is the last release of the legacy-era server.
-
-### Major Changes
-
-- [#5063](https://github.com/modelcontextprotocol/servers/pull/5063) [`b5af226`](https://github.com/modelcontextprotocol/servers/commit/b5af22668592700c02236d737f9836c42654edb6) [@cliffhall](https://github.com/cliffhall) - Move to the TypeScript SDK v2 packages (`@modelcontextprotocol/server`) from `@modelcontextprotocol/sdk` 1.x ([#4856](https://github.com/modelcontextprotocol/servers/issues/4856)). Breaking for clients: the server now requires Node.js 20 or later; over stdio, a single incoming JSON-RPC message larger than 10 MiB now closes the connection (the SDK v2 default read-buffer cap; SDK 1.x buffered without a limit); an unknown tool name is rejected with JSON-RPC error `-32602` instead of returning an `isError` result; error messages no longer carry the `MCP error <code>: ` prefix, and input-validation messages name the field first (`field: message`); tool schemas in `tools/list` declare JSON Schema 2020-12 instead of draft-07; and tools no longer advertise `execution.taskSupport`.
+The first semantic version, resuming semver after the date-stamped releases (last `2026.8.31`). It describes everything since `2026.8.31`, and is the last release of the legacy-era server, on the 1.x MCP SDK.
 
 ### Patch Changes
 
@@ -19,3 +15,5 @@ The first semantic version, resuming semver after the date-stamped releases (las
 - [#5053](https://github.com/modelcontextprotocol/servers/pull/5053) [`c63255a`](https://github.com/modelcontextprotocol/servers/commit/c63255ae9616b110d6089fa343fcfdf3f5def534) [@cliffhall](https://github.com/cliffhall) - Stop shipping the compiled test helper `dist/__tests__/helpers.js` in the published package: the build now excludes everything under `__tests__/`, not just `*.test.ts`.
 
 - [#5036](https://github.com/modelcontextprotocol/servers/pull/5036) [`b5c5ccc`](https://github.com/modelcontextprotocol/servers/commit/b5c5cccb79a5d43b41247065fb9efd174363e799) [@cliffhall](https://github.com/cliffhall) - A `branchId` that names an `Object.prototype` key, such as `"constructor"` or `"__proto__"`, now creates and lists its branch like any other id instead of failing the call. A call that fails no longer adds its thought to the history first, so `thoughtHistoryLength` counts only thoughts that were accepted.
+
+- [#5087](https://github.com/modelcontextprotocol/servers/pull/5087) [`09edf63`](https://github.com/modelcontextprotocol/servers/commit/09edf633b93cdaf094ba43622294d587afcd1023) [@cliffhall](https://github.com/cliffhall) - Require `@modelcontextprotocol/sdk` 1.31.0 or later (was `^1.30.0`), so an install can no longer resolve an SDK version affected by GHSA-6qxp-vccf-f47h. The advisory concerns the SDK's OAuth client, which this server does not use.
