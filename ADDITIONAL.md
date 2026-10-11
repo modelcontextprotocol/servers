@@ -42,6 +42,11 @@ This is a curated collection of community-built frameworks and resources that si
 * **[PHP MCP Client](https://github.com/php-mcp/client)** - Core PHP implementation for the Model Context Protocol (MCP) Client
 * **[Runbear](https://runbear.io/solutions/integrations/slack/mcp)** - No-code MCP client for team chat platforms, such as Slack, Microsoft Teams, and Discord.
 
+## ⚡ Deterministic Simulation & Safety Servers
+
+- **[LOCUS Engine MCP Server](https://github.com/ahmadshady747-create/locus-binaries)** - High-performance Model Context Protocol server providing deterministic AST verification, symbolic range analysis, canonical loop induction proving, flow-sensitive fact stack, and surgical patching in 100% safe Rust, exposing 30 deterministic AST safety and context management MCP tools.
+- **[GAMA Hyper-Physics MCP Server](https://github.com/ahmadshady747-create/gama-binaries)** - Unified multi-dimensional multiphysics compute engine exposing 49 verified MCP tools across 2D/3D/4D/5D mechanics, relativistic geodesics, and zero-GC kinematic simulation.
+
 ## 📚 Resources
 
 - **[A2A-MCP Java Bridge](https://github.com/vishalmysore/a2ajava)** - A2AJava brings powerful A2A-MCP integration directly into your Java applications. It enables developers to annotate standard Java methods and instantly expose them as MCP Server, A2A-discoverable actions — with no boilerplate or service registration overhead.
