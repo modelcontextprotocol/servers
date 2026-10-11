@@ -11,6 +11,7 @@ Published on npm as [`@modelcontextprotocol/server-sequential-thinking`](https:/
 - Branch into alternative paths of reasoning
 - Adjust the total number of thoughts dynamically
 - Generate and verify solution hypotheses
+- Serves both protocol eras on stdio: 2026-07-28 clients (`server/discover`, no handshake) and 2025-era clients (`initialize`). The thought history lasts as long as the client's connection, on either
 
 ## Tool
 

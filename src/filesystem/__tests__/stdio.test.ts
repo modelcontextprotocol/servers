@@ -11,7 +11,7 @@ import path from "path";
 import { PassThrough } from "node:stream";
 import { pathToFileURL } from "url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { McpServer } from "@modelcontextprotocol/server";
+import type { StdioServerHandle } from "@modelcontextprotocol/server/stdio";
 import { isEntryPoint, main, resolveAllowedDirectories } from "../index.js";
 import { makeTempDir, quietStderr } from "./helpers.js";
 
@@ -28,7 +28,7 @@ class StdioSession {
   readonly stdout = new PassThrough();
   private buffered = "";
   private readonly responses = new Map<number, JsonRpcResponse>();
-  server?: McpServer;
+  server?: StdioServerHandle;
 
   constructor() {
     this.stdout.setEncoding("utf8");
@@ -135,7 +135,7 @@ describe("startup", () => {
       "At least one directory must be provided by EITHER method for the server to operate.",
     );
     expect(stderr).toHaveBeenCalledWith(
-      "Started without allowed directories - waiting for client to provide roots via MCP protocol",
+      "Started without allowed directories - waiting for a 2025-era client to provide roots via MCP protocol",
     );
   });
 

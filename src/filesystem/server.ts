@@ -150,7 +150,24 @@ async function readFileAsBase64Stream(filePath: string): Promise<string> {
 export const NO_ALLOWED_DIRECTORIES_ERROR =
   "Server cannot operate: No allowed directories available. Server was started without command-line directories and client does not support MCP roots protocol. Please either: 1) Start server with directory arguments, or 2) Use a client that supports MCP roots protocol and provides valid root directories.";
 
+/**
+ * Why the server cannot operate on a 2026-07-28 connection when it was started
+ * with no allowed directories. That revision has no initialize handshake and
+ * no server-to-client roots/list, so the client's Roots cannot supply them
+ * (Roots is deprecated as of 2026-07-28); only the command line can (#4852).
+ */
+export const NO_ALLOWED_DIRECTORIES_MODERN_ERROR =
+  "Server cannot operate: No allowed directories available. Server was started without command-line directories, and on protocol version 2026-07-28 the client cannot provide them through MCP Roots. Restart the server with the directories it may access as command-line arguments.";
+
 export interface ServerOptions {
+  /**
+   * The protocol era the server will serve (default `legacy`). On a
+   * 2025-era connection the client's Roots, when it supports them, replace
+   * the command-line directories after initialize. A 2026-07-28 connection
+   * has no initialize and no roots/list, so it is limited to the
+   * command-line directories.
+   */
+  era?: "legacy" | "modern";
   /**
    * Called after the server has closed the connection because it cannot
    * operate: no directories were given and the client does not support
@@ -161,8 +178,8 @@ export interface ServerOptions {
 
 /**
  * Build a filesystem server that may touch only `initialAllowedDirectories`
- * (already resolved and normalized by the caller) until the client's Roots
- * replace them.
+ * (already resolved and normalized by the caller), until the client's Roots
+ * replace them on a 2025-era connection.
  */
 export function createServer(
   initialAllowedDirectories: string[],
@@ -217,6 +234,17 @@ export function createServer(
         awaited = barrier;
         await awaited.settled;
       } while (awaited !== barrier);
+      // A 2025-era session with no directories closes at initialize (#4992).
+      // A 2026-07-28 one has no initialize to close at, and its client cannot
+      // add directories, so every call says why it cannot run.
+      if (options.era === "modern" && allowedDirectories.length === 0) {
+        return {
+          content: [
+            { type: "text", text: NO_ALLOWED_DIRECTORIES_MODERN_ERROR },
+          ],
+          isError: true,
+        };
+      }
       return handler(...args);
     }) as never)) as typeof server.registerTool;
 
@@ -836,7 +864,8 @@ export function createServer(
   );
 
   // Handles post-initialization setup, specifically checking for and fetching
-  // MCP roots. The initial load claims its generation and installs its barrier
+  // MCP roots. Only a 2025-era connection initializes, so this never runs on
+  // 2026-07-28, where Roots is unavailable (and deprecated). The initial load claims its generation and installs its barrier
   // here, synchronously, before any roots/list_changed handled afterwards can
   // claim a newer one.
   server.server.oninitialized = () => {
