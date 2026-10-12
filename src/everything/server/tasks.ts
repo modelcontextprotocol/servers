@@ -105,6 +105,14 @@ const tasks = new Map<string, StoredTask>();
  */
 export const MAX_TASKS = 100;
 
+/**
+ * The most bytes of answers, serialized, one `tasks/update` may hand a task.
+ * A task keeps its answers until its TTL, and a transport accepts messages
+ * far larger than any of these tasks needs (10 MiB on stdio), so with
+ * `MAX_TASKS` this bounds what the store holds.
+ */
+export const MAX_ANSWER_BYTES = 64 * 1024;
+
 /** Drop every task past its TTL. */
 function sweep(now: number): void {
   for (const [taskId, task] of tasks) {
@@ -405,6 +413,13 @@ export function registerTasksExtension(server: McpServer): void {
           outstanding.includes(key),
         ),
       );
+      const size = JSON.stringify(answered).length;
+      if (size > MAX_ANSWER_BYTES) {
+        throw new ProtocolError(
+          ProtocolErrorCode.InvalidParams,
+          `Invalid params for tasks/update: the answers are ${size} bytes, over the ${MAX_ANSWER_BYTES}-byte limit; the task is unchanged`,
+        );
+      }
       if (Object.keys(answered).length > 0) {
         task.behavior.receive(answered, now);
       }

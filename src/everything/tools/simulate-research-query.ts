@@ -71,7 +71,7 @@ const config = {
     "input_required until the client answers its clarification request with tasks/update.",
   inputSchema: SimulateResearchQuerySchema,
   annotations: {
-    // Each call creates a task, and a full task store drops its oldest one.
+    // Each call creates a task in the process-wide task store.
     readOnlyHint: false,
     destructiveHint: false,
     idempotentHint: false,

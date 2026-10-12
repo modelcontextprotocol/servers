@@ -22,7 +22,12 @@
  * `tasks/result` and `tasks/list`, which the extension does not define.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearTasks, MAX_TASKS, TASKS_EXTENSION } from "../server/tasks.js";
+import {
+  clearTasks,
+  MAX_ANSWER_BYTES,
+  MAX_TASKS,
+  TASKS_EXTENSION,
+} from "../server/tasks.js";
 import { STAGE_DURATION, STAGES } from "../tools/simulate-research-query.js";
 import { connectRaw as rawClient, type RawSession } from "./harness.js";
 
@@ -177,6 +182,32 @@ describe("the extension", () => {
       topic: "x".repeat(1001),
     });
     expect(result.isError).toBe(true);
+  });
+
+  it("refuses answers over MAX_ANSWER_BYTES with -32602, leaving the task waiting", async () => {
+    peer = await rawClient({ ...TASKS, sampling: {} });
+    const created = await peer.call("trigger-sampling-request-async", {
+      prompt: "p",
+    });
+    const response = await peer.request("tasks/update", {
+      taskId: created.taskId,
+      inputResponses: {
+        "sampling-1": {
+          role: "assistant",
+          model: "m",
+          content: { type: "text", text: "x".repeat(MAX_ANSWER_BYTES) },
+        },
+      },
+    });
+    expect(response.error).toMatchObject({
+      code: -32602,
+      message: expect.stringContaining(
+        `over the ${MAX_ANSWER_BYTES}-byte limit; the task is unchanged`,
+      ),
+    });
+    const task = await peer.get(created.taskId as string);
+    expect(task.status).toBe("input_required");
+    expect(Object.keys(task.inputRequests as object)).toEqual(["sampling-1"]);
   });
 
   it("refuses tasks/update without inputResponses with -32602", async () => {
