@@ -159,7 +159,7 @@ This project is licensed under the Apache License, Version 2.0 for new contribut
 
 ## 💬 Community
 
-- [GitHub Discussions](https://github.com/orgs/modelcontextprotocol/discussions)
+- [GitHub Discussions](https://github.com/modelcontextprotocol/modelcontextprotocol/discussions)
 
 ## ⭐ Support
 
