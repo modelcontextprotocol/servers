@@ -55,8 +55,12 @@ const outputSchema: JsonSchemaType = {
   type: "object",
   properties: {
     region: { type: "string" },
+    // Nullable as anyOf with one type per branch, not `type: ["string",
+    // "null"]`: some clients map tool schemas onto a dialect that allows a
+    // single `type` per property (the OpenAPI subset of Gemini function
+    // declarations, for one) and reject or drop the array form.
     regionHeader: {
-      type: ["string", "null"],
+      anyOf: [{ type: "string" }, { type: "null" }],
       description: "The Mcp-Param-Region header the request carried, if any",
     },
     repeated: { type: "array", items: { type: "string" } },
