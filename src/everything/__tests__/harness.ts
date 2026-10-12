@@ -16,16 +16,23 @@
  * (pass `sessionId: null` to leave it undefined, as stdio does), for the tests
  * that look at one.
  *
+ * `connectRaw()` serves the same way to a raw JSON-RPC peer that puts the
+ * 2026-07-28 envelope on each request, for what the SDK client hides or
+ * refuses: the wire fields it consumes (`resultType`, the cache fields), a
+ * tampered `requestState`, and task handles.
+ *
  * `connectModern()` serves a 2026-07-28 client: it hands the factory to the
  * SDK's `serveStdio` entry over the in-memory pair, as the stdio transport
  * does, and the client negotiates the era with `server/discover`, so every
  * request carries its capabilities in `_meta`.
  */
 import { randomUUID } from "node:crypto";
+import { expect } from "vitest";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import type {
   ClientCapabilities,
   ContentBlock,
+  JSONRPCMessage,
   ServerNotification,
 } from "@modelcontextprotocol/client";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
@@ -187,3 +194,78 @@ export const MODERN_CAPABILITIES: ClientCapabilities = {
   ...ALL_CAPABILITIES,
   extensions: { "io.modelcontextprotocol/tasks": {} },
 };
+
+type Json = Record<string, unknown>;
+
+/** A raw 2026-07-28 JSON-RPC peer of a server served by `serveStdio`. */
+export type RawSession = {
+  /** Send a request; resolve with its whole response (result or error). */
+  request: (method: string, params?: Json) => Promise<Json>;
+  /** The result of a request that must succeed. */
+  result: (method: string, params?: Json) => Promise<Json>;
+  /** The result of a `tools/call`. */
+  call: (name: string, args?: Json) => Promise<Json>;
+  /** The result of a `tasks/get`. */
+  get: (taskId: string) => Promise<Json>;
+  close: () => Promise<void>;
+};
+
+/**
+ * Connect a raw JSON-RPC peer to a server served by `serveStdio`, declaring
+ * `capabilities` in the envelope of every request it sends.
+ */
+export async function connectRaw(capabilities: Json): Promise<RawSession> {
+  const [peer, serverTransport] = InMemoryTransport.createLinkedPair();
+  const cleanups: Array<() => void> = [];
+  const handle = serveStdio(
+    ({ era }) => {
+      const { server, cleanup } = createServer({ era });
+      cleanups.push(cleanup);
+      return server;
+    },
+    { transport: serverTransport },
+  );
+  const waiting = new Map<number, (message: JSONRPCMessage) => void>();
+  peer.onmessage = (message) => {
+    if ("id" in message && typeof message.id === "number") {
+      waiting.get(message.id)?.(message);
+    }
+  };
+  await peer.start();
+  let nextId = 1;
+
+  const request = (method: string, params: Json = {}) => {
+    const id = nextId++;
+    return new Promise<Json>((resolve) => {
+      waiting.set(id, (m) => resolve({ ...m }));
+      void peer.send({
+        jsonrpc: "2.0",
+        id,
+        method,
+        params: {
+          ...params,
+          _meta: {
+            "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+            "io.modelcontextprotocol/clientCapabilities": capabilities,
+            ...(params._meta as Json | undefined),
+          },
+        },
+      });
+    });
+  };
+  const result = async (method: string, params: Json = {}) => {
+    const response = await request(method, params);
+    expect(response.error).toBeUndefined();
+    return response.result as Json;
+  };
+  return {
+    request,
+    result,
+    call: (name, args = {}) => result("tools/call", { name, arguments: args }),
+    get: (taskId) => result("tasks/get", { taskId }),
+    close: async () => {
+      await handle.close();
+      for (const cleanup of cleanups) cleanup();
+    },
+  };
+}

@@ -20,7 +20,6 @@ import {
   acceptedContent,
   inputRequired,
   inputResponse,
-  type InputResponses,
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
@@ -28,6 +27,7 @@ import {
   clientSupportsTasks,
   createTask,
   tasksRequired,
+  type TaskInputResponses,
   type TaskState,
 } from "../server/tasks.js";
 
@@ -102,7 +102,7 @@ function getInterpretationsForTopic(
 }
 
 /** What the user's answer to the clarification request means. */
-function clarificationFrom(responses: InputResponses): string {
+function clarificationFrom(responses: TaskInputResponses): string {
   const view = inputResponse(responses, "clarification");
   const accepted = acceptedContent(
     responses,

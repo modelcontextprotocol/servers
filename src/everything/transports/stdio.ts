@@ -75,19 +75,14 @@ export async function main(
 }
 
 /**
- * Start the stdio server as the launcher does: announce it on stderr, run
- * `main()` (on the process's stdio unless other streams are given), and exit 1
- * if it fails.
+ * Start the stdio server as the launcher does: announce it on stderr and run
+ * `main()` on the process's stdio unless other streams are given. A transport
+ * that fails, including one that cannot start, is reported on stderr.
  */
 export async function startStdioServer(
   stdin?: Readable,
   stdout?: Writable,
 ): Promise<void> {
   console.error("Starting default (STDIO) server...");
-  try {
-    await main(stdin, stdout);
-  } catch (error) {
-    console.error("Server error:", error);
-    process.exit(1);
-  }
+  await main(stdin, stdout);
 }

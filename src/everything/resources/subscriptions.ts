@@ -27,20 +27,26 @@ export const setSubscriptionHandlers = (
 ) => {
   server.server.setRequestHandler("resources/subscribe", async (request) => {
     const { uri } = request.params;
-    await server.sendLoggingMessage({
-      level: "info",
-      data: `Received Subscribe Resource request for URI: ${uri}`,
-    });
+    await server.sendLoggingMessage(
+      {
+        level: "info",
+        data: `Received Subscribe Resource request for URI: ${uri}`,
+      },
+      server.server.transport?.sessionId,
+    );
     subscribed.add(uri);
     return {};
   });
 
   server.server.setRequestHandler("resources/unsubscribe", async (request) => {
     const { uri } = request.params;
-    await server.sendLoggingMessage({
-      level: "info",
-      data: `Received Unsubscribe Resource request: ${uri}`,
-    });
+    await server.sendLoggingMessage(
+      {
+        level: "info",
+        data: `Received Unsubscribe Resource request: ${uri}`,
+      },
+      server.server.transport?.sessionId,
+    );
     subscribed.delete(uri);
     return {};
   });

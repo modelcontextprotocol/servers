@@ -2,7 +2,10 @@
  * Characterizes the simulated logging that `toggle-simulated-logging` drives
  * (#4854): a random-leveled `notifications/message` at once and then every
  * five seconds, filtered by the level the client set with `logging/setLevel`,
- * per session, until toggled off or the session is cleaned up.
+ * per session, until toggled off or the session is cleaned up. The timer
+ * belongs to the server instance serving the session, so the messages no
+ * longer name a session id (#4852). The tool is 2025-era only; its 2026-07-28
+ * replacement, `trigger-log-messages`, is covered by modern.test.ts.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -44,12 +47,12 @@ describe("toggle-simulated-logging", () => {
   it("starts with one message at once, then one every five seconds", async () => {
     vi.spyOn(Math, "random").mockReturnValue(0.99);
     expect(await toggle()).toBe(
-      `Started simulated, random-leveled logging for session ${session.sessionId} at a 5 second pace. Client's selected logging level will be respected. If an interval elapses and the message to be sent is below the selected level, it will not be sent. Thus at higher chosen logging levels, messages should arrive further apart. `,
+      "Started simulated, random-leveled logging at a 5 second pace. Client's selected logging level will be respected. If an interval elapses and the message to be sent is below the selected level, it will not be sent. Thus at higher chosen logging levels, messages should arrive further apart.",
     );
     await vi.waitFor(() => expect(messages()).toHaveLength(1));
     expect(messages()[0]).toEqual({
       level: "emergency",
-      data: `Emergency-level message - SessionId ${session.sessionId}`,
+      data: "Emergency-level message",
     });
 
     await vi.advanceTimersByTimeAsync(10000);
@@ -65,43 +68,39 @@ describe("toggle-simulated-logging", () => {
       await vi.waitFor(() => expect(messages()).toHaveLength(i + 1));
       levels.push(messages()[i]);
     }
-    expect(
-      levels.map((m) => ({
-        level: m.level,
-        data: String(m.data).replace(session.sessionId ?? "", "<session>"),
-      })),
-    ).toMatchInlineSnapshot(`
+    expect(levels.map((m) => ({ level: m.level, data: m.data })))
+      .toMatchInlineSnapshot(`
       [
         {
-          "data": "Debug-level message - SessionId <session>",
+          "data": "Debug-level message",
           "level": "debug",
         },
         {
-          "data": "Info-level message - SessionId <session>",
+          "data": "Info-level message",
           "level": "info",
         },
         {
-          "data": "Notice-level message - SessionId <session>",
+          "data": "Notice-level message",
           "level": "notice",
         },
         {
-          "data": "Warning-level message - SessionId <session>",
+          "data": "Warning-level message",
           "level": "warning",
         },
         {
-          "data": "Error-level message - SessionId <session>",
+          "data": "Error-level message",
           "level": "error",
         },
         {
-          "data": "Critical-level message - SessionId <session>",
+          "data": "Critical-level message",
           "level": "critical",
         },
         {
-          "data": "Alert level-message - SessionId <session>",
+          "data": "Alert level-message",
           "level": "alert",
         },
         {
-          "data": "Emergency-level message - SessionId <session>",
+          "data": "Emergency-level message",
           "level": "emergency",
         },
       ]
@@ -111,9 +110,7 @@ describe("toggle-simulated-logging", () => {
   it("stops when toggled again", async () => {
     await toggle();
     await vi.waitFor(() => expect(messages()).toHaveLength(1));
-    expect(await toggle()).toBe(
-      `Stopped simulated logging for session ${session.sessionId}`,
-    );
+    expect(await toggle()).toBe("Stopped simulated logging");
     await vi.advanceTimersByTimeAsync(20000);
     expect(messages()).toHaveLength(1);
   });
@@ -128,23 +125,6 @@ describe("toggle-simulated-logging", () => {
     vi.spyOn(Math, "random").mockReturnValue(0.7); // critical
     await vi.advanceTimersByTimeAsync(5000);
     expect(messages().map((m) => m.level)).toEqual(["critical"]);
-  });
-
-  it("names no session when there is none (stdio)", async () => {
-    await session.close();
-    session = await connect({ sessionId: null });
-    vi.spyOn(Math, "random").mockReturnValue(0.2); // info
-    expect(await toggle()).toMatch(
-      /^Started simulated, random-leveled logging for session undefined /,
-    );
-    await vi.waitFor(() => expect(messages()).toHaveLength(1));
-    expect(messages()[0]).toEqual({
-      level: "info",
-      data: "Info-level message",
-    });
-    expect(await toggle()).toBe(
-      "Stopped simulated logging for session undefined",
-    );
   });
 
   it("is per session", async () => {

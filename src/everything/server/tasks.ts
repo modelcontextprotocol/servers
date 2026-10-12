@@ -28,7 +28,6 @@ import {
   ProtocolErrorCode,
   type CallToolResult,
   type InputRequests,
-  type InputResponses,
   type ServerContext,
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
@@ -43,6 +42,14 @@ export type TaskStatus =
   | "completed"
   | "failed"
   | "cancelled";
+
+/**
+ * The client's answers to a task's input requests, by key, as the SDK hands
+ * them to a handler.
+ */
+export type TaskInputResponses = NonNullable<
+  ServerContext["mcpReq"]["inputResponses"]
+>;
 
 /** What a task kind decides about its task at one moment. */
 export type TaskState =
@@ -62,7 +69,7 @@ export type TaskBehavior = {
   /** The task's state at `now` (epoch milliseconds). */
   stateAt: (now: number) => TaskState;
   /** Take the client's answers, sent with `tasks/update` at `now`. */
-  receive: (responses: InputResponses, now: number) => void;
+  receive: (responses: TaskInputResponses, now: number) => void;
 };
 
 /** A task in the store. */
@@ -213,12 +220,6 @@ const TaskIdParams = z.object({
   taskId: z.string().describe("The task identifier"),
 });
 
-const UpdateParams = TaskIdParams.extend({
-  inputResponses: z
-    .record(z.string(), z.unknown())
-    .describe("Answers to the task's outstanding input requests, by key"),
-});
-
 const TaskResult = z.looseObject({});
 const EmptyResult = z.object({});
 
@@ -242,8 +243,12 @@ export function registerTasksExtension(server: McpServer): void {
 
   server.server.setRequestHandler(
     "tasks/update",
-    { params: UpdateParams, result: EmptyResult },
-    async ({ taskId, inputResponses }) => {
+    { params: TaskIdParams, result: EmptyResult },
+    async ({ taskId }, ctx) => {
+      // The SDK lifts `inputResponses` out of the params of every request
+      // (it is a reserved retry field on 2026-07-28) into the context.
+      const inputResponses: TaskInputResponses =
+        ctx.mcpReq.inputResponses ?? {};
       const now = Date.now();
       const task = find(taskId, now);
       const state = stateOf(task, now);
@@ -263,7 +268,7 @@ export function registerTasksExtension(server: McpServer): void {
           `Task ${taskId} has no outstanding input request ${unknown.join(", ")}; it is waiting for ${outstanding.join(", ")}`,
         );
       }
-      task.behavior.receive(inputResponses as InputResponses, now);
+      task.behavior.receive(inputResponses, now);
       return {};
     },
   );

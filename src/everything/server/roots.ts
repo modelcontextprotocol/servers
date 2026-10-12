@@ -31,11 +31,14 @@ export const syncRoots = async (server: McpServer): Promise<void> => {
   const requestRoots = async () => {
     try {
       const response = await server.server.listRoots();
-      await server.sendLoggingMessage({
-        level: "info",
-        logger: "everything-server",
-        data: `Roots updated: ${response.roots.length} root(s) received from client`,
-      });
+      await server.sendLoggingMessage(
+        {
+          level: "info",
+          logger: "everything-server",
+          data: `Roots updated: ${response.roots.length} root(s) received from client`,
+        },
+        server.server.transport?.sessionId,
+      );
     } catch (error) {
       console.error(
         `Failed to request roots from client: ${

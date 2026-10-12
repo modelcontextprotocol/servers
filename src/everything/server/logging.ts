@@ -37,7 +37,12 @@ export const beginSimulatedLogging = (server: McpServer): (() => void) => {
   // logged rather than left to become an unhandled rejection.
   const send = () =>
     server
-      .sendLoggingMessage(MESSAGES[Math.floor(Math.random() * MESSAGES.length)])
+      .sendLoggingMessage(
+        MESSAGES[Math.floor(Math.random() * MESSAGES.length)],
+        // The SDK keeps the level the client set per transport session, so
+        // the filter is looked up by this connection's session id.
+        server.server.transport?.sessionId,
+      )
       .catch((error: unknown) =>
         console.error("Simulated logging message failed:", error),
       );
