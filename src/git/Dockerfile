@@ -29,6 +29,12 @@ RUN apt-get update && apt-get install -y git git-lfs && rm -rf /var/lib/apt/list
 WORKDIR /app
  
 COPY --from=uv /root/.local /root/.local
+# /root defaults to 700, which blocks any non-root user from even traversing
+# into /root/.local — and the venv's own python binary is a symlink into
+# /root/.local/share/uv/python/.../bin/python3.11, resolved at every startup,
+# not just at build time. Without this, switching to a non-root USER below
+# breaks the interpreter itself, not just file access.
+RUN chmod o+rx /root
 
 RUN if ! id -u app >/dev/null 2>&1; then \
       useradd -rUM -s /usr/sbin/nologin app; \
@@ -37,6 +43,14 @@ COPY --from=uv --chown=app:app /app/.venv /app/.venv
 
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
+
+# The container's job is exclusively to operate on whichever repo is bind-mounted
+# in, so there's no meaningful "wrong owner" for git to protect against here the
+# way there is on a shared host; without this, git refuses to touch a repo owned
+# by a different uid than the app user once we stop running as root below.
+RUN git config --system --add safe.directory '*'
+
+USER app
 
 # when running the container, add --db-path and a bind mount to the host's db file
 ENTRYPOINT ["mcp-server-git"]
