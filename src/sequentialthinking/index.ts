@@ -191,7 +191,13 @@ You should:
 export function main(transport?: Transport): StdioServerHandle {
   const handle = serveStdio(() => createServer(), {
     transport,
-    onerror: (error) => console.error("Transport error:", error),
+    // serveStdio reports a transport that fails, including one that cannot
+    // start, here rather than by rejecting, so record the failure in the
+    // exit status for whatever supervises the process.
+    onerror: (error) => {
+      console.error("Transport error:", error);
+      process.exitCode = 1;
+    },
   });
   console.error("Sequential Thinking MCP Server running on stdio");
   return handle;

@@ -130,6 +130,18 @@ describe("both protocol eras", () => {
     await expect(read).rejects.toMatchObject({ code: -32602 });
   });
 
+  it("reports a transport that cannot start on stderr and in the exit status", async () => {
+    const [, serverTransport] = InMemoryTransport.createLinkedPair();
+    const failure = new Error("no pipe");
+    vi.spyOn(serverTransport, "start").mockRejectedValue(failure);
+    const handle = await main(serverTransport);
+    await handle.close();
+    expect(console.error).toHaveBeenCalledWith("Transport error:", failure);
+    // Reset it so the run is not failed.
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined;
+  });
+
   it("stamps resultType and the cache fields on a 2026-07-28 read", async () => {
     const [peer, serverTransport] = InMemoryTransport.createLinkedPair();
     const handle = await main(serverTransport);

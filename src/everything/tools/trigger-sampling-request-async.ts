@@ -19,6 +19,8 @@ import {
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
+  capabilityRequired,
+  clientSupportsSampling,
   clientSupportsTasks,
   createTask,
   tasksRequired,
@@ -73,15 +75,21 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
     config,
     async (args, ctx): Promise<CallToolResult> => {
       if (!clientSupportsTasks(ctx)) return tasksRequired(name);
+      if (!clientSupportsSampling(ctx)) {
+        return capabilityRequired(name, "sampling");
+      }
       const { prompt, maxTokens } =
         TriggerSamplingRequestAsyncSchema.parse(args);
+      const createdAt = Date.now();
       let result: SamplingResult | undefined;
+      let answeredAt = createdAt;
 
       return createTask(
         {
           stateAt: (): TaskState =>
             result === undefined
               ? {
+                  since: createdAt,
                   status: "input_required",
                   statusMessage: "Waiting for the client's LLM to respond",
                   inputRequests: {
@@ -102,6 +110,7 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
                   },
                 }
               : {
+                  since: answeredAt,
                   status: "completed",
                   statusMessage: "Sampling complete",
                   result: {
@@ -113,9 +122,11 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
                     ],
                   },
                 },
-          receive: (responses) => {
+          receive: (responses, now) => {
             const answer = inputResponse(responses, "sampling");
-            if (answer.kind === "sampling") result = answer.result;
+            if (answer.kind !== "sampling") return;
+            result = answer.result;
+            answeredAt = now;
           },
         },
         { ttlMs: 10 * 60_000, pollIntervalMs: 1000 },

@@ -52,14 +52,21 @@ export type TaskInputResponses = NonNullable<
 >;
 
 /** What a task kind decides about its task at one moment. */
-export type TaskState =
+export type TaskState = (
   | { status: "working"; statusMessage: string }
   | {
       status: "input_required";
       statusMessage: string;
       inputRequests: InputRequests;
     }
-  | { status: "completed"; statusMessage?: string; result: CallToolResult };
+  | { status: "completed"; statusMessage?: string; result: CallToolResult }
+) & {
+  /**
+   * When the task entered this state (epoch milliseconds), reported as its
+   * `lastUpdatedAt`: the moment it changed, not the moment a poll noticed.
+   */
+  since: number;
+};
 
 /**
  * One kind of task: how its status follows from the clock, and what it does
@@ -76,14 +83,11 @@ export type TaskBehavior = {
 type StoredTask = {
   taskId: string;
   createdAt: number;
-  lastUpdatedAt: number;
   ttlMs: number;
   pollIntervalMs: number;
   behavior: TaskBehavior;
-  /** Set once the client cancels; a cancelled task stays cancelled. */
-  cancelled: boolean;
-  /** The status last reported, so a change moves `lastUpdatedAt`. */
-  lastStatus?: string;
+  /** When the client cancelled it; a cancelled task stays cancelled. */
+  cancelledAt?: number;
 };
 
 /** Every live task, by id, across every server instance in the process. */
@@ -111,20 +115,24 @@ function find(taskId: string, now: number): StoredTask {
 
 /** The task's state now, honoring a cancellation. */
 function stateOf(task: StoredTask, now: number): TaskState | CancelledState {
-  return task.cancelled
-    ? { status: "cancelled", statusMessage: "Cancelled by the client" }
+  return task.cancelledAt !== undefined
+    ? {
+        status: "cancelled",
+        statusMessage: "Cancelled by the client",
+        since: task.cancelledAt,
+      }
     : task.behavior.stateAt(now);
 }
 
-type CancelledState = { status: "cancelled"; statusMessage: string };
+type CancelledState = {
+  status: "cancelled";
+  statusMessage: string;
+  since: number;
+};
 
 /** The wire form of a task (the `DetailedTask` of the extension's schema). */
 function describe(task: StoredTask, now: number): Record<string, unknown> {
   const state = stateOf(task, now);
-  if (state.status !== task.lastStatus) {
-    task.lastStatus = state.status;
-    task.lastUpdatedAt = now;
-  }
   return {
     taskId: task.taskId,
     status: state.status,
@@ -132,7 +140,9 @@ function describe(task: StoredTask, now: number): Record<string, unknown> {
       statusMessage: state.statusMessage,
     }),
     createdAt: new Date(task.createdAt).toISOString(),
-    lastUpdatedAt: new Date(task.lastUpdatedAt).toISOString(),
+    lastUpdatedAt: new Date(
+      Math.max(task.createdAt, state.since),
+    ).toISOString(),
     ttlMs: task.ttlMs,
     pollIntervalMs: task.pollIntervalMs,
     ...(state.status === "input_required" && {
@@ -158,10 +168,8 @@ export function createTask(
   const task: StoredTask = {
     taskId: randomUUID(),
     createdAt: now,
-    lastUpdatedAt: now,
     ...options,
     behavior,
-    cancelled: false,
   };
   tasks.set(task.taskId, task);
   // The SDK passes a tool result's `resultType` through to the wire on
@@ -183,6 +191,44 @@ export function clientCapabilitiesOf(
     ? envelope[CLIENT_CAPABILITIES_META_KEY]
     : undefined;
   return isObject(capabilities) ? capabilities : undefined;
+}
+
+/**
+ * Whether the client that sent this request supports form-mode elicitation:
+ * `elicitation.form`, or an `elicitation` object with neither mode, which the
+ * spec reads as form mode (#4985).
+ */
+export function clientSupportsFormElicitation(ctx: ServerContext): boolean {
+  const elicitation = clientCapabilitiesOf(ctx)?.elicitation;
+  return (
+    isObject(elicitation) &&
+    (elicitation.form !== undefined || elicitation.url === undefined)
+  );
+}
+
+/** Whether the client that sent this request supports sampling. */
+export function clientSupportsSampling(ctx: ServerContext): boolean {
+  return clientCapabilitiesOf(ctx)?.sampling !== undefined;
+}
+
+/**
+ * The result for a task tool whose task would ask the client for input it
+ * did not declare it can give. The SDK checks a tool's own input requests,
+ * but not the ones a task carries in its status, so the tool checks here.
+ */
+export function capabilityRequired(
+  name: string,
+  capability: string,
+): CallToolResult {
+  return {
+    content: [
+      {
+        type: "text",
+        text: `${name} asks the client for input, so it needs a client that declares the ${capability} capability.`,
+      },
+    ],
+    isError: true,
+  };
 }
 
 /**
@@ -286,7 +332,7 @@ export function registerTasksExtension(server: McpServer): void {
           `Task ${taskId} is already ${status}`,
         );
       }
-      task.cancelled = true;
+      task.cancelledAt = now;
       return {};
     },
   );

@@ -128,6 +128,40 @@ describe("simulate-research-query", () => {
     expect(resultText(done)).toContain("Stage 4: Generating report ✓");
   });
 
+  it("reports when each status began, not when a poll noticed it", async () => {
+    peer = await rawClient(TASKS);
+    const created = await peer.call("simulate-research-query", { topic: "t" });
+    const start = Date.now();
+    // Polled long after it finished: the timestamp is the completion's.
+    advance(STAGE_DURATION * STAGES.length * 3);
+    const done = await peer.get(created.taskId as string);
+    expect(done.status).toBe("completed");
+    expect(done.lastUpdatedAt).toBe(
+      new Date(start + STAGE_DURATION * STAGES.length).toISOString(),
+    );
+  });
+
+  it("reports the moment of a cancellation as the last update", async () => {
+    peer = await rawClient(TASKS);
+    const created = await peer.call("simulate-research-query", { topic: "t" });
+    const taskId = created.taskId as string;
+    advance(500);
+    const cancelledAt = new Date(Date.now()).toISOString();
+    await peer.result("tasks/cancel", { taskId });
+    advance(STAGE_DURATION * 10);
+    expect((await peer.get(taskId)).lastUpdatedAt).toBe(cancelledAt);
+  });
+
+  it("does not ask a client that supports only URL-mode elicitation", async () => {
+    peer = await rawClient({ ...TASKS, elicitation: { url: {} } });
+    const created = await peer.call("simulate-research-query", {
+      topic: "t",
+      ambiguous: true,
+    });
+    advance(STAGE_DURATION * STAGES.length);
+    expect((await peer.get(created.taskId as string)).status).toBe("completed");
+  });
+
   it("is a tool error for a client that does not declare the extension", async () => {
     peer = await rawClient({});
     const result = await peer.call("simulate-research-query", { topic: "t" });
@@ -373,6 +407,21 @@ describe("trigger-sampling-request-async", () => {
     expect(resultText(done)).toContain('"text": "hi"');
   });
 
+  it("is a tool error for a client that does not declare sampling", async () => {
+    peer = await rawClient(TASKS);
+    const result = await peer.call("trigger-sampling-request-async", {
+      prompt: "p",
+    });
+    expect(result).toMatchObject({
+      isError: true,
+      content: [
+        {
+          text: "trigger-sampling-request-async asks the client for input, so it needs a client that declares the sampling capability.",
+        },
+      ],
+    });
+  });
+
   it("keeps waiting after an answer of the wrong kind", async () => {
     peer = await rawClient({ ...TASKS, sampling: {} });
     const created = await peer.call("trigger-sampling-request-async", {
@@ -432,9 +481,59 @@ describe("trigger-elicitation-request-async", () => {
     );
   });
 
-  it("summarizes an accepted answer with no fields", async () => {
-    const done = await answer({ action: "accept", content: {} });
-    expect(resultText(done)).toBe("Elicitation accept.");
+  it("summarizes an accepted answer with only the required name", async () => {
+    const done = await answer({ action: "accept", content: { name: "Ada" } });
+    expect(resultText(done)).toBe("Elicitation accept.\nName: Ada");
+  });
+
+  it("reports when the answer arrived as the last update", async () => {
+    peer = await rawClient(WITH_ELICITATION);
+    const created = await peer.call("trigger-elicitation-request-async");
+    advance(1500);
+    const answeredAt = new Date(Date.now()).toISOString();
+    await peer.result("tasks/update", {
+      taskId: created.taskId,
+      inputResponses: { form: { action: "decline" } },
+    });
+    advance(60_000);
+    expect((await peer.get(created.taskId as string)).lastUpdatedAt).toBe(
+      answeredAt,
+    );
+  });
+
+  it.each([
+    ["no name", {}],
+    ["a blank name", { name: "" }],
+    ["a color that is not a choice", { name: "Ada", favoriteColor: "mauve" }],
+  ])(
+    "keeps waiting after an accepted answer with %s",
+    async (_label, content) => {
+      peer = await rawClient(WITH_ELICITATION);
+      const created = await peer.call("trigger-elicitation-request-async");
+      await peer.result("tasks/update", {
+        taskId: created.taskId,
+        inputResponses: { form: { action: "accept", content } },
+      });
+      expect((await peer.get(created.taskId as string)).status).toBe(
+        "input_required",
+      );
+    },
+  );
+
+  it.each([
+    ["only the tasks extension", TASKS],
+    ["URL-mode elicitation only", { ...TASKS, elicitation: { url: {} } }],
+  ])("is a tool error for a client with %s", async (_label, capabilities) => {
+    peer = await rawClient(capabilities);
+    const result = await peer.call("trigger-elicitation-request-async");
+    expect(result).toMatchObject({
+      isError: true,
+      content: [
+        {
+          text: "trigger-elicitation-request-async asks the client for input, so it needs a client that declares the elicitation (form mode) capability.",
+        },
+      ],
+    });
   });
 
   it.each(["decline", "cancel"])("reports a %s", async (action) => {

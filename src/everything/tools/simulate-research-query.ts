@@ -23,7 +23,7 @@ import {
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
-  clientCapabilitiesOf,
+  clientSupportsFormElicitation,
   clientSupportsTasks,
   createTask,
   tasksRequired,
@@ -189,7 +189,8 @@ export const registerSimulateResearchQueryTool = (server: McpServer) => {
     async (args, ctx): Promise<CallToolResult> => {
       if (!clientSupportsTasks(ctx)) return tasksRequired(name);
       const { topic, ambiguous } = SimulateResearchQuerySchema.parse(args);
-      const canAsk = clientCapabilitiesOf(ctx)?.elicitation !== undefined;
+      // The clarification is a form, so only a form-capable client is asked.
+      const canAsk = clientSupportsFormElicitation(ctx);
 
       // The clock time the stages started counting from, and the stage they
       // started at: an ambiguous query restarts the count once it is answered.
@@ -204,8 +205,12 @@ export const registerSimulateResearchQueryTool = (server: McpServer) => {
           stateAt: (now): TaskState => {
             const stage =
               startStage + Math.floor((now - startedAt) / STAGE_DURATION);
+            // When the clock reached `stage`, the moment the task entered it.
+            const reached = (at: number) =>
+              startedAt + (at - startStage) * STAGE_DURATION;
             if (needsClarification() && stage >= CLARIFY_AT) {
               return {
+                since: reached(CLARIFY_AT),
                 status: "input_required",
                 statusMessage: `Found multiple interpretations for "${topic}". Requesting clarification...`,
                 inputRequests: {
@@ -230,12 +235,14 @@ export const registerSimulateResearchQueryTool = (server: McpServer) => {
             }
             if (stage >= STAGES.length) {
               return {
+                since: reached(STAGES.length),
                 status: "completed",
                 statusMessage: "Research complete",
                 result: generateResearchReport(topic, clarification),
               };
             }
             return {
+              since: reached(stage),
               status: "working",
               statusMessage:
                 clarification !== undefined && stage === CLARIFY_AT

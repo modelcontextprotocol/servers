@@ -12,10 +12,14 @@
 import {
   McpServer,
   CallToolResult,
+  acceptedContent,
   inputRequired,
   inputResponse,
 } from "@modelcontextprotocol/server";
+import { z } from "zod";
 import {
+  capabilityRequired,
+  clientSupportsFormElicitation,
   clientSupportsTasks,
   createTask,
   tasksRequired,
@@ -39,38 +43,37 @@ const config = {
   },
 };
 
-/** The form the task asks the user to fill in. */
-const requestedSchema = {
-  type: "object" as const,
-  properties: {
-    name: {
-      type: "string" as const,
-      title: "Your Name",
-      description: "Enter your name",
-    },
-    favoriteColor: {
-      type: "string" as const,
-      title: "Favorite Color",
-      description: "What is your favorite color?",
-      enum: ["red", "orange", "yellow", "green", "blue", "purple"],
-    },
-    agreeToTerms: {
-      type: "boolean" as const,
-      title: "Agree to Terms",
-      description: "Do you agree to the terms and conditions?",
-    },
-  },
-  required: ["name"],
-};
+/**
+ * The form the task asks the user to fill in. The same schema is sent as the
+ * requested schema and checks the answer, since the client's answer is
+ * untrusted: an accepted answer that does not fit leaves the task waiting.
+ */
+const FormSchema = z.object({
+  name: z
+    .string()
+    .min(1)
+    .meta({ title: "Your Name" })
+    .describe("Enter your name"),
+  favoriteColor: z
+    .enum(["red", "orange", "yellow", "green", "blue", "purple"])
+    .optional()
+    .meta({ title: "Favorite Color" })
+    .describe("What is your favorite color?"),
+  agreeToTerms: z
+    .boolean()
+    .optional()
+    .meta({ title: "Agree to Terms" })
+    .describe("Do you agree to the terms and conditions?"),
+});
 
 /** The completed task's summary of the user's answer. */
 function summarize(
   action: string,
-  content: Record<string, unknown> | undefined,
+  content?: z.infer<typeof FormSchema>,
 ): CallToolResult {
   const lines = [`Elicitation ${action}.`];
-  if (action === "accept" && content) {
-    if (content.name) lines.push(`Name: ${content.name}`);
+  if (content) {
+    lines.push(`Name: ${content.name}`);
     if (content.favoriteColor) {
       lines.push(`Favorite color: ${content.favoriteColor}`);
     }
@@ -97,33 +100,48 @@ export const registerTriggerElicitationRequestAsyncTool = (
     config,
     async (_args, ctx): Promise<CallToolResult> => {
       if (!clientSupportsTasks(ctx)) return tasksRequired(name);
+      if (!clientSupportsFormElicitation(ctx)) {
+        return capabilityRequired(name, "elicitation (form mode)");
+      }
+      const createdAt = Date.now();
       let summary: CallToolResult | undefined;
+      let answeredAt = createdAt;
 
       return createTask(
         {
           stateAt: (): TaskState =>
             summary === undefined
               ? {
+                  since: createdAt,
                   status: "input_required",
                   statusMessage: "Waiting for the user's input",
                   inputRequests: {
                     form: inputRequired.elicit({
                       message:
                         "Please provide inputs for the following fields (async task demo):",
-                      requestedSchema,
+                      requestedSchema: FormSchema,
                     }),
                   },
                 }
               : {
+                  since: answeredAt,
                   status: "completed",
                   statusMessage: "Input received",
                   result: summary,
                 },
-          receive: (responses) => {
+          receive: (responses, now) => {
             const answer = inputResponse(responses, "form");
-            if (answer.kind === "elicit") {
-              summary = summarize(answer.action, answer.content);
+            if (answer.kind !== "elicit") return;
+            if (answer.action !== "accept") {
+              summary = summarize(answer.action);
+            } else {
+              const content = acceptedContent(responses, "form", FormSchema);
+              // An accepted answer that does not fit the form is ignored, so
+              // the task keeps waiting for one that does.
+              if (content === undefined) return;
+              summary = summarize("accept", content);
             }
+            answeredAt = now;
           },
         },
         { ttlMs: 10 * 60_000, pollIntervalMs: 1000 },

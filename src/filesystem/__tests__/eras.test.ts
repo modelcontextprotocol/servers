@@ -177,6 +177,9 @@ describe("main() over stdio", () => {
     const failure = new Error("stdin broke");
     stdin.emit("error", failure);
     expect(stderr).toHaveBeenCalledWith("Transport error:", failure);
+    // The failure is in the exit status too; reset it so the run is not failed.
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined;
   });
 
   it("fails each 2026-07-28 call visibly when started with no directories", async () => {

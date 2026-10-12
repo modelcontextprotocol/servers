@@ -103,7 +103,7 @@ describe("stdio transport", () => {
     for (const listener of added) process.off("SIGINT", listener);
   });
 
-  it("reports a transport that cannot start on stderr", async () => {
+  it("reports a transport that cannot start on stderr and in the exit status", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const broken = new PassThrough();
     broken.on = () => {
@@ -117,6 +117,9 @@ describe("stdio transport", () => {
         expect.objectContaining({ message: "stdin unavailable" }),
       ),
     );
+    // The failure is in the exit status too; reset it so the run is not failed.
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined;
     for (const listener of process.listeners("SIGINT").slice(before)) {
       process.off("SIGINT", listener);
     }

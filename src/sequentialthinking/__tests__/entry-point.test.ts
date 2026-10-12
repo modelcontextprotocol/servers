@@ -53,13 +53,16 @@ describe("main", () => {
     }
   });
 
-  it("reports a transport that cannot start on stderr", async () => {
+  it("reports a transport that cannot start on stderr and in the exit status", async () => {
     const [, serverTransport] = InMemoryTransport.createLinkedPair();
     const failure = new Error("no pipe");
     vi.spyOn(serverTransport, "start").mockRejectedValue(failure);
     const handle = main(serverTransport);
     await handle.close();
     expect(errorSpy).toHaveBeenCalledWith("Transport error:", failure);
+    // The failure is in the exit status too; reset it so the run is not failed.
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined;
   });
 });
 
