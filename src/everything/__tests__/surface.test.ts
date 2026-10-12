@@ -579,7 +579,8 @@ describe("tools/list", () => {
             },
             "name": {
               "default": "README.md.gz",
-              "description": "Name of the output file",
+              "description": "Name of the output file (at most 255 characters)",
+              "maxLength": 255,
               "type": "string",
             },
             "outputType": {

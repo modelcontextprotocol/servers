@@ -148,16 +148,27 @@ describe("the extension", () => {
     },
   );
 
-  it("keeps at most MAX_TASKS, dropping the oldest", async () => {
+  it("refuses a new task at MAX_TASKS, keeping every live one until its TTL", async () => {
     peer = await rawClient(TASKS);
     const first = await peer.call("simulate-research-query", { topic: "t" });
     for (let i = 1; i < MAX_TASKS; i++) {
       await peer.call("simulate-research-query", { topic: "t" });
     }
+    const refused = await peer.call("simulate-research-query", { topic: "t" });
+    expect(refused).toMatchObject({
+      isError: true,
+      content: [
+        {
+          text: `The server is already running ${MAX_TASKS} tasks, its limit. Try again once one has expired.`,
+        },
+      ],
+    });
     expect((await peer.get(first.taskId as string)).status).toBe("working");
-    await peer.call("simulate-research-query", { topic: "t" });
-    const response = await peer.request("tasks/get", { taskId: first.taskId });
-    expect(response.error).toMatchObject({ code: -32602 });
+    // Once the tasks expire, there is room again.
+    advance(first.ttlMs as number);
+    expect(
+      (await peer.call("simulate-research-query", { topic: "t" })).resultType,
+    ).toBe("task");
   });
 
   it("refuses a topic longer than it will keep", async () => {
@@ -444,7 +455,7 @@ describe("simulate-research-query", () => {
     expect((await peer.get(created.taskId as string)).status).toBe("working");
   });
 
-  it("stays cancelled once the client cancels it, and refuses a second cancel", async () => {
+  it("stays cancelled once the client cancels it, and acknowledges a second cancel", async () => {
     peer = await rawClient(TASKS);
     const created = await peer.call("simulate-research-query", { topic: "t" });
     const taskId = created.taskId as string;
@@ -456,24 +467,21 @@ describe("simulate-research-query", () => {
       status: "cancelled",
       statusMessage: "Cancelled by the client",
     });
-    const again = await peer.request("tasks/cancel", { taskId });
-    expect(again.error).toMatchObject({
-      code: -32602,
-      message: expect.stringContaining("is already cancelled"),
+    expect(await peer.result("tasks/cancel", { taskId })).toMatchObject({
+      resultType: "complete",
     });
+    expect((await peer.get(taskId)).status).toBe("cancelled");
   });
 
-  it("refuses to cancel a completed task", async () => {
+  it("acknowledges a cancel of a completed task, which stays completed", async () => {
     peer = await rawClient(TASKS);
     const created = await peer.call("simulate-research-query", { topic: "t" });
+    const taskId = created.taskId as string;
     advance(STAGE_DURATION * STAGES.length);
-    const response = await peer.request("tasks/cancel", {
-      taskId: created.taskId,
+    expect(await peer.result("tasks/cancel", { taskId })).toMatchObject({
+      resultType: "complete",
     });
-    expect(response.error).toMatchObject({
-      code: -32602,
-      message: expect.stringContaining("is already completed"),
-    });
+    expect((await peer.get(taskId)).status).toBe("completed");
   });
 });
 

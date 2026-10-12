@@ -42,7 +42,11 @@ const GZIP_ALLOWED_DOMAINS = (process.env.GZIP_ALLOWED_DOMAINS ?? "")
 
 // Tool input schema
 const GZipFileAsResourceSchema = z.object({
-  name: z.string().describe("Name of the output file").default("README.md.gz"),
+  name: z
+    .string()
+    .max(255)
+    .describe("Name of the output file (at most 255 characters)")
+    .default("README.md.gz"),
   data: z
     .url()
     .describe("URL or data URI of the file content to compress")

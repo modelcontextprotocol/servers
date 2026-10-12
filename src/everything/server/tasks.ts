@@ -99,7 +99,9 @@ const tasks = new Map<string, StoredTask>();
  * The most tasks the process keeps. A task holds its tool's arguments (each
  * task tool bounds their length) and the client's answers (bounded by the
  * transports' request size) until its TTL, so without a cap a burst of calls
- * could exhaust memory first; past it, the oldest task is dropped.
+ * could exhaust memory first. A live task is kept until its TTL, since the
+ * extension lets a server discard one only after that, so at the cap a new
+ * task is refused rather than an old one dropped.
  */
 export const MAX_TASKS = 100;
 
@@ -175,10 +177,16 @@ export function createTask(
 ): CallToolResult {
   const now = Date.now();
   sweep(now);
-  // The map keeps insertion order, so the first entries are the oldest.
-  for (const taskId of tasks.keys()) {
-    if (tasks.size < MAX_TASKS) break;
-    tasks.delete(taskId);
+  if (tasks.size >= MAX_TASKS) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: `The server is already running ${MAX_TASKS} tasks, its limit. Try again once one has expired.`,
+        },
+      ],
+      isError: true,
+    };
   }
   const task: StoredTask = {
     taskId: randomUUID(),
@@ -347,8 +355,8 @@ const EmptyResult = z.object({});
  * Serve the extension's methods on a 2026-07-28 server: `tasks/get`,
  * `tasks/update` and `tasks/cancel`. A request from a client that does not
  * declare the extension is refused with -32021. An unknown or expired task
- * id, and a cancellation of a finished task, is refused with -32602 (invalid
- * params). An update's answers to requests that are not outstanding are
+ * id is refused with -32602 (invalid params). A cancellation is acknowledged
+ * whatever the task's status, and changes only a task still running. An update's answers to requests that are not outstanding are
  * ignored. Each input request a task makes has a key of its own, never reused
  * once answered (the extension requires it), so a re-asked request gets a
  * new key.
@@ -411,14 +419,13 @@ export function registerTasksExtension(server: McpServer): void {
       requireTasks(ctx);
       const now = Date.now();
       const task = find(taskId, now);
+      // Cancellation is cooperative: the request is acknowledged whatever
+      // the task's status, and a task that has already finished stays as it
+      // ended.
       const { status } = stateOf(task, now);
-      if (status === "completed" || status === "cancelled") {
-        throw new ProtocolError(
-          ProtocolErrorCode.InvalidParams,
-          `Task ${taskId} is already ${status}`,
-        );
+      if (status !== "completed" && status !== "cancelled") {
+        task.cancelledAt = now;
       }
-      task.cancelledAt = now;
       return {};
     },
   );

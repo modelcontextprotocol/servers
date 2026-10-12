@@ -59,12 +59,17 @@ function sweep(now: number): void {
  */
 function makeRoom(bytes: number): void {
   let total = bytes;
-  for (const resource of minted.values()) total += resource.blob.length;
+  for (const [uri, resource] of minted) total += sizeOf(uri, resource);
   for (const [uri, resource] of minted) {
     if (minted.size < MAX_MINTED_RESOURCES && total <= MAX_MINTED_BYTES) break;
     minted.delete(uri);
-    total -= resource.blob.length;
+    total -= sizeOf(uri, resource);
   }
+}
+
+/** What a stored resource counts against the budget: everything it keeps. */
+function sizeOf(uri: string, resource: MintedResource): number {
+  return uri.length + resource.name.length + resource.blob.length;
 }
 
 /**
@@ -82,15 +87,16 @@ export function mintBlobResource(
 ): ResourceLink {
   // One resource larger than the whole budget is refused outright, rather
   // than evicting everything else and still exceeding the budget.
-  if (blob.length > MAX_MINTED_BYTES) {
+  const uri = `demo://resource/minted/${randomUUID()}/${encodeURIComponent(name)}`;
+  const size = uri.length + name.length + blob.length;
+  if (size > MAX_MINTED_BYTES) {
     throw new Error(
-      `Cannot keep ${name} for later reading: its ${blob.length} bytes of content exceed the ${MAX_MINTED_BYTES}-byte limit for minted resources`,
+      `Cannot keep ${name} for later reading: its ${size} bytes exceed the ${MAX_MINTED_BYTES}-byte limit for minted resources`,
     );
   }
   const now = Date.now();
   sweep(now);
-  makeRoom(blob.length);
-  const uri = `demo://resource/minted/${randomUUID()}/${encodeURIComponent(name)}`;
+  makeRoom(size);
   minted.set(uri, {
     name,
     mimeType,

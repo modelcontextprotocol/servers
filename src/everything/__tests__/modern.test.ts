@@ -666,10 +666,31 @@ describe("minted resources", () => {
 
   it("refuses one resource larger than the whole byte budget", () => {
     expect(() =>
-      mintBlobResource("huge", "text/plain", "A".repeat(MAX_MINTED_BYTES + 1)),
+      mintBlobResource("huge", "text/plain", "A".repeat(MAX_MINTED_BYTES)),
     ).toThrow(
-      `Cannot keep huge for later reading: its ${MAX_MINTED_BYTES + 1} bytes of content exceed the ${MAX_MINTED_BYTES}-byte limit for minted resources`,
+      /^Cannot keep huge for later reading: its \d+ bytes exceed the \d+-byte limit for minted resources$/,
     );
+  });
+
+  it("counts a resource's name and URI against the byte budget", async () => {
+    // Two resources whose content alone fits, but not with their names.
+    const name = "n".repeat(1024);
+    const blob = "A".repeat(MAX_MINTED_BYTES / 2 - 1024);
+    const first = mintBlobResource(name, "text/plain", blob).uri;
+    mintBlobResource(name, "text/plain", blob);
+    session = await connectModern();
+    await expect(
+      session.client.readResource({ uri: first }),
+    ).rejects.toMatchObject({ code: -32602 });
+  });
+
+  it("refuses a gzip-file-as-resource name longer than it will keep", async () => {
+    session = await connectModern();
+    const result = await session.client.callTool({
+      name: "gzip-file-as-resource",
+      arguments: { name: "n".repeat(256), data: DATA_URI },
+    });
+    expect(result.isError).toBe(true);
   });
 
   it("keeps at most MAX_MINTED_BYTES of content, dropping the oldest", async () => {
