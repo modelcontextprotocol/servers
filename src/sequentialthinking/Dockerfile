@@ -5,6 +5,8 @@ COPY tsconfig.json /tsconfig.json
 
 WORKDIR /app
 
+RUN npm install -g npm@^11.5.1
+
 RUN --mount=type=cache,target=/root/.npm npm install
 
 RUN --mount=type=cache,target=/root/.npm-production npm ci --ignore-scripts --omit-dev
