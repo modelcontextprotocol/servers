@@ -199,14 +199,14 @@ describe("symlinks", () => {
     expect(await fs.readdir(outside)).toEqual(["secret.txt"]);
   });
 
-  it("refuses to write through a dangling symlink, reporting a missing parent", async () => {
+  it("refuses to write through a dangling symlink, naming the symlink", async () => {
     const link = path.join(dir, "dangling");
     await fs.symlink(path.join(outside, "not-yet"), link);
     const result = await call(client, "write_file", {
       path: link,
       content: "x",
     });
-    expect(textOf(result)).toBe(`Parent directory does not exist: ${dir}`);
+    expect(textOf(result)).toBe(`Broken symlink: ${link}`);
     await expect(fs.stat(path.join(outside, "not-yet"))).rejects.toThrow();
   });
 
