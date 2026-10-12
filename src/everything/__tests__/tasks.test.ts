@@ -168,6 +168,18 @@ describe("the extension", () => {
     expect(result.isError).toBe(true);
   });
 
+  it("refuses tasks/update without inputResponses with -32602", async () => {
+    peer = await rawClient(TASKS);
+    const created = await peer.call("simulate-research-query", { topic: "t" });
+    const response = await peer.request("tasks/update", {
+      taskId: created.taskId,
+    });
+    expect(response.error).toMatchObject({
+      code: -32602,
+      message: "Invalid params for tasks/update: inputResponses is required",
+    });
+  });
+
   it("drops a task once its TTL has passed", async () => {
     peer = await rawClient(TASKS);
     const created = await peer.call("simulate-research-query", { topic: "t" });

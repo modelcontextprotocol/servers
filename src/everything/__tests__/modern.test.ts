@@ -538,6 +538,37 @@ describe("change notifications", () => {
     expect(await arrived).toEqual({ uri: URI });
   });
 
+  it.each(["toolsChanged", "promptsChanged", "resourcesChanged"] as const)(
+    "logs, rather than leaves unhandled, a %s notification that cannot be sent",
+    async (method) => {
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      const server = new McpServer({ name: "s", version: "0" });
+      vi.spyOn(server, "isConnected").mockReturnValue(true);
+      const failure = new Error("closed");
+      vi.spyOn(server.server, "sendToolListChanged").mockRejectedValue(failure);
+      vi.spyOn(server.server, "sendPromptListChanged").mockRejectedValue(
+        failure,
+      );
+      vi.spyOn(server.server, "sendResourceListChanged").mockRejectedValue(
+        failure,
+      );
+      instancePublisher(server, () => true)[method]();
+      await vi.waitFor(() =>
+        expect(error).toHaveBeenCalledWith(
+          "Change notification failed:",
+          failure,
+        ),
+      );
+    },
+  );
+
+  it("sends no list change from an instance with no connection", () => {
+    const server = new McpServer({ name: "s", version: "0" });
+    const send = vi.spyOn(server.server, "sendToolListChanged");
+    instancePublisher(server, () => true).toolsChanged();
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it("logs, rather than throws, a resource update that cannot be sent", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const server = new McpServer({ name: "s", version: "0" });

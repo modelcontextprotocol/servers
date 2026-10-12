@@ -372,9 +372,15 @@ export function registerTasksExtension(server: McpServer): void {
     async ({ taskId }, ctx) => {
       requireTasks(ctx);
       // The SDK lifts `inputResponses` out of the params of every request
-      // (it is a reserved retry field on 2026-07-28) into the context.
-      const inputResponses: TaskInputResponses =
-        ctx.mcpReq.inputResponses ?? {};
+      // (it is a reserved retry field on 2026-07-28) into the context. The
+      // extension requires it, so a request without it is malformed.
+      const inputResponses = ctx.mcpReq.inputResponses;
+      if (inputResponses === undefined) {
+        throw new ProtocolError(
+          ProtocolErrorCode.InvalidParams,
+          "Invalid params for tasks/update: inputResponses is required",
+        );
+      }
       const now = Date.now();
       const task = find(taskId, now);
       const state = stateOf(task, now);

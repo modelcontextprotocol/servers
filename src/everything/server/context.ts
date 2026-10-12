@@ -62,10 +62,15 @@ export function instancePublisher(
 ): ChangePublisher {
   const report = (error: unknown) =>
     console.error("Change notification failed:", error);
+  // The low-level sends return their promise; McpServer's own helpers start
+  // the same send and drop it, so a failed one would go unhandled.
+  const send = (notify: () => Promise<void>) => {
+    if (server.isConnected()) notify().catch(report);
+  };
   return {
-    toolsChanged: () => server.sendToolListChanged(),
-    promptsChanged: () => server.sendPromptListChanged(),
-    resourcesChanged: () => server.sendResourceListChanged(),
+    toolsChanged: () => send(() => server.server.sendToolListChanged()),
+    promptsChanged: () => send(() => server.server.sendPromptListChanged()),
+    resourcesChanged: () => send(() => server.server.sendResourceListChanged()),
     resourceUpdated: (uri) => {
       if (isSubscribed(uri)) {
         server.server.sendResourceUpdated({ uri }).catch(report);
