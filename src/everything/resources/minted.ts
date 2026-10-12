@@ -69,6 +69,7 @@ function makeRoom(bytes: number): void {
 
 /**
  * Store a blob resource under a freshly minted URI, and return a link to it.
+ * Throws for a blob larger than `MAX_MINTED_BYTES`.
  *
  * @param name - The resource's name, the last segment of its URI.
  * @param mimeType - Its MIME type.
@@ -79,6 +80,13 @@ export function mintBlobResource(
   mimeType: string,
   blob: string,
 ): ResourceLink {
+  // One resource larger than the whole budget is refused outright, rather
+  // than evicting everything else and still exceeding the budget.
+  if (blob.length > MAX_MINTED_BYTES) {
+    throw new Error(
+      `Cannot keep ${name} for later reading: its ${blob.length} bytes of content exceed the ${MAX_MINTED_BYTES}-byte limit for minted resources`,
+    );
+  }
   const now = Date.now();
   sweep(now);
   makeRoom(blob.length);

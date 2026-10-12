@@ -102,6 +102,20 @@ describe("the 2026-07-28 surface", () => {
     expect(session.client.getServerCapabilities()?.extensions).toBeUndefined();
   });
 
+  it("marks the task-creating tools as not read-only", async () => {
+    session = await connectModern();
+    const { tools } = await session.client.listTools();
+    for (const name of [
+      "simulate-research-query",
+      "trigger-sampling-request-async",
+      "trigger-elicitation-request-async",
+    ]) {
+      expect(
+        tools.find((t) => t.name === name)?.annotations?.readOnlyHint,
+      ).toBe(false);
+    }
+  });
+
   it("lists the capability-gated and task tools up front, and not the 2025-only toggles", async () => {
     session = await connectModern();
     expect(session.client.getProtocolEra()).toBe("modern");
@@ -648,6 +662,14 @@ describe("minted resources", () => {
     await expect(
       session.client.readResource({ uri: first }),
     ).rejects.toMatchObject({ code: -32602 });
+  });
+
+  it("refuses one resource larger than the whole byte budget", () => {
+    expect(() =>
+      mintBlobResource("huge", "text/plain", "A".repeat(MAX_MINTED_BYTES + 1)),
+    ).toThrow(
+      `Cannot keep huge for later reading: its ${MAX_MINTED_BYTES + 1} bytes of content exceed the ${MAX_MINTED_BYTES}-byte limit for minted resources`,
+    );
   });
 
   it("keeps at most MAX_MINTED_BYTES of content, dropping the oldest", async () => {
