@@ -100,6 +100,12 @@ Please note that mcp-server-git is currently in early development. The functiona
      - `not_contains` (string, optional): The commit sha that branch should NOT contain. Do not pass anything to this param if no commit sha is specified
    - Returns: List of branches
 
+### Protocol versions
+
+The server speaks both eras of the Model Context Protocol over stdio, with nothing to configure: a **2026-07-28** client (discovered with `server/discover`, no session) and a **2025-11-25** client (the `initialize` handshake). The client's first request decides which. Tools behave the same in both.
+
+Roots is deprecated in 2026-07-28, and this server never asks a client for Roots in either era: repository access comes from `--repository` alone, or, with no `--repository`, from each tool call's `repo_path`. Methods the 2026-07-28 specification removes, such as `ping`, are answered only on a 2025-11-25 connection.
+
 ## Installation
 
 ### Using uv (recommended)
@@ -295,7 +301,8 @@ help you debug any issues.
 ### Tests and coverage
 
 The test suite drives `serve()` in-process through an MCP `ClientSession`
-(see `tests/conftest.py`). From `src/git`:
+(see `tests/conftest.py`), and `tests/test_eras.py` runs a `Client` against it
+as a 2026-07-28 and as a 2025-11-25 client. From `src/git`:
 
 ```bash
 uv run --frozen pytest                 # the tests

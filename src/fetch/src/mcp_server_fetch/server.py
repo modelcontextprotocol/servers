@@ -7,8 +7,10 @@
 # Built on the MCP Python SDK v2's low-level `Server` (#4851). That SDK no
 # longer validates tool arguments or folds tool exceptions into `isError`
 # results, so `call_tool` does both with SDK v1's messages, keeping tool
-# results as they were on v1. `serve()` runs the legacy (2025-11-25) handshake
-# loop only; serving 2026-07-28 is #4853.
+# results as they were on v1. `serve()` serves both protocol eras (#4853): a
+# 2025-11-25 client through the initialize handshake, and a 2026-07-28 client
+# sessionlessly. No handler reads the session or calls back to the client
+# (roots, sampling, elicitation, logging), so nothing differs between them.
 
 import asyncio
 import ipaddress
@@ -24,7 +26,6 @@ import markdownify
 import readabilipy.simple_json
 from mcp.shared.exceptions import MCPError
 from mcp.server import Server, ServerRequestContext
-from mcp.server.runner import serve_loop
 from mcp.server.stdio import stdio_server
 from mcp.types import (
     CallToolRequestParams,
@@ -558,15 +559,9 @@ Although originally you did not have internet access, and were advised to refuse
 
     options = server.create_initialization_options()
     async with stdio_server() as (read_stream, write_stream):
-        # Legacy era only. Server.run() would also serve 2026-07-28 (its
-        # dual-era loop answers server/discover and per-request envelopes);
-        # adopting that era is #4853, so this port (#4851) serves the
-        # handshake loop alone, the only era it served on SDK v1.
-        async with server.lifespan(server) as lifespan_state:
-            await serve_loop(
-                server,
-                read_stream,
-                write_stream,
-                lifespan_state=lifespan_state,
-                init_options=options,
-            )
+        # Both eras (#4853): Server.run()'s dual-era loop lets the client's
+        # first request decide. `initialize` gets the 2025-11-25 handshake;
+        # `server/discover` or a request carrying a 2026-07-28 envelope gets
+        # the modern, sessionless era, with its required result fields
+        # (resultType, ttlMs, cacheScope) filled in by the SDK.
+        await server.run(read_stream, write_stream, options)

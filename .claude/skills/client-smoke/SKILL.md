@@ -172,10 +172,14 @@ CLI) or **Server Settings → Protocol Era** (the web UI):
 | `modern` | Pins 2026-07-28 through `server/discover`, with no fallback |
 | `auto` | Probes `server/discover`, and falls back to `initialize` |
 
-⚠️ **Only the legacy era can be exercised against these servers today.** The
-Python servers are on `mcp` 1.x, whose newest protocol version is 2025-11-25.
-The TypeScript servers are on the TS SDK v2 packages (#4856) but still serve
-only the `initialize` handshake. None implements `server/discover`. So:
+**The Python servers serve both eras** (#4853): run every command twice, with
+`--protocol-era legacy` and `--protocol-era modern`, and expect both to
+succeed. A 2026-07-28 result carries `io.modelcontextprotocol/serverInfo` in
+its `_meta`, which is the quick way to see which era answered.
+
+⚠️ **The TypeScript servers serve only the legacy era today.** They are on the
+TS SDK v2 packages (#4856) but still serve only the `initialize` handshake,
+with no `server/discover`. Against them:
 
 - `--protocol-era modern` fails, by design, with `Version negotiation failed:
   the server did not offer pinned protocol version 2026-07-28 via
@@ -185,15 +189,11 @@ only the `initialize` handshake. None implements `server/discover`. So:
   connection and proves nothing about 2026-07-28.
 
 The both-eras check that `/pr-flow` asks for (#4857) therefore has one half
-that can pass today. For a server that does not yet serve the modern era,
-record the legacy run, and say in the PR that the server does not yet speak
-2026-07-28 rather than leaving the modern era unmentioned. Moving a server to
-a v2 SDK (#4856 for TypeScript, #4851 for Python) does not change that by
-itself: those keep the legacy wire behavior. Modern-era support arrives with
-#4852 (TypeScript) and #4853 (Python). Once a server has it, run every command
-twice, with `--protocol-era legacy` and `--protocol-era modern`, and expect
-both to succeed. Do not use `auto` for evidence in either case: it
-does not say which era answered.
+that can pass for a TypeScript server today. Record the legacy run, and say in
+the PR that the server does not yet speak 2026-07-28 rather than leaving the
+modern era unmentioned. Modern-era support for them arrives with #4852; from
+then on, run both eras as for the Python servers. Do not use `auto` for
+evidence in either case: it does not say which era answered.
 
 ## The Inspector web UI
 
