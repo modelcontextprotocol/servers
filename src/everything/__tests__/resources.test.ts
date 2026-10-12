@@ -75,16 +75,18 @@ describe("dynamic resource templates", () => {
   });
 
   it.each(["0", "-2", "1.5", "abc"])("rejects resource id %s", async (id) => {
+    // No such resource: -32602 with the URI in the error's data (#4852).
     const uri = `demo://resource/dynamic/text/${id}`;
-    await expect(session.client.readResource({ uri })).rejects.toThrow(
-      `Unknown resource: ${uri}`,
-    );
+    await expect(session.client.readResource({ uri })).rejects.toMatchObject({
+      code: -32602,
+      data: { uri },
+    });
   });
 
   it("rejects a URI that matches no resource or template", async () => {
     await expect(
       session.client.readResource({ uri: "demo://resource/nowhere" }),
-    ).rejects.toThrow("Resource demo://resource/nowhere not found");
+    ).rejects.toThrow("Resource not found: demo://resource/nowhere");
   });
 });
 
@@ -110,9 +112,9 @@ describe("resource subscriptions", () => {
     // Unsubscribing from a URI with no subscriber set is accepted too.
     await session.client.unsubscribeResource({ uri: "demo://never" });
     expect(logData()).toEqual([
-      `Received Subscribe Resource request for URI: ${URI} from session ${session.sessionId}`,
-      `Received Unsubscribe Resource request: ${URI} from session ${session.sessionId}`,
-      `Received Unsubscribe Resource request: demo://never from session ${session.sessionId}`,
+      `Received Subscribe Resource request for URI: ${URI}`,
+      `Received Unsubscribe Resource request: ${URI}`,
+      "Received Unsubscribe Resource request: demo://never",
     ]);
   });
 
@@ -137,17 +139,6 @@ describe("resource subscriptions", () => {
     }
   });
 
-  it("omits the session from the acknowledgement when there is none (stdio)", async () => {
-    await session.close();
-    session = await connect({ sessionId: null });
-    await session.client.subscribeResource({ uri: URI });
-    await session.client.unsubscribeResource({ uri: URI });
-    expect(logData()).toEqual([
-      `Received Subscribe Resource request for URI: ${URI} `,
-      `Received Unsubscribe Resource request: ${URI} `,
-    ]);
-  });
-
   it("sends updates for subscribed URIs every 5 seconds while toggled on", async () => {
     vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
     await session.client.subscribeResource({ uri: URI });
@@ -158,7 +149,7 @@ describe("resource subscriptions", () => {
       arguments: {},
     });
     expect(textOf(contentOf(on)[0])).toBe(
-      `Started simulated resource updated notifications for session ${session.sessionId} at a 5 second pace. Client will receive updates for any resources the it is subscribed to.`,
+      "Started simulated resource updated notifications at a 5 second pace. Client will receive updates for any resources it is subscribed to.",
     );
     await vi.waitFor(() => expect(updates()).toEqual([URI]));
 
@@ -175,7 +166,7 @@ describe("resource subscriptions", () => {
       arguments: {},
     });
     expect(textOf(contentOf(off)[0])).toBe(
-      `Stopped simulated resource updates for session ${session.sessionId}`,
+      "Stopped simulated resource updates",
     );
   });
 

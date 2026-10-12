@@ -51,7 +51,7 @@ async def test_serve_resolves_repository_subdirectory_to_root(
     with caplog.at_level(logging.INFO, logger="mcp_server_git.server"):
         async with connect(sub) as session:
             result = await session.call_tool("git_status", {"repo_path": str(root)})
-    assert not result.isError
+    assert not result.is_error
     assert f"Resolved --repository {sub} to repository root {root}" in caplog.text
     assert f"Using repository at {root}" in caplog.text
 

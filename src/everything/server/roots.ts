@@ -1,93 +1,61 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import {
-  Root,
-  RootsListChangedNotificationSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+// The 2025-era roots sync: after `initialize`, a server whose client supports
+// Roots asks for the list with `roots/list`, and asks again each time the
+// client sends `notifications/roots/list_changed`, reporting each answer to
+// the client as a log message.
+//
+// 2025-era only, and deprecated: the 2026-07-28 revision removes
+// server-to-client requests and `notifications/roots/list_changed`, and
+// deprecates Roots. There a server asks for roots in-band, by returning an
+// `input_required` result from a call, which `get-roots-list` does on both
+// eras (#4852). Nothing is cached: the answer is only reported.
 
-// Track roots by session id
-export const roots: Map<string | undefined, Root[]> = new Map<
-  string | undefined,
-  Root[]
->();
+import { McpServer } from "@modelcontextprotocol/server";
+
+/** The servers whose `roots/list_changed` handler is installed. */
+const watching = new WeakSet<McpServer>();
 
 /**
- * Get the latest the client roots list for the session.
+ * Ask the client for its roots and report the answer, and re-ask on each
+ * `notifications/roots/list_changed`. Does nothing for a client without Roots.
+ * Safe to call more than once: the notification handler is installed once.
  *
- * - Request and cache the roots list for the session if it has not been fetched before.
- * - Return the cached roots list for the session if it exists.
+ * A failed request is logged to stderr, not thrown, since the caller is a
+ * timer with nothing to report the failure to.
  *
- * When requesting the roots list for a session, it also sets up a `roots/list_changed`
- * notification handler. This ensures that updates are automatically fetched and handled
- * in real-time.
- *
- * This function is idempotent. It should only request roots from the client once per session,
- * returning the cached version thereafter.
- *
- * @param {McpServer} server - An instance of the MCP server used to communicate with the client.
- * @param {string} [sessionId] - An optional session id used to associate the roots list with a specific client session.
- *
- * @throws {Error} In case of a failure to request the roots from the client, an error log message is sent.
+ * @param {McpServer} server - The 2025-era server whose client is asked.
  */
-export const syncRoots = async (server: McpServer, sessionId?: string) => {
+export const syncRoots = async (server: McpServer): Promise<void> => {
   const clientCapabilities = server.server.getClientCapabilities() || {};
-  const clientSupportsRoots: boolean = clientCapabilities?.roots !== undefined;
+  if (clientCapabilities.roots === undefined) return;
 
-  // Fetch the roots list for this client
-  if (clientSupportsRoots) {
-    // Function to request the updated roots list from the client
-    const requestRoots = async () => {
-      try {
-        // Request the updated roots list from the client
-        const response = await server.server.listRoots();
-        /* v8 ignore else -- unreachable: listRoots() validates the reply against ListRootsResultSchema, which requires `roots`, and rejects anything else */
-        if (response && "roots" in response) {
-          // Store the roots list for this client
-          roots.set(sessionId, response.roots);
-
-          // Notify the client of roots received
-          await server.sendLoggingMessage(
-            {
-              level: "info",
-              logger: "everything-server",
-              data: `Roots updated: ${response?.roots?.length} root(s) received from client`,
-            },
-            sessionId,
-          );
-        } else {
-          await server.sendLoggingMessage(
-            {
-              level: "info",
-              logger: "everything-server",
-              data: "Client returned no roots set",
-            },
-            sessionId,
-          );
-        }
-      } catch (error) {
-        console.error(
-          `Failed to request roots from client ${sessionId}: ${
-            /* v8 ignore start -- the SDK always rejects listRoots() with an Error (McpError) */
-            error instanceof Error ? error.message : String(error)
-            /* v8 ignore stop */
-          }`,
-        );
-      }
-    };
-
-    // If the roots have not been synced for this client,
-    // set notification handler and request initial roots
-    if (!roots.has(sessionId)) {
-      // Set the list changed notification handler
-      server.server.setNotificationHandler(
-        RootsListChangedNotificationSchema,
-        requestRoots,
+  const requestRoots = async () => {
+    try {
+      const response = await server.server.listRoots();
+      await server.sendLoggingMessage(
+        {
+          level: "info",
+          logger: "everything-server",
+          data: `Roots updated: ${response.roots.length} root(s) received from client`,
+        },
+        server.server.transport?.sessionId,
       );
-
-      // Request the initial roots list immediately
-      await requestRoots();
+    } catch (error) {
+      console.error(
+        `Failed to request roots from client: ${
+          /* v8 ignore start -- the SDK always rejects listRoots() with an Error (ProtocolError or SdkError) */
+          error instanceof Error ? error.message : String(error)
+          /* v8 ignore stop */
+        }`,
+      );
     }
+  };
 
-    // Return the roots list for this client
-    return roots.get(sessionId);
+  if (!watching.has(server)) {
+    watching.add(server);
+    server.server.setNotificationHandler(
+      "notifications/roots/list_changed",
+      requestRoots,
+    );
   }
+  await requestRoots();
 };

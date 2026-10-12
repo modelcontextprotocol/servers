@@ -3,16 +3,17 @@
 // The memory server: a knowledge graph of entities, relations and
 // observations, persisted as JSONL and served over MCP as nine tools and one
 // subscribable resource. createServer() builds a server over a graph file so
-// tests can run it in-process; main() connects it to stdio, and runs only
-// when this file is the process entry point, so importing it starts nothing.
-
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
+// tests can run it in-process; main() serves it on stdio through the SDK's
+// serveStdio entry, which answers 2026-07-28 clients (server/discover, change
+// notifications on subscriptions/listen) and 2025-era clients (initialize,
+// resources/subscribe) from the same factory (#4852). main() runs only when
+// this file is the process entry point, so importing it starts nothing.
 import {
-  SubscribeRequestSchema,
-  UnsubscribeRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+  serveStdio,
+  type StdioServerHandle,
+} from "@modelcontextprotocol/server/stdio";
+import { McpServer } from "@modelcontextprotocol/server";
+import type { Transport } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { promises as fs, realpathSync } from "fs";
 import type { FileHandle } from "fs/promises";
@@ -737,10 +738,15 @@ export const SearchNodesQuerySchema = z
   );
 
 // Build a memory server over the graph file at memoryFilePath: the nine
-// tools, the knowledge-graph resource and its subscriptions. main() connects
-// the result to stdio; tests connect it to an in-memory transport, so each
-// call returns an independent server with its own subscriber set.
-export function createServer(memoryFilePath: string): McpServer {
+// tools, the knowledge-graph resource and its subscriptions. main() serves the
+// result on stdio; tests connect it to an in-memory transport, so each call
+// returns an independent server with its own subscriber set. `era` is the
+// protocol era the instance will serve, which decides how graph changes are
+// announced (see notifyGraphUpdated).
+export function createServer(
+  memoryFilePath: string,
+  era: "legacy" | "modern" = "legacy",
+): McpServer {
   const knowledgeGraphManager = new KnowledgeGraphManager(memoryFilePath);
 
   const server = new McpServer({
@@ -752,10 +758,14 @@ export function createServer(memoryFilePath: string): McpServer {
   // emit notifications/resources/updated to a client that asked for them.
   const resourceSubscribers = new Set<string>();
 
-  // Notify subscribers that the knowledge graph resource changed. No-op when the
-  // client has not subscribed.
+  // Notify subscribers that the knowledge graph resource changed. A 2025-era
+  // client subscribes with resources/subscribe, so the notification is sent
+  // only once it has. On 2026-07-28 that method does not exist: a client asks
+  // for updates in its subscriptions/listen filter, and serveStdio delivers
+  // the notification only to a listen stream that named the URI, so it is
+  // always handed over.
   function notifyGraphUpdated() {
-    if (resourceSubscribers.has(RESOURCE_URI)) {
+    if (era === "modern" || resourceSubscribers.has(RESOURCE_URI)) {
       // Fire-and-forget: the tool result must not wait on (or fail because of)
       // the notification, so a delivery failure is logged rather than thrown.
       server.server
@@ -773,14 +783,14 @@ export function createServer(memoryFilePath: string): McpServer {
       title: "Create Entities",
       description:
         "Create multiple new entities in the knowledge graph. An entity whose name already exists, or repeats an earlier entity in the same call, is skipped and its observations are not added; the result lists the skipped names in `skipped`. Use add_observations to add observations to an existing entity.",
-      inputSchema: {
+      inputSchema: z.object({
         entities: z.array(EntitySchema),
-      },
-      outputSchema: {
+      }),
+      outputSchema: z.object({
         entities: z.array(EntitySchema),
         // Present only when at least one requested entity was skipped.
         skipped: z.array(z.string()).optional(),
-      },
+      }),
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -820,12 +830,12 @@ export function createServer(memoryFilePath: string): McpServer {
       title: "Create Relations",
       description:
         "Create multiple new relations between entities in the knowledge graph. Relations should be in active voice",
-      inputSchema: {
+      inputSchema: z.object({
         relations: z.array(RelationSchema),
-      },
-      outputSchema: {
+      }),
+      outputSchema: z.object({
         relations: z.array(RelationSchema),
-      },
+      }),
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -852,7 +862,7 @@ export function createServer(memoryFilePath: string): McpServer {
       title: "Add Observations",
       description:
         "Add new observations to existing entities in the knowledge graph",
-      inputSchema: {
+      inputSchema: z.object({
         observations: z.array(
           z.object({
             entityName: z
@@ -863,15 +873,15 @@ export function createServer(memoryFilePath: string): McpServer {
               .describe("An array of observation contents to add"),
           }),
         ),
-      },
-      outputSchema: {
+      }),
+      outputSchema: z.object({
         results: z.array(
           z.object({
             entityName: z.string(),
             addedObservations: z.array(z.string()),
           }),
         ),
-      },
+      }),
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -898,15 +908,15 @@ export function createServer(memoryFilePath: string): McpServer {
       title: "Delete Entities",
       description:
         "Delete multiple entities and their associated relations from the knowledge graph",
-      inputSchema: {
+      inputSchema: z.object({
         entityNames: z
           .array(z.string())
           .describe("An array of entity names to delete"),
-      },
-      outputSchema: {
+      }),
+      outputSchema: z.object({
         success: z.boolean(),
         message: z.string(),
-      },
+      }),
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,
@@ -936,7 +946,7 @@ export function createServer(memoryFilePath: string): McpServer {
       title: "Delete Observations",
       description:
         "Delete specific observations from entities in the knowledge graph",
-      inputSchema: {
+      inputSchema: z.object({
         deletions: z.array(
           z.object({
             entityName: z
@@ -947,11 +957,11 @@ export function createServer(memoryFilePath: string): McpServer {
               .describe("An array of observations to delete"),
           }),
         ),
-      },
-      outputSchema: {
+      }),
+      outputSchema: z.object({
         success: z.boolean(),
         message: z.string(),
-      },
+      }),
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,
@@ -987,15 +997,15 @@ export function createServer(memoryFilePath: string): McpServer {
     {
       title: "Delete Relations",
       description: "Delete multiple relations from the knowledge graph",
-      inputSchema: {
+      inputSchema: z.object({
         relations: z
           .array(RelationSchema)
           .describe("An array of relations to delete"),
-      },
-      outputSchema: {
+      }),
+      outputSchema: z.object({
         success: z.boolean(),
         message: z.string(),
-      },
+      }),
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,
@@ -1024,11 +1034,11 @@ export function createServer(memoryFilePath: string): McpServer {
     {
       title: "Read Graph",
       description: "Read the entire knowledge graph",
-      inputSchema: {},
-      outputSchema: {
+      inputSchema: z.object({}),
+      outputSchema: z.object({
         entities: z.array(EntitySchema),
         relations: z.array(RelationSchema),
-      },
+      }),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -1053,13 +1063,13 @@ export function createServer(memoryFilePath: string): McpServer {
     {
       title: "Search Nodes",
       description: "Search for nodes in the knowledge graph based on a query",
-      inputSchema: {
+      inputSchema: z.object({
         query: SearchNodesQuerySchema,
-      },
-      outputSchema: {
+      }),
+      outputSchema: z.object({
         entities: z.array(EntitySchema),
         relations: z.array(RelationSchema),
-      },
+      }),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -1084,15 +1094,15 @@ export function createServer(memoryFilePath: string): McpServer {
     {
       title: "Open Nodes",
       description: "Open specific nodes in the knowledge graph by their names",
-      inputSchema: {
+      inputSchema: z.object({
         names: z
           .array(z.string())
           .describe("An array of entity names to retrieve"),
-      },
-      outputSchema: {
+      }),
+      outputSchema: z.object({
         entities: z.array(EntitySchema),
         relations: z.array(RelationSchema),
-      },
+      }),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -1145,33 +1155,45 @@ export function registerKnowledgeGraphResource(
 }
 
 // Enable clients to subscribe to the knowledge-graph resource and receive
-// notifications/resources/updated when mutation tools change the graph.
+// notifications/resources/updated when mutation tools change the graph. The
+// subscribe and unsubscribe methods exist only on the 2025 protocol era; the
+// `subscribe` capability also lets a 2026-07-28 client name the resource in
+// its subscriptions/listen filter.
 export function registerKnowledgeGraphSubscriptions(
   server: McpServer,
   resourceSubscribers: Set<string>,
 ) {
   server.server.registerCapabilities({ resources: { subscribe: true } });
-  server.server.setRequestHandler(SubscribeRequestSchema, async (request) => {
+  server.server.setRequestHandler("resources/subscribe", async (request) => {
     resourceSubscribers.add(request.params.uri);
     return {};
   });
-  server.server.setRequestHandler(UnsubscribeRequestSchema, async (request) => {
+  server.server.setRequestHandler("resources/unsubscribe", async (request) => {
     resourceSubscribers.delete(request.params.uri);
     return {};
   });
 }
 
-// Start the server on stdio, writing the graph to the file
-// ensureMemoryFilePath picks. The transport is a parameter so a test can run
-// this whole startup path in-process; the bin always uses stdio.
-export async function main(
-  transport: Transport = new StdioServerTransport(),
-): Promise<McpServer> {
+// Serve the server on stdio, writing the graph to the file
+// ensureMemoryFilePath picks. The first message the client sends picks the
+// connection's protocol era, and the factory builds the server for it. The
+// transport is a parameter so a test can run this whole startup path
+// in-process; the bin always uses the process's stdio. A transport error,
+// including one that stops the transport from starting, is reported on stderr.
+export async function main(transport?: Transport): Promise<StdioServerHandle> {
   const memoryFilePath = await ensureMemoryFilePath();
-  const server = createServer(memoryFilePath);
-  await server.connect(transport);
+  const handle = serveStdio(({ era }) => createServer(memoryFilePath, era), {
+    transport,
+    // serveStdio reports a transport that fails, including one that cannot
+    // start, here rather than by rejecting, so record the failure in the
+    // exit status for whatever supervises the process.
+    onerror: (error) => {
+      console.error("Transport error:", error);
+      process.exitCode = 1;
+    },
+  });
   console.error("Knowledge Graph MCP Server running on stdio");
-  return server;
+  return handle;
 }
 
 // True when this module is the program node was asked to run, rather than a

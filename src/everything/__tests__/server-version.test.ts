@@ -5,8 +5,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { createRequire } from "node:module";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { createServer } from "../server/index.js";
 import { resolvePackageVersion, SERVER_VERSION } from "../version.js";
 

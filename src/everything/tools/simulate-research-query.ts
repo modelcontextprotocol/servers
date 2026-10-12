@@ -1,17 +1,42 @@
-import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+// The `simulate-research-query` tool: a simulated deep-research job that runs
+// as a task on the Tasks extension (`io.modelcontextprotocol/tasks`), on
+// protocol version 2026-07-28 (#4852).
+//
+// The call returns a task handle at once. The task works through four
+// stages, one a second, and the client follows it with `tasks/get`. For an
+// ambiguous topic it stops at the third stage with status `input_required`,
+// carrying an elicitation that asks which interpretation the user means; the
+// client answers it with `tasks/update` and the task carries on. The final
+// report arrives inside the `completed` status. The task's progress is worked
+// out from the clock when it is read (server/tasks.ts), so nothing runs in
+// the background.
+//
+// SDK v2 removed the experimental 2025-11-25 tasks layer this tool was first
+// built on (SEP-1686), so it is registered for 2026-07-28 clients only.
+
 import {
+  McpServer,
   CallToolResult,
-  GetTaskResult,
-  Task,
-  ElicitResult,
-  ElicitResultSchema,
-} from "@modelcontextprotocol/sdk/types.js";
-import { CreateTaskResult } from "@modelcontextprotocol/sdk/experimental/tasks";
+  acceptedContent,
+  inputRequired,
+  inputResponse,
+} from "@modelcontextprotocol/server";
+import { z } from "zod";
+import {
+  clientSupportsFormElicitation,
+  createTask,
+  type TaskInputResponses,
+  type TaskState,
+} from "../server/tasks.js";
 
 // Tool input schema
 const SimulateResearchQuerySchema = z.object({
-  topic: z.string().describe("The research topic to investigate"),
+  topic: z
+    .string()
+    .max(1000)
+    .describe(
+      "The research topic to investigate (at most 1,000 characters; the task keeps it until it expires)",
+    ),
   ambiguous: z
     .boolean()
     .default(false)
@@ -20,306 +45,38 @@ const SimulateResearchQuerySchema = z.object({
     ),
 });
 
-// Research stages
-const STAGES = [
+/** The stages a research task works through, in order. */
+export const STAGES = [
   "Gathering sources",
   "Analyzing content",
   "Synthesizing findings",
   "Generating report",
 ];
 
-// Duration per stage in milliseconds
-const STAGE_DURATION = 1000;
+/** How long each stage takes, in milliseconds. */
+export const STAGE_DURATION = 1000;
 
-// Internal state for tracking research tasks
-interface ResearchState {
-  topic: string;
-  ambiguous: boolean;
-  currentStage: number;
-  clarification?: string;
-  completed: boolean;
-  result?: CallToolResult;
-}
+/** The stage an ambiguous query stops before, to ask for a clarification. */
+const CLARIFY_AT = 2;
 
-// Map to store research state per task
-const researchStates = new Map<string, ResearchState>();
-
-/**
- * Runs the background research process.
- * Updates task status as it progresses through stages.
- * If clarification is needed, sends elicitation via sendRequest with relatedTask,
- * which queues the request in the task message queue. The SDK delivers it through
- * the tasks/result stream when the client calls tasks/result (per spec input_required flow).
- * This works on all transports (STDIO, SSE, Streamable HTTP).
- */
-async function runResearchProcess(
-  taskId: string,
-  args: z.infer<typeof SimulateResearchQuerySchema>,
-  taskStore: {
-    updateTaskStatus: (
-      taskId: string,
-      status: Task["status"],
-      message?: string,
-    ) => Promise<void>;
-    storeTaskResult: (
-      taskId: string,
-      status: "completed" | "failed",
-      result: CallToolResult,
-    ) => Promise<void>;
+// Tool configuration
+const name = "simulate-research-query";
+const config = {
+  title: "Simulate Research Query",
+  description:
+    "Simulates a deep research operation that gathers, analyzes, and synthesizes information. " +
+    "Runs as a task on the io.modelcontextprotocol/tasks extension (protocol version 2026-07-28): " +
+    "the call returns a task handle, and the client polls tasks/get as the task moves through four stages. " +
+    "If 'ambiguous' is true and the client supports elicitation, the task pauses with status " +
+    "input_required until the client answers its clarification request with tasks/update.",
+  inputSchema: SimulateResearchQuerySchema,
+  annotations: {
+    // Each call creates a task in the process-wide task store.
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
   },
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  sendRequest: any,
-): Promise<void> {
-  const state = researchStates.get(taskId);
-  /* v8 ignore next -- createTask stores the state immediately before starting this process */
-  if (!state) return;
-
-  // Process each stage
-  for (let i = state.currentStage; i < STAGES.length; i++) {
-    state.currentStage = i;
-
-    // Check if task was cancelled externally
-    if (state.completed) return;
-
-    // Update status message for current stage
-    await taskStore.updateTaskStatus(taskId, "working", `${STAGES[i]}...`);
-
-    // At synthesis stage (index 2), check if clarification is needed
-    if (i === 2 && state.ambiguous && !state.clarification) {
-      // Update status to show we're requesting input (spec SHOULD)
-      await taskStore.updateTaskStatus(
-        taskId,
-        "input_required",
-        `Found multiple interpretations for "${state.topic}". Requesting clarification...`,
-      );
-
-      try {
-        // relatedTask queues elicitation via task message queue → delivered through tasks/result on all transports
-        const elicitResult: ElicitResult = await sendRequest(
-          {
-            method: "elicitation/create",
-            params: {
-              message: `The research query "${state.topic}" could have multiple interpretations. Please clarify what you're looking for:`,
-              requestedSchema: {
-                type: "object",
-                properties: {
-                  interpretation: {
-                    type: "string",
-                    title: "Clarification",
-                    description:
-                      "Which interpretation of the topic do you mean?",
-                    oneOf: getInterpretationsForTopic(state.topic),
-                  },
-                },
-                required: ["interpretation"],
-              },
-            },
-          },
-          ElicitResultSchema,
-          { relatedTask: { taskId } },
-        );
-
-        // Process elicitation response
-        if (elicitResult.action === "accept" && elicitResult.content) {
-          state.clarification =
-            (elicitResult.content as { interpretation?: string })
-              .interpretation || "User accepted without selection";
-        } else if (elicitResult.action === "decline") {
-          state.clarification = "User declined - using default interpretation";
-        } else {
-          state.clarification = "User cancelled - using default interpretation";
-        }
-      } catch (error) {
-        // Elicitation failed - use default interpretation and continue
-        console.warn(
-          `Elicitation failed for task ${taskId}:`,
-          error instanceof Error ? error.message : String(error),
-        );
-        state.clarification = "technical (default - elicitation unavailable)";
-      }
-
-      // Resume with working status (spec SHOULD)
-      await taskStore.updateTaskStatus(
-        taskId,
-        "working",
-        `Continuing with interpretation: "${state.clarification}"...`,
-      );
-
-      // Continue processing (no return - just keep going through the loop)
-    }
-
-    // Simulate work for this stage
-    await new Promise((resolve) => setTimeout(resolve, STAGE_DURATION));
-  }
-
-  // All stages complete - generate result
-  state.completed = true;
-  const result = generateResearchReport(state);
-  state.result = result;
-
-  await taskStore.storeTaskResult(taskId, "completed", result);
-}
-
-/**
- * Generates the final research report with educational content about tasks.
- */
-function generateResearchReport(state: ResearchState): CallToolResult {
-  const topic = state.clarification
-    ? `${state.topic} (${state.clarification})`
-    : state.topic;
-
-  const report = `# Research Report: ${topic}
-
-## Research Parameters
-- **Topic**: ${state.topic}
-${state.clarification ? `- **Clarification**: ${state.clarification}` : ""}
-
-## Synthesis
-This research query was processed through ${STAGES.length} stages:
-${STAGES.map((s, i) => `- Stage ${i + 1}: ${s} ✓`).join("\n")}
-
----
-
-## About This Demo (SEP-1686: Tasks)
-
-This tool demonstrates MCP's task-based execution pattern for long-running operations:
-
-**Task Lifecycle Demonstrated:**
-1. \`tools/call\` with \`task\` parameter → Server returns \`CreateTaskResult\` (not the final result)
-2. Client polls \`tasks/get\` → Server returns current status and \`statusMessage\`
-3. Status progressed: \`working\` → ${
-    state.clarification ? `\`input_required\` → \`working\` → ` : ""
-  }\`completed\`
-4. Client calls \`tasks/result\` → Server returns this final result
-
-${
-  state.clarification
-    ? `**Elicitation Flow:**
-When the query was ambiguous, the server sent an \`elicitation/create\` request
-to the client. The task status changed to \`input_required\` while awaiting user input.
-${
-  state.clarification.includes("unavailable")
-    ? `**Note:** Elicitation failed and a default interpretation was used.`
-    : `After receiving clarification ("${state.clarification}"), the task resumed processing and completed.`
-}
-`
-    : ""
-}
-**Key Concepts:**
-- Tasks enable "call now, fetch later" patterns
-- \`statusMessage\` provides human-readable progress updates
-- Tasks have TTL (time-to-live) for automatic cleanup
-- \`pollInterval\` suggests how often to check status
-- Elicitation requests use \`relatedTask\` to queue via tasks/result (works on all transports)
-
-*This is a simulated research report from the Everything MCP Server.*
-`;
-
-  return {
-    content: [
-      {
-        type: "text",
-        text: report,
-      },
-    ],
-  };
-}
-
-/**
- * Registers the 'simulate-research-query' tool as a task-based tool.
- *
- * This tool demonstrates the MCP Tasks feature (SEP-1686) with a real-world scenario:
- * a research tool that gathers and synthesizes information from multiple sources.
- * If the query is ambiguous, it pauses to ask for clarification before completing.
- *
- * @param {McpServer} server - The McpServer instance where the tool will be registered.
- */
-export const registerSimulateResearchQueryTool = (server: McpServer) => {
-  // Check if client supports elicitation (needed for input_required flow)
-  const clientCapabilities = server.server.getClientCapabilities() || {};
-  const clientSupportsElicitation: boolean =
-    clientCapabilities.elicitation !== undefined;
-
-  server.experimental.tasks.registerToolTask(
-    "simulate-research-query",
-    {
-      title: "Simulate Research Query",
-      description:
-        "Simulates a deep research operation that gathers, analyzes, and synthesizes information. " +
-        "Demonstrates MCP task-based operations with progress through multiple stages. " +
-        "If 'ambiguous' is true and client supports elicitation, sends an elicitation request for clarification.",
-      inputSchema: SimulateResearchQuerySchema,
-      execution: { taskSupport: "required" },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
-    },
-    {
-      /**
-       * Creates a new research task and starts background processing.
-       */
-      createTask: async (args, extra): Promise<CreateTaskResult> => {
-        const validatedArgs = SimulateResearchQuerySchema.parse(args);
-
-        // Create the task in the store
-        const task = await extra.taskStore.createTask({
-          ttl: 300000, // 5 minutes
-          pollInterval: 1000,
-        });
-
-        // Initialize research state
-        const state: ResearchState = {
-          topic: validatedArgs.topic,
-          ambiguous: validatedArgs.ambiguous && clientSupportsElicitation,
-          currentStage: 0,
-          completed: false,
-        };
-        researchStates.set(task.taskId, state);
-
-        // Start background research (don't await - runs asynchronously)
-        // Pass sendRequest for elicitation (queued via task message queue, works on all transports)
-        runResearchProcess(
-          task.taskId,
-          validatedArgs,
-          extra.taskStore,
-          extra.sendRequest,
-        ).catch((error) => {
-          console.error(`Research task ${task.taskId} failed:`, error);
-          extra.taskStore
-            .updateTaskStatus(task.taskId, "failed", String(error))
-            .catch(console.error);
-        });
-
-        return { task };
-      },
-
-      /* v8 ignore start -- SDK 1.x never calls a tool task's getTask/getTaskResult: tasks/get and tasks/result are answered from the task store (Protocol), so these handlers are unreachable over the wire */
-      /**
-       * Returns the current status of the research task.
-       */
-      getTask: async (args, extra): Promise<GetTaskResult> => {
-        return await extra.taskStore.getTask(extra.taskId);
-      },
-
-      /**
-       * Returns the task result.
-       * Elicitation is now handled directly in the background process.
-       */
-      getTaskResult: async (args, extra): Promise<CallToolResult> => {
-        // Return the stored result
-        const result = await extra.taskStore.getTaskResult(extra.taskId);
-
-        // Clean up state
-        researchStates.delete(extra.taskId);
-
-        return result as CallToolResult;
-      },
-      /* v8 ignore stop */
-    },
-  );
 };
 
 /**
@@ -330,7 +87,6 @@ function getInterpretationsForTopic(
 ): Array<{ const: string; title: string }> {
   const lowerTopic = topic.toLowerCase();
 
-  // Example: contextual interpretations for "python"
   if (lowerTopic.includes("python")) {
     return [
       { const: "programming", title: "Python programming language" },
@@ -339,10 +95,180 @@ function getInterpretationsForTopic(
     ];
   }
 
-  // Default generic interpretations
   return [
     { const: "technical", title: "Technical/scientific perspective" },
     { const: "historical", title: "Historical perspective" },
     { const: "current", title: "Current events/news perspective" },
   ];
 }
+
+/**
+ * What the user's answer to the clarification request means. An accepted
+ * answer counts only if it is one of the interpretations offered for `topic`.
+ */
+function clarificationFrom(
+  responses: TaskInputResponses,
+  topic: string,
+): string {
+  const offered = getInterpretationsForTopic(topic).map((o) => o.const);
+  const ClarificationSchema = z.object({
+    interpretation: z.string().refine((value) => offered.includes(value)),
+  });
+  const view = inputResponse(responses, "clarification");
+  const accepted = acceptedContent(
+    responses,
+    "clarification",
+    ClarificationSchema,
+  );
+  if (accepted) return accepted.interpretation;
+  if (view.kind === "elicit" && view.action === "decline") {
+    return "User declined - using default interpretation";
+  }
+  if (view.kind === "elicit" && view.action === "cancel") {
+    return "User cancelled - using default interpretation";
+  }
+  return "No usable answer - using default interpretation";
+}
+
+/**
+ * Generates the final research report with educational content about tasks.
+ */
+function generateResearchReport(
+  topic: string,
+  clarification: string | undefined,
+): CallToolResult {
+  const subject = clarification ? `${topic} (${clarification})` : topic;
+  const report = `# Research Report: ${subject}
+
+## Research Parameters
+- **Topic**: ${topic}
+${clarification ? `- **Clarification**: ${clarification}` : ""}
+
+## Synthesis
+This research query was processed through ${STAGES.length} stages:
+${STAGES.map((s, i) => `- Stage ${i + 1}: ${s} ✓`).join("\n")}
+
+---
+
+## About This Demo (SEP-2663: the Tasks extension)
+
+This tool demonstrates MCP's task-based execution pattern for long-running operations:
+
+**Task Lifecycle Demonstrated:**
+1. \`tools/call\` → the server returns a task handle (\`resultType: "task"\`), not the final result
+2. Client polls \`tasks/get\` → the server returns the current status and \`statusMessage\`
+3. Status progressed: \`working\` → ${
+    clarification ? `\`input_required\` → \`working\` → ` : ""
+  }\`completed\`
+4. The \`completed\` status carries this final result
+${
+  clarification
+    ? `
+**Input Flow:**
+The query was ambiguous, so the task paused with status \`input_required\`,
+carrying an elicitation request. The client answered it with \`tasks/update\`
+("${clarification}"), and the task resumed and completed.
+`
+    : ""
+}
+**Key Concepts:**
+- Tasks enable "call now, fetch later" patterns
+- \`statusMessage\` provides human-readable progress updates
+- Tasks have a TTL (\`ttlMs\`) for automatic cleanup
+- \`pollIntervalMs\` suggests how often to check status
+- A task asks for input in-band, through its \`input_required\` status
+
+*This is a simulated research report from the Everything MCP Server.*
+`;
+
+  return { content: [{ type: "text", text: report }] };
+}
+
+/**
+ * Registers the 'simulate-research-query' tool, for 2026-07-28 clients.
+ *
+ * A client that does not declare the tasks extension is refused with -32021
+ * before the tool runs (`guardTaskTools`), since it could not follow the task
+ * handle. `ambiguous` is ignored for a
+ * client that does not support elicitation.
+ *
+ * @param {McpServer} server - The McpServer instance where the tool will be registered.
+ */
+export const registerSimulateResearchQueryTool = (server: McpServer) => {
+  server.registerTool(
+    name,
+    config,
+    async (args, ctx): Promise<CallToolResult> => {
+      const { topic, ambiguous } = SimulateResearchQuerySchema.parse(args);
+      // The clarification is a form, so only a form-capable client is asked.
+      const canAsk = clientSupportsFormElicitation(ctx);
+
+      // The clock time the stages started counting from, and the stage they
+      // started at: an ambiguous query restarts the count once it is answered.
+      let startedAt = Date.now();
+      let startStage = 0;
+      let clarification: string | undefined;
+      const needsClarification = () =>
+        ambiguous && canAsk && clarification === undefined;
+
+      return createTask(
+        {
+          stateAt: (now): TaskState => {
+            const stage =
+              startStage + Math.floor((now - startedAt) / STAGE_DURATION);
+            // When the clock reached `stage`, the moment the task entered it.
+            const reached = (at: number) =>
+              startedAt + (at - startStage) * STAGE_DURATION;
+            if (needsClarification() && stage >= CLARIFY_AT) {
+              return {
+                since: reached(CLARIFY_AT),
+                status: "input_required",
+                statusMessage: `Found multiple interpretations for "${topic}". Requesting clarification...`,
+                inputRequests: {
+                  clarification: inputRequired.elicit({
+                    message: `The research query "${topic}" could have multiple interpretations. Please clarify what you're looking for:`,
+                    requestedSchema: {
+                      type: "object",
+                      properties: {
+                        interpretation: {
+                          type: "string",
+                          title: "Clarification",
+                          description:
+                            "Which interpretation of the topic do you mean?",
+                          oneOf: getInterpretationsForTopic(topic),
+                        },
+                      },
+                      required: ["interpretation"],
+                    },
+                  }),
+                },
+              };
+            }
+            if (stage >= STAGES.length) {
+              return {
+                since: reached(STAGES.length),
+                status: "completed",
+                statusMessage: "Research complete",
+                result: generateResearchReport(topic, clarification),
+              };
+            }
+            return {
+              since: reached(stage),
+              status: "working",
+              statusMessage:
+                clarification !== undefined && stage === CLARIFY_AT
+                  ? `Continuing with interpretation: "${clarification}"...`
+                  : `${STAGES[stage]}...`,
+            };
+          },
+          receive: (responses, now) => {
+            clarification = clarificationFrom(responses, topic);
+            startedAt = now;
+            startStage = CLARIFY_AT;
+          },
+        },
+        { ttlMs: 5 * 60_000, pollIntervalMs: STAGE_DURATION },
+      );
+    },
+  );
+};

@@ -7,8 +7,8 @@
  */
 import { PassThrough } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
+import { Client } from "@modelcontextprotocol/client";
 import {
   main,
   startStdioServer,
@@ -53,19 +53,25 @@ describe("stdio transport", () => {
     await client.close();
   });
 
-  it("gives the session no id, so per-session output names none", async () => {
-    const { client } = await startOnPipes();
-    const result = await client.callTool({
-      name: "toggle-subscriber-updates",
-      arguments: {},
+  it("serves a 2026-07-28 client on the same pipes (#4852)", async () => {
+    const toServer = new PassThrough();
+    const fromServer = new PassThrough();
+    const stdio = await main(toServer, fromServer);
+    started.push(stdio);
+    const client = new Client(
+      { name: "stdio-test", version: "0.0.0" },
+      { versionNegotiation: { mode: { pin: "2026-07-28" } } },
+    );
+    await client.connect(new StdioServerTransport(fromServer, toServer));
+    expect(client.getProtocolEra()).toBe("modern");
+    expect(client.getServerCapabilities()?.extensions).toEqual({
+      "io.modelcontextprotocol/tasks": {},
     });
-    expect(result.content).toEqual([
-      {
-        type: "text",
-        text: "Started simulated resource updated notifications for session undefined at a 5 second pace. Client will receive updates for any resources the it is subscribed to.",
-      },
-    ]);
-    await client.callTool({ name: "toggle-subscriber-updates", arguments: {} });
+    const result = await client.callTool({
+      name: "echo",
+      arguments: { message: "modern" },
+    });
+    expect(result.content).toEqual([{ type: "text", text: "Echo: modern" }]);
     await client.close();
   });
 
@@ -97,17 +103,25 @@ describe("stdio transport", () => {
     for (const listener of added) process.off("SIGINT", listener);
   });
 
-  it("reports a failure to start and exits 1", async () => {
+  it("reports a transport that cannot start on stderr and in the exit status", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    const exit = vi
-      .spyOn(process, "exit")
-      .mockImplementation(() => undefined as never);
     const broken = new PassThrough();
     broken.on = () => {
       throw new Error("stdin unavailable");
     };
+    const before = process.listeners("SIGINT").length;
     await startStdioServer(broken, new PassThrough());
-    expect(error).toHaveBeenCalledWith("Server error:", expect.any(Error));
-    expect(exit).toHaveBeenCalledWith(1);
+    await vi.waitFor(() =>
+      expect(error).toHaveBeenCalledWith(
+        "Transport error:",
+        expect.objectContaining({ message: "stdin unavailable" }),
+      ),
+    );
+    // The failure is in the exit status too; reset it so the run is not failed.
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined;
+    for (const listener of process.listeners("SIGINT").slice(before)) {
+      process.off("SIGINT", listener);
+    }
   });
 });

@@ -6,10 +6,7 @@
  * all driven by a test client that answers the server's `roots/list`.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  ListRootsRequestSchema,
-  type Root,
-} from "@modelcontextprotocol/sdk/types.js";
+import type { Root } from "@modelcontextprotocol/server";
 import {
   connect,
   contentOf,
@@ -32,7 +29,7 @@ async function connectWithRoots(answer: () => Root[]) {
   const s = await connect({
     capabilities: { roots: { listChanged: true } },
     setup: (client) =>
-      client.setRequestHandler(ListRootsRequestSchema, async () => {
+      client.setRequestHandler("roots/list", async () => {
         requests++;
         return { roots: answer() };
       }),
@@ -110,7 +107,7 @@ describe("roots sync after initialize", () => {
     session = s;
     await vi.waitFor(() =>
       expect(errorSpy).toHaveBeenCalledWith(
-        `Failed to request roots from client ${s.sessionId}: MCP error -32603: no roots for you`,
+        "Failed to request roots from client: no roots for you",
       ),
     );
     expect(logData(s)).toEqual([]);
@@ -130,13 +127,16 @@ describe("get-roots-list", () => {
     );
   });
 
-  it("fetches the roots itself when called before the initial sync, and the sync then reuses them", async () => {
+  it("asks the client on every call, with a multi-round-trip request (#4852)", async () => {
+    // The tool no longer reads a per-session cache: each call returns
+    // input_required carrying roots/list, which the legacy shim sends as a
+    // real request. The sync after initialize asks on its own.
     const { s, requests } = await connectWithRoots(() => ROOTS);
     session = s;
+    await vi.waitFor(() => expect(requests()).toBe(1));
     await getRootsList(s);
-    expect(requests()).toBe(1);
-    await new Promise((resolve) => setTimeout(resolve, 450));
-    expect(requests()).toBe(1);
+    await getRootsList(s);
+    expect(requests()).toBe(3);
   });
 
   it("explains an empty roots list", async () => {
@@ -151,14 +151,17 @@ describe("get-roots-list", () => {
     );
   });
 
-  it("explains a client that failed to list its roots the same way", async () => {
+  it("reports a client that failed to list its roots as a tool error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const { s } = await connectWithRoots(() => {
       throw new Error("unavailable");
     });
     session = s;
-    expect(await getRootsList(s)).toMatch(
-      /^The client supports roots but no roots are currently configured\./,
-    );
+    const result = await s.client.callTool({
+      name: "get-roots-list",
+      arguments: {},
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(contentOf(result)[0])).toContain("unavailable");
   });
 });

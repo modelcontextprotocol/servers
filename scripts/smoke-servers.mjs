@@ -62,10 +62,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import {
+  Client,
+  SSEClientTransport,
+  StreamableHTTPClientTransport,
+} from "@modelcontextprotocol/client";
+import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -310,7 +312,7 @@ async function exercise(client, server, ctx) {
     throw new Error(
       `tools/list does not include \`${call.name}\` (got: ${tools.map((t) => t.name).join(", ")})`,
     );
-  const result = await client.callTool(call, undefined, options);
+  const result = await client.callTool(call, options);
   const text = textOf(result);
   if (result.isError)
     throw new Error(`\`${call.name}\` returned an error result: ${text}`);

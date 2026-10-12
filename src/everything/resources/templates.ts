@@ -2,9 +2,10 @@ import { z } from "zod";
 import {
   CompleteResourceTemplateCallback,
   McpServer,
+  ResourceNotFoundError,
   ResourceTemplate,
-} from "@modelcontextprotocol/sdk/server/mcp.js";
-import { completable } from "@modelcontextprotocol/sdk/server/completable.js";
+  completable,
+} from "@modelcontextprotocol/server";
 
 // Resource types
 export const RESOURCE_TYPE_TEXT = "Text" as const;
@@ -138,7 +139,9 @@ export const blobResourceUri = (resourceId: number) =>
  * @param {URL} uri - The URI of the resource (used in the error message).
  * @param {Record<string, unknown>} variables - Context variables including resourceId.
  * @returns {number} The parsed and validated resource identifier as a positive integer.
- * @throws {Error} If the resourceId is not a finite positive integer.
+ * @throws {ResourceNotFoundError} If the resourceId is not a finite positive
+ * integer: no such resource exists, which the protocol reports as -32602
+ * with the URI in the error's data (#4852).
  */
 const parseResourceId = (uri: URL, variables: Record<string, unknown>) => {
   const idxStr = String(variables.resourceId ?? "");
@@ -146,7 +149,7 @@ const parseResourceId = (uri: URL, variables: Record<string, unknown>) => {
   if (Number.isFinite(idx) && Number.isInteger(idx) && idx > 0) {
     return idx;
   }
-  throw new Error(`Unknown resource: ${uri.toString()}`);
+  throw new ResourceNotFoundError(uri.toString());
 };
 
 /**

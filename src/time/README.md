@@ -6,7 +6,7 @@ A Model Context Protocol server that provides time and timezone conversion capab
 
 Source: https://github.com/modelcontextprotocol/servers/tree/main/src/time
 
-Requires MCP Python SDK 1.x (`mcp>=1.29.0,<2`). SDK 2.0 renamed APIs this server uses. The port to v2 is in progress.
+Requires MCP Python SDK 2.x (`mcp>=2.2,<3`).
 
 ### Available Tools
 
@@ -21,6 +21,10 @@ Requires MCP Python SDK 1.x (`mcp>=1.29.0,<2`). SDK 2.0 renamed APIs this server
     - `target_timezone` (string): Target IANA timezone name
 
 A timezone name, here and in `--local-timezone`, must be an exact IANA key, case included: `Europe/Warsaw` is accepted and `europe/warsaw` is rejected on every platform, including macOS, whose case-insensitive filesystem would otherwise resolve it.
+
+### Protocol versions
+
+The server speaks both eras of the Model Context Protocol over stdio, with nothing to configure: a **2026-07-28** client (discovered with `server/discover`, no session) and a **2025-11-25** client (the `initialize` handshake). The client's first request decides which. Tools behave the same in both. Methods the 2026-07-28 specification removes, such as `ping`, are answered only on a 2025-11-25 connection.
 
 ## Installation
 
@@ -279,7 +283,8 @@ npx @modelcontextprotocol/inspector uv run mcp-server-time
 ## Development
 
 Run the tests from `src/time`. They live in `tests/`: `test_protocol.py` drives
-the server through an MCP `ClientSession` in-process, `test_entrypoints.py`
+the server through an MCP `ClientSession` in-process, `test_eras.py` runs a
+`Client` against it as a 2026-07-28 and as a 2025-11-25 client, `test_entrypoints.py`
 covers `main()`, `python -m mcp_server_time` and the console script, and
 `test_server.py` unit-tests the time helpers.
 

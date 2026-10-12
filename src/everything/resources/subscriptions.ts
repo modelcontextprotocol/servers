@@ -1,195 +1,82 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import {
-  SubscribeRequestSchema,
-  UnsubscribeRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+// 2025-era per-resource subscriptions, and the simulated updates
+// `toggle-subscriber-updates` sends for them.
+//
+// `resources/subscribe` and `resources/unsubscribe` exist only on the 2025
+// protocol era. A 2026-07-28 client names the resources it wants updates for
+// in its `subscriptions/listen` filter instead, and the serving entry
+// delivers each `notifications/resources/updated` only to a stream that asked
+// for it (`trigger-resource-update` shows that). The subscribed set belongs to
+// the server instance serving the client's connection or session, so no
+// session map is needed (#4852).
 
-// Track subscriber session id lists by URI
-const subscriptions: Map<string, Set<string | undefined>> = new Map<
-  string,
-  Set<string | undefined>
->();
-
-// Interval to send notifications to subscribers
-const subsUpdateIntervals: Map<string | undefined, NodeJS.Timeout | undefined> =
-  new Map<string | undefined, NodeJS.Timeout | undefined>();
+import { McpServer } from "@modelcontextprotocol/server";
 
 /**
- * Sets up the subscription and unsubscription handlers for the provided server.
+ * Install the `resources/subscribe` and `resources/unsubscribe` handlers on a
+ * 2025-era server, recording each subscription in `subscribed`.
  *
- * The function defines two request handlers:
- * 1. A `Subscribe` handler that allows clients to subscribe to specific resource URIs.
- * 2. An `Unsubscribe` handler that allows clients to unsubscribe from specific resource URIs.
- *
- * The `Subscribe` handler performs the following actions:
- * - Extracts the URI and session ID from the request.
- * - Logs a message acknowledging the subscription request.
- * - Updates the internal tracking of subscribers for the given URI.
- *
- * The `Unsubscribe` handler performs the following actions:
- * - Extracts the URI and session ID from the request.
- * - Logs a message acknowledging the unsubscription request.
- * - Removes the subscriber for the specified URI.
+ * Each handler acknowledges the request with an info-level log message, then
+ * adds the URI to, or removes it from, the set.
  *
  * @param {McpServer} server - The server instance to which subscription handlers will be attached.
+ * @param {Set<string>} subscribed - The URIs this server's client has subscribed to.
  */
-export const setSubscriptionHandlers = (server: McpServer) => {
-  // Set the subscription handler
-  server.server.setRequestHandler(
-    SubscribeRequestSchema,
-    async (request, extra) => {
-      // Get the URI to subscribe to
-      const { uri } = request.params;
-
-      // Get the session id (can be undefined for stdio)
-      const sessionId = extra.sessionId as string;
-
-      // Acknowledge the subscribe request
-      await server.sendLoggingMessage(
-        {
-          level: "info",
-          data: `Received Subscribe Resource request for URI: ${uri} ${
-            sessionId ? `from session ${sessionId}` : ""
-          }`,
-        },
-        sessionId,
-      );
-
-      // Get the subscribers for this URI
-      const subscribers = subscriptions.has(uri)
-        ? (subscriptions.get(uri) as Set<string>)
-        : new Set<string>();
-      subscribers.add(sessionId);
-      subscriptions.set(uri, subscribers);
-      return {};
-    },
-  );
-
-  // Set the unsubscription handler
-  server.server.setRequestHandler(
-    UnsubscribeRequestSchema,
-    async (request, extra) => {
-      // Get the URI to subscribe to
-      const { uri } = request.params;
-
-      // Get the session id (can be undefined for stdio)
-      const sessionId = extra.sessionId as string;
-
-      // Acknowledge the subscribe request
-      await server.sendLoggingMessage(
-        {
-          level: "info",
-          data: `Received Unsubscribe Resource request: ${uri} ${
-            sessionId ? `from session ${sessionId}` : ""
-          }`,
-        },
-        sessionId,
-      );
-
-      // Remove the subscriber
-      if (subscriptions.has(uri)) {
-        const subscribers = subscriptions.get(uri) as Set<string>;
-        if (subscribers.has(sessionId)) subscribers.delete(sessionId);
-      }
-      return {};
-    },
-  );
-};
-
-/**
- * Sends simulated resource update notifications to the subscribed client.
- *
- * Iterates the URIs in `subscriptions` and emits a
- * `notifications/resources/updated` notification for each URI the given
- * sessionId is subscribed to.
- *
- * @param {McpServer} server - The server instance used to send notifications.
- * @param {string | undefined} sessionId - The session ID of the client to check for subscriptions.
- * @returns {Promise<void>} Resolves once all applicable notifications are sent.
- */
-const sendSimulatedResourceUpdates = async (
+export const setSubscriptionHandlers = (
   server: McpServer,
-  sessionId: string | undefined,
-): Promise<void> => {
-  // Search all URIs for ones this client is subscribed to
-  for (const uri of subscriptions.keys()) {
-    const subscribers = subscriptions.get(uri) as Set<string | undefined>;
+  subscribed: Set<string>,
+) => {
+  server.server.setRequestHandler("resources/subscribe", async (request) => {
+    const { uri } = request.params;
+    await server.sendLoggingMessage(
+      {
+        level: "info",
+        data: `Received Subscribe Resource request for URI: ${uri}`,
+      },
+      server.server.transport?.sessionId,
+    );
+    subscribed.add(uri);
+    return {};
+  });
 
-    // If this client is subscribed, send the notification
-    if (subscribers.has(sessionId)) {
-      await server.server.notification({
-        method: "notifications/resources/updated",
-        params: { uri },
-      });
-    }
-  }
+  server.server.setRequestHandler("resources/unsubscribe", async (request) => {
+    const { uri } = request.params;
+    await server.sendLoggingMessage(
+      {
+        level: "info",
+        data: `Received Unsubscribe Resource request: ${uri}`,
+      },
+      server.server.transport?.sessionId,
+    );
+    subscribed.delete(uri);
+    return {};
+  });
 };
 
 /**
- * Starts the process of simulating resource updates and sending server notifications
- * to the client for the resources they are subscribed to. If the update interval is
- * already active, invoking this function will not start another interval.
+ * Start sending `server`'s client a `notifications/resources/updated` for each
+ * resource it has subscribed to, now and then every five seconds.
  *
- * @param server
- * @param sessionId
+ * @param {McpServer} server - The server whose client receives the updates.
+ * @param {Set<string>} subscribed - The URIs that client has subscribed to.
+ * @returns {() => void} Stops the updates.
  */
 export const beginSimulatedResourceUpdates = (
   server: McpServer,
-  sessionId: string | undefined,
-) => {
-  if (!subsUpdateIntervals.has(sessionId)) {
-    // Send once immediately, then every 5 seconds. Fire-and-forget: this
-    // function is synchronous by contract (its callers start a background
-    // simulation), so neither send can be awaited. A send that fails (e.g. the
-    // transport closed before the updates were stopped) is logged rather than
-    // left to become an unhandled rejection.
-    const send = () =>
-      sendSimulatedResourceUpdates(server, sessionId).catch((error: unknown) =>
-        console.error("Simulated resource update failed:", error),
-      );
-    void send();
-
-    // Set the interval to send later resource update notifications to this client
-    subsUpdateIntervals.set(
-      sessionId,
-      setInterval(() => void send(), 5000),
-    );
-  }
-};
-
-/**
- * Stops simulated resource updates for a given session.
- *
- * This function halts any active intervals associated with the provided session ID
- * and removes the session's corresponding entries from resource management collections.
- * Session ID can be undefined for stdio.
- *
- * @param {string} [sessionId]
- */
-export const stopSimulatedResourceUpdates = (sessionId?: string) => {
-  // Remove active intervals
-  if (subsUpdateIntervals.has(sessionId)) {
-    const subsUpdateInterval = subsUpdateIntervals.get(sessionId);
-    clearInterval(subsUpdateInterval);
-    subsUpdateIntervals.delete(sessionId);
-  }
-};
-
-/**
- * Removes a session from every URI's subscriber set, dropping any URI entry
- * that ends up with no remaining subscribers.
- *
- * A session that disconnects without explicitly unsubscribing otherwise stays
- * in `subscriptions` for the life of the process. Call this from the
- * transport's `cleanup(sessionId)` when a session ends.
- *
- * @param {string} [sessionId]
- */
-export const removeSubscriber = (sessionId?: string) => {
-  for (const [uri, subscribers] of subscriptions) {
-    subscribers.delete(sessionId);
-    if (subscribers.size === 0) {
-      subscriptions.delete(uri);
+  subscribed: Set<string>,
+): (() => void) => {
+  // Fire-and-forget: this runs on a timer with no caller to await it. A send
+  // that fails (e.g. the transport closed before the updates were stopped) is
+  // logged rather than left to become an unhandled rejection.
+  const send = async () => {
+    try {
+      for (const uri of [...subscribed]) {
+        await server.server.sendResourceUpdated({ uri });
+      }
+    } catch (error: unknown) {
+      console.error("Simulated resource update failed:", error);
     }
-  }
+  };
+  void send();
+  const interval = setInterval(() => void send(), 5000);
+  return () => clearInterval(interval);
 };

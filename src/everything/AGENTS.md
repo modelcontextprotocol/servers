@@ -29,8 +29,9 @@ The server factory is `src/everything/server/index.ts` and registers all feature
 
 ### High-level
 
-- Tools live under `src/everything/tools/` and are registered via `registerTools(server)`.
-- Resources live under `src/everything/resources/` and are registered via `registerResources(server)`.
+- The server serves both protocol eras (2026-07-28 and 2025-era); the factory is `createServer({ era })`, and what each era gets is wired in `server/index.ts` and `tools/index.ts`.
+- Tools live under `src/everything/tools/` and are registered via `registerTools(server, context)` (both eras), `registerModernTools` (2026-07-28) or `registerLegacyTools` / `registerConditionalTools` (2025 era).
+- Resources live under `src/everything/resources/` and are registered via `registerResources(server, context)`.
 - Prompts live under `src/everything/prompts/` and are registered via `registerPrompts(server)`.
 - Subscriptions and simulated update routines are under `src/everything/resources/subscriptions.ts`.
 - Logging helpers are under `src/everything/server/logging.ts`.
@@ -39,7 +40,8 @@ The server factory is `src/everything/server/index.ts` and registers all feature
 ### When adding a new feature
 
 - Follow the existing file/module pattern in its folder (naming, exports, and registration function).
-- Export a `registerX(server)` function that registers new items with the MCP SDK in the same style as existing ones.
+- Export a `registerX(server)` function that registers new items with the MCP SDK in the same style as existing ones (taking the per-instance `context` too when it needs the era, the change publisher or per-connection state).
+- Keep no state in module-level maps keyed by session id; see [Extension Points](docs/extension.md).
 - Wire your new module into the central index (e.g., update `tools/index.ts`, `resources/index.ts`, or `prompts/index.ts`).
 - Ensure schemas (for tools) are accurate JSON Schema and include helpful descriptions and examples.
 - Keep the docs in `src/everything/docs/` up to date if you add or modify noteworthy features.

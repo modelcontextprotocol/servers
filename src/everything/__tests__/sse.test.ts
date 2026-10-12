@@ -8,8 +8,7 @@
 import type { Server } from "node:http";
 import { once } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import { Client, SSEClientTransport } from "@modelcontextprotocol/client";
 import { createApp } from "../transports/sse.js";
 
 let http: Server;
@@ -60,15 +59,21 @@ describe("SSE transport", () => {
     const a = await connectSse();
     const b = await connectSse();
     expect(a.sessionId).not.toBe(b.sessionId);
-    const toggled = await a.client.callTool({
-      name: "toggle-simulated-logging",
-      arguments: {},
-    });
-    expect(JSON.stringify(toggled.content)).toContain(a.sessionId);
-    await a.client.callTool({
-      name: "toggle-simulated-logging",
-      arguments: {},
-    });
+    // Each stream's server keeps its own toggle state: turning logging on
+    // for one leaves the other's off.
+    const toggle = async (client: typeof a.client) =>
+      JSON.stringify(
+        (
+          await client.callTool({
+            name: "toggle-simulated-logging",
+            arguments: {},
+          })
+        ).content,
+      );
+    expect(await toggle(a.client)).toContain("Started");
+    expect(await toggle(b.client)).toContain("Started");
+    expect(await toggle(a.client)).toContain("Stopped");
+    expect(await toggle(b.client)).toContain("Stopped");
     await Promise.all([a.client.close(), b.client.close()]);
   });
 

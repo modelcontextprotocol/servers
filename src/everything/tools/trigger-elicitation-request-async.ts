@@ -1,15 +1,32 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+// The `trigger-elicitation-request-async` tool: a task on the Tasks extension
+// (`io.modelcontextprotocol/tasks`) that needs the user's input before it can
+// finish, on protocol version 2026-07-28 (#4852).
+//
+// On 2025-11-25 this tool sent the client a task-augmented
+// `elicitation/create` request and polled the client's own task. The
+// 2026-07-28 revision has no server-to-client requests, so the roles turn
+// around: the call returns a handle to a server task whose status is
+// `input_required`, carrying the elicitation. The client shows it to the user
+// and answers with `tasks/update`, and the task completes with a summary.
+
+import {
+  McpServer,
+  CallToolResult,
+  acceptedContent,
+  inputRequired,
+  inputResponse,
+} from "@modelcontextprotocol/server";
 import { z } from "zod";
+import { createTask, type TaskState } from "../server/tasks.js";
 
 // Tool configuration
 const name = "trigger-elicitation-request-async";
 const config = {
   title: "Trigger Async Elicitation Request Tool",
   description:
-    "Trigger an async elicitation request that the CLIENT executes as a background task. " +
-    "Demonstrates bidirectional MCP tasks where the server sends an elicitation request and " +
-    "the client handles user input asynchronously, allowing the server to poll for completion.",
+    "Runs as a task on the io.modelcontextprotocol/tasks extension (protocol version 2026-07-28) that needs " +
+    "the user's input: the task waits in status input_required, carrying an elicitation request, until the " +
+    "client answers it with tasks/update, then completes with a summary of the answer.",
   inputSchema: {},
   annotations: {
     readOnlyHint: false,
@@ -19,277 +36,109 @@ const config = {
   },
 };
 
-// Poll interval in milliseconds
-const POLL_INTERVAL = 1000;
+/**
+ * The form the task asks the user to fill in. The same schema is sent as the
+ * requested schema and checks the answer, since the client's answer is
+ * untrusted: an accepted answer that does not fit leaves the task waiting.
+ */
+const FormSchema = z.object({
+  name: z
+    .string()
+    .min(1)
+    .meta({ title: "Your Name" })
+    .describe("Enter your name"),
+  favoriteColor: z
+    .enum(["red", "orange", "yellow", "green", "blue", "purple"])
+    .optional()
+    .meta({ title: "Favorite Color" })
+    .describe("What is your favorite color?"),
+  agreeToTerms: z
+    .boolean()
+    .optional()
+    .meta({ title: "Agree to Terms" })
+    .describe("Do you agree to the terms and conditions?"),
+});
 
-// Time-to-live requested for the client's task (10 minutes for user input)
-const TASK_TTL = 600000;
-
-// Stop polling this long before the TTL runs out, so the last tasks/get
-// reaches the client while it still holds the task
-const TTL_SAFETY_MARGIN = 5000;
+/** The completed task's summary of the user's answer. */
+function summarize(
+  action: string,
+  content?: z.infer<typeof FormSchema>,
+): CallToolResult {
+  const lines = [`Elicitation ${action}.`];
+  if (content) {
+    lines.push(`Name: ${content.name}`);
+    if (content.favoriteColor) {
+      lines.push(`Favorite color: ${content.favoriteColor}`);
+    }
+    if (content.agreeToTerms !== undefined) {
+      lines.push(`Agreed to terms: ${content.agreeToTerms}`);
+    }
+  }
+  return { content: [{ type: "text", text: lines.join("\n") }] };
+}
 
 /**
- * Registers the 'trigger-elicitation-request-async' tool.
+ * Registers the 'trigger-elicitation-request-async' tool, for 2026-07-28
+ * clients.
  *
- * This tool demonstrates bidirectional MCP tasks for elicitation:
- * - Server sends elicitation request to client with task metadata
- * - Client creates a task and returns CreateTaskResult
- * - Client prompts user for input (task status: input_required)
- * - Server polls client's tasks/get endpoint for status
- * - Server fetches final result from client's tasks/result endpoint
+ * A client that does not declare both the tasks extension and form-mode
+ * elicitation is refused with -32021 before the tool runs (`guardTaskTools`).
  *
  * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
 export const registerTriggerElicitationRequestAsyncTool = (
   server: McpServer,
 ) => {
-  // Check client capabilities
-  const clientCapabilities = server.server.getClientCapabilities() || {};
+  server.registerTool(name, config, async (): Promise<CallToolResult> => {
+    const createdAt = Date.now();
+    let summary: CallToolResult | undefined;
+    let answeredAt = createdAt;
+    // The key of the outstanding request. A key is never reused once
+    // answered, so a re-asked form gets the next one.
+    let attempt = 1;
+    const key = () => `form-${attempt}`;
 
-  // Client must support form-mode elicitation AND tasks.requests.elicitation.
-  // The request is form mode, so a URL-only client cannot answer it (#4985):
-  // form mode is `elicitation.form`, or `elicitation` with neither mode.
-  const elicitation = clientCapabilities.elicitation;
-  const clientSupportsElicitation =
-    elicitation !== undefined &&
-    (elicitation.form !== undefined || elicitation.url === undefined);
-  const clientTasksCapability = clientCapabilities.tasks as
-    | {
-        requests?: { elicitation?: { create?: object } };
-      }
-    | undefined;
-  const clientSupportsAsyncElicitation =
-    clientTasksCapability?.requests?.elicitation?.create !== undefined;
-
-  if (clientSupportsElicitation && clientSupportsAsyncElicitation) {
-    server.registerTool(
-      name,
-      config,
-      async (args, extra): Promise<CallToolResult> => {
-        // Polling must end before the client may expire the task. The client
-        // starts the TTL when it creates the task, after this point, so a
-        // deadline measured from here is conservative. performance.now() is
-        // monotonic, so a wall-clock adjustment cannot stretch the deadline.
-        const pollDeadline = performance.now() + TASK_TTL - TTL_SAFETY_MARGIN;
-
-        // Create the elicitation request WITH task metadata
-        // Using z.any() schema to avoid complex type matching with _meta
-        const request = {
-          method: "elicitation/create" as const,
-          params: {
-            task: {
-              ttl: TASK_TTL, // 10 minutes (user input may take a while)
-            },
-            message:
-              "Please provide inputs for the following fields (async task demo):",
-            requestedSchema: {
-              type: "object" as const,
-              properties: {
-                name: {
-                  title: "Your Name",
-                  type: "string" as const,
-                  description: "Your full name",
+    return createTask(
+      {
+        stateAt: (): TaskState =>
+          summary === undefined
+            ? {
+                // Waiting since the form, or the last re-ask, went out
+                since: answeredAt,
+                status: "input_required",
+                statusMessage: "Waiting for the user's input",
+                inputRequests: {
+                  [key()]: inputRequired.elicit({
+                    message:
+                      "Please provide inputs for the following fields (async task demo):",
+                    requestedSchema: FormSchema,
+                  }),
                 },
-                favoriteColor: {
-                  title: "Favorite Color",
-                  type: "string" as const,
-                  description: "What is your favorite color?",
-                  enum: ["Red", "Blue", "Green", "Yellow", "Purple"],
-                },
-                agreeToTerms: {
-                  title: "Terms Agreement",
-                  type: "boolean" as const,
-                  description: "Do you agree to the terms and conditions?",
-                },
+              }
+            : {
+                since: answeredAt,
+                status: "completed",
+                statusMessage: "Input received",
+                result: summary,
               },
-              required: ["name"],
-            },
-          },
-        };
-
-        // Send the elicitation request
-        // Client may return either:
-        // - ElicitResult (synchronous execution)
-        // - CreateTaskResult (task-based execution with { task } object)
-        const elicitResponse = await extra.sendRequest(
-          request as Parameters<typeof extra.sendRequest>[0],
-          z.union([
-            // CreateTaskResult - client created a task
-            z.object({
-              task: z.object({
-                taskId: z.string(),
-                status: z.string(),
-                pollInterval: z.number().optional(),
-                statusMessage: z.string().optional(),
-              }),
-            }),
-            // ElicitResult - synchronous execution
-            z.object({
-              action: z.string(),
-              content: z.any().optional(),
-            }),
-          ]),
-        );
-
-        // Check if client returned CreateTaskResult (has task object)
-        const isTaskResult = "task" in elicitResponse && elicitResponse.task;
-        if (!isTaskResult) {
-          // Client executed synchronously - return the direct response
-          return {
-            content: [
-              {
-                type: "text",
-                text: `[SYNC] Client executed synchronously:\n${JSON.stringify(
-                  elicitResponse,
-                  null,
-                  2,
-                )}`,
-              },
-            ],
-          };
-        }
-
-        const taskId = elicitResponse.task.taskId;
-        const statusMessages: string[] = [];
-        statusMessages.push(`Task created: ${taskId}`);
-
-        // Poll for task completion
-        let attempts = 0;
-        let taskStatus = elicitResponse.task.status;
-        // A task that is already finished when created is never polled, so
-        // its status message has to come from the CreateTaskResult
-        let taskStatusMessage = elicitResponse.task.statusMessage;
-        let timedOut = false;
-
-        while (
-          taskStatus !== "completed" &&
-          taskStatus !== "failed" &&
-          taskStatus !== "cancelled"
-        ) {
-          // Wait before polling
-          await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
-
-          // Give up rather than poll past the TTL the task was created with.
-          // Checked after the wait, so a timer that fires late cannot slip a
-          // poll in after the deadline.
-          if (performance.now() > pollDeadline) {
-            timedOut = true;
-            break;
+        receive: (responses, now) => {
+          answeredAt = now;
+          const answer = inputResponse(responses, key());
+          if (answer.kind === "elicit" && answer.action !== "accept") {
+            summary = summarize(answer.action);
+            return;
           }
-          attempts++;
-
-          // Get task status from client
-          const pollResult = await extra.sendRequest(
-            {
-              method: "tasks/get",
-              params: { taskId },
-            },
-            z.looseObject({
-              status: z.string(),
-              statusMessage: z.string().optional(),
-            }),
-          );
-
-          taskStatus = pollResult.status;
-          taskStatusMessage = pollResult.statusMessage;
-
-          // Only log status changes or every 10 polls to avoid spam
-          if (
-            attempts === 1 ||
-            attempts % 10 === 0 ||
-            taskStatus !== "input_required"
-          ) {
-            statusMessages.push(
-              `Poll ${attempts}: ${taskStatus}${
-                taskStatusMessage ? ` - ${taskStatusMessage}` : ""
-              }`,
-            );
-          }
-        }
-
-        // Check for timeout
-        if (timedOut) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `[TIMEOUT] Task timed out after ${attempts} poll attempts, before its ${
-                  TASK_TTL / 60000
-                }-minute TTL expired\n\nProgress:\n${statusMessages.join(
-                  "\n",
-                )}`,
-              },
-            ],
-          };
-        }
-
-        // Check for failure/cancellation
-        if (taskStatus === "failed" || taskStatus === "cancelled") {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `[${taskStatus.toUpperCase()}] ${
-                  taskStatusMessage || "No message"
-                }\n\nProgress:\n${statusMessages.join("\n")}`,
-              },
-            ],
-          };
-        }
-
-        // Fetch the final result
-        const result = await extra.sendRequest(
-          {
-            method: "tasks/result",
-            params: { taskId },
-          },
-          z.any(),
-        );
-
-        // Format the elicitation result
-        const content: CallToolResult["content"] = [];
-
-        if (result.action === "accept" && result.content) {
-          content.push({
-            type: "text",
-            text: `[COMPLETED] User provided the requested information!`,
-          });
-
-          const userData = result.content as Record<string, unknown>;
-          const lines = [];
-          if (userData.name) lines.push(`- Name: ${userData.name}`);
-          if (userData.favoriteColor)
-            lines.push(`- Favorite Color: ${userData.favoriteColor}`);
-          if (userData.agreeToTerms !== undefined)
-            lines.push(`- Agreed to terms: ${userData.agreeToTerms}`);
-
-          content.push({
-            type: "text",
-            text: `User inputs:\n${lines.join("\n")}`,
-          });
-        } else if (result.action === "decline") {
-          content.push({
-            type: "text",
-            text: `[DECLINED] User declined to provide the requested information.`,
-          });
-        } else if (result.action === "cancel") {
-          content.push({
-            type: "text",
-            text: `[CANCELLED] User cancelled the elicitation dialog.`,
-          });
-        }
-
-        // Include progress and raw result for debugging
-        content.push({
-          type: "text",
-          text: `\nProgress:\n${statusMessages.join(
-            "\n",
-          )}\n\nRaw result: ${JSON.stringify(result, null, 2)}`,
-        });
-
-        return { content };
+          const content =
+            answer.kind === "elicit"
+              ? acceptedContent(responses, key(), FormSchema)
+              : undefined;
+          // An answer of another kind, or one that does not fit the form,
+          // spends the request: ask again under a new key.
+          if (content === undefined) attempt++;
+          else summary = summarize("accept", content);
+        },
       },
+      { ttlMs: 10 * 60_000, pollIntervalMs: 1000 },
     );
-  }
+  });
 };

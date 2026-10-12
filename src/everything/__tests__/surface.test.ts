@@ -4,7 +4,8 @@
  * prompt, resource and resource-template lists, including which tools appear
  * only for clients that declare a capability. These lists are the regression
  * net for the SDK v2 migration: an assertion here that has to change is a
- * behavior change.
+ * behavior change. Every session here is 2025-era (`initialize`); what a
+ * 2026-07-28 client is offered is in modern.test.ts.
  */
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -25,16 +26,19 @@ const BASE_TOOLS = [
   "echo",
   "get-annotated-message",
   "get-env",
+  "get-header-params",
   "get-resource-links",
   "get-resource-reference",
   "get-structured-content",
   "get-sum",
   "get-tiny-image",
   "gzip-file-as-resource",
-  "simulate-research-query",
   "toggle-simulated-logging",
   "toggle-subscriber-updates",
+  "trigger-list-changed",
+  "trigger-log-messages",
   "trigger-long-running-operation",
+  "trigger-resource-update",
 ];
 
 describe("initialize", () => {
@@ -52,11 +56,6 @@ describe("initialize", () => {
       resources: { subscribe: true, listChanged: true },
       logging: {},
       completions: {},
-      tasks: {
-        list: {},
-        cancel: {},
-        requests: { tools: { call: {} } },
-      },
     });
     expect(client.getInstructions()).toMatch(
       /^# Everything Server – Server Instructions/,
@@ -75,9 +74,8 @@ describe("initialize", () => {
     const gated = [
       "get-roots-list",
       "trigger-elicitation-request",
-      "trigger-elicitation-request-async",
+      "trigger-multi-step-elicitation",
       "trigger-sampling-request",
-      "trigger-sampling-request-async",
       "trigger-url-elicitation",
     ];
 
@@ -116,9 +114,8 @@ describe("tools/list", () => {
         ...BASE_TOOLS,
         "get-roots-list",
         "trigger-elicitation-request",
-        "trigger-elicitation-request-async",
+        "trigger-multi-step-elicitation",
         "trigger-sampling-request",
-        "trigger-sampling-request-async",
         "trigger-url-elicitation",
       ].sort(),
     );
@@ -127,44 +124,24 @@ describe("tools/list", () => {
   it.each([
     [{ roots: {} }, ["get-roots-list"]],
     [{ sampling: {} }, ["trigger-sampling-request"]],
-    [{ elicitation: {} }, ["trigger-elicitation-request"]],
-    [{ elicitation: { form: {} } }, ["trigger-elicitation-request"]],
+    [
+      { elicitation: {} },
+      ["trigger-elicitation-request", "trigger-multi-step-elicitation"],
+    ],
+    [
+      { elicitation: { form: {} } },
+      ["trigger-elicitation-request", "trigger-multi-step-elicitation"],
+    ],
     // A URL-only client cannot answer the form request (#4985).
     [{ elicitation: { url: {} } }, ["trigger-url-elicitation"]],
     [
       { elicitation: { form: {}, url: {} } },
-      ["trigger-elicitation-request", "trigger-url-elicitation"],
+      [
+        "trigger-elicitation-request",
+        "trigger-multi-step-elicitation",
+        "trigger-url-elicitation",
+      ],
     ],
-    [
-      {
-        sampling: {},
-        tasks: { requests: { sampling: { createMessage: {} } } },
-      },
-      ["trigger-sampling-request", "trigger-sampling-request-async"],
-    ],
-    [
-      { elicitation: {}, tasks: { requests: { elicitation: { create: {} } } } },
-      ["trigger-elicitation-request", "trigger-elicitation-request-async"],
-    ],
-    [
-      {
-        elicitation: { form: {} },
-        tasks: { requests: { elicitation: { create: {} } } },
-      },
-      ["trigger-elicitation-request", "trigger-elicitation-request-async"],
-    ],
-    // The async tool's request is form mode too, so a URL-only client does
-    // not get it even with task support (#4985).
-    [
-      {
-        elicitation: { url: {} },
-        tasks: { requests: { elicitation: { create: {} } } },
-      },
-      ["trigger-url-elicitation"],
-    ],
-    // The async tools need the base capability as well as the task one.
-    [{ tasks: { requests: { sampling: { createMessage: {} } } } }, []],
-    [{ tasks: { requests: { elicitation: { create: {} } } } }, []],
   ])(
     "gates tools on the client's declared capabilities: %j",
     async (capabilities, extra) => {
@@ -177,7 +154,9 @@ describe("tools/list", () => {
   );
 
   it("sends tools/list_changed after initialize, when the conditional tools are registered", async () => {
-    session = await connect();
+    // A client with no capabilities gets no conditional tools, so nothing is
+    // registered after initialize and no list_changed is sent.
+    session = await connect({ capabilities: ALL_CAPABILITIES });
     await session.client.listTools();
     expect(
       ofMethod(session.notifications, "notifications/tools/list_changed")
@@ -210,9 +189,7 @@ describe("tools/list", () => {
             "openWorldHint": false,
             "readOnlyHint": true,
           },
-          "execution": {
-            "taskSupport": "forbidden",
-          },
+          "execution": undefined,
           "hasOutputSchema": false,
           "title": "Echo Tool",
         },
@@ -223,9 +200,7 @@ describe("tools/list", () => {
             "openWorldHint": false,
             "readOnlyHint": true,
           },
-          "execution": {
-            "taskSupport": "forbidden",
-          },
+          "execution": undefined,
           "hasOutputSchema": false,
           "title": "Get Annotated Message Tool",
         },
@@ -236,11 +211,20 @@ describe("tools/list", () => {
             "openWorldHint": false,
             "readOnlyHint": true,
           },
-          "execution": {
-            "taskSupport": "forbidden",
-          },
+          "execution": undefined,
           "hasOutputSchema": false,
           "title": "Print Environment Tool",
+        },
+        "get-header-params": {
+          "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false,
+            "readOnlyHint": true,
+          },
+          "execution": undefined,
+          "hasOutputSchema": true,
+          "title": "Get Header Params Tool",
         },
         "get-resource-links": {
           "annotations": {
@@ -249,9 +233,7 @@ describe("tools/list", () => {
             "openWorldHint": false,
             "readOnlyHint": true,
           },
-          "execution": {
-            "taskSupport": "forbidden",
-          },
+          "execution": undefined,
           "hasOutputSchema": false,
           "title": "Get Resource Links Tool",
         },
@@ -262,9 +244,7 @@ describe("tools/list", () => {
             "openWorldHint": false,
             "readOnlyHint": true,
           },
-          "execution": {
-            "taskSupport": "forbidden",
-          },
+          "execution": undefined,
           "hasOutputSchema": false,
           "title": "Get Resource Reference Tool",
         },
@@ -275,9 +255,7 @@ describe("tools/list", () => {
             "openWorldHint": false,
             "readOnlyHint": true,
           },
-          "execution": {
-            "taskSupport": "forbidden",
-          },
+          "execution": undefined,
           "hasOutputSchema": false,
           "title": "Get Roots List Tool",
         },
@@ -288,9 +266,7 @@ describe("tools/list", () => {
             "openWorldHint": false,
             "readOnlyHint": true,
           },
-          "execution": {
-            "taskSupport": "forbidden",
-          },
+          "execution": undefined,
           "hasOutputSchema": true,
           "title": "Get Structured Content Tool",
         },
@@ -301,9 +277,7 @@ describe("tools/list", () => {
             "openWorldHint": false,
             "readOnlyHint": true,
           },
-          "execution": {
-            "taskSupport": "forbidden",
-          },
+          "execution": undefined,
           "hasOutputSchema": false,
           "title": "Get Sum Tool",
         },
@@ -314,9 +288,7 @@ describe("tools/list", () => {
             "openWorldHint": false,
             "readOnlyHint": true,
           },
-          "execution": {
-            "taskSupport": "forbidden",
-          },
+          "execution": undefined,
           "hasOutputSchema": false,
           "title": "Get Tiny Image Tool",
         },
@@ -327,24 +299,9 @@ describe("tools/list", () => {
             "openWorldHint": true,
             "readOnlyHint": false,
           },
-          "execution": {
-            "taskSupport": "forbidden",
-          },
+          "execution": undefined,
           "hasOutputSchema": false,
           "title": "GZip File as Resource Tool",
-        },
-        "simulate-research-query": {
-          "annotations": {
-            "destructiveHint": false,
-            "idempotentHint": false,
-            "openWorldHint": false,
-            "readOnlyHint": false,
-          },
-          "execution": {
-            "taskSupport": "required",
-          },
-          "hasOutputSchema": false,
-          "title": "Simulate Research Query",
         },
         "toggle-simulated-logging": {
           "annotations": {
@@ -353,9 +310,7 @@ describe("tools/list", () => {
             "openWorldHint": false,
             "readOnlyHint": false,
           },
-          "execution": {
-            "taskSupport": "forbidden",
-          },
+          "execution": undefined,
           "hasOutputSchema": false,
           "title": "Toggle Simulated Logging",
         },
@@ -366,9 +321,7 @@ describe("tools/list", () => {
             "openWorldHint": false,
             "readOnlyHint": false,
           },
-          "execution": {
-            "taskSupport": "forbidden",
-          },
+          "execution": undefined,
           "hasOutputSchema": false,
           "title": "Toggle Subscriber Updates",
         },
@@ -379,24 +332,31 @@ describe("tools/list", () => {
             "openWorldHint": false,
             "readOnlyHint": false,
           },
-          "execution": {
-            "taskSupport": "forbidden",
-          },
+          "execution": undefined,
           "hasOutputSchema": false,
           "title": "Trigger Elicitation Request Tool",
         },
-        "trigger-elicitation-request-async": {
+        "trigger-list-changed": {
           "annotations": {
             "destructiveHint": false,
             "idempotentHint": false,
             "openWorldHint": false,
-            "readOnlyHint": false,
+            "readOnlyHint": true,
           },
-          "execution": {
-            "taskSupport": "forbidden",
-          },
+          "execution": undefined,
           "hasOutputSchema": false,
-          "title": "Trigger Async Elicitation Request Tool",
+          "title": "Trigger List Changed Tool",
+        },
+        "trigger-log-messages": {
+          "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false,
+            "readOnlyHint": true,
+          },
+          "execution": undefined,
+          "hasOutputSchema": false,
+          "title": "Trigger Log Messages Tool",
         },
         "trigger-long-running-operation": {
           "annotations": {
@@ -405,11 +365,31 @@ describe("tools/list", () => {
             "openWorldHint": false,
             "readOnlyHint": true,
           },
-          "execution": {
-            "taskSupport": "forbidden",
-          },
+          "execution": undefined,
           "hasOutputSchema": false,
           "title": "Trigger Long Running Operation Tool",
+        },
+        "trigger-multi-step-elicitation": {
+          "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": false,
+            "readOnlyHint": false,
+          },
+          "execution": undefined,
+          "hasOutputSchema": false,
+          "title": "Trigger Multi-Step Elicitation Tool",
+        },
+        "trigger-resource-update": {
+          "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": false,
+            "readOnlyHint": true,
+          },
+          "execution": undefined,
+          "hasOutputSchema": false,
+          "title": "Trigger Resource Update Tool",
         },
         "trigger-sampling-request": {
           "annotations": {
@@ -418,24 +398,9 @@ describe("tools/list", () => {
             "openWorldHint": true,
             "readOnlyHint": false,
           },
-          "execution": {
-            "taskSupport": "forbidden",
-          },
+          "execution": undefined,
           "hasOutputSchema": false,
           "title": "Trigger Sampling Request Tool",
-        },
-        "trigger-sampling-request-async": {
-          "annotations": {
-            "destructiveHint": false,
-            "idempotentHint": false,
-            "openWorldHint": true,
-            "readOnlyHint": false,
-          },
-          "execution": {
-            "taskSupport": "forbidden",
-          },
-          "hasOutputSchema": false,
-          "title": "Trigger Async Sampling Request Tool",
         },
         "trigger-url-elicitation": {
           "annotations": {
@@ -444,9 +409,7 @@ describe("tools/list", () => {
             "openWorldHint": true,
             "readOnlyHint": false,
           },
-          "execution": {
-            "taskSupport": "forbidden",
-          },
+          "execution": undefined,
           "hasOutputSchema": false,
           "title": "Trigger URL Elicitation Tool",
         },
@@ -465,7 +428,7 @@ describe("tools/list", () => {
     expect(schemas).toMatchInlineSnapshot(`
       {
         "echo": {
-          "$schema": "http://json-schema.org/draft-07/schema#",
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "properties": {
             "message": {
               "description": "Message to echo",
@@ -478,7 +441,7 @@ describe("tools/list", () => {
           "type": "object",
         },
         "get-annotated-message": {
-          "$schema": "http://json-schema.org/draft-07/schema#",
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "properties": {
             "includeImage": {
               "default": false,
@@ -501,12 +464,34 @@ describe("tools/list", () => {
           "type": "object",
         },
         "get-env": {
-          "$schema": "http://json-schema.org/draft-07/schema#",
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "properties": {},
           "type": "object",
         },
+        "get-header-params": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "region": {
+              "description": "A region name, e.g. eu-west. Mirrored into the Mcp-Param-Region HTTP header.",
+              "type": "string",
+              "x-mcp-header": "Region",
+            },
+            "repeat": {
+              "default": 1,
+              "description": "How many times to repeat the region in the result (1-3)",
+              "maximum": 3,
+              "minimum": 1,
+              "type": "integer",
+            },
+          },
+          "required": [
+            "region",
+          ],
+          "type": "object",
+        },
         "get-resource-links": {
-          "$schema": "http://json-schema.org/draft-07/schema#",
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "properties": {
             "count": {
               "default": 3,
@@ -519,7 +504,7 @@ describe("tools/list", () => {
           "type": "object",
         },
         "get-resource-reference": {
-          "$schema": "http://json-schema.org/draft-07/schema#",
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "properties": {
             "resourceId": {
               "default": 1,
@@ -538,12 +523,12 @@ describe("tools/list", () => {
           "type": "object",
         },
         "get-roots-list": {
-          "$schema": "http://json-schema.org/draft-07/schema#",
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "properties": {},
           "type": "object",
         },
         "get-structured-content": {
-          "$schema": "http://json-schema.org/draft-07/schema#",
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "properties": {
             "location": {
               "description": "Choose city",
@@ -561,7 +546,7 @@ describe("tools/list", () => {
           "type": "object",
         },
         "get-sum": {
-          "$schema": "http://json-schema.org/draft-07/schema#",
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "properties": {
             "a": {
               "description": "First number",
@@ -579,12 +564,12 @@ describe("tools/list", () => {
           "type": "object",
         },
         "get-tiny-image": {
-          "$schema": "http://json-schema.org/draft-07/schema#",
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "properties": {},
           "type": "object",
         },
         "gzip-file-as-resource": {
-          "$schema": "http://json-schema.org/draft-07/schema#",
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "properties": {
             "data": {
               "default": "https://raw.githubusercontent.com/modelcontextprotocol/servers/refs/heads/main/README.md",
@@ -594,7 +579,8 @@ describe("tools/list", () => {
             },
             "name": {
               "default": "README.md.gz",
-              "description": "Name of the output file",
+              "description": "Name of the output file (at most 255 characters)",
+              "maxLength": 255,
               "type": "string",
             },
             "outputType": {
@@ -609,46 +595,46 @@ describe("tools/list", () => {
           },
           "type": "object",
         },
-        "simulate-research-query": {
-          "$schema": "http://json-schema.org/draft-07/schema#",
-          "properties": {
-            "ambiguous": {
-              "default": false,
-              "description": "Simulate an ambiguous query that requires clarification (triggers input_required status)",
-              "type": "boolean",
-            },
-            "topic": {
-              "description": "The research topic to investigate",
-              "type": "string",
-            },
-          },
-          "required": [
-            "topic",
-          ],
-          "type": "object",
-        },
         "toggle-simulated-logging": {
-          "$schema": "http://json-schema.org/draft-07/schema#",
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "properties": {},
           "type": "object",
         },
         "toggle-subscriber-updates": {
-          "$schema": "http://json-schema.org/draft-07/schema#",
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "properties": {},
           "type": "object",
         },
         "trigger-elicitation-request": {
-          "$schema": "http://json-schema.org/draft-07/schema#",
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "properties": {},
           "type": "object",
         },
-        "trigger-elicitation-request-async": {
-          "$schema": "http://json-schema.org/draft-07/schema#",
+        "trigger-list-changed": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "list": {
+              "description": "Which list to announce as changed",
+              "enum": [
+                "tools",
+                "prompts",
+                "resources",
+              ],
+              "type": "string",
+            },
+          },
+          "required": [
+            "list",
+          ],
+          "type": "object",
+        },
+        "trigger-log-messages": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "properties": {},
           "type": "object",
         },
         "trigger-long-running-operation": {
-          "$schema": "http://json-schema.org/draft-07/schema#",
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "properties": {
             "duration": {
               "default": 10,
@@ -663,26 +649,26 @@ describe("tools/list", () => {
           },
           "type": "object",
         },
-        "trigger-sampling-request": {
-          "$schema": "http://json-schema.org/draft-07/schema#",
+        "trigger-multi-step-elicitation": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {},
+          "type": "object",
+        },
+        "trigger-resource-update": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "properties": {
-            "maxTokens": {
-              "default": 100,
-              "description": "Maximum number of tokens to generate",
-              "type": "number",
-            },
-            "prompt": {
-              "description": "The prompt to send to the LLM",
+            "uri": {
+              "description": "The URI of the resource to announce as updated, e.g. demo://resource/dynamic/text/1",
               "type": "string",
             },
           },
           "required": [
-            "prompt",
+            "uri",
           ],
           "type": "object",
         },
-        "trigger-sampling-request-async": {
-          "$schema": "http://json-schema.org/draft-07/schema#",
+        "trigger-sampling-request": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "properties": {
             "maxTokens": {
               "default": 100,
@@ -700,15 +686,15 @@ describe("tools/list", () => {
           "type": "object",
         },
         "trigger-url-elicitation": {
-          "$schema": "http://json-schema.org/draft-07/schema#",
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "properties": {
             "elicitationId": {
-              "description": "Optional explicit elicitation ID. Defaults to a random UUID.",
+              "description": "Optional explicit elicitation ID. Defaults to a random UUID. 2025-era clients only: the 2026-07-28 in-band request carries no elicitation ID.",
               "type": "string",
             },
             "errorPath": {
               "default": false,
-              "description": "Controls which elicitation mechanism is used. When false (default), sends an elicitation/create request (request path). When true, throws a UrlElicitationRequiredError (MCP error code -32042) so the client handles the URL elicitation via the error path rather than waiting for a response. To clear the error, satisfy the prerequisite and retry this call with the same arguments; the retry ignores errorPath and proceeds, so the client does not loop on the same error.",
+              "description": "Controls which elicitation mechanism is used. When false (default), sends an elicitation/create request (request path). When true, throws a UrlElicitationRequiredError (MCP error code -32042) so the client handles the URL elicitation via the error path rather than waiting for a response. To clear the error, satisfy the prerequisite and retry this call with the same arguments; the retry ignores errorPath and proceeds, so the client does not loop on the same error. 2025-era clients only: protocol version 2026-07-28 has no -32042 error, so there both settings use the in-band input_required flow.",
               "type": "boolean",
             },
             "message": {
@@ -737,7 +723,7 @@ describe("tools/list", () => {
     const tool = tools.find((t) => t.name === "get-structured-content");
     expect(tool?.outputSchema).toMatchInlineSnapshot(`
       {
-        "$schema": "http://json-schema.org/draft-07/schema#",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
           "conditions": {
@@ -771,12 +757,15 @@ describe("prompts/list", () => {
     expect(prompts).toMatchInlineSnapshot(`
       [
         {
+          "_meta": undefined,
           "arguments": undefined,
           "description": "A prompt with no arguments",
+          "icons": undefined,
           "name": "simple-prompt",
           "title": "Simple Prompt",
         },
         {
+          "_meta": undefined,
           "arguments": [
             {
               "description": "Name of the city",
@@ -784,16 +773,18 @@ describe("prompts/list", () => {
               "required": true,
             },
             {
-              "description": undefined,
+              "description": "Name of the state",
               "name": "state",
               "required": false,
             },
           ],
           "description": "A prompt with two arguments, one required and one optional",
+          "icons": undefined,
           "name": "args-prompt",
           "title": "Arguments Prompt",
         },
         {
+          "_meta": undefined,
           "arguments": [
             {
               "description": "Choose the department.",
@@ -807,10 +798,12 @@ describe("prompts/list", () => {
             },
           ],
           "description": "First argument choice narrows values for second argument.",
+          "icons": undefined,
           "name": "completable-prompt",
           "title": "Team Management",
         },
         {
+          "_meta": undefined,
           "arguments": [
             {
               "description": "Type of resource to fetch",
@@ -824,6 +817,7 @@ describe("prompts/list", () => {
             },
           ],
           "description": "A prompt that includes an embedded resource reference",
+          "icons": undefined,
           "name": "resource-prompt",
           "title": "Resource Prompt",
         },

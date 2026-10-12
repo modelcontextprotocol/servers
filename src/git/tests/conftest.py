@@ -130,7 +130,12 @@ async def connect(
 
 def wire(model: BaseModel) -> dict[str, Any]:
     """A result as it travels on the wire, independent of SDK attribute names."""
-    return model.model_dump(by_alias=True, mode="json", exclude_none=True)
+    # exclude_unset: SDK v2 result models default fields the 2025-11-25 wire
+    # does not carry (resultType, ttlMs, cacheScope), so only what the server
+    # actually sent is compared.
+    return model.model_dump(
+        by_alias=True, mode="json", exclude_none=True, exclude_unset=True
+    )
 
 
 def text_result(text: str, *, is_error: bool = False) -> dict[str, Any]:

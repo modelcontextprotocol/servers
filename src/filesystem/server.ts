@@ -4,12 +4,8 @@
 // lets the tests drive a real Client against it in-process over an in-memory
 // transport (#4854), and holding the allow-list in this closure rather than in
 // a module global lets two instances coexist in one process.
-
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import {
-  RootsListChangedNotificationSchema,
-  type Root,
-} from "@modelcontextprotocol/sdk/types.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import type { Root } from "@modelcontextprotocol/server";
 import fs from "fs/promises";
 import { createReadStream } from "fs";
 import path from "path";
@@ -34,10 +30,11 @@ import {
 import { SERVER_VERSION } from "./version.js";
 
 // The JSON Schema dialect every advertised tool schema declares (#4841). The
-// SDK 1.x tools/list handler renders zod schemas with zod's draft-07 target and
-// stamps "$schema": draft-07 on each one, which validators that accept only
+// SDK 1.x tools/list handler rendered zod schemas with zod's draft-07 target and
+// stamped "$schema": draft-07 on each one, which validators that accept only
 // 2020-12 (the dialect MCP assumes for tool schemas) reject outright. Setting
-// $schema in the root object's zod metadata overrides that stamp. The schemas
+// $schema in the root object's zod metadata overrode that stamp. SDK v2 stamps
+// 2020-12 itself, so the label is now the SDK's default as well. The schemas
 // below use nothing whose draft-07 and 2020-12 renderings differ (no tuples),
 // so the label is the only change; server-tools.test.ts fails if a draft-07-only
 // keyword ever appears under it.
@@ -170,7 +167,24 @@ async function readFileAsBase64Stream(filePath: string): Promise<string> {
 export const NO_ALLOWED_DIRECTORIES_ERROR =
   "Server cannot operate: No allowed directories available. Server was started without command-line directories and client does not support MCP roots protocol. Please either: 1) Start server with directory arguments, or 2) Use a client that supports MCP roots protocol and provides valid root directories.";
 
+/**
+ * Why the server cannot operate on a 2026-07-28 connection when it was started
+ * with no allowed directories. That revision has no initialize handshake and
+ * no server-to-client roots/list, so the client's Roots cannot supply them
+ * (Roots is deprecated as of 2026-07-28); only the command line can (#4852).
+ */
+export const NO_ALLOWED_DIRECTORIES_MODERN_ERROR =
+  "Server cannot operate: No allowed directories available. Server was started without command-line directories, and on protocol version 2026-07-28 the client cannot provide them through MCP Roots. Restart the server with the directories it may access as command-line arguments.";
+
 export interface ServerOptions {
+  /**
+   * The protocol era the server will serve (default `legacy`). On a
+   * 2025-era connection the client's Roots, when it supports them, replace
+   * the command-line directories after initialize. A 2026-07-28 connection
+   * has no initialize and no roots/list, so it is limited to the
+   * command-line directories.
+   */
+  era?: "legacy" | "modern";
   /**
    * Called after the server has closed the connection because it cannot
    * operate: no directories were given and the client does not support
@@ -181,8 +195,8 @@ export interface ServerOptions {
 
 /**
  * Build a filesystem server that may touch only `initialAllowedDirectories`
- * (already resolved and normalized by the caller) until the client's Roots
- * replace them.
+ * (already resolved and normalized by the caller), until the client's Roots
+ * replace them on a 2025-era connection.
  */
 export function createServer(
   initialAllowedDirectories: string[],
@@ -237,6 +251,17 @@ export function createServer(
         awaited = barrier;
         await awaited.settled;
       } while (awaited !== barrier);
+      // A 2025-era session with no directories closes at initialize (#4992).
+      // A 2026-07-28 one has no initialize to close at, and its client cannot
+      // add directories, so every call says why it cannot run.
+      if (options.era === "modern" && allowedDirectories.length === 0) {
+        return {
+          content: [
+            { type: "text", text: NO_ALLOWED_DIRECTORIES_MODERN_ERROR },
+          ],
+          isError: true,
+        };
+      }
       return handler(...args);
     }) as never)) as typeof server.registerTool;
 
@@ -895,7 +920,7 @@ export function createServer(
 
   // Handles dynamic roots updates during runtime, when client sends "roots/list_changed" notification, server fetches the updated roots and replaces all allowed directories with the new roots.
   server.server.setNotificationHandler(
-    RootsListChangedNotificationSchema,
+    "notifications/roots/list_changed",
     async () => {
       const generation = ++rootsGeneration;
       const settle = installBarrier();
@@ -918,7 +943,8 @@ export function createServer(
   );
 
   // Handles post-initialization setup, specifically checking for and fetching
-  // MCP roots. The initial load claims its generation and installs its barrier
+  // MCP roots. Only a 2025-era connection initializes, so this never runs on
+  // 2026-07-28, where Roots is unavailable (and deprecated). The initial load claims its generation and installs its barrier
   // here, synchronously, before any roots/list_changed handled afterwards can
   // claim a newer one.
   server.server.oninitialized = () => {

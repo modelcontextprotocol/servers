@@ -14,18 +14,19 @@ It explains how the server starts, how transports are wired, where tools, prompt
 
 ### Purpose
 
-A minimal, modular MCP server showcasing core Model Context Protocol features. It exposes simple tools, prompts, and resources, and can be run over multiple transports (STDIO, SSE, and Streamable HTTP).
+A minimal, modular MCP server showcasing core Model Context Protocol features. It exposes simple tools, prompts, and resources, and can be run over multiple transports (STDIO, Streamable HTTP, and the deprecated HTTP+SSE). It serves both protocol eras: 2026-07-28 clients (`server/discover`, per-request `_meta`, no sessions) and 2025-era clients (`initialize`), from one server factory.
 
 ### Design
 
-A small “server factory” constructs the MCP server and registers features.
-Transports are separate entry points that create/connect the server and handle network concerns.
+A small “server factory” constructs the MCP server for a protocol era and registers features.
+Transports are separate entry points that serve the factory and handle network concerns: the SDK's `serveStdio` and `createMcpHandler` entries pick each client's era.
 Tools, prompts, and resources are organized in their own submodules.
 
 ### Multi‑client
 
-The server supports multiple concurrent clients. Tracking per session data is demonstrated with
-resource subscriptions and simulated logging.
+The server supports multiple concurrent clients. Per-connection state (resource subscriptions,
+simulated logging) lives on the server instance serving the connection, and state that must outlive
+a 2026-07-28 request (tasks, minted resources) is stored under handles the server mints.
 
 ## Build and Distribution
 

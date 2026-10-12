@@ -1,663 +1,679 @@
 /**
- * Characterizes the everything server's experimental task tools (#4854):
+ * The everything server's task tools on the Tasks extension
+ * (`io.modelcontextprotocol/tasks`, SEP-2663), on protocol version 2026-07-28
+ * (#4852): `simulate-research-query`, `trigger-sampling-request-async` and
+ * `trigger-elicitation-request-async`, and the extension's `tasks/get`,
+ * `tasks/update` and `tasks/cancel`.
  *
- * - `simulate-research-query`, a server-side task (`taskSupport: required`)
- *   that a client drives with `tools/call` + `task`, `tasks/get` and
- *   `tasks/result`, including the `input_required` elicitation it sends for an
- *   ambiguous topic and what happens when the client cancels it.
- * - `trigger-sampling-request-async` and `trigger-elicitation-request-async`,
- *   which send the client a task-augmented request and then poll the client's
- *   `tasks/get` until it is done. The test client declares the task request
- *   capabilities and keeps its tasks in an `InMemoryTaskStore`.
+ * A task tool answers `tools/call` with a task handle (`resultType: "task"`),
+ * which the SDK `Client` refuses, since it has no tasks support of its own
+ * (the extension's client lives in `@modelcontextprotocol/ext-tasks`). So
+ * these tests speak raw JSON-RPC to the server, served by `serveStdio` over an
+ * in-memory pair the way the stdio transport serves it, with the 2026-07-28
+ * envelope on each request. A task's progress follows the clock, so the tests
+ * fake `Date` and move it.
  *
- * Every wait in these tools is a `setTimeout` (one-second stages and polls),
- * so the tests fake `setTimeout` and advance the clock.
+ * These replace the Part 1 (#4854) tests of the same tools on the 2025-11-25
+ * experimental tasks layer, which SDK v2 removed. Two behaviors those tests
+ * pinned are gone with the 2025 era rather than ported: the async tools
+ * sending the *client* a task-augmented request and polling the client's
+ * tasks (2026-07-28 has no server-to-client requests, so the server's task
+ * carries the request in its `input_required` status instead), and
+ * `tasks/result` and `tasks/list`, which the extension does not define.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { InMemoryTaskStore } from "@modelcontextprotocol/sdk/experimental/tasks";
 import {
-  CallToolResultSchema,
-  CreateMessageRequestSchema,
-  ElicitRequestSchema,
-  type ElicitRequest,
-  type ElicitResult,
-} from "@modelcontextprotocol/sdk/types.js";
-import { connect, contentOf, textOf, type Session } from "./harness.js";
+  clearTasks,
+  MAX_ANSWER_BYTES,
+  MAX_TASKS,
+  TASKS_EXTENSION,
+} from "../server/tasks.js";
+import { STAGE_DURATION, STAGES } from "../tools/simulate-research-query.js";
+import { connectRaw as rawClient, type RawSession } from "./harness.js";
 
-let session: Session | undefined;
+type Json = Record<string, unknown>;
+type Peer = RawSession;
+
+const TASKS = { extensions: { [TASKS_EXTENSION]: {} } };
+const WITH_ELICITATION = { ...TASKS, elicitation: { form: {} } };
+
+let peer: Peer;
 
 beforeEach(() => {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-10-11T12:00:00Z"));
 });
 
 afterEach(async () => {
+  await peer?.close();
+  clearTasks();
   vi.useRealTimers();
-  vi.restoreAllMocks();
-  await session?.close();
-  session = undefined;
 });
 
-/** Advance the fake clock until `promise` settles (or `limitMs` passes). */
-async function settle<T>(promise: Promise<T>, limitMs = 30_000): Promise<T> {
-  let settled = false;
-  const tracked = promise.finally(() => {
-    settled = true;
-  });
-  tracked.catch(() => {}); // observed below
-  for (let t = 0; t < limitMs && !settled; t += 100) {
-    await vi.advanceTimersByTimeAsync(100);
-  }
-  if (!settled) throw new Error(`did not settle within ${limitMs} ms`);
-  return tracked;
+/** Move the clock on by `ms`. */
+function advance(ms: number) {
+  vi.setSystemTime(Date.now() + ms);
 }
 
-/** Collect every message of an async iterable. */
-async function collect<T>(stream: AsyncIterable<T>): Promise<T[]> {
-  const out: T[] = [];
-  for await (const message of stream) out.push(message);
-  return out;
+/** The text of a completed task's result. */
+function resultText(task: Json): string {
+  const result = task.result as { content: { text: string }[] };
+  return result.content.map((block) => block.text).join("\n");
 }
 
-describe("simulate-research-query", () => {
-  /** Run the tool as a task to completion and return the stream's messages. */
-  async function research(args: Record<string, unknown>) {
-    const s = session!;
-    await s.client.listTools(); // lets callToolStream see taskSupport
-    return settle(
-      collect(
-        s.client.experimental.tasks.callToolStream(
-          { name: "simulate-research-query", arguments: args },
-          CallToolResultSchema,
-        ),
-      ),
-    );
-  }
-
-  function statusMessages(messages: Awaited<ReturnType<typeof research>>) {
-    return messages
-      .filter((m) => m.type === "taskStatus")
-      .map((m) => (m.type === "taskStatus" ? m.task.statusMessage : ""));
-  }
-
-  function report(messages: Awaited<ReturnType<typeof research>>): string {
-    const last = messages.at(-1);
-    if (last?.type !== "result") throw new Error(`no result: ${last?.type}`);
-    return textOf(contentOf(last.result)[0]);
-  }
-
-  it("creates a task that works through four stages and completes with a report", async () => {
-    session = await connect();
-    const messages = await research({ topic: "tides" });
-
-    expect(messages[0]).toMatchObject({
-      type: "taskCreated",
-      task: { status: "working", ttl: 300000, pollInterval: 1000 },
+describe("the extension", () => {
+  it("is advertised in server/discover", async () => {
+    peer = await rawClient(TASKS);
+    const discover = await peer.result("server/discover");
+    expect(discover.capabilities).toMatchObject({
+      extensions: { [TASKS_EXTENSION]: {} },
     });
-    expect(statusMessages(messages)).toEqual([
-      "Gathering sources...",
-      "Analyzing content...",
-      "Synthesizing findings...",
-      "Generating report...",
-      // The completed task keeps the last stage's status message.
-      "Generating report...",
-    ]);
-    expect(report(messages)).toMatchInlineSnapshot(`
-      "# Research Report: tides
-
-      ## Research Parameters
-      - **Topic**: tides
-
-
-      ## Synthesis
-      This research query was processed through 4 stages:
-      - Stage 1: Gathering sources ✓
-      - Stage 2: Analyzing content ✓
-      - Stage 3: Synthesizing findings ✓
-      - Stage 4: Generating report ✓
-
-      ---
-
-      ## About This Demo (SEP-1686: Tasks)
-
-      This tool demonstrates MCP's task-based execution pattern for long-running operations:
-
-      **Task Lifecycle Demonstrated:**
-      1. \`tools/call\` with \`task\` parameter → Server returns \`CreateTaskResult\` (not the final result)
-      2. Client polls \`tasks/get\` → Server returns current status and \`statusMessage\`
-      3. Status progressed: \`working\` → \`completed\`
-      4. Client calls \`tasks/result\` → Server returns this final result
-
-
-      **Key Concepts:**
-      - Tasks enable "call now, fetch later" patterns
-      - \`statusMessage\` provides human-readable progress updates
-      - Tasks have TTL (time-to-live) for automatic cleanup
-      - \`pollInterval\` suggests how often to check status
-      - Elicitation requests use \`relatedTask\` to queue via tasks/result (works on all transports)
-
-      *This is a simulated research report from the Everything MCP Server.*
-      "
-    `);
   });
 
-  it("is rejected as a tool error when called without a task", async () => {
-    session = await connect();
-    const result = await session.client.callTool({
-      name: "simulate-research-query",
-      arguments: { topic: "x" },
+  it.each([
+    ["tasks/get", {}],
+    ["tasks/update", { inputResponses: {} }],
+    ["tasks/cancel", {}],
+  ])("refuses %s for an unknown task with -32602", async (method, extra) => {
+    peer = await rawClient(TASKS);
+    const response = await peer.request(method, { taskId: "nope", ...extra });
+    expect(response.error).toMatchObject({
+      code: -32602,
+      message: expect.stringContaining("Unknown task: nope"),
     });
-    expect(result).toEqual({
+  });
+
+  it.each([
+    ["simulate-research-query", {}, { extensions: { [TASKS_EXTENSION]: {} } }],
+    [
+      "trigger-sampling-request-async",
+      { sampling: {} },
+      { extensions: { [TASKS_EXTENSION]: {} } },
+    ],
+    ["trigger-sampling-request-async", TASKS, { sampling: {} }],
+    [
+      "trigger-sampling-request-async",
+      {},
+      { extensions: { [TASKS_EXTENSION]: {} }, sampling: {} },
+    ],
+    [
+      "trigger-elicitation-request-async",
+      { elicitation: { form: {} } },
+      { extensions: { [TASKS_EXTENSION]: {} } },
+    ],
+    ["trigger-elicitation-request-async", TASKS, { elicitation: { form: {} } }],
+    [
+      "trigger-elicitation-request-async",
+      { ...TASKS, elicitation: { url: {} } },
+      { elicitation: { form: {} } },
+    ],
+  ] as const)(
+    "refuses %s from a client declaring %j with -32021 naming what is missing",
+    async (tool, capabilities, requiredCapabilities) => {
+      peer = await rawClient(capabilities);
+      const response = await peer.request("tools/call", {
+        name: tool,
+        arguments:
+          tool === "trigger-elicitation-request-async"
+            ? {}
+            : tool === "simulate-research-query"
+              ? { topic: "t" }
+              : { prompt: "p" },
+      });
+      expect(response.error).toMatchObject({
+        code: -32021,
+        data: { requiredCapabilities },
+      });
+    },
+  );
+
+  it.each([
+    ["tasks/get", {}],
+    ["tasks/update", { inputResponses: {} }],
+    ["tasks/cancel", {}],
+  ])(
+    "refuses %s from a client without the extension with -32021",
+    async (method, extra) => {
+      peer = await rawClient(TASKS);
+      const created = await peer.call("simulate-research-query", {
+        topic: "t",
+      });
+      await peer.close();
+      peer = await rawClient({});
+      const response = await peer.request(method, {
+        taskId: created.taskId,
+        ...extra,
+      });
+      expect(response.error).toMatchObject({
+        code: -32021,
+        data: {
+          requiredCapabilities: { extensions: { [TASKS_EXTENSION]: {} } },
+        },
+      });
+    },
+  );
+
+  it("refuses a new task at MAX_TASKS, keeping every live one until its TTL", async () => {
+    peer = await rawClient(TASKS);
+    const first = await peer.call("simulate-research-query", { topic: "t" });
+    for (let i = 1; i < MAX_TASKS; i++) {
+      await peer.call("simulate-research-query", { topic: "t" });
+    }
+    const refused = await peer.call("simulate-research-query", { topic: "t" });
+    expect(refused).toMatchObject({
       isError: true,
       content: [
         {
-          type: "text",
-          text: "MCP error -32601: Tool simulate-research-query requires task augmentation (taskSupport: 'required')",
+          text: `The server is already running ${MAX_TASKS} tasks, its limit. Try again once one has expired.`,
         },
       ],
     });
+    expect((await peer.get(first.taskId as string)).status).toBe("working");
+    // Once the tasks expire, there is room again.
+    advance(first.ttlMs as number);
+    expect(
+      (await peer.call("simulate-research-query", { topic: "t" })).resultType,
+    ).toBe("task");
+  });
+
+  it("refuses a topic longer than it will keep", async () => {
+    peer = await rawClient(TASKS);
+    const result = await peer.call("simulate-research-query", {
+      topic: "x".repeat(1001),
+    });
+    expect(result.isError).toBe(true);
+  });
+
+  it("refuses answers over MAX_ANSWER_BYTES with -32602, leaving the task waiting", async () => {
+    peer = await rawClient({ ...TASKS, sampling: {} });
+    const created = await peer.call("trigger-sampling-request-async", {
+      prompt: "p",
+    });
+    const response = await peer.request("tasks/update", {
+      taskId: created.taskId,
+      inputResponses: {
+        "sampling-1": {
+          role: "assistant",
+          model: "m",
+          content: { type: "text", text: "x".repeat(MAX_ANSWER_BYTES) },
+        },
+      },
+    });
+    expect(response.error).toMatchObject({
+      code: -32602,
+      message: expect.stringContaining(
+        `over the ${MAX_ANSWER_BYTES}-byte limit; the task is unchanged`,
+      ),
+    });
+    const task = await peer.get(created.taskId as string);
+    expect(task.status).toBe("input_required");
+    expect(Object.keys(task.inputRequests as object)).toEqual(["sampling-1"]);
+  });
+
+  it("refuses tasks/update without inputResponses with -32602", async () => {
+    peer = await rawClient(TASKS);
+    const created = await peer.call("simulate-research-query", { topic: "t" });
+    const response = await peer.request("tasks/update", {
+      taskId: created.taskId,
+    });
+    expect(response.error).toMatchObject({
+      code: -32602,
+      message: "Invalid params for tasks/update: inputResponses is required",
+    });
+  });
+
+  it("drops a task once its TTL has passed", async () => {
+    peer = await rawClient(TASKS);
+    const created = await peer.call("simulate-research-query", { topic: "t" });
+    advance(created.ttlMs as number);
+    const response = await peer.request("tasks/get", {
+      taskId: created.taskId,
+    });
+    expect(response.error).toMatchObject({ code: -32602 });
+  });
+});
+
+describe("simulate-research-query", () => {
+  it("returns a task handle, then works through four stages and completes with a report", async () => {
+    peer = await rawClient(TASKS);
+    const created = await peer.call("simulate-research-query", {
+      topic: "MCP",
+    });
+    expect(created).toMatchObject({
+      resultType: "task",
+      status: "working",
+      statusMessage: "Gathering sources...",
+      ttlMs: 300000,
+      pollIntervalMs: STAGE_DURATION,
+    });
+    expect(created.taskId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(created.createdAt).toBe("2026-10-11T12:00:00.000Z");
+
+    const messages = [];
+    for (let stage = 1; stage < STAGES.length; stage++) {
+      advance(STAGE_DURATION);
+      messages.push((await peer.get(created.taskId as string)).statusMessage);
+    }
+    expect(messages).toEqual([
+      "Analyzing content...",
+      "Synthesizing findings...",
+      "Generating report...",
+    ]);
+
+    advance(STAGE_DURATION);
+    const done = await peer.get(created.taskId as string);
+    expect(done).toMatchObject({
+      status: "completed",
+      statusMessage: "Research complete",
+      resultType: "complete",
+      lastUpdatedAt: new Date(Date.now()).toISOString(),
+    });
+    expect(resultText(done)).toMatch(/^# Research Report: MCP\n/);
+    expect(resultText(done)).toContain("Stage 4: Generating report ✓");
+  });
+
+  it("reports when each status began, not when a poll noticed it", async () => {
+    peer = await rawClient(TASKS);
+    const created = await peer.call("simulate-research-query", { topic: "t" });
+    const start = Date.now();
+    // Polled long after it finished: the timestamp is the completion's.
+    advance(STAGE_DURATION * STAGES.length * 3);
+    const done = await peer.get(created.taskId as string);
+    expect(done.status).toBe("completed");
+    expect(done.lastUpdatedAt).toBe(
+      new Date(start + STAGE_DURATION * STAGES.length).toISOString(),
+    );
+  });
+
+  it("reports the moment of a cancellation as the last update", async () => {
+    peer = await rawClient(TASKS);
+    const created = await peer.call("simulate-research-query", { topic: "t" });
+    const taskId = created.taskId as string;
+    advance(500);
+    const cancelledAt = new Date(Date.now()).toISOString();
+    await peer.result("tasks/cancel", { taskId });
+    advance(STAGE_DURATION * 10);
+    expect((await peer.get(taskId)).lastUpdatedAt).toBe(cancelledAt);
+  });
+
+  it("does not ask a client that supports only URL-mode elicitation", async () => {
+    peer = await rawClient({ ...TASKS, elicitation: { url: {} } });
+    const created = await peer.call("simulate-research-query", {
+      topic: "t",
+      ambiguous: true,
+    });
+    advance(STAGE_DURATION * STAGES.length);
+    expect((await peer.get(created.taskId as string)).status).toBe("completed");
   });
 
   it("ignores 'ambiguous' for a client without elicitation", async () => {
-    session = await connect();
-    const messages = await research({ topic: "python", ambiguous: true });
-    expect(statusMessages(messages)).not.toContain(
-      expect.stringContaining("Requesting clarification"),
-    );
-    expect(report(messages)).toMatch(/^# Research Report: python\n/);
+    peer = await rawClient(TASKS);
+    const created = await peer.call("simulate-research-query", {
+      topic: "t",
+      ambiguous: true,
+    });
+    advance(STAGE_DURATION * STAGES.length);
+    expect((await peer.get(created.taskId as string)).status).toBe("completed");
   });
 
   describe("with an ambiguous topic and an elicitation-capable client", () => {
-    async function connectAnswering(
-      answer: (req: ElicitRequest) => ElicitResult,
-    ) {
-      const asked: ElicitRequest["params"][] = [];
-      session = await connect({
-        capabilities: { elicitation: { form: {} } },
-        setup: (client) =>
-          client.setRequestHandler(ElicitRequestSchema, async (req) => {
-            asked.push(req.params);
-            return answer(req);
-          }),
+    /** Start an ambiguous query and run it to its clarification request. */
+    async function toClarification(topic: string) {
+      peer = await rawClient(WITH_ELICITATION);
+      const created = await peer.call("simulate-research-query", {
+        topic,
+        ambiguous: true,
       });
-      return asked;
+      const taskId = created.taskId as string;
+      advance(STAGE_DURATION * 2);
+      return { taskId, task: await peer.get(taskId) };
     }
 
-    it("asks for a clarification through tasks/result, then completes with it", async () => {
-      const asked = await connectAnswering(() => ({
-        action: "accept",
-        content: { interpretation: "programming" },
-      }));
-      const messages = await research({ topic: "Python", ambiguous: true });
+    it("waits for a clarification with tasks/update, then completes with it", async () => {
+      const { taskId, task } = await toClarification("python");
+      expect(task).toMatchObject({
+        status: "input_required",
+        statusMessage:
+          'Found multiple interpretations for "python". Requesting clarification...',
+      });
+      const request = (task.inputRequests as Json).clarification as Json;
+      expect(request).toMatchObject({
+        method: "elicitation/create",
+        params: { mode: "form" },
+      });
+      const oneOf = (
+        (request.params as Json).requestedSchema as {
+          properties: { interpretation: { oneOf: unknown[] } };
+        }
+      ).properties.interpretation.oneOf;
+      expect(oneOf).toEqual([
+        { const: "programming", title: "Python programming language" },
+        { const: "snake", title: "Python snake species" },
+        { const: "comedy", title: "Monty Python comedy group" },
+      ]);
 
-      expect(asked).toHaveLength(1);
-      expect(asked[0]).toMatchObject({
-        message:
-          'The research query "Python" could have multiple interpretations. Please clarify what you\'re looking for:',
-        requestedSchema: {
-          type: "object",
-          properties: {
-            interpretation: {
-              type: "string",
-              title: "Clarification",
-              description: "Which interpretation of the topic do you mean?",
-              oneOf: [
-                { const: "programming", title: "Python programming language" },
-                { const: "snake", title: "Python snake species" },
-                { const: "comedy", title: "Monty Python comedy group" },
-              ],
+      // Still waiting, however long it takes.
+      advance(STAGE_DURATION * 10);
+      expect((await peer.get(taskId)).status).toBe("input_required");
+
+      expect(
+        await peer.result("tasks/update", {
+          taskId,
+          inputResponses: {
+            clarification: {
+              action: "accept",
+              content: { interpretation: "programming" },
             },
           },
-          required: ["interpretation"],
-        },
+        }),
+      ).toMatchObject({ resultType: "complete" });
+      expect(await peer.get(taskId)).toMatchObject({
+        status: "working",
+        statusMessage: 'Continuing with interpretation: "programming"...',
       });
-      expect(statusMessages(messages)).toContain(
-        'Found multiple interpretations for "Python". Requesting clarification...',
+
+      advance(STAGE_DURATION * 2);
+      const done = await peer.get(taskId);
+      expect(done.status).toBe("completed");
+      expect(resultText(done)).toMatch(
+        /^# Research Report: python \(programming\)\n/,
       );
-      const text = report(messages);
-      expect(text).toMatch(/^# Research Report: Python \(programming\)\n/);
-      expect(text).toContain("- **Clarification**: programming");
-      expect(text).toContain(
-        'After receiving clarification ("programming"), the task resumed processing and completed.',
-      );
+      expect(resultText(done)).toContain("answered it with `tasks/update`");
     });
 
     it("offers generic interpretations for other topics", async () => {
-      const asked = await connectAnswering(() => ({ action: "decline" }));
-      await research({ topic: "Mercury", ambiguous: true });
-      const params = asked[0];
-      if (!("requestedSchema" in params)) throw new Error("expected form mode");
-      expect(params.requestedSchema.properties.interpretation).toHaveProperty(
-        "oneOf",
-        [
-          { const: "technical", title: "Technical/scientific perspective" },
-          { const: "historical", title: "Historical perspective" },
-          { const: "current", title: "Current events/news perspective" },
-        ],
-      );
+      const { task } = await toClarification("climate");
+      const request = (task.inputRequests as Json).clarification as {
+        params: {
+          requestedSchema: {
+            properties: { interpretation: { oneOf: { const: string }[] } };
+          };
+        };
+      };
+      expect(
+        request.params.requestedSchema.properties.interpretation.oneOf.map(
+          (option) => option.const,
+        ),
+      ).toEqual(["technical", "historical", "current"]);
     });
 
     it.each([
-      [{ action: "decline" }, "User declined - using default interpretation"],
-      [{ action: "cancel" }, "User cancelled - using default interpretation"],
-      [{ action: "accept", content: {} }, "User accepted without selection"],
-      // An accept with no content is treated as a cancel.
-      [{ action: "accept" }, "User cancelled - using default interpretation"],
-    ] as [ElicitResult, string][])(
-      "records %j as %j",
-      async (answer, clarification) => {
-        await connectAnswering(() => answer);
-        const messages = await research({ topic: "tides", ambiguous: true });
-        expect(report(messages)).toContain(
+      ["decline", "User declined - using default interpretation"],
+      ["cancel", "User cancelled - using default interpretation"],
+    ])(
+      "continues with a default when the user chooses %s",
+      async (action, clarification) => {
+        const { taskId } = await toClarification("t");
+        await peer.result("tasks/update", {
+          taskId,
+          inputResponses: { clarification: { action } },
+        });
+        advance(STAGE_DURATION * 2);
+        expect(resultText(await peer.get(taskId))).toContain(
           `- **Clarification**: ${clarification}`,
         );
       },
     );
 
-    it("falls back to a default interpretation when the elicitation fails", async () => {
-      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-      await connectAnswering(() => {
-        throw new Error("no UI");
+    it("continues with a default when the answer is not usable", async () => {
+      const { taskId } = await toClarification("t");
+      await peer.result("tasks/update", {
+        taskId,
+        inputResponses: { clarification: { action: "accept", content: {} } },
       });
-      const messages = await research({ topic: "tides", ambiguous: true });
-      const text = report(messages);
-      expect(text).toContain(
-        "- **Clarification**: technical (default - elicitation unavailable)",
+      advance(STAGE_DURATION * 2);
+      expect(resultText(await peer.get(taskId))).toContain(
+        "No usable answer - using default interpretation",
       );
-      expect(text).toContain(
-        "**Note:** Elicitation failed and a default interpretation was used.",
+    });
+
+    it("ignores an answer to a request it did not make, and keeps waiting", async () => {
+      const { taskId } = await toClarification("t");
+      expect(
+        await peer.result("tasks/update", {
+          taskId,
+          inputResponses: { other: { action: "accept" } },
+        }),
+      ).toMatchObject({ resultType: "complete" });
+      expect((await peer.get(taskId)).status).toBe("input_required");
+    });
+
+    it("uses only the outstanding answer from an update that also carries others", async () => {
+      const { taskId } = await toClarification("python");
+      await peer.result("tasks/update", {
+        taskId,
+        inputResponses: {
+          other: { action: "decline" },
+          clarification: {
+            action: "accept",
+            content: { interpretation: "snake" },
+          },
+        },
+      });
+      advance(STAGE_DURATION * 2);
+      expect(resultText(await peer.get(taskId))).toMatch(
+        /^# Research Report: python \(snake\)\n/,
       );
-      expect(warn).toHaveBeenCalledWith(
-        expect.stringMatching(/^Elicitation failed for task /),
-        expect.stringContaining("no UI"),
+    });
+
+    it("does not take an interpretation it did not offer", async () => {
+      const { taskId } = await toClarification("python");
+      await peer.result("tasks/update", {
+        taskId,
+        inputResponses: {
+          clarification: {
+            action: "accept",
+            content: { interpretation: "astrology" },
+          },
+        },
+      });
+      advance(STAGE_DURATION * 2);
+      expect(resultText(await peer.get(taskId))).toContain(
+        "No usable answer - using default interpretation",
       );
     });
   });
 
-  it("lists its task, and stops working on it once the client cancels it", async () => {
-    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
-    session = await connect();
-    const { client } = session;
-    await client.listTools();
-    const stream = client.experimental.tasks.callToolStream(
-      { name: "simulate-research-query", arguments: { topic: "tides" } },
-      CallToolResultSchema,
-    );
-    const first = await stream.next();
-    if (first.done || first.value.type !== "taskCreated") {
-      throw new Error("expected taskCreated");
-    }
-    const { taskId } = first.value.task;
-    await stream.return(undefined);
+  it("acknowledges and ignores tasks/update while the task is working", async () => {
+    peer = await rawClient(TASKS);
+    const created = await peer.call("simulate-research-query", { topic: "t" });
+    expect(
+      await peer.result("tasks/update", {
+        taskId: created.taskId,
+        inputResponses: { clarification: { action: "accept" } },
+      }),
+    ).toMatchObject({ resultType: "complete" });
+    expect((await peer.get(created.taskId as string)).status).toBe("working");
+  });
 
-    const { tasks } = await client.experimental.tasks.listTasks();
-    expect(tasks.map((t) => t.taskId)).toContain(taskId);
-
-    await client.experimental.tasks.cancelTask(taskId);
-    // The next stage's status update fails on the cancelled task; the
-    // failure is logged, marking it failed fails too, and it stays cancelled.
-    await vi.advanceTimersByTimeAsync(5000);
-    expect(errors).toHaveBeenCalledWith(
-      `Research task ${taskId} failed:`,
-      expect.any(Error),
-    );
-    expect(await client.experimental.tasks.getTask(taskId)).toMatchObject({
-      status: "cancelled",
-      statusMessage: "Client cancelled task execution.",
+  it("stays cancelled once the client cancels it, and acknowledges a second cancel", async () => {
+    peer = await rawClient(TASKS);
+    const created = await peer.call("simulate-research-query", { topic: "t" });
+    const taskId = created.taskId as string;
+    expect(await peer.result("tasks/cancel", { taskId })).toMatchObject({
+      resultType: "complete",
     });
+    advance(STAGE_DURATION * STAGES.length);
+    expect(await peer.get(taskId)).toMatchObject({
+      status: "cancelled",
+      statusMessage: "Cancelled by the client",
+    });
+    expect(await peer.result("tasks/cancel", { taskId })).toMatchObject({
+      resultType: "complete",
+    });
+    expect((await peer.get(taskId)).status).toBe("cancelled");
+  });
+
+  it("acknowledges a cancel of a completed task, which stays completed", async () => {
+    peer = await rawClient(TASKS);
+    const created = await peer.call("simulate-research-query", { topic: "t" });
+    const taskId = created.taskId as string;
+    advance(STAGE_DURATION * STAGES.length);
+    expect(await peer.result("tasks/cancel", { taskId })).toMatchObject({
+      resultType: "complete",
+    });
+    expect((await peer.get(taskId)).status).toBe("completed");
   });
 });
 
-/**
- * A client that declares sampling and elicitation, with task support for
- * both, and keeps the tasks it creates in its own store.
- */
-async function connectTaskClient(
-  onRequest: (
-    method: "sampling" | "elicitation",
-    taskId: string | undefined,
-  ) => void,
-  extraTtl = 0,
-) {
-  const taskStore = new InMemoryTaskStore();
-  let requestNumber = 0;
-  const createTask = async (
-    method: "sampling" | "elicitation",
-    request: Parameters<InMemoryTaskStore["createTask"]>[2],
-    ttl: number | undefined,
-  ) => {
-    const task = await taskStore.createTask(
-      { ttl: ttl === undefined ? undefined : ttl + extraTtl },
-      ++requestNumber,
-      request,
-    );
-    onRequest(method, task.taskId);
-    return { task };
-  };
-  session = await connect({
-    capabilities: {
-      sampling: {},
-      elicitation: { form: {} },
-      tasks: {
-        list: {},
-        cancel: {},
-        requests: {
-          sampling: { createMessage: {} },
-          elicitation: { create: {} },
-        },
-      },
-    },
-    taskStore,
-    setup: (client) => {
-      client.setRequestHandler(CreateMessageRequestSchema, async (req) =>
-        createTask("sampling", req, req.params.task?.ttl),
-      );
-      client.setRequestHandler(ElicitRequestSchema, async (req) =>
-        createTask("elicitation", req, req.params.task?.ttl),
-      );
-    },
-  });
-  return { client: session.client, taskStore };
-}
-
-async function callAsync(name: string, args: Record<string, unknown> = {}) {
-  const result = await settle(
-    session!.client.callTool({ name, arguments: args }, undefined, {
-      timeout: 3_600_000,
-    }),
-    700_000,
-  );
-  return contentOf(result).map(textOf);
-}
-
-/** Run `fn` half a second from now, before the server's first one-second poll. */
-function later(fn: () => Promise<unknown>): void {
-  setTimeout(() => void fn(), 500);
-}
-
-const SAMPLE = {
-  role: "assistant" as const,
-  content: { type: "text" as const, text: "sampled" },
-  model: "test-model",
-};
-
 describe("trigger-sampling-request-async", () => {
-  it("sends a task-augmented sampling request, polls the client's task, and returns its result", async () => {
-    let created = "";
-    const { taskStore } = await connectTaskClient((_method, taskId) => {
-      created = taskId!;
-      // Finish the client-side task before the server's first poll.
-      later(() => taskStore.storeTaskResult(taskId!, "completed", SAMPLE));
+  it("waits with a sampling request, then completes with the client's answer", async () => {
+    peer = await rawClient({ ...TASKS, sampling: {} });
+    const created = await peer.call("trigger-sampling-request-async", {
+      prompt: "Say hi",
     });
-    const [text] = await callAsync("trigger-sampling-request-async", {
-      prompt: "hello",
-      maxTokens: 5,
-    });
-    const task = await taskStore.getTask(created);
-    expect(task?.ttl).toBe(300000);
-    expect(text).toBe(
-      `[COMPLETED] Async sampling completed!\n\n**Progress:**\nTask created: ${created}\nPoll 1: completed\n\n**Result:**\n${JSON.stringify(
-        {
-          ...SAMPLE,
-          _meta: {
-            "io.modelcontextprotocol/related-task": { taskId: created },
+    expect(created).toMatchObject({
+      resultType: "task",
+      status: "input_required",
+      statusMessage: "Waiting for the client's LLM to respond",
+      ttlMs: 600000,
+      inputRequests: {
+        "sampling-1": {
+          method: "sampling/createMessage",
+          params: {
+            maxTokens: 100,
+            systemPrompt: "You are a helpful test server.",
+            messages: [
+              {
+                role: "user",
+                content: {
+                  type: "text",
+                  text: "Resource trigger-sampling-request-async context: Say hi",
+                },
+              },
+            ],
           },
         },
-        null,
-        2,
-      )}`,
-    );
-  });
-
-  it("reports a failed client task with its status message", async () => {
-    const { taskStore } = await connectTaskClient((_m, taskId) => {
-      later(() =>
-        taskStore.updateTaskStatus(taskId!, "failed", "model overloaded"),
-      );
-    });
-    const [text] = await callAsync("trigger-sampling-request-async", {
-      prompt: "p",
-    });
-    expect(text).toMatch(
-      /^\[FAILED\] model overloaded\n\nProgress:\nTask created: \S+\nPoll 1: failed - model overloaded$/,
-    );
-  });
-
-  it("reports the status message of a client task that is already finished when it is created", async () => {
-    // A task that fails before it is returned is never polled, so its status
-    // message comes from the CreateTaskResult.
-    const { taskStore } = await connectTaskClient((_m, taskId) => {
-      void taskStore.updateTaskStatus(taskId!, "failed", "instant failure");
-    });
-    const [text] = await callAsync("trigger-sampling-request-async", {
-      prompt: "p",
-    });
-    expect(text).toMatch(
-      /^\[FAILED\] instant failure\n\nProgress:\nTask created: \S+$/,
-    );
-  });
-
-  it("reports a cancelled client task with no message", async () => {
-    const { taskStore } = await connectTaskClient((_m, taskId) => {
-      later(() => taskStore.updateTaskStatus(taskId!, "cancelled"));
-    });
-    const [text] = await callAsync("trigger-sampling-request-async", {
-      prompt: "p",
-    });
-    expect(text).toMatch(/^\[CANCELLED\] No message\n\nProgress:\n/);
-  });
-
-  it("gives up after 60 polls of a task that never finishes", async () => {
-    await connectTaskClient(() => {});
-    const [text] = await callAsync("trigger-sampling-request-async", {
-      prompt: "p",
-    });
-    expect(text).toMatch(
-      /^\[TIMEOUT\] Task timed out after 60 poll attempts\n\nProgress:\nTask created: \S+\nPoll 1: working\n/,
-    );
-    expect(text.split("\n").filter((l) => l.startsWith("Poll "))).toHaveLength(
-      60,
-    );
-  });
-
-  it("returns a synchronous answer from a client that ignores the task request", async () => {
-    session = await connect({
-      capabilities: {
-        sampling: {},
-        tasks: { requests: { sampling: { createMessage: {} } } },
-      },
-      setup: (client) => {
-        // A client that answers outside the SDK's sampling handler, which
-        // would insist on a CreateTaskResult for a task-augmented request.
-        client.fallbackRequestHandler = async () => SAMPLE;
       },
     });
-    const [text] = await callAsync("trigger-sampling-request-async", {
+    const taskId = created.taskId as string;
+    await peer.result("tasks/update", {
+      taskId,
+      inputResponses: {
+        "sampling-1": {
+          role: "assistant",
+          model: "test-model",
+          content: { type: "text", text: "hi" },
+        },
+      },
+    });
+    const done = await peer.get(taskId);
+    expect(done.status).toBe("completed");
+    expect(resultText(done)).toMatch(/^LLM sampling result: \n/);
+    expect(resultText(done)).toContain('"text": "hi"');
+  });
+
+  it("asks again, under a new key, after an answer of the wrong kind", async () => {
+    peer = await rawClient({ ...TASKS, sampling: {} });
+    const created = await peer.call("trigger-sampling-request-async", {
       prompt: "p",
     });
-    expect(text).toBe(
-      `[SYNC] Client executed synchronously:\n${JSON.stringify(SAMPLE, null, 2)}`,
-    );
+    await peer.result("tasks/update", {
+      taskId: created.taskId,
+      inputResponses: { "sampling-1": { action: "accept" } },
+    });
+    const again = await peer.get(created.taskId as string);
+    expect(again.status).toBe("input_required");
+    expect(Object.keys(again.inputRequests as object)).toEqual(["sampling-2"]);
   });
 });
 
 describe("trigger-elicitation-request-async", () => {
-  it("sends a task-augmented elicitation and summarizes the accepted answer", async () => {
-    const asked: string[] = [];
-    const { taskStore } = await connectTaskClient((method, taskId) => {
-      asked.push(method);
-      later(() =>
-        taskStore.storeTaskResult(taskId!, "completed", {
-          action: "accept",
-          content: { name: "Ada", favoriteColor: "Blue", agreeToTerms: true },
-        }),
-      );
+  async function answer(response: Json) {
+    peer = await rawClient(WITH_ELICITATION);
+    const created = await peer.call("trigger-elicitation-request-async");
+    expect(created).toMatchObject({
+      status: "input_required",
+      statusMessage: "Waiting for the user's input",
+      inputRequests: {
+        "form-1": {
+          method: "elicitation/create",
+          params: { mode: "form", requestedSchema: { required: ["name"] } },
+        },
+      },
     });
-    const texts = await callAsync("trigger-elicitation-request-async");
-    expect(asked).toEqual(["elicitation"]);
-    expect(texts[0]).toBe(
-      "[COMPLETED] User provided the requested information!",
-    );
-    expect(texts[1]).toBe(
-      "User inputs:\n- Name: Ada\n- Favorite Color: Blue\n- Agreed to terms: true",
-    );
-    expect(texts[2]).toMatch(
-      /^\nProgress:\nTask created: \S+\nPoll 1: completed\n\nRaw result: \{/,
+    const taskId = created.taskId as string;
+    await peer.result("tasks/update", {
+      taskId,
+      inputResponses: { "form-1": response },
+    });
+    return peer.get(taskId);
+  }
+
+  it("summarizes an accepted answer", async () => {
+    const done = await answer({
+      action: "accept",
+      content: { name: "Ada", favoriteColor: "blue", agreeToTerms: true },
+    });
+    expect(done).toMatchObject({
+      status: "completed",
+      statusMessage: "Input received",
+    });
+    expect(resultText(done)).toBe(
+      "Elicitation accept.\nName: Ada\nFavorite color: blue\nAgreed to terms: true",
     );
   });
 
-  it("summarizes an accepted answer with no fields", async () => {
-    const { taskStore } = await connectTaskClient((_m, taskId) => {
-      later(() =>
-        taskStore.storeTaskResult(taskId!, "completed", {
-          action: "accept",
-          content: {},
-        }),
-      );
+  it("summarizes an accepted answer with only the required name", async () => {
+    const done = await answer({ action: "accept", content: { name: "Ada" } });
+    expect(resultText(done)).toBe("Elicitation accept.\nName: Ada");
+  });
+
+  it("reports when the answer arrived as the last update", async () => {
+    peer = await rawClient(WITH_ELICITATION);
+    const created = await peer.call("trigger-elicitation-request-async");
+    advance(1500);
+    const answeredAt = new Date(Date.now()).toISOString();
+    await peer.result("tasks/update", {
+      taskId: created.taskId,
+      inputResponses: { "form-1": { action: "decline" } },
     });
-    const texts = await callAsync("trigger-elicitation-request-async");
-    expect(texts.slice(0, 2)).toEqual([
-      "[COMPLETED] User provided the requested information!",
-      "User inputs:\n",
-    ]);
+    advance(60_000);
+    expect((await peer.get(created.taskId as string)).lastUpdatedAt).toBe(
+      answeredAt,
+    );
   });
 
   it.each([
-    [
-      "decline",
-      "[DECLINED] User declined to provide the requested information.",
-    ],
-    ["cancel", "[CANCELLED] User cancelled the elicitation dialog."],
-  ])("reports a %s", async (action, expected) => {
-    const { taskStore } = await connectTaskClient((_m, taskId) => {
-      later(() => taskStore.storeTaskResult(taskId!, "completed", { action }));
-    });
-    const texts = await callAsync("trigger-elicitation-request-async");
-    expect(texts[0]).toBe(expected);
-  });
-
-  it("reports only progress and the raw result for an answer of another shape", async () => {
-    const { taskStore } = await connectTaskClient((_m, taskId) => {
-      later(() =>
-        taskStore.storeTaskResult(taskId!, "completed", { action: "accept" }),
+    ["no name", {}],
+    ["a blank name", { name: "" }],
+    ["a color that is not a choice", { name: "Ada", favoriteColor: "mauve" }],
+  ])(
+    "asks again, under a new key, after an accepted answer with %s",
+    async (_label, content) => {
+      peer = await rawClient(WITH_ELICITATION);
+      const created = await peer.call("trigger-elicitation-request-async");
+      await peer.result("tasks/update", {
+        taskId: created.taskId,
+        inputResponses: { "form-1": { action: "accept", content } },
+      });
+      const again = await peer.get(created.taskId as string);
+      expect(again.status).toBe("input_required");
+      expect(Object.keys(again.inputRequests as object)).toEqual(["form-2"]);
+      // The spent key is no longer outstanding, so an answer to it is ignored.
+      await peer.result("tasks/update", {
+        taskId: created.taskId,
+        inputResponses: { "form-1": { action: "decline" } },
+      });
+      expect((await peer.get(created.taskId as string)).status).toBe(
+        "input_required",
       );
-    });
-    const texts = await callAsync("trigger-elicitation-request-async");
-    expect(texts).toHaveLength(1);
-    expect(texts[0]).toMatch(/^\nProgress:\n/);
+    },
+  );
+
+  it.each(["decline", "cancel"])("reports a %s", async (action) => {
+    const done = await answer({ action });
+    expect(resultText(done)).toBe(`Elicitation ${action}.`);
   });
 
-  it("logs the first poll, every tenth, and every status change while input is required", async () => {
-    let taskId = "";
-    const { taskStore } = await connectTaskClient((_m, id) => {
-      taskId = id!;
-      later(() => taskStore.updateTaskStatus(id!, "input_required", "waiting"));
+  it("asks again, under a new key, after an answer of the wrong kind", async () => {
+    peer = await rawClient(WITH_ELICITATION);
+    const created = await peer.call("trigger-elicitation-request-async");
+    await peer.result("tasks/update", {
+      taskId: created.taskId,
+      inputResponses: { "form-1": { roots: [] } },
     });
-    const call = callAsync("trigger-elicitation-request-async");
-    // Let 21 polls happen while input is required, then finish.
-    await vi.advanceTimersByTimeAsync(21_500);
-    await taskStore.storeTaskResult(taskId, "completed", { action: "decline" });
-    const texts = await call;
-    const polls = texts[1].split("\n").filter((l) => l.startsWith("Poll "));
-    expect(polls.slice(0, 3)).toEqual([
-      "Poll 1: input_required - waiting",
-      "Poll 10: input_required - waiting",
-      "Poll 20: input_required - waiting",
-    ]);
-    // The completed status keeps the earlier message.
-    expect(polls.at(-1)).toMatch(/^Poll 2\d: completed - waiting$/);
-    expect(polls).toHaveLength(4);
-  });
-
-  it("reports the status message of a client task that is already finished when it is created", async () => {
-    // A task that fails before it is returned is never polled, so its status
-    // message comes from the CreateTaskResult.
-    const { taskStore } = await connectTaskClient((_m, taskId) => {
-      void taskStore.updateTaskStatus(taskId!, "failed", "instant failure");
-    });
-    const texts = await callAsync("trigger-elicitation-request-async");
-    expect(texts).toEqual([
-      expect.stringMatching(
-        /^\[FAILED\] instant failure\n\nProgress:\nTask created: \S+$/,
-      ),
-    ]);
-  });
-
-  it("reports a failed client task", async () => {
-    const { taskStore } = await connectTaskClient((_m, taskId) => {
-      later(() => taskStore.updateTaskStatus(taskId!, "failed"));
-    });
-    const texts = await callAsync("trigger-elicitation-request-async");
-    expect(texts[0]).toMatch(/^\[FAILED\] No message\n\nProgress:\n/);
-  });
-
-  /** Also fake `performance`, which the tool's polling deadline is measured with. */
-  function fakeClock() {
-    vi.useFakeTimers({
-      toFake: ["setTimeout", "clearTimeout", "performance"],
-    });
-  }
-
-  it("gives up 5 seconds before the 10-minute TTL of a task that never finishes", async () => {
-    fakeClock();
-    // A client that keeps its task longer than the 10-minute TTL asked for.
-    await connectTaskClient(() => {}, 60_000);
-    const texts = await callAsync("trigger-elicitation-request-async");
-    expect(texts[0]).toMatch(
-      /^\[TIMEOUT\] Task timed out after 595 poll attempts, before its 10-minute TTL expired\n\nProgress:\n/,
-    );
-  });
-
-  it("times out before a client that honors the 10-minute TTL expires the task", async () => {
-    fakeClock();
-    let created = "";
-    const { taskStore } = await connectTaskClient((_m, taskId) => {
-      created = taskId!;
-    });
-    const texts = await callAsync("trigger-elicitation-request-async");
-    // The last poll reached the task while the client still held it.
-    expect(texts).toHaveLength(1);
-    expect(texts[0]).toMatch(
-      /^\[TIMEOUT\] Task timed out after 595 poll attempts, before its 10-minute TTL expired\n\nProgress:\nTask created: \S+\nPoll 1: working\n/,
-    );
-    expect(texts[0]).toMatch(/\nPoll 595: working$/);
-    // The client still holds the task when the tool gives up, 5 s before the
-    // 600000 ms TTL it asked for runs out.
-    expect((await taskStore.getTask(created))?.ttl).toBe(600000);
-  });
-
-  it("times out without polling when its wait ends past the deadline", async () => {
-    // A timer that fires late: the first reading sets the deadline, and every
-    // later one is already past it.
-    let readings = 0;
-    vi.spyOn(performance, "now").mockImplementation(() =>
-      readings++ === 0 ? 0 : 600_000,
-    );
-    await connectTaskClient(() => {});
-    const texts = await callAsync("trigger-elicitation-request-async");
-    expect(texts).toEqual([
-      expect.stringMatching(
-        /^\[TIMEOUT\] Task timed out after 0 poll attempts, before its 10-minute TTL expired\n\nProgress:\nTask created: \S+$/,
-      ),
-    ]);
-  });
-
-  it("returns a synchronous answer from a client that ignores the task request", async () => {
-    session = await connect({
-      capabilities: {
-        elicitation: {},
-        tasks: { requests: { elicitation: { create: {} } } },
-      },
-      setup: (client) => {
-        client.fallbackRequestHandler = async () => ({ action: "cancel" });
-      },
-    });
-    const texts = await callAsync("trigger-elicitation-request-async");
-    expect(texts).toEqual([
-      `[SYNC] Client executed synchronously:\n${JSON.stringify(
-        { action: "cancel" },
-        null,
-        2,
-      )}`,
-    ]);
+    const again = await peer.get(created.taskId as string);
+    expect(Object.keys(again.inputRequests as object)).toEqual(["form-2"]);
   });
 });

@@ -1,91 +1,52 @@
-import { LoggingLevel } from "@modelcontextprotocol/sdk/types.js";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+// Simulated logging for `toggle-simulated-logging`: a timer that sends a
+// random-leveled `notifications/message` every five seconds, filtered by the
+// level the client set with `logging/setLevel`.
+//
+// This is 2025-era behavior. The 2026-07-28 revision removes
+// `logging/setLevel` and unsolicited log messages: a log message is sent only
+// during a request, at the level that request names in its `_meta`
+// (`trigger-log-messages` shows that). Logging itself is deprecated as of
+// 2026-07-28 (SEP-2577). The timer belongs to one server instance, the one
+// serving the client's connection or session, so no session map is needed
+// (#4852).
 
-// Map session ID to the interval for sending logging messages to the client
-const logsUpdateIntervals: Map<string | undefined, NodeJS.Timeout | undefined> =
-  new Map<string | undefined, NodeJS.Timeout | undefined>();
+import { LoggingLevel, McpServer } from "@modelcontextprotocol/server";
+
+/** One message per logging level, from least to most severe. */
+const MESSAGES: { level: LoggingLevel; data: string }[] = [
+  { level: "debug", data: "Debug-level message" },
+  { level: "info", data: "Info-level message" },
+  { level: "notice", data: "Notice-level message" },
+  { level: "warning", data: "Warning-level message" },
+  { level: "error", data: "Error-level message" },
+  { level: "critical", data: "Critical-level message" },
+  { level: "alert", data: "Alert level-message" },
+  { level: "emergency", data: "Emergency-level message" },
+];
 
 /**
- * Initiates a simulated logging process by sending random log messages to the client at a
- * fixed interval. Each log message contains a random logging level and optional session ID.
+ * Start sending `server`'s client a random-leveled log message now and then
+ * every five seconds. The SDK drops a message below the level the client set.
  *
- * @param {McpServer} server - The server instance responsible for handling the logging messages.
- * @param {string | undefined} sessionId - An optional identifier for the session. If provided,
- * the session ID will be appended to log messages.
+ * @param {McpServer} server - The server whose client receives the messages.
+ * @returns {() => void} Stops the messages.
  */
-export const beginSimulatedLogging = (
-  server: McpServer,
-  sessionId: string | undefined,
-) => {
-  const maybeAppendSessionId = sessionId ? ` - SessionId ${sessionId}` : "";
-  const messages: { level: LoggingLevel; data: string }[] = [
-    { level: "debug", data: `Debug-level message${maybeAppendSessionId}` },
-    { level: "info", data: `Info-level message${maybeAppendSessionId}` },
-    { level: "notice", data: `Notice-level message${maybeAppendSessionId}` },
-    {
-      level: "warning",
-      data: `Warning-level message${maybeAppendSessionId}`,
-    },
-    { level: "error", data: `Error-level message${maybeAppendSessionId}` },
-    {
-      level: "critical",
-      data: `Critical-level message${maybeAppendSessionId}`,
-    },
-    { level: "alert", data: `Alert level-message${maybeAppendSessionId}` },
-    {
-      level: "emergency",
-      data: `Emergency-level message${maybeAppendSessionId}`,
-    },
-  ];
-
-  /**
-   * Send a simulated logging message to the client
-   */
-  const sendSimulatedLoggingMessage = async (sessionId: string | undefined) => {
-    // By using the `sendLoggingMessage` function to send the message, we
-    // ensure that the client's chosen logging level will be respected
-    await server.sendLoggingMessage(
-      messages[Math.floor(Math.random() * messages.length)],
-      sessionId,
-    );
-  };
-
-  // Set the interval to send later logging messages to this client
-  /* v8 ignore else -- toggle-simulated-logging tracks the sessions it started and never begins one twice */
-  if (!logsUpdateIntervals.has(sessionId)) {
-    // Send once immediately, then every 5 seconds. Fire-and-forget: this
-    // function is synchronous by contract (it starts a background simulation),
-    // so neither send can be awaited. A send that fails (e.g. the transport
-    // closed before `stopSimulatedLogging`) is logged rather than left to
-    // become an unhandled rejection.
-    const send = () =>
-      sendSimulatedLoggingMessage(sessionId).catch((error: unknown) =>
+export const beginSimulatedLogging = (server: McpServer): (() => void) => {
+  // Fire-and-forget: this runs on a timer with no caller to await it. A send
+  // that fails (e.g. the transport closed before logging was stopped) is
+  // logged rather than left to become an unhandled rejection.
+  const send = () =>
+    server
+      .sendLoggingMessage(
+        MESSAGES[Math.floor(Math.random() * MESSAGES.length)],
+        // The SDK keeps the level the client set per transport session, so
+        // the filter is looked up by this connection's session id.
+        server.server.transport?.sessionId,
+      )
+      .catch((error: unknown) =>
         console.error("Simulated logging message failed:", error),
       );
-    void send();
-
-    // Send a randomly-leveled log message every 5 seconds
-    logsUpdateIntervals.set(
-      sessionId,
-      setInterval(() => void send(), 5000),
-    );
-  }
-};
-
-/**
- * Stops the simulated logging process for a given session.
- *
- * This function halts the periodic logging updates associated with the specified
- * session ID by clearing the interval and removing the session's tracking
- * reference. Session ID can be undefined for stdio.
- *
- * @param {string} [sessionId] - The optional unique identifier of the session.
- */
-export const stopSimulatedLogging = (sessionId?: string) => {
-  // Remove active intervals
-  if (logsUpdateIntervals.has(sessionId)) {
-    const logsUpdateInterval = logsUpdateIntervals.get(sessionId);
-    clearInterval(logsUpdateInterval);
-    logsUpdateIntervals.delete(sessionId);
-  }
+  void send();
+  const interval = setInterval(() => void send(), 5000);
+  return () => clearInterval(interval);
 };
