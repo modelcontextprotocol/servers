@@ -16,7 +16,7 @@ const SimulateResearchQuerySchema = z.object({
     .boolean()
     .default(false)
     .describe(
-      "Simulate an ambiguous query that requires clarification (triggers input_required status)"
+      "Simulate an ambiguous query that requires clarification (triggers input_required status)",
     ),
 });
 
@@ -59,18 +59,19 @@ async function runResearchProcess(
     updateTaskStatus: (
       taskId: string,
       status: Task["status"],
-      message?: string
+      message?: string,
     ) => Promise<void>;
     storeTaskResult: (
       taskId: string,
       status: "completed" | "failed",
-      result: CallToolResult
+      result: CallToolResult,
     ) => Promise<void>;
   },
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  sendRequest: any
+  sendRequest: any,
 ): Promise<void> {
   const state = researchStates.get(taskId);
+  /* v8 ignore next -- createTask stores the state immediately before starting this process */
   if (!state) return;
 
   // Process each stage
@@ -89,7 +90,7 @@ async function runResearchProcess(
       await taskStore.updateTaskStatus(
         taskId,
         "input_required",
-        `Found multiple interpretations for "${state.topic}". Requesting clarification...`
+        `Found multiple interpretations for "${state.topic}". Requesting clarification...`,
       );
 
       try {
@@ -115,7 +116,7 @@ async function runResearchProcess(
             },
           },
           ElicitResultSchema,
-          { relatedTask: { taskId } }
+          { relatedTask: { taskId } },
         );
 
         // Process elicitation response
@@ -132,7 +133,7 @@ async function runResearchProcess(
         // Elicitation failed - use default interpretation and continue
         console.warn(
           `Elicitation failed for task ${taskId}:`,
-          error instanceof Error ? error.message : String(error)
+          error instanceof Error ? error.message : String(error),
         );
         state.clarification = "technical (default - elicitation unavailable)";
       }
@@ -141,7 +142,7 @@ async function runResearchProcess(
       await taskStore.updateTaskStatus(
         taskId,
         "working",
-        `Continuing with interpretation: "${state.clarification}"...`
+        `Continuing with interpretation: "${state.clarification}"...`,
       );
 
       // Continue processing (no return - just keep going through the loop)
@@ -284,7 +285,7 @@ export const registerSimulateResearchQueryTool = (server: McpServer) => {
           task.taskId,
           validatedArgs,
           extra.taskStore,
-          extra.sendRequest
+          extra.sendRequest,
         ).catch((error) => {
           console.error(`Research task ${task.taskId} failed:`, error);
           extra.taskStore
@@ -295,6 +296,7 @@ export const registerSimulateResearchQueryTool = (server: McpServer) => {
         return { task };
       },
 
+      /* v8 ignore start -- SDK 1.x never calls a tool task's getTask/getTaskResult: tasks/get and tasks/result are answered from the task store (Protocol), so these handlers are unreachable over the wire */
       /**
        * Returns the current status of the research task.
        */
@@ -315,7 +317,8 @@ export const registerSimulateResearchQueryTool = (server: McpServer) => {
 
         return result as CallToolResult;
       },
-    }
+      /* v8 ignore stop */
+    },
   );
 };
 
@@ -323,7 +326,7 @@ export const registerSimulateResearchQueryTool = (server: McpServer) => {
  * Returns contextual interpretation options based on the topic.
  */
 function getInterpretationsForTopic(
-  topic: string
+  topic: string,
 ): Array<{ const: string; title: string }> {
   const lowerTopic = topic.toLowerCase();
 

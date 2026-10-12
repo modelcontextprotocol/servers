@@ -28,7 +28,7 @@ export const resourceTypeCompleter = completable(
   z.string().describe("Type of resource to fetch"),
   (value: string) => {
     return RESOURCE_TYPES.filter((t) => t.startsWith(value));
-  }
+  },
 );
 
 /**
@@ -52,7 +52,7 @@ export const resourceIdForPromptCompleter = completable(
   (value: string) => {
     const resourceId = Number(value);
     return Number.isInteger(resourceId) && resourceId > 0 ? [value] : [];
-  }
+  },
 );
 
 /**
@@ -101,11 +101,11 @@ export const textResource = (uri: URL, resourceId: number) => {
 export const blobResource = (uri: URL, resourceId: number) => {
   const timestamp = new Date().toLocaleTimeString();
   const resourceText = Buffer.from(
-    `Resource ${resourceId}: This is a base64 blob created at ${timestamp}`
+    `Resource ${resourceId}: This is a base64 blob created at ${timestamp}`,
   ).toString("base64");
   return {
     uri: uri.toString(),
-    mimeType: "text/plain",
+    mimeType: "application/octet-stream",
     blob: resourceText,
   };
 };
@@ -127,31 +127,26 @@ export const blobResourceUri = (resourceId: number) =>
   new URL(`${blobUriBase}/${resourceId}`);
 
 /**
- * Parses the resource identifier from the provided URI and validates it
- * against the given variables. Throws an error if the URI corresponds
- * to an unknown resource or if the resource identifier is invalid.
+ * Parses the resource identifier from the provided variables and validates
+ * that it is a positive integer.
  *
- * @param {URL} uri - The URI of the resource to be parsed.
- * @param {Record<string, unknown>} variables - A record containing context-specific variables that include the resourceId.
- * @returns {number} The parsed and validated resource identifier as an integer.
- * @throws {Error} Throws an error if the URI matches unsupported base URIs or if the resourceId is invalid.
+ * The SDK only routes URIs that match the registered template to the
+ * resource handler, so by the time we get here the URI prefix is already
+ * known to be one of `textUriBase` / `blobUriBase`. Only the resourceId
+ * variable still needs validating.
+ *
+ * @param {URL} uri - The URI of the resource (used in the error message).
+ * @param {Record<string, unknown>} variables - Context variables including resourceId.
+ * @returns {number} The parsed and validated resource identifier as a positive integer.
+ * @throws {Error} If the resourceId is not a finite positive integer.
  */
 const parseResourceId = (uri: URL, variables: Record<string, unknown>) => {
-  const uriError = `Unknown resource: ${uri.toString()}`;
-  if (
-    uri.toString().startsWith(textUriBase) &&
-    uri.toString().startsWith(blobUriBase)
-  ) {
-    throw new Error(uriError);
-  } else {
-    const idxStr = String((variables as any).resourceId ?? "");
-    const idx = Number(idxStr);
-    if (Number.isFinite(idx) && Number.isInteger(idx) && idx > 0) {
-      return idx;
-    } else {
-      throw new Error(uriError);
-    }
+  const idxStr = String(variables.resourceId ?? "");
+  const idx = Number(idxStr);
+  if (Number.isFinite(idx) && Number.isInteger(idx) && idx > 0) {
+    return idx;
   }
+  throw new Error(`Unknown resource: ${uri.toString()}`);
 };
 
 /**
@@ -186,7 +181,7 @@ export const registerResourceTemplates = (server: McpServer) => {
       return {
         contents: [textResource(uri, resourceId)],
       };
-    }
+    },
   );
 
   // Register the blob resource template
@@ -206,6 +201,6 @@ export const registerResourceTemplates = (server: McpServer) => {
       return {
         contents: [blobResource(uri, resourceId)],
       };
-    }
+    },
   );
 };

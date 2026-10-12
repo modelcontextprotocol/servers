@@ -1,0 +1,30 @@
+[
+  {
+    "prompt": "File an issue titled 'fetch server ignores robots.txt after a redirect' and set it up the way this repo wants.",
+    "expect": "issue-create"
+  },
+  {
+    "prompt": "Which milestone should a new issue go in, and how do I find the current one?",
+    "expect": "issue-create"
+  },
+  {
+    "prompt": "Before I file this, how do I check nobody has reported it already?",
+    "expect": "issue-create"
+  },
+  {
+    "prompt": "I found a bug in the git server while working on something else. How do I get it tracked in this repo?",
+    "expect": "issue-create"
+  },
+  {
+    "prompt": "Raise an issue for adding a Roots demonstration to the everything server.",
+    "expect": "issue-create"
+  },
+  {
+    "prompt": "What is the chemical symbol for potassium?",
+    "expect": null
+  },
+  {
+    "prompt": "Reverse this string: stressed",
+    "expect": null
+  }
+]

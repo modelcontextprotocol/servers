@@ -1,0 +1,34 @@
+[
+  {
+    "prompt": "Triage the new issues.",
+    "expect": "issue-triage"
+  },
+  {
+    "prompt": "How do I decide what Priority an incoming issue deserves?",
+    "expect": "issue-triage"
+  },
+  {
+    "prompt": "Audit the Servers V2 board for anything that has drifted.",
+    "expect": "issue-triage"
+  },
+  {
+    "prompt": "Someone opened an issue asking us to list their MCP server in the README. How do I respond?",
+    "expect": "issue-triage"
+  },
+  {
+    "prompt": "Three outside PRs all fix the same filesystem path bug. What do I do with them?",
+    "expect": "issue-triage"
+  },
+  {
+    "prompt": "After scoring an issue against the rubric, what do I do with the score?",
+    "expect": "issue-triage"
+  },
+  {
+    "prompt": "Who wrote the novel Moby-Dick?",
+    "expect": null
+  },
+  {
+    "prompt": "Convert 45 degrees Celsius to Fahrenheit.",
+    "expect": null
+  }
+]

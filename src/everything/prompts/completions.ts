@@ -17,9 +17,9 @@ export const registerPromptWithCompletions = (server: McpServer) => {
       z.string().describe("Choose the department."),
       (value) => {
         return ["Engineering", "Sales", "Marketing", "Support"].filter((d) =>
-          d.startsWith(value)
+          d.startsWith(value),
         );
-      }
+      },
     ),
     name: completable(
       z
@@ -37,7 +37,7 @@ export const registerPromptWithCompletions = (server: McpServer) => {
           return ["John", "Kim", "Lee"].filter((n) => n.startsWith(value));
         }
         return [];
-      }
+      },
     ),
   };
 
@@ -59,6 +59,6 @@ export const registerPromptWithCompletions = (server: McpServer) => {
           },
         },
       ],
-    })
+    }),
   );
 };

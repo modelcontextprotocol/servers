@@ -79,7 +79,7 @@ export const registerTriggerSamplingRequestTool = (server: McpServer) => {
         // Send the sampling request to the client
         const result = await extra.sendRequest(
           request,
-          CreateMessageResultSchema
+          CreateMessageResultSchema,
         );
 
         // Return the result to the client
@@ -91,7 +91,7 @@ export const registerTriggerSamplingRequestTool = (server: McpServer) => {
             },
           ],
         };
-      }
+      },
     );
   }
 };

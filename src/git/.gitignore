@@ -1,2 +1,6 @@
 __pycache__
 .venv
+# Coverage output (see Development in README.md)
+.coverage
+.coverage.*
+coverage.json

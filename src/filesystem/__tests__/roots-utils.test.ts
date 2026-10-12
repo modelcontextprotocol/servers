@@ -1,84 +1,114 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { getValidRootDirectories } from '../roots-utils.js';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, realpathSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import type { Root } from '@modelcontextprotocol/sdk/types.js';
+// Unit tests for getValidRootDirectories, which turns the roots a client
+// sends into allowed directories. The protocol-level roots behavior is in
+// server-roots.test.ts; this file covers the inputs the SDK's Root schema
+// keeps a client from sending over the wire (plain paths, ~) and failures
+// that need a mocked stat. Root URIs are built with pathToFileURL, as a
+// client builds them, not by concatenating "file://" and a path.
 
-describe('getValidRootDirectories', () => {
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { promises as fsp } from "fs";
+import {
+  mkdtempSync,
+  rmSync,
+  mkdirSync,
+  writeFileSync,
+  realpathSync,
+} from "fs";
+import { homedir, tmpdir } from "os";
+import { join } from "path";
+import { pathToFileURL } from "url";
+import { getValidRootDirectories } from "../roots-utils.js";
+
+describe("getValidRootDirectories", () => {
   let testDir1: string;
   let testDir2: string;
   let testDir3: string;
   let testFile: string;
 
   beforeEach(() => {
-    // Create test directories
-    testDir1 = realpathSync(mkdtempSync(join(tmpdir(), 'mcp-roots-test1-')));
-    testDir2 = realpathSync(mkdtempSync(join(tmpdir(), 'mcp-roots-test2-')));
-    testDir3 = realpathSync(mkdtempSync(join(tmpdir(), 'mcp-roots-test3-')));
-
-    // Create a test file (not a directory)
-    testFile = join(testDir1, 'test-file.txt');
-    writeFileSync(testFile, 'test content');
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    // realpathSync.native, like the fs.promises.realpath the code uses,
+    // expands a Windows 8.3 short name (RUNNER~1) in os.tmpdir(); the JS
+    // realpathSync does not.
+    testDir1 = realpathSync.native(
+      mkdtempSync(join(tmpdir(), "mcp-roots-test1-")),
+    );
+    testDir2 = realpathSync.native(
+      mkdtempSync(join(tmpdir(), "mcp-roots-test2-")),
+    );
+    testDir3 = realpathSync.native(
+      mkdtempSync(join(tmpdir(), "mcp-roots-test3-")),
+    );
+    testFile = join(testDir1, "test-file.txt");
+    writeFileSync(testFile, "test content");
   });
 
   afterEach(() => {
-    // Cleanup
+    vi.restoreAllMocks();
     rmSync(testDir1, { recursive: true, force: true });
     rmSync(testDir2, { recursive: true, force: true });
     rmSync(testDir3, { recursive: true, force: true });
   });
 
-  describe('valid directory processing', () => {
-    it('should process all URI formats and edge cases', async () => {
-      const roots = [
-        { uri: `file://${testDir1}`, name: 'File URI' },
-        { uri: testDir2, name: 'Plain path' },
-        { uri: testDir3 } // Plain path without name property
-      ];
-
-      const result = await getValidRootDirectories(roots);
-
-      expect(result).toContain(testDir1);
-      expect(result).toContain(testDir2);
-      expect(result).toContain(testDir3);
-      expect(result).toHaveLength(3);
+  describe("valid directory processing", () => {
+    it("accepts file URIs and plain paths, with or without a name", async () => {
+      const result = await getValidRootDirectories([
+        { uri: pathToFileURL(testDir1).href, name: "File URI" },
+        { uri: testDir2, name: "Plain path" },
+        { uri: testDir3 },
+      ]);
+      expect(result).toEqual([testDir1, testDir2, testDir3]);
     });
 
-    it('should normalize complex paths', async () => {
-      const subDir = join(testDir1, 'subdir');
+    it("normalizes . and .. segments", async () => {
+      const subDir = join(testDir1, "subdir");
       mkdirSync(subDir);
-      
-      const roots = [
-        { uri: `file://${testDir1}/./subdir/../subdir`, name: 'Complex Path' }
-      ];
+      const result = await getValidRootDirectories([
+        { uri: `${pathToFileURL(testDir1).href}/./subdir/../subdir` },
+      ]);
+      expect(result).toEqual([subDir]);
+    });
 
-      const result = await getValidRootDirectories(roots);
-
-      expect(result).toHaveLength(1);
-      expect(result[0]).toBe(subDir);
+    it("expands ~ and ~/ in a plain path to the home directory", async () => {
+      const home = realpathSync.native(homedir());
+      expect(await getValidRootDirectories([{ uri: "~" }])).toEqual([home]);
+      expect(await getValidRootDirectories([{ uri: "~/" }])).toEqual([home]);
     });
   });
 
-  describe('error handling', () => {
+  describe("error handling", () => {
+    it("drops missing, non-directory and malformed roots, logging each", async () => {
+      const nonExistentDir = join(testDir1, "non-existent-directory");
+      const result = await getValidRootDirectories([
+        { uri: pathToFileURL(testDir1).href, name: "Valid Dir" },
+        { uri: pathToFileURL(nonExistentDir).href },
+        { uri: pathToFileURL(testFile).href },
+        { uri: "file://\0invalid\0path" },
+      ]);
+      expect(result).toEqual([testDir1]);
+      expect(console.error).toHaveBeenCalledWith(
+        `Skipping non-directory root: ${testFile}`,
+      );
+      expect(console.error).toHaveBeenCalledWith(
+        `Skipping invalid path or inaccessible: ${pathToFileURL(nonExistentDir).href}`,
+      );
+    });
 
-    it('should handle various error types', async () => {
-      const nonExistentDir = join(tmpdir(), 'non-existent-directory-12345');
-      const invalidPath = '\0invalid\0path'; // Null bytes cause different error types
-      const roots = [
-        { uri: `file://${testDir1}`, name: 'Valid Dir' },
-        { uri: `file://${nonExistentDir}`, name: 'Non-existent Dir' },
-        { uri: `file://${testFile}`, name: 'File Not Dir' },
-        { uri: `file://${invalidPath}`, name: 'Invalid Path' }
-      ];
-
-      const result = await getValidRootDirectories(roots);
-
-      expect(result).toContain(testDir1);
-      expect(result).not.toContain(nonExistentDir);
-      expect(result).not.toContain(testFile);
-      expect(result).not.toContain(invalidPath);
-      expect(result).toHaveLength(1);
+    it("drops a root whose stat fails after realpath succeeded, logging the error", async () => {
+      vi.spyOn(fsp, "stat")
+        .mockRejectedValueOnce(new Error("EACCES"))
+        .mockRejectedValueOnce("not an Error");
+      const result = await getValidRootDirectories([
+        { uri: testDir1 },
+        { uri: testDir2 },
+      ]);
+      expect(result).toEqual([]);
+      expect(console.error).toHaveBeenCalledWith(
+        `Skipping invalid directory: ${testDir1} due to error: EACCES`,
+      );
+      expect(console.error).toHaveBeenCalledWith(
+        `Skipping invalid directory: ${testDir2} due to error: not an Error`,
+      );
     });
   });
 });

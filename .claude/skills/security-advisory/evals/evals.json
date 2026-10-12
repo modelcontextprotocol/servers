@@ -1,0 +1,34 @@
+[
+  {
+    "prompt": "Someone just reported a path traversal in the filesystem server through the private vulnerability form. What do I do with it?",
+    "expect": "security-advisory"
+  },
+  {
+    "prompt": "A privately reported vulnerability against the fetch server looks like it's really in the Python SDK's HTTP handling. How do I handle that?",
+    "expect": "security-advisory"
+  },
+  {
+    "prompt": "How do I get a private fork for an accepted advisory so I can write the fix without it being visible?",
+    "expect": "security-advisory"
+  },
+  {
+    "prompt": "How do I reply to the person who reported a vulnerability to us privately?",
+    "expect": "security-advisory"
+  },
+  {
+    "prompt": "The fix for a privately reported vulnerability in the git server just went out in a release. What's left to do before it's finished?",
+    "expect": "security-advisory"
+  },
+  {
+    "prompt": "Walk me through taking an accepted vulnerability report all the way to a shipped, disclosed fix.",
+    "expect": "security-advisory"
+  },
+  {
+    "prompt": "What is the capital of Portugal?",
+    "expect": null
+  },
+  {
+    "prompt": "Rename the local variable `tmp` to `buffer` in this snippet: `const tmp = 1; return tmp + 1;`",
+    "expect": null
+  }
+]

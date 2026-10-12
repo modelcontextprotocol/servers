@@ -6,12 +6,14 @@ import {
 import {
   setSubscriptionHandlers,
   stopSimulatedResourceUpdates,
+  removeSubscriber,
 } from "../resources/subscriptions.js";
 import { registerConditionalTools, registerTools } from "../tools/index.js";
 import { registerResources, readInstructions } from "../resources/index.js";
 import { registerPrompts } from "../prompts/index.js";
 import { stopSimulatedLogging } from "./logging.js";
 import { syncRoots } from "./roots.js";
+import { SERVER_VERSION } from "../version.js";
 
 // Server Factory response
 export type ServerFactoryResponse = {
@@ -47,7 +49,7 @@ export const createServer: () => ServerFactoryResponse = () => {
     {
       name: "mcp-servers/everything",
       title: "Everything Reference Server",
-      version: "2.0.0",
+      version: SERVER_VERSION,
     },
     {
       capabilities: {
@@ -75,7 +77,7 @@ export const createServer: () => ServerFactoryResponse = () => {
       instructions,
       taskStore,
       taskMessageQueue,
-    }
+    },
   );
 
   // Register the tools
@@ -110,6 +112,7 @@ export const createServer: () => ServerFactoryResponse = () => {
       // Stop any simulated logging or resource updates that may have been initiated.
       stopSimulatedLogging(sessionId);
       stopSimulatedResourceUpdates(sessionId);
+      removeSubscriber(sessionId);
       // Clean up task store timers
       taskStore.cleanup();
       if (initializeTimeout) clearTimeout(initializeTimeout);

@@ -1,8 +1,8 @@
-import { promises as fs, type Stats } from 'fs';
-import path from 'path';
-import os from 'os';
-import { normalizePath } from './path-utils.js';
-import type { Root } from '@modelcontextprotocol/sdk/types.js';
+import { promises as fs, type Stats } from "fs";
+import path from "path";
+import os from "os";
+import { normalizePath } from "./path-utils.js";
+import type { Root } from "@modelcontextprotocol/sdk/types.js";
 import { fileURLToPath } from "url";
 
 /**
@@ -12,10 +12,13 @@ import { fileURLToPath } from "url";
  */
 async function parseRootUri(rootUri: string): Promise<string | null> {
   try {
-    const rawPath = rootUri.startsWith('file://') ? fileURLToPath(rootUri) : rootUri;
-    const expandedPath = rawPath.startsWith('~/') || rawPath === '~' 
-      ? path.join(os.homedir(), rawPath.slice(1)) 
-      : rawPath;
+    const rawPath = rootUri.startsWith("file://")
+      ? fileURLToPath(rootUri)
+      : rootUri;
+    const expandedPath =
+      rawPath.startsWith("~/") || rawPath === "~"
+        ? path.join(os.homedir(), rawPath.slice(1))
+        : rawPath;
     const absolutePath = path.resolve(expandedPath);
     const resolvedPath = await fs.realpath(absolutePath);
     return normalizePath(resolvedPath);
@@ -31,7 +34,11 @@ async function parseRootUri(rootUri: string): Promise<string | null> {
  * @param reason - Specific reason for failure
  * @returns Formatted error message
  */
-function formatDirectoryError(dir: string, error?: unknown, reason?: string): string {
+function formatDirectoryError(
+  dir: string,
+  error?: unknown,
+  reason?: string,
+): string {
   if (reason) {
     return `Skipping ${reason}: ${dir}`;
   }
@@ -41,37 +48,45 @@ function formatDirectoryError(dir: string, error?: unknown, reason?: string): st
 
 /**
  * Resolves requested root directories from MCP root specifications.
- * 
+ *
  * Converts root URI specifications (file:// URIs or plain paths) into normalized
  * directory paths, validating that each path exists and is a directory.
  * Includes symlink resolution for security.
- * 
+ *
  * @param requestedRoots - Array of root specifications with URI and optional name
  * @returns Promise resolving to array of validated directory paths
  */
 export async function getValidRootDirectories(
-  requestedRoots: readonly Root[]
+  requestedRoots: readonly Root[],
 ): Promise<string[]> {
   const validatedDirectories: string[] = [];
-  
+
   for (const requestedRoot of requestedRoots) {
     const resolvedPath = await parseRootUri(requestedRoot.uri);
     if (!resolvedPath) {
-      console.error(formatDirectoryError(requestedRoot.uri, undefined, 'invalid path or inaccessible'));
+      console.error(
+        formatDirectoryError(
+          requestedRoot.uri,
+          undefined,
+          "invalid path or inaccessible",
+        ),
+      );
       continue;
     }
-    
+
     try {
       const stats: Stats = await fs.stat(resolvedPath);
       if (stats.isDirectory()) {
         validatedDirectories.push(resolvedPath);
       } else {
-        console.error(formatDirectoryError(resolvedPath, undefined, 'non-directory root'));
+        console.error(
+          formatDirectoryError(resolvedPath, undefined, "non-directory root"),
+        );
       }
     } catch (error) {
       console.error(formatDirectoryError(resolvedPath, error));
     }
   }
-  
+
   return validatedDirectories;
 }

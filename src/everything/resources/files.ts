@@ -18,10 +18,10 @@ export const registerFileResources = (server: McpServer) => {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = dirname(__filename);
   const docsDir = join(__dirname, "..", "docs");
-  let entries: string[] = [];
+  let entries: string[];
   try {
     entries = readdirSync(docsDir);
-  } catch (e) {
+  } catch {
     // If docs/ folder is missing or unreadable, just skip registration
     return;
   }
@@ -58,7 +58,7 @@ export const registerFileResources = (server: McpServer) => {
             },
           ],
         };
-      }
+      },
     );
   }
 };

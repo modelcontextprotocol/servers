@@ -1,0 +1,38 @@
+[
+  {
+    "prompt": "npm run local:gate just failed at the verify:install-fresh stage. What do I do?",
+    "expect": "pre-push-gate"
+  },
+  {
+    "prompt": "The gate printed 'gate-lease: pid 4412 holds the gate lease; waiting for its turn'. Is something stuck? Should I skip the lease?",
+    "expect": "pre-push-gate"
+  },
+  {
+    "prompt": "The boot smoke stage went red for the git server over stdio. How do I work out what is wrong?",
+    "expect": "pre-push-gate"
+  },
+  {
+    "prompt": "I ran the pre-push gate in the background and the task says exit code 0. How do I confirm it really passed?",
+    "expect": "pre-push-gate"
+  },
+  {
+    "prompt": "validate:py reports FAIL for fetch at the sync step during the gate. How do I fix it?",
+    "expect": "pre-push-gate"
+  },
+  {
+    "prompt": "verify:no-test-retries is failing in my gate run but I never added a test retry. What is it matching?",
+    "expect": "pre-push-gate"
+  },
+  {
+    "prompt": "The coverage stage of my gate run went red, but the last report it printed was all green. How do I find what failed and fix it?",
+    "expect": "pre-push-gate"
+  },
+  {
+    "prompt": "What is 17 multiplied by 23?",
+    "expect": null
+  },
+  {
+    "prompt": "Write a limerick about a cat.",
+    "expect": null
+  }
+]
