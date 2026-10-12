@@ -68,17 +68,22 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
     const createdAt = Date.now();
     let result: SamplingResult | undefined;
     let answeredAt = createdAt;
+    // The key of the outstanding request. A key is never reused once
+    // answered, so a re-asked request gets the next one.
+    let attempt = 1;
+    const key = () => `sampling-${attempt}`;
 
     return createTask(
       {
         stateAt: (): TaskState =>
           result === undefined
             ? {
-                since: createdAt,
+                // Waiting since the request, or the last re-ask, went out
+                since: answeredAt,
                 status: "input_required",
                 statusMessage: "Waiting for the client's LLM to respond",
                 inputRequests: {
-                  sampling: inputRequired.createMessage({
+                  [key()]: inputRequired.createMessage({
                     messages: [
                       {
                         role: "user",
@@ -108,10 +113,12 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
                 },
               },
         receive: (responses, now) => {
-          const answer = inputResponse(responses, "sampling");
-          if (answer.kind !== "sampling") return;
-          result = answer.result;
           answeredAt = now;
+          const answer = inputResponse(responses, key());
+          // An answer of another kind spends the request: ask again under a
+          // new key.
+          if (answer.kind === "sampling") result = answer.result;
+          else attempt++;
         },
       },
       { ttlMs: 10 * 60_000, pollIntervalMs: 1000 },

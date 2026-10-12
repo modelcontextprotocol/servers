@@ -73,9 +73,6 @@ const config = {
   },
 };
 
-/** The clarification question's answer. */
-const ClarificationSchema = z.object({ interpretation: z.string() });
-
 /**
  * Returns contextual interpretation options based on the topic.
  */
@@ -99,8 +96,18 @@ function getInterpretationsForTopic(
   ];
 }
 
-/** What the user's answer to the clarification request means. */
-function clarificationFrom(responses: TaskInputResponses): string {
+/**
+ * What the user's answer to the clarification request means. An accepted
+ * answer counts only if it is one of the interpretations offered for `topic`.
+ */
+function clarificationFrom(
+  responses: TaskInputResponses,
+  topic: string,
+): string {
+  const offered = getInterpretationsForTopic(topic).map((o) => o.const);
+  const ClarificationSchema = z.object({
+    interpretation: z.string().refine((value) => offered.includes(value)),
+  });
   const view = inputResponse(responses, "clarification");
   const accepted = acceptedContent(
     responses,
@@ -249,7 +256,7 @@ export const registerSimulateResearchQueryTool = (server: McpServer) => {
             };
           },
           receive: (responses, now) => {
-            clarification = clarificationFrom(responses);
+            clarification = clarificationFrom(responses, topic);
             startedAt = now;
             startStage = CLARIFY_AT;
           },

@@ -334,8 +334,11 @@ const EmptyResult = z.object({});
  * Serve the extension's methods on a 2026-07-28 server: `tasks/get`,
  * `tasks/update` and `tasks/cancel`. A request from a client that does not
  * declare the extension is refused with -32021. An unknown or expired task
- * id, and an update or cancellation that does not fit the task's status, is
- * refused with -32602 (invalid params).
+ * id, and a cancellation of a finished task, is refused with -32602 (invalid
+ * params). An update's answers to requests that are not outstanding are
+ * ignored. Each input request a task makes has a key of its own, never reused
+ * once answered (the extension requires it), so a re-asked request gets a
+ * new key.
  *
  * @param {McpServer} server - The 2026-07-28 server to serve them on.
  */
@@ -362,23 +365,22 @@ export function registerTasksExtension(server: McpServer): void {
       const now = Date.now();
       const task = find(taskId, now);
       const state = stateOf(task, now);
-      if (state.status !== "input_required") {
-        throw new ProtocolError(
-          ProtocolErrorCode.InvalidParams,
-          `Task ${taskId} is ${state.status}, not waiting for input`,
-        );
-      }
-      const outstanding = Object.keys(state.inputRequests);
-      const unknown = Object.keys(inputResponses).filter(
-        (key) => !outstanding.includes(key),
+      // Only answers to requests outstanding now are passed on. The rest (a
+      // key never issued, one already answered, or any answer to a task not
+      // waiting for input) are ignored, as the extension asks, so a client
+      // that resends or batches responses is not failed for it.
+      const outstanding =
+        state.status === "input_required"
+          ? Object.keys(state.inputRequests)
+          : [];
+      const answered = Object.fromEntries(
+        Object.entries(inputResponses).filter(([key]) =>
+          outstanding.includes(key),
+        ),
       );
-      if (unknown.length > 0) {
-        throw new ProtocolError(
-          ProtocolErrorCode.InvalidParams,
-          `Task ${taskId} has no outstanding input request ${unknown.join(", ")}; it is waiting for ${outstanding.join(", ")}`,
-        );
+      if (Object.keys(answered).length > 0) {
+        task.behavior.receive(answered, now);
       }
-      task.behavior.receive(inputResponses, now);
       return {};
     },
   );

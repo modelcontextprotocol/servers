@@ -93,17 +93,22 @@ export const registerTriggerElicitationRequestAsyncTool = (
     const createdAt = Date.now();
     let summary: CallToolResult | undefined;
     let answeredAt = createdAt;
+    // The key of the outstanding request. A key is never reused once
+    // answered, so a re-asked form gets the next one.
+    let attempt = 1;
+    const key = () => `form-${attempt}`;
 
     return createTask(
       {
         stateAt: (): TaskState =>
           summary === undefined
             ? {
-                since: createdAt,
+                // Waiting since the form, or the last re-ask, went out
+                since: answeredAt,
                 status: "input_required",
                 statusMessage: "Waiting for the user's input",
                 inputRequests: {
-                  form: inputRequired.elicit({
+                  [key()]: inputRequired.elicit({
                     message:
                       "Please provide inputs for the following fields (async task demo):",
                     requestedSchema: FormSchema,
@@ -117,18 +122,20 @@ export const registerTriggerElicitationRequestAsyncTool = (
                 result: summary,
               },
         receive: (responses, now) => {
-          const answer = inputResponse(responses, "form");
-          if (answer.kind !== "elicit") return;
-          if (answer.action !== "accept") {
-            summary = summarize(answer.action);
-          } else {
-            const content = acceptedContent(responses, "form", FormSchema);
-            // An accepted answer that does not fit the form is ignored, so
-            // the task keeps waiting for one that does.
-            if (content === undefined) return;
-            summary = summarize("accept", content);
-          }
           answeredAt = now;
+          const answer = inputResponse(responses, key());
+          if (answer.kind === "elicit" && answer.action !== "accept") {
+            summary = summarize(answer.action);
+            return;
+          }
+          const content =
+            answer.kind === "elicit"
+              ? acceptedContent(responses, key(), FormSchema)
+              : undefined;
+          // An answer of another kind, or one that does not fit the form,
+          // spends the request: ask again under a new key.
+          if (content === undefined) attempt++;
+          else summary = summarize("accept", content);
         },
       },
       { ttlMs: 10 * 60_000, pollIntervalMs: 1000 },

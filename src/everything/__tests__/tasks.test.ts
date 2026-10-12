@@ -353,32 +353,63 @@ describe("simulate-research-query", () => {
       );
     });
 
-    it("refuses an answer to a request it did not make", async () => {
+    it("ignores an answer to a request it did not make, and keeps waiting", async () => {
       const { taskId } = await toClarification("t");
-      const response = await peer.request("tasks/update", {
+      expect(
+        await peer.result("tasks/update", {
+          taskId,
+          inputResponses: { other: { action: "accept" } },
+        }),
+      ).toMatchObject({ resultType: "complete" });
+      expect((await peer.get(taskId)).status).toBe("input_required");
+    });
+
+    it("uses only the outstanding answer from an update that also carries others", async () => {
+      const { taskId } = await toClarification("python");
+      await peer.result("tasks/update", {
         taskId,
-        inputResponses: { other: { action: "accept" } },
+        inputResponses: {
+          other: { action: "decline" },
+          clarification: {
+            action: "accept",
+            content: { interpretation: "snake" },
+          },
+        },
       });
-      expect(response.error).toMatchObject({
-        code: -32602,
-        message: expect.stringContaining(
-          "has no outstanding input request other; it is waiting for clarification",
-        ),
+      advance(STAGE_DURATION * 2);
+      expect(resultText(await peer.get(taskId))).toMatch(
+        /^# Research Report: python \(snake\)\n/,
+      );
+    });
+
+    it("does not take an interpretation it did not offer", async () => {
+      const { taskId } = await toClarification("python");
+      await peer.result("tasks/update", {
+        taskId,
+        inputResponses: {
+          clarification: {
+            action: "accept",
+            content: { interpretation: "astrology" },
+          },
+        },
       });
+      advance(STAGE_DURATION * 2);
+      expect(resultText(await peer.get(taskId))).toContain(
+        "No usable answer - using default interpretation",
+      );
     });
   });
 
-  it("refuses tasks/update while the task is working", async () => {
+  it("acknowledges and ignores tasks/update while the task is working", async () => {
     peer = await rawClient(TASKS);
     const created = await peer.call("simulate-research-query", { topic: "t" });
-    const response = await peer.request("tasks/update", {
-      taskId: created.taskId,
-      inputResponses: {},
-    });
-    expect(response.error).toMatchObject({
-      code: -32602,
-      message: expect.stringContaining("is working, not waiting for input"),
-    });
+    expect(
+      await peer.result("tasks/update", {
+        taskId: created.taskId,
+        inputResponses: { clarification: { action: "accept" } },
+      }),
+    ).toMatchObject({ resultType: "complete" });
+    expect((await peer.get(created.taskId as string)).status).toBe("working");
   });
 
   it("stays cancelled once the client cancels it, and refuses a second cancel", async () => {
@@ -426,7 +457,7 @@ describe("trigger-sampling-request-async", () => {
       statusMessage: "Waiting for the client's LLM to respond",
       ttlMs: 600000,
       inputRequests: {
-        sampling: {
+        "sampling-1": {
           method: "sampling/createMessage",
           params: {
             maxTokens: 100,
@@ -448,7 +479,7 @@ describe("trigger-sampling-request-async", () => {
     await peer.result("tasks/update", {
       taskId,
       inputResponses: {
-        sampling: {
+        "sampling-1": {
           role: "assistant",
           model: "test-model",
           content: { type: "text", text: "hi" },
@@ -461,18 +492,18 @@ describe("trigger-sampling-request-async", () => {
     expect(resultText(done)).toContain('"text": "hi"');
   });
 
-  it("keeps waiting after an answer of the wrong kind", async () => {
+  it("asks again, under a new key, after an answer of the wrong kind", async () => {
     peer = await rawClient({ ...TASKS, sampling: {} });
     const created = await peer.call("trigger-sampling-request-async", {
       prompt: "p",
     });
     await peer.result("tasks/update", {
       taskId: created.taskId,
-      inputResponses: { sampling: { action: "accept" } },
+      inputResponses: { "sampling-1": { action: "accept" } },
     });
-    expect((await peer.get(created.taskId as string)).status).toBe(
-      "input_required",
-    );
+    const again = await peer.get(created.taskId as string);
+    expect(again.status).toBe("input_required");
+    expect(Object.keys(again.inputRequests as object)).toEqual(["sampling-2"]);
   });
 });
 
@@ -484,7 +515,7 @@ describe("trigger-elicitation-request-async", () => {
       status: "input_required",
       statusMessage: "Waiting for the user's input",
       inputRequests: {
-        form: {
+        "form-1": {
           method: "elicitation/create",
           params: { mode: "form", requestedSchema: { required: ["name"] } },
         },
@@ -493,7 +524,7 @@ describe("trigger-elicitation-request-async", () => {
     const taskId = created.taskId as string;
     await peer.result("tasks/update", {
       taskId,
-      inputResponses: { form: response },
+      inputResponses: { "form-1": response },
     });
     return peer.get(taskId);
   }
@@ -524,7 +555,7 @@ describe("trigger-elicitation-request-async", () => {
     const answeredAt = new Date(Date.now()).toISOString();
     await peer.result("tasks/update", {
       taskId: created.taskId,
-      inputResponses: { form: { action: "decline" } },
+      inputResponses: { "form-1": { action: "decline" } },
     });
     advance(60_000);
     expect((await peer.get(created.taskId as string)).lastUpdatedAt).toBe(
@@ -537,13 +568,21 @@ describe("trigger-elicitation-request-async", () => {
     ["a blank name", { name: "" }],
     ["a color that is not a choice", { name: "Ada", favoriteColor: "mauve" }],
   ])(
-    "keeps waiting after an accepted answer with %s",
+    "asks again, under a new key, after an accepted answer with %s",
     async (_label, content) => {
       peer = await rawClient(WITH_ELICITATION);
       const created = await peer.call("trigger-elicitation-request-async");
       await peer.result("tasks/update", {
         taskId: created.taskId,
-        inputResponses: { form: { action: "accept", content } },
+        inputResponses: { "form-1": { action: "accept", content } },
+      });
+      const again = await peer.get(created.taskId as string);
+      expect(again.status).toBe("input_required");
+      expect(Object.keys(again.inputRequests as object)).toEqual(["form-2"]);
+      // The spent key is no longer outstanding, so an answer to it is ignored.
+      await peer.result("tasks/update", {
+        taskId: created.taskId,
+        inputResponses: { "form-1": { action: "decline" } },
       });
       expect((await peer.get(created.taskId as string)).status).toBe(
         "input_required",
@@ -556,15 +595,14 @@ describe("trigger-elicitation-request-async", () => {
     expect(resultText(done)).toBe(`Elicitation ${action}.`);
   });
 
-  it("keeps waiting after an answer of the wrong kind", async () => {
+  it("asks again, under a new key, after an answer of the wrong kind", async () => {
     peer = await rawClient(WITH_ELICITATION);
     const created = await peer.call("trigger-elicitation-request-async");
     await peer.result("tasks/update", {
       taskId: created.taskId,
-      inputResponses: { form: { roots: [] } },
+      inputResponses: { "form-1": { roots: [] } },
     });
-    expect((await peer.get(created.taskId as string)).status).toBe(
-      "input_required",
-    );
+    const again = await peer.get(created.taskId as string);
+    expect(Object.keys(again.inputRequests as object)).toEqual(["form-2"]);
   });
 });

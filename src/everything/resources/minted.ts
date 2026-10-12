@@ -24,6 +24,15 @@ import {
 /** How long a minted resource stays readable, in milliseconds. */
 export const MINTED_RESOURCE_TTL_MS = 10 * 60_000;
 
+/**
+ * The most minted resources the process keeps, and the most bytes of content
+ * across them. Each one may be as large as the gzip tool's fetch limit, so
+ * without a budget a burst of calls could exhaust memory before the TTL frees
+ * anything; past it, the oldest are dropped first.
+ */
+export const MAX_MINTED_RESOURCES = 100;
+export const MAX_MINTED_BYTES = 64 * 1024 * 1024;
+
 /** The URI template every minted resource matches. */
 const mintedUriTemplate = "demo://resource/minted/{id}/{name}";
 
@@ -45,6 +54,20 @@ function sweep(now: number): void {
 }
 
 /**
+ * Drop the oldest minted resources (the map keeps insertion order) until one
+ * more of `bytes` fits both budgets.
+ */
+function makeRoom(bytes: number): void {
+  let total = bytes;
+  for (const resource of minted.values()) total += resource.blob.length;
+  for (const [uri, resource] of minted) {
+    if (minted.size < MAX_MINTED_RESOURCES && total <= MAX_MINTED_BYTES) break;
+    minted.delete(uri);
+    total -= resource.blob.length;
+  }
+}
+
+/**
  * Store a blob resource under a freshly minted URI, and return a link to it.
  *
  * @param name - The resource's name, the last segment of its URI.
@@ -58,6 +81,7 @@ export function mintBlobResource(
 ): ResourceLink {
   const now = Date.now();
   sweep(now);
+  makeRoom(blob.length);
   const uri = `demo://resource/minted/${randomUUID()}/${encodeURIComponent(name)}`;
   minted.set(uri, {
     name,

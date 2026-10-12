@@ -37,7 +37,10 @@ import { instancePublisher } from "../server/context.js";
 import { STATIC_DOCUMENT_CACHE_HINT } from "../resources/files.js";
 import {
   clearMintedResources,
+  MAX_MINTED_BYTES,
+  MAX_MINTED_RESOURCES,
   MINTED_RESOURCE_TTL_MS,
+  mintBlobResource,
 } from "../resources/minted.js";
 import { LOGGING_LEVELS } from "../tools/trigger-log-messages.js";
 import {
@@ -599,6 +602,35 @@ describe("minted resources", () => {
       code: -32602,
       data: { uri },
     });
+  });
+
+  it("keeps at most MAX_MINTED_RESOURCES, dropping the oldest", async () => {
+    const first = mintBlobResource("first", "text/plain", "AA==").uri;
+    for (let i = 1; i < MAX_MINTED_RESOURCES; i++) {
+      mintBlobResource(`r${i}`, "text/plain", "AA==");
+    }
+    session = await connectModern();
+    expect(await session.client.readResource({ uri: first })).toMatchObject({
+      contents: [{ uri: first }],
+    });
+    mintBlobResource("one-more", "text/plain", "AA==");
+    await expect(
+      session.client.readResource({ uri: first }),
+    ).rejects.toMatchObject({ code: -32602 });
+  });
+
+  it("keeps at most MAX_MINTED_BYTES of content, dropping the oldest", async () => {
+    const half = "A".repeat(MAX_MINTED_BYTES / 2);
+    const first = mintBlobResource("first", "text/plain", half).uri;
+    const second = mintBlobResource("second", "text/plain", half).uri;
+    mintBlobResource("third", "text/plain", "AA==");
+    session = await connectModern();
+    await expect(
+      session.client.readResource({ uri: first }),
+    ).rejects.toMatchObject({ code: -32602 });
+    expect(
+      (await session.client.readResource({ uri: second })).contents,
+    ).toHaveLength(1);
   });
 
   it("is not served to a 2025-era client", async () => {

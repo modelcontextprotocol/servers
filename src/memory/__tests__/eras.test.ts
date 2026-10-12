@@ -142,6 +142,33 @@ describe("both protocol eras", () => {
     process.exitCode = undefined;
   });
 
+  it("answers resources/subscribe from a 2026-07-28 peer with -32601", async () => {
+    // The revision removed the method, so the SDK refuses it before any
+    // handler runs, though the factory installs one for 2025-era clients.
+    const [peer, serverTransport] = InMemoryTransport.createLinkedPair();
+    const handle = await main(serverTransport);
+    closers.push(() => handle.close());
+    const response = new Promise<JSONRPCMessage>((resolve) => {
+      peer.onmessage = resolve;
+    });
+    await peer.start();
+    await peer.send({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "resources/subscribe",
+      params: {
+        uri: URI,
+        _meta: {
+          "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+          "io.modelcontextprotocol/clientCapabilities": {},
+        },
+      },
+    });
+    expect((await response) as Record<string, unknown>).toMatchObject({
+      error: { code: -32601 },
+    });
+  });
+
   it("stamps resultType and the cache fields on a 2026-07-28 read", async () => {
     const [peer, serverTransport] = InMemoryTransport.createLinkedPair();
     const handle = await main(serverTransport);
