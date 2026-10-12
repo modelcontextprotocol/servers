@@ -31,7 +31,12 @@ import {
 
 // Tool input schema
 const SimulateResearchQuerySchema = z.object({
-  topic: z.string().describe("The research topic to investigate"),
+  topic: z
+    .string()
+    .max(1000)
+    .describe(
+      "The research topic to investigate (at most 1,000 characters; the task keeps it until it expires)",
+    ),
   ambiguous: z
     .boolean()
     .default(false)

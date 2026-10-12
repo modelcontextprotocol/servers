@@ -22,7 +22,12 @@ import { createTask, type TaskState } from "../server/tasks.js";
 
 // Tool input schema
 const TriggerSamplingRequestAsyncSchema = z.object({
-  prompt: z.string().describe("The prompt to send to the LLM"),
+  prompt: z
+    .string()
+    .max(10000)
+    .describe(
+      "The prompt to send to the LLM (at most 10,000 characters; the task keeps it until it expires)",
+    ),
   maxTokens: z
     .number()
     .default(100)

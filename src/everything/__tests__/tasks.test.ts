@@ -22,7 +22,7 @@
  * `tasks/result` and `tasks/list`, which the extension does not define.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearTasks, TASKS_EXTENSION } from "../server/tasks.js";
+import { clearTasks, MAX_TASKS, TASKS_EXTENSION } from "../server/tasks.js";
 import { STAGE_DURATION, STAGES } from "../tools/simulate-research-query.js";
 import { connectRaw as rawClient, type RawSession } from "./harness.js";
 
@@ -147,6 +147,26 @@ describe("the extension", () => {
       });
     },
   );
+
+  it("keeps at most MAX_TASKS, dropping the oldest", async () => {
+    peer = await rawClient(TASKS);
+    const first = await peer.call("simulate-research-query", { topic: "t" });
+    for (let i = 1; i < MAX_TASKS; i++) {
+      await peer.call("simulate-research-query", { topic: "t" });
+    }
+    expect((await peer.get(first.taskId as string)).status).toBe("working");
+    await peer.call("simulate-research-query", { topic: "t" });
+    const response = await peer.request("tasks/get", { taskId: first.taskId });
+    expect(response.error).toMatchObject({ code: -32602 });
+  });
+
+  it("refuses a topic longer than it will keep", async () => {
+    peer = await rawClient(TASKS);
+    const result = await peer.call("simulate-research-query", {
+      topic: "x".repeat(1001),
+    });
+    expect(result.isError).toBe(true);
+  });
 
   it("drops a task once its TTL has passed", async () => {
     peer = await rawClient(TASKS);

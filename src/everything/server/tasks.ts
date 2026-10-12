@@ -95,6 +95,14 @@ type StoredTask = {
 /** Every live task, by id, across every server instance in the process. */
 const tasks = new Map<string, StoredTask>();
 
+/**
+ * The most tasks the process keeps. A task holds its tool's arguments (each
+ * task tool bounds their length) and the client's answers (bounded by the
+ * transports' request size) until its TTL, so without a cap a burst of calls
+ * could exhaust memory first; past it, the oldest task is dropped.
+ */
+export const MAX_TASKS = 100;
+
 /** Drop every task past its TTL. */
 function sweep(now: number): void {
   for (const [taskId, task] of tasks) {
@@ -167,6 +175,11 @@ export function createTask(
 ): CallToolResult {
   const now = Date.now();
   sweep(now);
+  // The map keeps insertion order, so the first entries are the oldest.
+  for (const taskId of tasks.keys()) {
+    if (tasks.size < MAX_TASKS) break;
+    tasks.delete(taskId);
+  }
   const task: StoredTask = {
     taskId: randomUUID(),
     createdAt: now,
