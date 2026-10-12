@@ -654,6 +654,23 @@ describe("2026-07-28 clients", () => {
     });
   });
 
+  it.each(["null", '"x"', "42", "true"])(
+    "answers a session-less POST of the JSON value %s as an invalid request, not a parse error",
+    async (body) => {
+      const response = await fetch(mcp, {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body,
+      });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({
+        jsonrpc: "2.0",
+        error: { code: -32600 },
+        id: null,
+      });
+    },
+  );
+
   it("answers a session-less POST over 4 MiB with 413", async () => {
     const response = await fetch(mcp, {
       method: "POST",

@@ -86,7 +86,13 @@ function sessionNotFound(res: Response, id: string | number | null = null) {
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 
 /** Parses a session-less POST's JSON body, to classify it and to serve it. */
-const parseJson = express.json({ limit: MAX_BODY_BYTES, type: () => true });
+const parseJson = express.json({
+  limit: MAX_BODY_BYTES,
+  type: () => true,
+  // Any JSON value parses, so a primitive body reaches the SDK, which answers
+  // it as an invalid request (-32600); -32700 is only for text that is not JSON.
+  strict: false,
+});
 
 /**
  * Answer a session-less POST whose body could not be parsed the way the SDK
