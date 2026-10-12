@@ -287,7 +287,7 @@ test("formatKnownIssues pluralizes and is omitted when empty", () => {
   assert.equal(formatKnownIssues(["a", "b"]), "## Known issues\n\na\n\nb");
 });
 
-test("assembleNotes: packages, sections, trailer, ledger, known issues, thanks", () => {
+test("assembleNotes: packages, ledger, sections, trailer, known issues, thanks", () => {
   assert.equal(
     assembleNotes({
       packages: "P",
@@ -298,7 +298,7 @@ test("assembleNotes: packages, sections, trailer, ledger, known issues, thanks",
       knownIssues: ["K"],
       thanks: "## Thanks for helping us improve\n\nX",
     }),
-    "P\n\nS1\n\nS2\n\nT\n\nRelease ledger: [mb](https://l)\n\n## Known issue\n\nK\n\n## Thanks for helping us improve\n\nX\n",
+    "P\n\nRelease ledger: [mb](https://l)\n\nS1\n\nS2\n\nT\n\n## Known issue\n\nK\n\n## Thanks for helping us improve\n\nX\n",
   );
   assert.equal(
     assembleNotes({
@@ -528,6 +528,13 @@ test("notes: per-server sections, every PR placed, one release-wide Thanks", asy
     "## Repository",
     "## Thanks for helping us improve",
   ]);
+  // The ledger sits directly under the Packages table (#5115), so the
+  // evidence for what was published is read with it, not below every PR list.
+  assert.match(
+    sectionOf(notes, "## Packages"),
+    /\|\n\nRelease ledger: \[v2\/chore\/1-release-v2\.0\.0\]\(https:\/\/l\.example\/x\)\n$/,
+  );
+  assert.equal(notes.split("Release ledger:").length, 2);
 
   const git = sectionOf(notes, "## mcp-server-git 2.0.0");
   assert.match(git, /change 10 .*\n\* change 11 [^\n]*\n*$/);
@@ -549,8 +556,6 @@ test("notes: per-server sections, every PR placed, one release-wide Thanks", asy
     notes.endsWith(
       [
         "**Full Changelog**: https://example/compare",
-        "",
-        "Release ledger: [v2/chore/1-release-v2.0.0](https://l.example/x)",
         "",
         "## Thanks for helping us improve",
         "",

@@ -11,13 +11,15 @@
 //
 //   ## Packages                      every package, its version, and whether
 //                                    this release publishes it (registry check)
+//   Release ledger: [<branch>](<url>)   right under the table, so what was
+//                                    published and the evidence behind it are
+//                                    read together, not below every PR list
 //   ## <package> <version>           one per PUBLISHED package, with its
 //     ### What's Changed             PRs
 //   ## Repository                    every PR left over (CI, docs, skills, a
 //                                    server whose version did not change), so
 //                                    no PR in the generated list is dropped
 //   ## New Contributors / Full Changelog   GitHub's own trailer, verbatim
-//   Release ledger: [<branch>](<url>)
 //   ## Known issues                  only when passed in: a maintainer's call
 //   ## Thanks for helping us improve one release-wide list of the community
 //                                    members whose issues the PRs close, laid
@@ -569,9 +571,9 @@ export function assembleNotes({
   return (
     [
       packages,
+      `Release ledger: [${mergeBranch}](${ledgerUrl})`,
       ...sections,
       trailer,
-      `Release ledger: [${mergeBranch}](${ledgerUrl})`,
       formatKnownIssues(knownIssues),
       thanks,
     ]

@@ -437,14 +437,16 @@ what changed in the server they use:
    whether this release publishes it (the registry does not have that version
    yet) or leaves it unchanged. The tag is the milestone's name, not a
    version, so this table is where a reader finds the versions.
-2. **One `## <package> <version>` section per published package**, whose
+2. **The release-ledger line**, linking the artifact from 4d, directly under
+   the table, so what was published and the evidence behind it are read
+   together.
+3. **One `## <package> <version>` section per published package**, whose
    `### What's Changed` lists the PRs that change files under its
    `src/<dir>/`. A PR that touches several servers is listed under each.
-3. **`## Repository`**: every PR no published section took (CI, docs, skills,
+4. **`## Repository`**: every PR no published section took (CI, docs, skills,
    a server whose version did not change), so no PR in the generated list is
    dropped.
-4. GitHub's **New Contributors** block and **Full Changelog** link, verbatim.
-5. **The release-ledger line**, linking the artifact from 4d.
+5. GitHub's **New Contributors** block and **Full Changelog** link, verbatim.
 6. **`## Known issues`**, only when you pass one. It names the issue, who is
    affected and the workaround. What counts as a known issue is a maintainer's
    judgment, so it is written by hand, never generated.
