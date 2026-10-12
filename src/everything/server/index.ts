@@ -33,7 +33,11 @@ import {
 } from "../tools/index.js";
 import { registerResources, readInstructions } from "../resources/index.js";
 import { registerPrompts } from "../prompts/index.js";
-import { registerTasksExtension, TASKS_EXTENSION } from "./tasks.js";
+import {
+  guardTaskTools,
+  registerTasksExtension,
+  TASKS_EXTENSION,
+} from "./tasks.js";
 import { syncRoots } from "./roots.js";
 import {
   instancePublisher,
@@ -127,9 +131,10 @@ export const createServer = (
     },
     {
       capabilities: {
-        tools: {
-          listChanged: true,
-        },
+        // `tools: { listChanged: true }` is advertised by the first
+        // registerTool. Declaring it here would install McpServer's
+        // tools/call handler in the constructor, before guardTaskTools can
+        // wrap it.
         prompts: {
           listChanged: true,
         },
@@ -166,6 +171,10 @@ export const createServer = (
       ),
     onCleanup: (fn) => cleanups.push(fn),
   };
+
+  // A task tool refuses, with -32021, a client that has not declared what it
+  // needs; this wraps the tools/call handler the first registration installs.
+  if (era === "modern") guardTaskTools(server);
 
   // Register the tools, resources and prompts every era gets
   registerTools(server, context);

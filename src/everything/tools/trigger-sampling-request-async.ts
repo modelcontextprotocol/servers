@@ -18,14 +18,7 @@ import {
   type InputResponseView,
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import {
-  capabilityRequired,
-  clientSupportsSampling,
-  clientSupportsTasks,
-  createTask,
-  tasksRequired,
-  type TaskState,
-} from "../server/tasks.js";
+import { createTask, type TaskState } from "../server/tasks.js";
 
 // Tool input schema
 const TriggerSamplingRequestAsyncSchema = z.object({
@@ -63,74 +56,65 @@ const config = {
 /**
  * Registers the 'trigger-sampling-request-async' tool, for 2026-07-28 clients.
  *
- * A client that does not declare the tasks extension gets an error result.
- * The SDK checks the sampling capability when the client fetches the
- * request, not here: the request travels inside the task's status.
+ * A client that does not declare both the tasks extension and sampling is
+ * refused with -32021 before the tool runs (`guardTaskTools`): the SDK does
+ * not check the requests a task carries in its status.
  *
  * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
 export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
-  server.registerTool(
-    name,
-    config,
-    async (args, ctx): Promise<CallToolResult> => {
-      if (!clientSupportsTasks(ctx)) return tasksRequired(name);
-      if (!clientSupportsSampling(ctx)) {
-        return capabilityRequired(name, "sampling");
-      }
-      const { prompt, maxTokens } =
-        TriggerSamplingRequestAsyncSchema.parse(args);
-      const createdAt = Date.now();
-      let result: SamplingResult | undefined;
-      let answeredAt = createdAt;
+  server.registerTool(name, config, async (args): Promise<CallToolResult> => {
+    const { prompt, maxTokens } = TriggerSamplingRequestAsyncSchema.parse(args);
+    const createdAt = Date.now();
+    let result: SamplingResult | undefined;
+    let answeredAt = createdAt;
 
-      return createTask(
-        {
-          stateAt: (): TaskState =>
-            result === undefined
-              ? {
-                  since: createdAt,
-                  status: "input_required",
-                  statusMessage: "Waiting for the client's LLM to respond",
-                  inputRequests: {
-                    sampling: inputRequired.createMessage({
-                      messages: [
-                        {
-                          role: "user",
-                          content: {
-                            type: "text",
-                            text: `Resource ${name} context: ${prompt}`,
-                          },
-                        },
-                      ],
-                      systemPrompt: "You are a helpful test server.",
-                      maxTokens,
-                      temperature: 0.7,
-                    }),
-                  },
-                }
-              : {
-                  since: answeredAt,
-                  status: "completed",
-                  statusMessage: "Sampling complete",
-                  result: {
-                    content: [
+    return createTask(
+      {
+        stateAt: (): TaskState =>
+          result === undefined
+            ? {
+                since: createdAt,
+                status: "input_required",
+                statusMessage: "Waiting for the client's LLM to respond",
+                inputRequests: {
+                  sampling: inputRequired.createMessage({
+                    messages: [
                       {
-                        type: "text",
-                        text: `LLM sampling result: \n${JSON.stringify(result, null, 2)}`,
+                        role: "user",
+                        content: {
+                          type: "text",
+                          text: `Resource ${name} context: ${prompt}`,
+                        },
                       },
                     ],
-                  },
+                    systemPrompt: "You are a helpful test server.",
+                    maxTokens,
+                    temperature: 0.7,
+                  }),
                 },
-          receive: (responses, now) => {
-            const answer = inputResponse(responses, "sampling");
-            if (answer.kind !== "sampling") return;
-            result = answer.result;
-            answeredAt = now;
-          },
+              }
+            : {
+                since: answeredAt,
+                status: "completed",
+                statusMessage: "Sampling complete",
+                result: {
+                  content: [
+                    {
+                      type: "text",
+                      text: `LLM sampling result: \n${JSON.stringify(result, null, 2)}`,
+                    },
+                  ],
+                },
+              },
+        receive: (responses, now) => {
+          const answer = inputResponse(responses, "sampling");
+          if (answer.kind !== "sampling") return;
+          result = answer.result;
+          answeredAt = now;
         },
-        { ttlMs: 10 * 60_000, pollIntervalMs: 1000 },
-      );
-    },
-  );
+      },
+      { ttlMs: 10 * 60_000, pollIntervalMs: 1000 },
+    );
+  });
 };

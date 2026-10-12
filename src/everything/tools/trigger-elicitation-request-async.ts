@@ -17,14 +17,7 @@ import {
   inputResponse,
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import {
-  capabilityRequired,
-  clientSupportsFormElicitation,
-  clientSupportsTasks,
-  createTask,
-  tasksRequired,
-  type TaskState,
-} from "../server/tasks.js";
+import { createTask, type TaskState } from "../server/tasks.js";
 
 // Tool configuration
 const name = "trigger-elicitation-request-async";
@@ -88,64 +81,57 @@ function summarize(
  * Registers the 'trigger-elicitation-request-async' tool, for 2026-07-28
  * clients.
  *
- * A client that does not declare the tasks extension gets an error result.
+ * A client that does not declare both the tasks extension and form-mode
+ * elicitation is refused with -32021 before the tool runs (`guardTaskTools`).
  *
  * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
 export const registerTriggerElicitationRequestAsyncTool = (
   server: McpServer,
 ) => {
-  server.registerTool(
-    name,
-    config,
-    async (_args, ctx): Promise<CallToolResult> => {
-      if (!clientSupportsTasks(ctx)) return tasksRequired(name);
-      if (!clientSupportsFormElicitation(ctx)) {
-        return capabilityRequired(name, "elicitation (form mode)");
-      }
-      const createdAt = Date.now();
-      let summary: CallToolResult | undefined;
-      let answeredAt = createdAt;
+  server.registerTool(name, config, async (): Promise<CallToolResult> => {
+    const createdAt = Date.now();
+    let summary: CallToolResult | undefined;
+    let answeredAt = createdAt;
 
-      return createTask(
-        {
-          stateAt: (): TaskState =>
-            summary === undefined
-              ? {
-                  since: createdAt,
-                  status: "input_required",
-                  statusMessage: "Waiting for the user's input",
-                  inputRequests: {
-                    form: inputRequired.elicit({
-                      message:
-                        "Please provide inputs for the following fields (async task demo):",
-                      requestedSchema: FormSchema,
-                    }),
-                  },
-                }
-              : {
-                  since: answeredAt,
-                  status: "completed",
-                  statusMessage: "Input received",
-                  result: summary,
+    return createTask(
+      {
+        stateAt: (): TaskState =>
+          summary === undefined
+            ? {
+                since: createdAt,
+                status: "input_required",
+                statusMessage: "Waiting for the user's input",
+                inputRequests: {
+                  form: inputRequired.elicit({
+                    message:
+                      "Please provide inputs for the following fields (async task demo):",
+                    requestedSchema: FormSchema,
+                  }),
                 },
-          receive: (responses, now) => {
-            const answer = inputResponse(responses, "form");
-            if (answer.kind !== "elicit") return;
-            if (answer.action !== "accept") {
-              summary = summarize(answer.action);
-            } else {
-              const content = acceptedContent(responses, "form", FormSchema);
-              // An accepted answer that does not fit the form is ignored, so
-              // the task keeps waiting for one that does.
-              if (content === undefined) return;
-              summary = summarize("accept", content);
-            }
-            answeredAt = now;
-          },
+              }
+            : {
+                since: answeredAt,
+                status: "completed",
+                statusMessage: "Input received",
+                result: summary,
+              },
+        receive: (responses, now) => {
+          const answer = inputResponse(responses, "form");
+          if (answer.kind !== "elicit") return;
+          if (answer.action !== "accept") {
+            summary = summarize(answer.action);
+          } else {
+            const content = acceptedContent(responses, "form", FormSchema);
+            // An accepted answer that does not fit the form is ignored, so
+            // the task keeps waiting for one that does.
+            if (content === undefined) return;
+            summary = summarize("accept", content);
+          }
+          answeredAt = now;
         },
-        { ttlMs: 10 * 60_000, pollIntervalMs: 1000 },
-      );
-    },
-  );
+      },
+      { ttlMs: 10 * 60_000, pollIntervalMs: 1000 },
+    );
+  });
 };

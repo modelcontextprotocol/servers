@@ -24,9 +24,11 @@ import { randomUUID } from "node:crypto";
 import {
   CLIENT_CAPABILITIES_META_KEY,
   McpServer,
+  MissingRequiredClientCapabilityError,
   ProtocolError,
   ProtocolErrorCode,
   type CallToolResult,
+  type ClientCapabilities,
   type InputRequests,
   type ServerContext,
 } from "@modelcontextprotocol/server";
@@ -206,31 +208,6 @@ export function clientSupportsFormElicitation(ctx: ServerContext): boolean {
   );
 }
 
-/** Whether the client that sent this request supports sampling. */
-export function clientSupportsSampling(ctx: ServerContext): boolean {
-  return clientCapabilitiesOf(ctx)?.sampling !== undefined;
-}
-
-/**
- * The result for a task tool whose task would ask the client for input it
- * did not declare it can give. The SDK checks a tool's own input requests,
- * but not the ones a task carries in its status, so the tool checks here.
- */
-export function capabilityRequired(
-  name: string,
-  capability: string,
-): CallToolResult {
-  return {
-    content: [
-      {
-        type: "text",
-        text: `${name} asks the client for input, so it needs a client that declares the ${capability} capability.`,
-      },
-    ],
-    isError: true,
-  };
-}
-
 /**
  * Whether the client that sent this request declared the tasks extension, so
  * it can follow a task handle. A tool may answer with a task only then.
@@ -244,17 +221,101 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** The result for a task tool called by a client without the extension. */
-export function tasksRequired(name: string): CallToolResult {
-  return {
-    content: [
-      {
-        type: "text",
-        text: `${name} runs as a task, so it needs a client that declares the ${TASKS_EXTENSION} extension in its capabilities.`,
-      },
-    ],
-    isError: true,
-  };
+/** The tasks extension, as a client declares it. */
+const TASKS_CAPABILITY: ClientCapabilities = {
+  extensions: { [TASKS_EXTENSION]: {} },
+};
+
+/**
+ * What each task tool needs the client to have declared: the tasks
+ * extension, to follow the handle, and the capability its task asks for
+ * input with. The SDK checks the input requests a tool returns itself, but
+ * not the ones a task carries in its status, so they are checked here.
+ */
+const TASK_TOOL_REQUIREMENTS: Record<
+  string,
+  (ctx: ServerContext) => ClientCapabilities | undefined
+> = {
+  "simulate-research-query": (ctx) => missingTasks(ctx),
+  "trigger-sampling-request-async": (ctx) =>
+    merged(
+      missingTasks(ctx),
+      clientCapabilitiesOf(ctx)?.sampling === undefined
+        ? { sampling: {} }
+        : undefined,
+    ),
+  "trigger-elicitation-request-async": (ctx) =>
+    merged(
+      missingTasks(ctx),
+      clientSupportsFormElicitation(ctx)
+        ? undefined
+        : { elicitation: { form: {} } },
+    ),
+};
+
+/** The tasks extension, if this request's client did not declare it. */
+function missingTasks(ctx: ServerContext): ClientCapabilities | undefined {
+  return clientSupportsTasks(ctx) ? undefined : TASKS_CAPABILITY;
+}
+
+/** Both sets of missing capabilities, or undefined when neither is. */
+function merged(
+  a: ClientCapabilities | undefined,
+  b: ClientCapabilities | undefined,
+): ClientCapabilities | undefined {
+  return a || b ? { ...a, ...b } : undefined;
+}
+
+/** The -32021 error naming the capabilities the client did not declare. */
+function missingCapabilities(
+  requiredCapabilities: ClientCapabilities,
+): MissingRequiredClientCapabilityError {
+  return new MissingRequiredClientCapabilityError(
+    { requiredCapabilities },
+    `Missing required client capability: ${Object.keys(requiredCapabilities).join(", ")}`,
+  );
+}
+
+/**
+ * Refuse a call to a task tool from a client that did not declare what the
+ * tool needs, with the JSON-RPC error -32021 naming it, as the extension
+ * requires: such a client cannot be served without a task handle.
+ *
+ * `McpServer` reports anything a tool handler throws as an `isError` tool
+ * result, so the check cannot live in the tools. Instead it wraps the
+ * `tools/call` handler `McpServer` installs, which the SDK then runs behind
+ * its own era checks, so the error reaches the client as an error. Call this
+ * before the first tool is registered, on a server constructed without a
+ * `tools` capability: `McpServer` installs the handler at the first
+ * registration then, or in its constructor when `tools` is declared.
+ *
+ * @param {McpServer} server - The 2026-07-28 server whose task tools to guard.
+ */
+export function guardTaskTools(server: McpServer): void {
+  const lowLevel = server.server;
+  const setRequestHandler = lowLevel.setRequestHandler.bind(lowLevel);
+  // The SDK's overloads cannot be restated for a wrapper; this one only
+  // inspects the arguments and passes them through unchanged.
+  lowLevel.setRequestHandler = ((...args: unknown[]) => {
+    const handler = args.at(-1);
+    if (args[0] === "tools/call" && typeof handler === "function") {
+      args[args.length - 1] = (
+        request: { params: { name: string } },
+        ctx: ServerContext,
+      ) => {
+        const missing = TASK_TOOL_REQUIREMENTS[request.params.name]?.(ctx);
+        if (missing) throw missingCapabilities(missing);
+        return handler(request, ctx);
+      };
+    }
+    return (setRequestHandler as (...a: unknown[]) => unknown)(...args);
+  }) as typeof lowLevel.setRequestHandler;
+}
+
+/** Refuse a tasks/* request from a client without the extension (-32021). */
+function requireTasks(ctx: ServerContext): void {
+  const missing = missingTasks(ctx);
+  if (missing) throw missingCapabilities(missing);
 }
 
 /** Forget every task. For tests. */
@@ -271,9 +332,10 @@ const EmptyResult = z.object({});
 
 /**
  * Serve the extension's methods on a 2026-07-28 server: `tasks/get`,
- * `tasks/update` and `tasks/cancel`. An unknown or expired task id, and an
- * update or cancellation that does not fit the task's status, is refused
- * with -32602 (invalid params).
+ * `tasks/update` and `tasks/cancel`. A request from a client that does not
+ * declare the extension is refused with -32021. An unknown or expired task
+ * id, and an update or cancellation that does not fit the task's status, is
+ * refused with -32602 (invalid params).
  *
  * @param {McpServer} server - The 2026-07-28 server to serve them on.
  */
@@ -281,7 +343,8 @@ export function registerTasksExtension(server: McpServer): void {
   server.server.setRequestHandler(
     "tasks/get",
     { params: TaskIdParams, result: TaskResult },
-    async ({ taskId }) => {
+    async ({ taskId }, ctx) => {
+      requireTasks(ctx);
       const now = Date.now();
       return describe(find(taskId, now), now);
     },
@@ -291,6 +354,7 @@ export function registerTasksExtension(server: McpServer): void {
     "tasks/update",
     { params: TaskIdParams, result: EmptyResult },
     async ({ taskId }, ctx) => {
+      requireTasks(ctx);
       // The SDK lifts `inputResponses` out of the params of every request
       // (it is a reserved retry field on 2026-07-28) into the context.
       const inputResponses: TaskInputResponses =
@@ -322,7 +386,8 @@ export function registerTasksExtension(server: McpServer): void {
   server.server.setRequestHandler(
     "tasks/cancel",
     { params: TaskIdParams, result: EmptyResult },
-    async ({ taskId }) => {
+    async ({ taskId }, ctx) => {
+      requireTasks(ctx);
       const now = Date.now();
       const task = find(taskId, now);
       const { status } = stateOf(task, now);

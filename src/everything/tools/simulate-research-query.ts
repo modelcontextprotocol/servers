@@ -24,9 +24,7 @@ import {
 import { z } from "zod";
 import {
   clientSupportsFormElicitation,
-  clientSupportsTasks,
   createTask,
-  tasksRequired,
   type TaskInputResponses,
   type TaskState,
 } from "../server/tasks.js";
@@ -176,8 +174,9 @@ carrying an elicitation request. The client answered it with \`tasks/update\`
 /**
  * Registers the 'simulate-research-query' tool, for 2026-07-28 clients.
  *
- * A client that does not declare the tasks extension gets an error result,
- * since it could not follow the task handle. `ambiguous` is ignored for a
+ * A client that does not declare the tasks extension is refused with -32021
+ * before the tool runs (`guardTaskTools`), since it could not follow the task
+ * handle. `ambiguous` is ignored for a
  * client that does not support elicitation.
  *
  * @param {McpServer} server - The McpServer instance where the tool will be registered.
@@ -187,7 +186,6 @@ export const registerSimulateResearchQueryTool = (server: McpServer) => {
     name,
     config,
     async (args, ctx): Promise<CallToolResult> => {
-      if (!clientSupportsTasks(ctx)) return tasksRequired(name);
       const { topic, ambiguous } = SimulateResearchQuerySchema.parse(args);
       // The clarification is a form, so only a form-capable client is asked.
       const canAsk = clientSupportsFormElicitation(ctx);

@@ -78,6 +78,76 @@ describe("the extension", () => {
     });
   });
 
+  it.each([
+    ["simulate-research-query", {}, { extensions: { [TASKS_EXTENSION]: {} } }],
+    [
+      "trigger-sampling-request-async",
+      { sampling: {} },
+      { extensions: { [TASKS_EXTENSION]: {} } },
+    ],
+    ["trigger-sampling-request-async", TASKS, { sampling: {} }],
+    [
+      "trigger-sampling-request-async",
+      {},
+      { extensions: { [TASKS_EXTENSION]: {} }, sampling: {} },
+    ],
+    [
+      "trigger-elicitation-request-async",
+      { elicitation: { form: {} } },
+      { extensions: { [TASKS_EXTENSION]: {} } },
+    ],
+    ["trigger-elicitation-request-async", TASKS, { elicitation: { form: {} } }],
+    [
+      "trigger-elicitation-request-async",
+      { ...TASKS, elicitation: { url: {} } },
+      { elicitation: { form: {} } },
+    ],
+  ] as const)(
+    "refuses %s from a client declaring %j with -32021 naming what is missing",
+    async (tool, capabilities, requiredCapabilities) => {
+      peer = await rawClient(capabilities);
+      const response = await peer.request("tools/call", {
+        name: tool,
+        arguments:
+          tool === "trigger-elicitation-request-async"
+            ? {}
+            : tool === "simulate-research-query"
+              ? { topic: "t" }
+              : { prompt: "p" },
+      });
+      expect(response.error).toMatchObject({
+        code: -32021,
+        data: { requiredCapabilities },
+      });
+    },
+  );
+
+  it.each([
+    ["tasks/get", {}],
+    ["tasks/update", { inputResponses: {} }],
+    ["tasks/cancel", {}],
+  ])(
+    "refuses %s from a client without the extension with -32021",
+    async (method, extra) => {
+      peer = await rawClient(TASKS);
+      const created = await peer.call("simulate-research-query", {
+        topic: "t",
+      });
+      await peer.close();
+      peer = await rawClient({});
+      const response = await peer.request(method, {
+        taskId: created.taskId,
+        ...extra,
+      });
+      expect(response.error).toMatchObject({
+        code: -32021,
+        data: {
+          requiredCapabilities: { extensions: { [TASKS_EXTENSION]: {} } },
+        },
+      });
+    },
+  );
+
   it("drops a task once its TTL has passed", async () => {
     peer = await rawClient(TASKS);
     const created = await peer.call("simulate-research-query", { topic: "t" });
@@ -160,22 +230,6 @@ describe("simulate-research-query", () => {
     });
     advance(STAGE_DURATION * STAGES.length);
     expect((await peer.get(created.taskId as string)).status).toBe("completed");
-  });
-
-  it("is a tool error for a client that does not declare the extension", async () => {
-    peer = await rawClient({});
-    const result = await peer.call("simulate-research-query", { topic: "t" });
-    expect(result).toMatchObject({
-      isError: true,
-      content: [
-        {
-          type: "text",
-          text: expect.stringContaining(
-            `needs a client that declares the ${TASKS_EXTENSION} extension`,
-          ),
-        },
-      ],
-    });
   });
 
   it("ignores 'ambiguous' for a client without elicitation", async () => {
@@ -407,21 +461,6 @@ describe("trigger-sampling-request-async", () => {
     expect(resultText(done)).toContain('"text": "hi"');
   });
 
-  it("is a tool error for a client that does not declare sampling", async () => {
-    peer = await rawClient(TASKS);
-    const result = await peer.call("trigger-sampling-request-async", {
-      prompt: "p",
-    });
-    expect(result).toMatchObject({
-      isError: true,
-      content: [
-        {
-          text: "trigger-sampling-request-async asks the client for input, so it needs a client that declares the sampling capability.",
-        },
-      ],
-    });
-  });
-
   it("keeps waiting after an answer of the wrong kind", async () => {
     peer = await rawClient({ ...TASKS, sampling: {} });
     const created = await peer.call("trigger-sampling-request-async", {
@@ -434,14 +473,6 @@ describe("trigger-sampling-request-async", () => {
     expect((await peer.get(created.taskId as string)).status).toBe(
       "input_required",
     );
-  });
-
-  it("is a tool error for a client that does not declare the extension", async () => {
-    peer = await rawClient({ sampling: {} });
-    const result = await peer.call("trigger-sampling-request-async", {
-      prompt: "p",
-    });
-    expect(result.isError).toBe(true);
   });
 });
 
@@ -520,22 +551,6 @@ describe("trigger-elicitation-request-async", () => {
     },
   );
 
-  it.each([
-    ["only the tasks extension", TASKS],
-    ["URL-mode elicitation only", { ...TASKS, elicitation: { url: {} } }],
-  ])("is a tool error for a client with %s", async (_label, capabilities) => {
-    peer = await rawClient(capabilities);
-    const result = await peer.call("trigger-elicitation-request-async");
-    expect(result).toMatchObject({
-      isError: true,
-      content: [
-        {
-          text: "trigger-elicitation-request-async asks the client for input, so it needs a client that declares the elicitation (form mode) capability.",
-        },
-      ],
-    });
-  });
-
   it.each(["decline", "cancel"])("reports a %s", async (action) => {
     const done = await answer({ action });
     expect(resultText(done)).toBe(`Elicitation ${action}.`);
@@ -551,11 +566,5 @@ describe("trigger-elicitation-request-async", () => {
     expect((await peer.get(created.taskId as string)).status).toBe(
       "input_required",
     );
-  });
-
-  it("is a tool error for a client that does not declare the extension", async () => {
-    peer = await rawClient({ elicitation: {} });
-    const result = await peer.call("trigger-elicitation-request-async");
-    expect(result.isError).toBe(true);
   });
 });
