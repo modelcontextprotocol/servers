@@ -4,7 +4,8 @@
  * prompt, resource and resource-template lists, including which tools appear
  * only for clients that declare a capability. These lists are the regression
  * net for the SDK v2 migration: an assertion here that has to change is a
- * behavior change.
+ * behavior change. Every session here is 2025-era (`initialize`); what a
+ * 2026-07-28 client is offered is in modern.test.ts.
  */
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -25,6 +26,7 @@ const BASE_TOOLS = [
   "echo",
   "get-annotated-message",
   "get-env",
+  "get-header-params",
   "get-resource-links",
   "get-resource-reference",
   "get-structured-content",
@@ -33,7 +35,10 @@ const BASE_TOOLS = [
   "gzip-file-as-resource",
   "toggle-simulated-logging",
   "toggle-subscriber-updates",
+  "trigger-list-changed",
+  "trigger-log-messages",
   "trigger-long-running-operation",
+  "trigger-resource-update",
 ];
 
 describe("initialize", () => {
@@ -69,6 +74,7 @@ describe("initialize", () => {
     const gated = [
       "get-roots-list",
       "trigger-elicitation-request",
+      "trigger-multi-step-elicitation",
       "trigger-sampling-request",
       "trigger-url-elicitation",
     ];
@@ -108,6 +114,7 @@ describe("tools/list", () => {
         ...BASE_TOOLS,
         "get-roots-list",
         "trigger-elicitation-request",
+        "trigger-multi-step-elicitation",
         "trigger-sampling-request",
         "trigger-url-elicitation",
       ].sort(),
@@ -117,60 +124,26 @@ describe("tools/list", () => {
   it.each([
     [{ roots: {} }, ["get-roots-list"]],
     [{ sampling: {} }, ["trigger-sampling-request"]],
-    [{ elicitation: {} }, ["trigger-elicitation-request"]],
-    [{ elicitation: { form: {} } }, ["trigger-elicitation-request"]],
+    [
+      { elicitation: {} },
+      ["trigger-elicitation-request", "trigger-multi-step-elicitation"],
+    ],
+    [
+      { elicitation: { form: {} } },
+      ["trigger-elicitation-request", "trigger-multi-step-elicitation"],
+    ],
     // A URL-only client cannot answer the form request (#4985).
     [{ elicitation: { url: {} } }, ["trigger-url-elicitation"]],
     [
       { elicitation: { form: {}, url: {} } },
-      ["trigger-elicitation-request", "trigger-url-elicitation"],
+      [
+        "trigger-elicitation-request",
+        "trigger-multi-step-elicitation",
+        "trigger-url-elicitation",
+      ],
     ],
   ])(
     "gates tools on the client's declared capabilities: %j",
-    async (capabilities, extra) => {
-      session = await connect({ capabilities });
-      const { tools } = await session.client.listTools();
-      expect(tools.map((t) => t.name).sort()).toEqual(
-        [...BASE_TOOLS, ...extra].sort(),
-      );
-    },
-  );
-
-  // The async task tools went with SDK v2's experimental tasks layer
-  // (SEP-2663). Part 5 (#4852) brings them back on the tasks extension.
-  it.skip.each([
-    [
-      {
-        sampling: {},
-        tasks: { requests: { sampling: { createMessage: {} } } },
-      },
-      ["trigger-sampling-request", "trigger-sampling-request-async"],
-    ],
-    [
-      { elicitation: {}, tasks: { requests: { elicitation: { create: {} } } } },
-      ["trigger-elicitation-request", "trigger-elicitation-request-async"],
-    ],
-    [
-      {
-        elicitation: { form: {} },
-        tasks: { requests: { elicitation: { create: {} } } },
-      },
-      ["trigger-elicitation-request", "trigger-elicitation-request-async"],
-    ],
-    // The async tool's request is form mode too, so a URL-only client does
-    // not get it even with task support (#4985).
-    [
-      {
-        elicitation: { url: {} },
-        tasks: { requests: { elicitation: { create: {} } } },
-      },
-      ["trigger-url-elicitation"],
-    ],
-    // The async tools need the base capability as well as the task one.
-    [{ tasks: { requests: { sampling: { createMessage: {} } } } }, []],
-    [{ tasks: { requests: { elicitation: { create: {} } } } }, []],
-  ])(
-    "gates the async task tools on the client's declared capabilities: %j",
     async (capabilities, extra) => {
       session = await connect({ capabilities });
       const { tools } = await session.client.listTools();
@@ -241,6 +214,17 @@ describe("tools/list", () => {
           "execution": undefined,
           "hasOutputSchema": false,
           "title": "Print Environment Tool",
+        },
+        "get-header-params": {
+          "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false,
+            "readOnlyHint": true,
+          },
+          "execution": undefined,
+          "hasOutputSchema": true,
+          "title": "Get Header Params Tool",
         },
         "get-resource-links": {
           "annotations": {
@@ -352,6 +336,28 @@ describe("tools/list", () => {
           "hasOutputSchema": false,
           "title": "Trigger Elicitation Request Tool",
         },
+        "trigger-list-changed": {
+          "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": false,
+            "readOnlyHint": true,
+          },
+          "execution": undefined,
+          "hasOutputSchema": false,
+          "title": "Trigger List Changed Tool",
+        },
+        "trigger-log-messages": {
+          "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false,
+            "readOnlyHint": true,
+          },
+          "execution": undefined,
+          "hasOutputSchema": false,
+          "title": "Trigger Log Messages Tool",
+        },
         "trigger-long-running-operation": {
           "annotations": {
             "destructiveHint": false,
@@ -362,6 +368,28 @@ describe("tools/list", () => {
           "execution": undefined,
           "hasOutputSchema": false,
           "title": "Trigger Long Running Operation Tool",
+        },
+        "trigger-multi-step-elicitation": {
+          "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": false,
+            "readOnlyHint": false,
+          },
+          "execution": undefined,
+          "hasOutputSchema": false,
+          "title": "Trigger Multi-Step Elicitation Tool",
+        },
+        "trigger-resource-update": {
+          "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": false,
+            "readOnlyHint": true,
+          },
+          "execution": undefined,
+          "hasOutputSchema": false,
+          "title": "Trigger Resource Update Tool",
         },
         "trigger-sampling-request": {
           "annotations": {
@@ -438,6 +466,28 @@ describe("tools/list", () => {
         "get-env": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
           "properties": {},
+          "type": "object",
+        },
+        "get-header-params": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "region": {
+              "description": "A region name, e.g. eu-west. Mirrored into the Mcp-Param-Region HTTP header.",
+              "type": "string",
+              "x-mcp-header": "Region",
+            },
+            "repeat": {
+              "default": 1,
+              "description": "How many times to repeat the region in the result (1-3)",
+              "maximum": 3,
+              "minimum": 1,
+              "type": "integer",
+            },
+          },
+          "required": [
+            "region",
+          ],
           "type": "object",
         },
         "get-resource-links": {
@@ -529,7 +579,8 @@ describe("tools/list", () => {
             },
             "name": {
               "default": "README.md.gz",
-              "description": "Name of the output file",
+              "description": "Name of the output file (at most 255 characters)",
+              "maxLength": 255,
               "type": "string",
             },
             "outputType": {
@@ -559,6 +610,29 @@ describe("tools/list", () => {
           "properties": {},
           "type": "object",
         },
+        "trigger-list-changed": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "list": {
+              "description": "Which list to announce as changed",
+              "enum": [
+                "tools",
+                "prompts",
+                "resources",
+              ],
+              "type": "string",
+            },
+          },
+          "required": [
+            "list",
+          ],
+          "type": "object",
+        },
+        "trigger-log-messages": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {},
+          "type": "object",
+        },
         "trigger-long-running-operation": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
           "properties": {
@@ -573,6 +647,24 @@ describe("tools/list", () => {
               "type": "number",
             },
           },
+          "type": "object",
+        },
+        "trigger-multi-step-elicitation": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {},
+          "type": "object",
+        },
+        "trigger-resource-update": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "properties": {
+            "uri": {
+              "description": "The URI of the resource to announce as updated, e.g. demo://resource/dynamic/text/1",
+              "type": "string",
+            },
+          },
+          "required": [
+            "uri",
+          ],
           "type": "object",
         },
         "trigger-sampling-request": {
@@ -597,12 +689,12 @@ describe("tools/list", () => {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
           "properties": {
             "elicitationId": {
-              "description": "Optional explicit elicitation ID. Defaults to a random UUID.",
+              "description": "Optional explicit elicitation ID. Defaults to a random UUID. 2025-era clients only: the 2026-07-28 in-band request carries no elicitation ID.",
               "type": "string",
             },
             "errorPath": {
               "default": false,
-              "description": "Controls which elicitation mechanism is used. When false (default), sends an elicitation/create request (request path). When true, throws a UrlElicitationRequiredError (MCP error code -32042) so the client handles the URL elicitation via the error path rather than waiting for a response. To clear the error, satisfy the prerequisite and retry this call with the same arguments; the retry ignores errorPath and proceeds, so the client does not loop on the same error.",
+              "description": "Controls which elicitation mechanism is used. When false (default), sends an elicitation/create request (request path). When true, throws a UrlElicitationRequiredError (MCP error code -32042) so the client handles the URL elicitation via the error path rather than waiting for a response. To clear the error, satisfy the prerequisite and retry this call with the same arguments; the retry ignores errorPath and proceeds, so the client does not loop on the same error. 2025-era clients only: protocol version 2026-07-28 has no -32042 error, so there both settings use the in-band input_required flow.",
               "type": "boolean",
             },
             "message": {

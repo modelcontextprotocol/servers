@@ -14,7 +14,6 @@ import type {
   ElicitRequest,
   ElicitResult,
 } from "@modelcontextprotocol/server";
-import { __resetIssuedErrorPathElicitations } from "../tools/trigger-url-elicitation.js";
 import {
   connect,
   contentOf,
@@ -26,7 +25,6 @@ import {
 let session: Session | undefined;
 
 afterEach(async () => {
-  __resetIssuedErrorPathElicitations();
   await session?.close();
   session = undefined;
 });
@@ -53,8 +51,11 @@ describe("trigger-sampling-request", () => {
       arguments: { prompt: "Say hi" },
     });
 
+    // The tool asks in-band (input_required); the SDK's legacy shim sends the
+    // request, adding a progress token of its own (#4852).
     expect(asked).toEqual([
       {
+        _meta: { progressToken: expect.anything() },
         messages: [
           {
             role: "user",
@@ -121,11 +122,12 @@ describe("trigger-sampling-request", () => {
     });
     expect(result).toEqual({
       isError: true,
-      // The SDK prefixes the client's error message twice on its way back.
+      // The SDK's legacy shim reports a failed input request as a tool error
+      // naming the call it was fulfilling (#4852).
       content: [
         {
           type: "text",
-          text: "user rejected",
+          text: "Fulfilling input required by 'tools/call' failed: user rejected",
         },
       ],
     });
@@ -167,7 +169,11 @@ describe("trigger-elicitation-request", () => {
     expect(asked).toHaveLength(1);
     expect(asked[0]).toMatchInlineSnapshot(`
       {
+        "_meta": {
+          "progressToken": 0,
+        },
         "message": "Please provide inputs for the following fields:",
+        "mode": "form",
         "requestedSchema": {
           "properties": {
             "birthdate": {
