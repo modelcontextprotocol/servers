@@ -594,6 +594,14 @@ would not, burns turns, and buries the result under no-op turns.
   `https://modelcontextprotocol.io/mcp`). For schema details use the versioned
   schemas (JSON and TypeScript) in
   [modelcontextprotocol/schema](https://github.com/modelcontextprotocol/modelcontextprotocol/tree/main/schema).
+- **Protocol eras**: every TypeScript server serves both 2026-07-28 clients
+  and 2025-era clients from one factory: stdio through the SDK's
+  `serveStdio`, Streamable HTTP through `createMcpHandler`. Keep no state in
+  a map keyed by session id, since 2026-07-28 has no sessions: per-connection
+  state lives on the server instance, and state that must outlive a
+  2026-07-28 request lives under a handle the server mints. Ask a client for
+  input (elicitation, sampling, roots) by returning `inputRequired(...)`,
+  which the SDK's legacy shim also serves to 2025-era clients.
 - **Transports**: stdio is the default and every server supports it.
   `everything` also serves Streamable HTTP and HTTP+SSE. **HTTP+SSE is
   deprecated**: keep what exists working, and never make it the default or the

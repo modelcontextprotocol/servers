@@ -13,7 +13,14 @@ This MCP server attempts to exercise all the features of the MCP protocol. It is
 
 A complete list of the registered MCP primitives and other protocol features demonstrated can be found in the [Server Features](docs/features.md) document.
 
-The task tools (`simulate-research-query`, `trigger-sampling-request-async` and `trigger-elicitation-request-async`) are not available for now: they were built on the TypeScript SDK's experimental tasks layer, which SDK v2 removed. They return on the MCP tasks extension in [#4852](https://github.com/modelcontextprotocol/servers/issues/4852).
+## Protocol versions
+
+The server serves both protocol eras, over stdio and Streamable HTTP, from one process:
+
+- **2026-07-28** clients connect with `server/discover`, send their protocol version, identity and capabilities with each request, and have no session. The server demonstrates the revision's new features for them: multi-round-trip requests (`input_required`) with `requestState`, `subscriptions/listen` change notifications, per-request log levels, cache hints (`ttlMs` / `cacheScope`), the tasks extension (`io.modelcontextprotocol/tasks`) under the `extensions` capability, and `x-mcp-header` with JSON Schema 2020-12 tool schemas.
+- **2025-era** clients connect with the `initialize` handshake, as before. Elicitation, sampling and roots are served to them from the same multi-round-trip handlers through the SDK's legacy shim.
+
+Roots, sampling and logging are deprecated as of 2026-07-28 and stay available, labelled deprecated. [Server Features](docs/features.md) marks which era each feature belongs to.
 
 ## Requirements
 
@@ -91,6 +98,16 @@ On Windows, use:
 }
 ```
 
+## Run from source with [Streamable HTTP Transport](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http)
+
+```shell
+cd src/everything
+npm install
+npm run start:streamableHttp
+```
+
+The endpoint is `http://localhost:3001/mcp` (`PORT` overrides the port). It serves 2026-07-28 clients statelessly and 2025-era clients with sessions, from the same URL.
+
 ## Running from source with [HTTP+SSE Transport](https://modelcontextprotocol.io/specification/2024-11-05/basic/transports#http-with-sse) (deprecated as of [2025-03-26](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports))
 
 ```shell
@@ -99,13 +116,7 @@ npm install
 npm run start:sse
 ```
 
-## Run from source with [Streamable HTTP Transport](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http)
-
-```shell
-cd src/everything
-npm install
-npm run start:streamableHttp
-```
+The HTTP+SSE transport serves 2025-era clients only, and the server prints a deprecation warning when it starts. Prefer Streamable HTTP.
 
 ## Running as an installed package
 
@@ -127,16 +138,16 @@ npx @modelcontextprotocol/server-everything
 npx @modelcontextprotocol/server-everything stdio
 ```
 
-### Run the SSE server
-
-```shell
-npx @modelcontextprotocol/server-everything sse
-```
-
 ### Run the streamable HTTP server
 
 ```shell
 npx @modelcontextprotocol/server-everything streamableHttp
+```
+
+### Run the SSE server (deprecated, 2025-era clients only)
+
+```shell
+npx @modelcontextprotocol/server-everything sse
 ```
 
 ## License
