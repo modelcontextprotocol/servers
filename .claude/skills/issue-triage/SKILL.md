@@ -447,13 +447,22 @@ while IFS=$'\t' read -r PR CLASS ISSUE _; do
   if [ -n "$SWEEP_LABEL" ]; then
     gh pr edit "$PR" --repo modelcontextprotocol/servers --add-label "$SWEEP_LABEL" </dev/null \
       || { echo "label FAILED on #$PR — stopping" >&2; break; }
-    sleep 1   # AGENTS.md "Pacing GitHub writes": one request per second, even within an item
+    sleep 8
   fi
-  gh pr close "$PR" --repo modelcontextprotocol/servers --comment "$BODY" </dev/null \
-    || { echo "close FAILED on #$PR — stopping; re-snapshot to see what is left" >&2; break; }
-  sleep 5
+  # Comment and close as two writes, so each is paced: `gh pr close --comment`
+  # sends both back to back.
+  gh pr comment "$PR" --repo modelcontextprotocol/servers --body "$BODY" </dev/null \
+    || { echo "comment FAILED on #$PR — stopping; look before retrying, it may have landed" >&2; break; }
+  sleep 8
+  gh pr close "$PR" --repo modelcontextprotocol/servers </dev/null \
+    || { echo "close FAILED on #$PR (its comment is posted; close it, do not re-comment) — stopping" >&2; break; }
+  sleep 8
 done < "$D/manifest.tsv"
 ```
+
+Each `sleep 8` paces a sustained loop by `AGENTS.md` **Pacing GitHub writes**:
+one write per 8 s is 450 an hour, under the hourly cap that a 1 s floor alone
+would pass in under ten minutes.
 
 The step 0 issue closes take the same two sweep additions during the backlog
 sweep: the close label (`gh issue edit <N> --add-label`) and the `#4875`
