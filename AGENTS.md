@@ -274,6 +274,15 @@ Cut feature branches from **`origin/v2/main`**. **Never open a PR against
 `main`**, with one exception: a milestone's merge PR, which the `release`
 skill opens. There is no `v1` line in this repository.
 
+**`v2/main` changes only through a merged PR.** Its ruleset, `v2/main: PRs
+only`, refuses deletion, force-pushes and direct pushes, and has no bypass
+actors. It requires no approvals, so a maintainer can merge their own PR. No
+automation pushes to `v2/main`: the Version Packages and Prepare Python
+Release workflows push branches of their own and open PRs. A workflow that
+needs to push to `v2/main` directly is a change to this rule and its ruleset,
+decided first. The `main` guard (**Source is v2/main**) trusts `v2/main`'s
+history, so this ruleset is what makes that trust hold.
+
 - **Repo**: https://github.com/modelcontextprotocol/servers
 - **Project board**: [Servers V2 (#43)](https://github.com/orgs/modelcontextprotocol/projects/43)
 
