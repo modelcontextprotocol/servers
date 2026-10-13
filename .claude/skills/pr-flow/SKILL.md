@@ -427,7 +427,7 @@ else, and it holds a full `node_modules` on disk per issue:
 
 ```sh
 git worktree remove "../$(basename "$PWD")-<N>"
-git branch -D v2/fix/<N>-<slug>
+git branch -D v2/<type>/<N>-<slug>
 ```
 
 `git worktree remove` refuses a worktree with uncommitted or untracked changes;
