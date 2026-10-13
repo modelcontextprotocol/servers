@@ -19,8 +19,11 @@ out; everything else points here.
 into parallel jobs on a fresh install; the gate runs them in sequence on your
 checkout. So a green gate means every check CI applies has already passed on
 your machine. It is the strongest predictor of a green CI there is here, though
-not a proof: CI runs on Linux, on a fresh `npm ci`, with Node 22 and each
-Python server's pinned interpreter.
+not a proof: CI runs on Linux, on a fresh `npm ci`, with Node 22 (the oldest
+supported) and each Python server's pinned interpreter, and `typescript.yml`'s
+`validate` job runs each TypeScript server on Node 22, 24 and 26, one parallel
+leg per version. The gate runs on whichever Node you have; use Node 24, the
+development version.
 
 **There are two exceptions.** The first is the Windows legs (#1149): `test-windows` in both
 workflows runs each server's test suite (`npm test`, `pytest`) on a

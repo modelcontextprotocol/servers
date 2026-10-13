@@ -96,8 +96,9 @@ opening paragraph instead, as this one does. A format with no comment syntax
 
 ## Development setup
 
-Node **22** for the TypeScript servers. Python **>= 3.10** for the Python
-servers, at the version each server's `.python-version` pins. Python
+Node **24** for the TypeScript servers, the development version; Node **22**
+is the oldest supported, and CI validates each TypeScript server on 22, 24 and
+26 in parallel legs. Python **>= 3.10** for the Python servers, at the version each server's `.python-version` pins. Python
 dependencies are managed with **`uv`, never `pip`**.
 
 ```sh
