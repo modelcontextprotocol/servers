@@ -46,7 +46,7 @@ describe("sequentialthinking thought logging", () => {
     const border = "─".repeat(Math.max(header.length, text.length) + 4);
     return `
 ┌${border}┐
-│ ${header} │
+│ ${header.padEnd(border.length - 2)} │
 ├${border}┤
 │ ${text.padEnd(border.length - 2)} │
 └${border}┘`;
@@ -163,6 +163,19 @@ describe("sequentialthinking thought logging", () => {
         box("🌿 Branch 1/3 (from thought 1, ID: constructor)", "a thought"),
       ]);
     });
+  });
+
+  // #5108: the header row is padded to the border's width, so every row of
+  // the box is the same width, whether the header or the thought is longer.
+  it.each([
+    ["the header", "t"],
+    ["the thought", "a much longer thought than the header line is"],
+  ])("draws every row the same width when %s is longer", async (_l, text) => {
+    conn = await connect({ disableThoughtLogging: undefined });
+    await conn.think(thought({ thought: text }));
+    const rows = logged()[0].split("\n").slice(1);
+    expect(rows).toHaveLength(5);
+    expect(new Set(rows.map((row) => row.length)).size).toBe(1);
   });
 
   // #5000: when colour is on, the header carries chalk's escape codes, but the
