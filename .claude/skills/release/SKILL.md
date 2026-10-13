@@ -179,10 +179,11 @@ Then, on the PR:
    would not survive; this is the exception `AGENTS.md` names.
 2. **Wait for its CI to pass.** The workflow token's push starts no workflow,
    so the Version Packages workflow dispatches the TypeScript and Python
-   workflows on `changeset-release/v2/main` after each update; their checks
-   report on the PR's head commit. Closing and reopening the PR does not start
-   them (that fires `pull_request`; they run on `push`). If none appear, run
-   them by hand:
+   workflows on `changeset-release/v2/main` after each update. A PR does not
+   list dispatched checks, so the result shows as two commit statuses,
+   `TypeScript (dispatched)` and `Python (dispatched)`. Closing and reopening
+   the PR does not start them (that fires `pull_request`; they run on `push`).
+   If neither status appears, run them by hand:
    `gh workflow run typescript.yml --ref changeset-release/v2/main` (and
    `python.yml`).
 3. **Read it**: each bump matches the semver policy in `RELEASING.md`, each
@@ -203,7 +204,7 @@ gh workflow run prepare-python-release.yml --repo modelcontextprotocol/servers \
 It opens a PR that starts with `Closes #N`, on a branch named
 `v2/chore/<N>-python-calver-<date>`, labeled `v2`, and dispatches the
 TypeScript and Python workflows on that branch, as the Version Packages
-workflow does. Wait for that CI to pass, check that each stamped package really
+workflow does. Wait for its two `(dispatched)` statuses to pass, check that each stamped package really
 changed, and a maintainer merges it.
 No PR means no Python server has a shipped change since its last stamp.
 

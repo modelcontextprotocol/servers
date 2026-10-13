@@ -9,7 +9,9 @@ on:
   # that automation opens (Version Packages, Prepare Python Release) get no
   # push run. Their workflows dispatch this one on the PR's branch instead
   # (#5110): `workflow_dispatch` is the one event that token can start, and its
-  # run reports its checks on the branch's head commit, which the PR shows.
+  # run's checks attach to the branch's head commit. The rollup a PR reads
+  # leaves dispatched checks out, so the `dispatch-status` jobs below report
+  # the run as a commit status instead.
   workflow_dispatch:
 
 # Superseded runs on the same ref are cancelled (e.g. rapid amend-pushes),
@@ -180,3 +182,62 @@ jobs:
         with:
           name: dist-${{ matrix.package }}
           path: src/${{ matrix.package }}/dist/
+
+  # A dispatched run's checks attach to the branch's head commit but are left
+  # out of its status rollup, which is what a pull request reads (verified on
+  # #5110: 29 successful dispatched check runs, a rollup of null). So on a
+  # dispatch, which is how a version PR opened by automation gets CI, these two
+  # jobs mirror the run onto the commit as a status, which the rollup does
+  # include: pending at the start, then the result of every job above. A push
+  # run reports through its own checks and skips both.
+  dispatch-status-pending:
+    name: Report the dispatched run as pending
+    if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+    steps:
+      - name: Set the commit status to pending
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -f state=pending -f context="Python (dispatched)" \
+            -f description="Dispatched run in progress" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+  # `!cancelled()`: a run superseded by a newer dispatch posts nothing, and the
+  # newer run reports instead. A job skipped by its own `if:` counts as passed.
+  dispatch-status:
+    name: Report the dispatched run's result
+    if: github.event_name == 'workflow_dispatch' && !cancelled()
+    needs:
+      [
+        dispatch-status-pending,
+        detect-packages,
+        script-tests,
+        test,
+        coverage,
+        test-windows,
+        build,
+      ]
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+    steps:
+      - name: Set the commit status to the run's result
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          if jq -e 'all(.[]; .result == "success" or .result == "skipped")' <<<"$NEEDS" >/dev/null; then
+            STATE=success DESCRIPTION="Every job passed"
+          else
+            STATE=failure DESCRIPTION="A job failed; open the run for details"
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -f state="$STATE" -f context="Python (dispatched)" \
+            -f description="$DESCRIPTION" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
