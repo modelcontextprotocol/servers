@@ -86,12 +86,18 @@ D=${D:-$(mktemp -d)}
 # Copy the class's response from Canned responses into "$D/response.md" (the
 # text inside the quote, with #ORIGINAL or the SDK link filled in) first.
 # Close as not planned, with that response (body in a file, so quoting is
-# safe). NOT for a duplicate: post the Duplicate response with `gh issue
-# comment`, close it with the `board-ops` state_reason=duplicate call, and
-# delete its card if it has one (`board-ops`, Delete a card). An empty or missing response stops here instead of closing silently.
+# safe). The comment and the close are two writes, paced apart by AGENTS.md
+# "Pacing GitHub writes" (`gh issue close --comment` sends them back to back).
+# NOT for a duplicate: post the Duplicate response with `gh issue comment`,
+# close it with the `board-ops` state_reason=duplicate call, and delete its
+# card if it has one (`board-ops`, Delete a card), pacing those three writes
+# the same way. An empty or missing response stops here instead of closing
+# silently.
 BODY=$(cat "$D/response.md") && [ -n "$BODY" ] \
-  && gh issue close <N> --repo modelcontextprotocol/servers --reason "not planned" --comment "$BODY" \
-  || { echo "no response or close failed for #<N> — stop and check it" >&2; false; }
+  && gh issue comment <N> --repo modelcontextprotocol/servers --body "$BODY" \
+  && sleep 1 \
+  && gh issue close <N> --repo modelcontextprotocol/servers --reason "not planned" \
+  || { echo "no response, or the comment or close failed for #<N> — look before retrying" >&2; false; }
 # Spam or empty, the one class with no response:
 gh issue close <N> --repo modelcontextprotocol/servers --reason "not planned"
 ```
