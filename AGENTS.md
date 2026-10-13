@@ -600,6 +600,14 @@ would not, burns turns, and buries the result under no-op turns.
 - ⚠️ **If a notifier is already armed, wait for it.** Re-checking by hand
   alongside it is the polling this rule forbids.
 
+## Pacing GitHub writes
+
+**Pace bulk GitHub writes: 1 s between requests, never in parallel, under 80 a
+minute and 500 an hour.** The secondary limit refuses while `gh api rate_limit`
+still shows quota, and most `gh` writes are GraphQL. After a refusal, wait out
+`retry-after`, or a minute without one; a refused create can still land, so
+look before retrying.
+
 ## MCP protocol
 
 - **Look protocol questions up; do not answer them from memory.** The repo

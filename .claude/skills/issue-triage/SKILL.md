@@ -42,9 +42,9 @@ reporter is notified of each one. So:
   manifest** that lists each item, its class, and the issue it will point at.
   A wrong class is cheap to fix in a file and expensive to fix after a
   notification went out. Closing a single item the maintainer named is fine.
-- **Pace every write loop**: a few seconds between calls, and **stop on the
-  first failed call** rather than carrying on blind. GitHub's secondary rate
-  limit on content creation trips well before its primary one, and a loop that
+- **Pace every write loop** by `AGENTS.md` **Pacing GitHub writes**, and
+  **stop on the first failed call** rather than carrying on blind. GitHub's
+  secondary rate limit trips well before its primary one, and a loop that
   keeps going after a 403 leaves a half-applied batch nobody can see.
 - **Never restate a vulnerability in public**, not even to summarize a report
   that was already filed publicly. See [Security reports](#security-reports).
@@ -86,14 +86,22 @@ D=${D:-$(mktemp -d)}
 # Copy the class's response from Canned responses into "$D/response.md" (the
 # text inside the quote, with #ORIGINAL or the SDK link filled in) first.
 # Close as not planned, with that response (body in a file, so quoting is
-# safe). NOT for a duplicate: post the Duplicate response with `gh issue
-# comment`, close it with the `board-ops` state_reason=duplicate call, and
-# delete its card if it has one (`board-ops`, Delete a card). An empty or missing response stops here instead of closing silently.
+# safe). The comment and the close are two writes (`gh issue close --comment`
+# sends them back to back), and a run closes several issues, so every write
+# here is followed by the PR-close loop's `sleep 8`, including the last one
+# before the next issue. NOT for a duplicate: post the Duplicate response with
+# `gh issue comment`, close it with the `board-ops` state_reason=duplicate
+# call, and delete its card if it has one (`board-ops`, Delete a card), with
+# the same `sleep 8` after each of those three writes. An empty or missing
+# response stops here instead of closing silently.
 BODY=$(cat "$D/response.md") && [ -n "$BODY" ] \
-  && gh issue close <N> --repo modelcontextprotocol/servers --reason "not planned" --comment "$BODY" \
-  || { echo "no response or close failed for #<N> — stop and check it" >&2; false; }
+  && gh issue comment <N> --repo modelcontextprotocol/servers --body "$BODY" \
+  && sleep 8 \
+  && gh issue close <N> --repo modelcontextprotocol/servers --reason "not planned" \
+  && sleep 8 \
+  || { echo "no response, or the comment or close failed for #<N> — look before retrying" >&2; false; }
 # Spam or empty, the one class with no response:
-gh issue close <N> --repo modelcontextprotocol/servers --reason "not planned"
+gh issue close <N> --repo modelcontextprotocol/servers --reason "not planned" && sleep 8
 ```
 
 ## Pass 1 — sweep onto the board (no approval implied)
@@ -447,12 +455,21 @@ while IFS=$'\t' read -r PR CLASS ISSUE _; do
   if [ -n "$SWEEP_LABEL" ]; then
     gh pr edit "$PR" --repo modelcontextprotocol/servers --add-label "$SWEEP_LABEL" </dev/null \
       || { echo "label FAILED on #$PR — stopping" >&2; break; }
+    sleep 8
   fi
-  gh pr close "$PR" --repo modelcontextprotocol/servers --comment "$BODY" </dev/null \
-    || { echo "close FAILED on #$PR — stopping; re-snapshot to see what is left" >&2; break; }
-  sleep 5
+  # Comment and close as two writes, so each is paced: `gh pr close --comment`
+  # sends both back to back.
+  gh pr comment "$PR" --repo modelcontextprotocol/servers --body "$BODY" </dev/null \
+    || { echo "comment FAILED on #$PR — stopping; look before retrying, it may have landed" >&2; break; }
+  sleep 8
+  gh pr close "$PR" --repo modelcontextprotocol/servers </dev/null \
+    || { echo "close FAILED on #$PR (its comment is posted; close it, do not re-comment) — stopping" >&2; break; }
+  sleep 8
 done < "$D/manifest.tsv"
 ```
+
+Each `sleep 8` paces a sustained loop, long enough to stay inside every limit
+in `AGENTS.md` **Pacing GitHub writes** for as long as the batch runs.
 
 The step 0 issue closes take the same two sweep additions during the backlog
 sweep: the close label (`gh issue edit <N> --add-label`) and the `#4875`
