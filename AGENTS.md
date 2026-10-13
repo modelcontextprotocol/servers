@@ -500,7 +500,11 @@ here.
 - **When work begins**, assign the issue to yourself, set Status to
   **In Progress**, and create a branch named
   `v2/<type>/<ISSUE_NUMBER>-<slug>` (for example
-  `v2/fix/4810-filesystem-symlink-escape`) from `origin/v2/main`.
+  `v2/fix/4810-filesystem-symlink-escape`) from `origin/v2/main`, **in a new
+  git worktree**: never by switching branches in the primary checkout, which
+  concurrent agent sessions share. Remove the worktree once the PR merges or
+  is closed. The recipe is the `pr-flow` skill (step 2, and step 10 for the
+  removal).
 - **When work is complete**, run the checks under
   [Before pushing](#before-pushing), open a PR against `v2/main` labeled `v2`
   with `Closes #<ISSUE_NUMBER>` as the body's first line, and set Status to

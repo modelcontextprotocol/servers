@@ -39,12 +39,39 @@ gh issue edit <N> --repo modelcontextprotocol/servers --add-assignee @me
 
 ## 2. Branch
 
-`v2/<type>/<N>-<slug>`, cut from **`origin/v2/main`**:
+`v2/<type>/<N>-<slug>`, cut from **`origin/v2/main`** into a **new git
+worktree**, never by switching branches in the primary checkout. Several agent
+sessions work this repo on one machine at once and share the primary checkout:
+a `git switch` there moves the branch out from under every other session using
+it, and carries one task's uncommitted edits, `dist/` output and
+`node_modules` into another's. A worktree per issue gives each task its own
+tree and leaves the primary checkout alone.
+
+Run it from the primary checkout. The worktree is a **sibling** directory named
+for the checkout plus the issue number (`servers` → `../servers-4810`), never a
+directory inside the repo, where every format, lint and typecheck scope would
+see a second copy of the source:
 
 ```sh
 git fetch origin v2/main
-git switch -c v2/fix/4810-filesystem-symlink-escape origin/v2/main
+git worktree add --no-track "../$(basename "$PWD")-4810" \
+  -b v2/fix/4810-filesystem-symlink-escape origin/v2/main
+cd "../$(basename "$PWD")-4810"
+npm install
 ```
+
+- `--no-track` keeps the new branch from tracking `origin/v2/main`, so
+  `git status` does not report your work as "ahead of v2/main", and the first
+  push is an explicit `git push -u origin <branch>` to a branch of its own name.
+- ⚠️ **The `npm install` is part of the step.** A worktree starts with no
+  `node_modules`, no `dist/` and no `.venv` (`/local-dev`). The root install
+  builds every TypeScript server; a Python server builds its `.venv` on its
+  first `uv run`. Background the install if you have edits to make first; the
+  gate needs it finished.
+- Every later step (edits, the gate, commits, the push) runs **inside the
+  worktree**.
+- The harness's `EnterWorktree` tool, where available, does the same; name the
+  branch by the rule above.
 
 `<type>` follows the issue's type label: `bug` → `fix`, `enhancement` → `feat`,
 `documentation` → `docs`, `chore` → `chore`. A `question` has no branch type,
@@ -56,10 +83,11 @@ branch and keeps the work legible in `git branch -a` next to `main`.
 history, so the PR diff would show unrelated changes.
 
 **Stacking.** When one issue's work depends on another PR that has not merged
-yet, branch from that PR's branch and open the PR with `--base` set to it. Say
-in the body that it is stacked and on which PR. When the lower PR merges,
-retarget the stacked one to `v2/main` (`gh pr edit <PR> --base v2/main`) and
-rebase it if GitHub reports conflicts.
+yet, branch from that PR's branch (its worktree is cut from it:
+`git worktree add … -b <child> <parent-branch>`) and open the PR with `--base`
+set to it. Say in the body that it is stacked and on which PR. When the lower
+PR merges, retarget the stacked one to `v2/main`
+(`gh pr edit <PR> --base v2/main`) and rebase it if GitHub reports conflicts.
 
 ## 3. Sign off every commit (DCO)
 
@@ -391,3 +419,16 @@ issue will not be done, the issue shipped nothing: close it as not planned and
 **delete its card** (`/board-ops`) rather than moving it to Done.
 
 If PRs were stacked on this one, retarget each to `v2/main` (step 2).
+
+**Then remove the worktree and its local branch**, from the primary checkout,
+once the PR shows as merged (or closed, for abandoned work). A stale worktree
+keeps its branch checked out, so git refuses to check that branch out anywhere
+else, and it holds a full `node_modules` on disk per issue:
+
+```sh
+git worktree remove "../$(basename "$PWD")-<N>"
+git branch -D v2/<type>/<N>-<slug>
+```
+
+`git worktree remove` refuses a worktree with uncommitted or untracked changes;
+read what is there before reaching for `--force`.

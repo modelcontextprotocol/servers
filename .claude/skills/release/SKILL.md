@@ -69,13 +69,21 @@ branch and reach `main` with everything else. **All are merged before the merge
 PR is opened.** A milestone that touches only one language, with a clean audit,
 has one.
 
+Each branch this skill cuts by hand (the audit, the hand-run CalVer stamp, the
+merge branch) goes into **its own sibling worktree**, as `/pr-flow` step 2
+does, never by switching branches in the primary checkout. Run each recipe from
+the primary checkout; the worktree is named for the checkout, the release
+issue and the branch's role, since one issue owns several branches.
+
 ### 2a. The audit
 
 Audit first, so the version bumps sit on a tree that was just checked.
 
 ```sh
 git fetch origin v2/main
-git switch -c "v2/chore/$N-release-audit" origin/v2/main
+git worktree add --no-track "../$(basename "$PWD")-$N-audit" \
+  -b "v2/chore/$N-release-audit" origin/v2/main
+cd "../$(basename "$PWD")-$N-audit" && npm install
 
 # npm: one lockfile covers the root and all four TypeScript workspaces.
 npm audit --audit-level=high
@@ -197,7 +205,9 @@ the same script:
 
 ```sh
 git fetch origin v2/main
-git switch -c "v2/chore/$N-python-calver-$(date -u +%Y.%-m.%-d)" origin/v2/main
+git worktree add --no-track "../$(basename "$PWD")-$N-calver" \
+  -b "v2/chore/$N-python-calver-$(date -u +%Y.%-m.%-d)" origin/v2/main
+cd "../$(basename "$PWD")-$N-calver" && npm install
 node scripts/prepare-python-release.mjs     # prints "name: old -> new" per stamped package
 git commit -s -am "chore: stamp Python CalVer versions for $(date -u +%Y.%-m.%-d)"
 ```
@@ -216,7 +226,9 @@ PR would then add a second.)
 
 ```sh
 git fetch origin main v2/main
-git switch -c "v2/chore/$N-release-$MILESTONE" origin/v2/main
+git worktree add --no-track "../$(basename "$PWD")-$N-merge" \
+  -b "v2/chore/$N-release-$MILESTONE" origin/v2/main
+cd "../$(basename "$PWD")-$N-merge"
 ```
 
 **The merge's result is the release candidate. Prove it will be `v2/main`'s
@@ -336,8 +348,8 @@ is not optional: if it prints anything but `active`, set it back by hand
 
 Work from a **dedicated worktree** with its own install, so nothing stale from
 another branch is tested. It is added **detached** at the pushed merge branch:
-the branch itself is still checked out where step 3 created it, and git
-refuses to check one branch out twice.
+the branch itself is still checked out in step 3's worktree, and git refuses
+to check one branch out twice.
 
 ```sh
 git worktree add --detach ../servers-release "origin/v2/chore/$N-release-$MILESTONE"
@@ -617,9 +629,10 @@ Then close out, by hand, since nothing closed the release issue:
 gh issue close "$N" --repo modelcontextprotocol/servers --reason completed
 ```
 
-Move its card to **Done** (`/board-ops`), remove the worktree
-(`git worktree remove ../servers-release`), and tell the maintainer the
-milestone can be closed.
+Move its card to **Done** (`/board-ops`), remove the worktrees from the
+primary checkout (`git worktree remove ../servers-release`, and each
+`../<checkout>-$N-<role>` from steps 2 and 3 with its local branch, as in
+`/pr-flow` step 10), and tell the maintainer the milestone can be closed.
 
 **If the run failed**, `RELEASING.md` **When a publish fails** has the two
 cases: a transient failure is re-run on the same run; a defect is fixed on
