@@ -5,6 +5,12 @@ on:
   # PR branch ran each workflow twice (once per event). PR checks still report
   # from the push run of the head commit.
   push:
+  # A push made with the workflow token starts no workflow, so the version PRs
+  # that automation opens (Version Packages, Prepare Python Release) get no
+  # push run. Their workflows dispatch this one on the PR's branch instead
+  # (#5110): `workflow_dispatch` is the one event that token can start, and its
+  # run reports its checks on the branch's head commit, which the PR shows.
+  workflow_dispatch:
 
 # Superseded runs on the same ref are cancelled (e.g. rapid amend-pushes),
 # except on main, where every merge keeps its own CI run

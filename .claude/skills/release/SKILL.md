@@ -177,8 +177,14 @@ Then, on the PR:
 1. **Tie it to the release issue with a comment**, `Part of #N`. The action
    rewrites the PR's body on every push to `v2/main`, so a `Closes` line there
    would not survive; this is the exception `AGENTS.md` names.
-2. **Close and reopen it to start CI.** A PR opened with the workflow token
-   does not trigger workflows.
+2. **Wait for its CI to pass.** The workflow token's push starts no workflow,
+   so the Version Packages workflow dispatches the TypeScript and Python
+   workflows on `changeset-release/v2/main` after each update; their checks
+   report on the PR's head commit. Closing and reopening the PR does not start
+   them (that fires `pull_request`; they run on `push`). If none appear, run
+   them by hand:
+   `gh workflow run typescript.yml --ref changeset-release/v2/main` (and
+   `python.yml`).
 3. **Read it**: each bump matches the semver policy in `RELEASING.md`, each
    `CHANGELOG.md` entry says what a user of the server needs to know, the
    consumed changeset files are deleted, and `package-lock.json` records the
@@ -195,8 +201,10 @@ gh workflow run prepare-python-release.yml --repo modelcontextprotocol/servers \
 ```
 
 It opens a PR that starts with `Closes #N`, on a branch named
-`v2/chore/<N>-python-calver-<date>`, labeled `v2`. Close and reopen it to start
-CI, check that each stamped package really changed, and a maintainer merges it.
+`v2/chore/<N>-python-calver-<date>`, labeled `v2`, and dispatches the
+TypeScript and Python workflows on that branch, as the Version Packages
+workflow does. Wait for that CI to pass, check that each stamped package really
+changed, and a maintainer merges it.
 No PR means no Python server has a shipped change since its last stamp.
 
 ⚠️ GitHub only dispatches a workflow that exists on the default branch. Until
