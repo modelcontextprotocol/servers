@@ -210,7 +210,7 @@ describe("the stdio transport", () => {
     session.send(7, "tools/list");
     const response = await session.response(7);
     expect(response.error).toBeUndefined();
-    expect(response.result?.tools).toHaveLength(14);
+    expect(response.result?.tools).toHaveLength(16);
   });
 
   // #4206: a malformed line is reported to the transport's onerror (unset,
@@ -234,7 +234,7 @@ describe("the stdio transport", () => {
       message: "Method not found",
     });
     session.send(3, "tools/list");
-    expect((await session.response(3)).result?.tools).toHaveLength(14);
+    expect((await session.response(3)).result?.tools).toHaveLength(16);
   });
 });
 

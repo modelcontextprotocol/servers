@@ -22,6 +22,8 @@ import {
   getFileStats,
   readFileContent,
   writeFileContent,
+  appendFileContent,
+  createOrAppendFileContent,
   moveFile,
   // Search & filtering functions
   searchFilesWithValidation,
@@ -402,6 +404,155 @@ describe("Lib Functions", () => {
   });
 
   describe("File Operations", () => {
+    describe("appendFileContent", () => {
+      it("reports a missing file without trying to create it", async () => {
+        mockFs.lstat.mockRejectedValueOnce(
+          Object.assign(new Error("missing"), { code: "ENOENT" }),
+        );
+        await expect(
+          appendFileContent("/test/missing.txt", "text"),
+        ).rejects.toMatchObject({
+          message: "File does not exist: /test/missing.txt",
+          code: "ENOENT",
+        });
+        expect(mockFs.open).not.toHaveBeenCalled();
+      });
+
+      it("reports a file removed between lstat and open as missing", async () => {
+        mockFs.lstat.mockResolvedValueOnce(REGULAR_FILE);
+        mockFs.open.mockRejectedValueOnce(
+          Object.assign(new Error("missing"), { code: "ENOENT" }),
+        );
+        await expect(
+          appendFileContent("/test/file.txt", "text"),
+        ).rejects.toThrow("File does not exist");
+      });
+
+      it("refuses a non-regular path before opening it", async () => {
+        mockFs.lstat.mockResolvedValueOnce({
+          ...REGULAR_FILE,
+          isFile: () => false,
+        } as Stats);
+        await expect(appendFileContent("/test/link", "text")).rejects.toThrow(
+          "not a regular file",
+        );
+        expect(mockFs.open).not.toHaveBeenCalled();
+      });
+
+      it.each([
+        { ...REGULAR_FILE, ino: 43 } as Stats,
+        { ...REGULAR_FILE, dev: 2 } as Stats,
+        { ...REGULAR_FILE, isFile: () => false } as Stats,
+      ])("refuses a replaced file and closes its handle", async (stats) => {
+        mockFs.lstat.mockResolvedValueOnce(REGULAR_FILE);
+        const handle = createMockWriteHandle(stats);
+        mockFs.open.mockResolvedValueOnce(asWriteHandle(handle));
+        await expect(
+          appendFileContent("/test/file.txt", "text"),
+        ).rejects.toThrow("was replaced");
+        expect(handle.writeFile).not.toHaveBeenCalled();
+        expect(handle.close).toHaveBeenCalledOnce();
+      });
+
+      it("retains the identity check without POSIX flags on Windows", async () => {
+        const constants = mockFs.constants as {
+          O_NOFOLLOW?: number;
+          O_NONBLOCK?: number;
+        };
+        const noFollow = constants.O_NOFOLLOW;
+        const nonBlock = constants.O_NONBLOCK;
+        constants.O_NOFOLLOW = undefined;
+        constants.O_NONBLOCK = undefined;
+        mockFs.lstat.mockResolvedValueOnce(REGULAR_FILE);
+        const handle = createMockWriteHandle({
+          ...REGULAR_FILE,
+          ino: 43,
+        } as Stats);
+        mockFs.open.mockResolvedValueOnce(asWriteHandle(handle));
+        try {
+          await expect(
+            appendFileContent("/test/file.txt", "text"),
+          ).rejects.toThrow("was replaced");
+          expect(mockFs.open).toHaveBeenCalledWith(
+            "/test/file.txt",
+            fs.constants.O_WRONLY | fs.constants.O_APPEND,
+          );
+          expect(handle.writeFile).not.toHaveBeenCalled();
+        } finally {
+          constants.O_NOFOLLOW = noFollow;
+          constants.O_NONBLOCK = nonBlock;
+        }
+      });
+
+      it.each(["stat", "writeFile"] as const)(
+        "closes the handle when %s fails",
+        async (operation) => {
+          mockFs.lstat.mockResolvedValueOnce(REGULAR_FILE);
+          const handle = createMockWriteHandle();
+          const error = Object.assign(new Error("permission denied"), {
+            code: "EACCES",
+          });
+          handle[operation].mockRejectedValueOnce(error);
+          mockFs.open.mockResolvedValueOnce(asWriteHandle(handle));
+          await expect(
+            appendFileContent("/test/file.txt", "text"),
+          ).rejects.toBe(error);
+          expect(handle.close).toHaveBeenCalledOnce();
+        },
+      );
+
+      it("propagates an open error without creating a file", async () => {
+        mockFs.lstat.mockResolvedValueOnce(REGULAR_FILE);
+        const error = Object.assign(new Error("permission denied"), {
+          code: "EACCES",
+        });
+        mockFs.open.mockRejectedValueOnce(error);
+        await expect(appendFileContent("/test/file.txt", "text")).rejects.toBe(
+          error,
+        );
+      });
+    });
+
+    describe("createOrAppendFileContent", () => {
+      it("propagates append errors other than missing files", async () => {
+        const error = Object.assign(new Error("permission denied"), {
+          code: "EACCES",
+        });
+        mockFs.lstat.mockRejectedValueOnce(error);
+        await expect(
+          createOrAppendFileContent("/test/file.txt", "text"),
+        ).rejects.toBe(error);
+        expect(mockFs.open).not.toHaveBeenCalled();
+      });
+
+      it("propagates exclusive creation errors", async () => {
+        mockFs.lstat.mockRejectedValueOnce(
+          Object.assign(new Error("missing"), { code: "ENOENT" }),
+        );
+        const error = Object.assign(new Error("permission denied"), {
+          code: "EACCES",
+        });
+        mockFs.open.mockRejectedValueOnce(error);
+        await expect(
+          createOrAppendFileContent("/test/file.txt", "text"),
+        ).rejects.toBe(error);
+      });
+
+      it("closes a newly created handle when writing fails", async () => {
+        mockFs.lstat.mockRejectedValueOnce(
+          Object.assign(new Error("missing"), { code: "ENOENT" }),
+        );
+        const handle = createMockWriteHandle();
+        const error = Object.assign(new Error("disk full"), { code: "ENOSPC" });
+        handle.writeFile.mockRejectedValueOnce(error);
+        mockFs.open.mockResolvedValueOnce(asWriteHandle(handle));
+        await expect(
+          createOrAppendFileContent("/test/file.txt", "text"),
+        ).rejects.toBe(error);
+        expect(handle.close).toHaveBeenCalledOnce();
+      });
+    });
+
     describe("getFileStats", () => {
       it("returns file statistics", async () => {
         const mockStats = {

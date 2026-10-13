@@ -19,6 +19,8 @@ import {
   getFileStats,
   readFileContent,
   writeFileContent,
+  appendFileContent,
+  createOrAppendFileContent,
   moveFile,
   searchFilesWithValidation,
   applyFileEdits,
@@ -72,6 +74,21 @@ const ReadMultipleFilesArgsSchema = z.object({
 const WriteFileArgsSchema = z.object({
   path: z.string(),
   content: z.string(),
+});
+
+const AppendFileArgsSchema = z.object({
+  path: z
+    .string()
+    .describe("Path to an existing file within allowed directories"),
+  content: z
+    .string()
+    .describe("Text to append exactly as provided, without adding a newline"),
+});
+
+const CreateOrAppendFileArgsSchema = AppendFileArgsSchema.extend({
+  path: z
+    .string()
+    .describe("Path to a new or existing file within allowed directories"),
 });
 
 const EditOperation = z.object({
@@ -449,6 +466,68 @@ export function createServer(
       const validPath = await validatePath(args.path, allowedDirectories);
       await writeFileContent(validPath, args.content);
       const text = `Successfully wrote to ${args.path}`;
+      return {
+        content: [{ type: "text" as const, text }],
+        structuredContent: { content: text },
+      };
+    },
+  );
+
+  server.registerTool(
+    "append_file",
+    {
+      title: "Append File",
+      description:
+        "Append text to the physical end of an existing file without replacing it or its existing content. " +
+        "The file must already exist; use create_or_append_file to create it if needed. " +
+        "Content is appended exactly as provided, without adding a newline. Only works within allowed directories.",
+      inputSchema: jsonSchema2020(AppendFileArgsSchema.shape),
+      outputSchema: jsonSchema2020({ content: z.string() }),
+      annotations: {
+        readOnlyHint: false,
+        idempotentHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
+    },
+    async (args: z.infer<typeof AppendFileArgsSchema>) => {
+      const validPath = await validatePath(args.path, allowedDirectories);
+      await appendFileContent(validPath, args.content);
+      const text = `Successfully appended content to ${args.path}`;
+      return {
+        content: [{ type: "text" as const, text }],
+        structuredContent: { content: text },
+      };
+    },
+  );
+
+  server.registerTool(
+    "create_or_append_file",
+    {
+      title: "Create or Append File",
+      description:
+        "Create a missing file with the provided text, or append to the physical end of an existing file. " +
+        "Preserves existing content and appends text exactly as provided, without adding a newline. " +
+        "Only works within allowed directories.",
+      inputSchema: jsonSchema2020(CreateOrAppendFileArgsSchema.shape),
+      outputSchema: jsonSchema2020({ content: z.string() }),
+      annotations: {
+        readOnlyHint: false,
+        idempotentHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
+    },
+    async (args: z.infer<typeof CreateOrAppendFileArgsSchema>) => {
+      const validPath = await validatePath(args.path, allowedDirectories);
+      const operation = await createOrAppendFileContent(
+        validPath,
+        args.content,
+      );
+      const text =
+        operation === "created"
+          ? `Successfully created ${args.path} with content`
+          : `Successfully appended content to ${args.path}`;
       return {
         content: [{ type: "text" as const, text }],
         structuredContent: { content: text },

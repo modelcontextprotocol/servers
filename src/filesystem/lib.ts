@@ -1,4 +1,4 @@
-import fs from "fs/promises";
+import fs, { type FileHandle } from "fs/promises";
 import path from "path";
 import { StringDecoder } from "string_decoder";
 import { createTwoFilesPatch } from "diff";
@@ -305,6 +305,90 @@ export async function writeFileContent(
     } else {
       throw error;
     }
+  }
+}
+
+/** Append at physical EOF without creating or replacing the validated file. */
+export async function appendFileContent(
+  filePath: string,
+  content: string,
+): Promise<void> {
+  try {
+    const expected = await fs.lstat(filePath);
+    if (!expected.isFile()) {
+      throw new Error(`Refusing to append: not a regular file: ${filePath}`);
+    }
+    // No O_CREAT or O_TRUNC: a missing file must stay missing. O_NONBLOCK
+    // prevents a FIFO swapped in after lstat from blocking the open. Neither
+    // it nor O_NOFOLLOW exists on Windows; the handle identity check below
+    // still refuses a replacement before any bytes are written there.
+    const handle = await fs.open(
+      filePath,
+      fs.constants.O_WRONLY |
+        fs.constants.O_APPEND |
+        (fs.constants.O_NOFOLLOW ?? 0) |
+        (fs.constants.O_NONBLOCK ?? 0),
+    );
+    try {
+      const opened = await handle.stat();
+      if (
+        !opened.isFile() ||
+        opened.dev !== expected.dev ||
+        opened.ino !== expected.ino
+      ) {
+        throw new Error(
+          `Refusing to append: ${filePath} was replaced while it was being opened`,
+        );
+      }
+      // O_APPEND puts every write at EOF, retaining the inode and its links.
+      await handle.writeFile(content, "utf-8");
+    } finally {
+      await handle.close();
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw Object.assign(
+        new Error(`File does not exist: ${filePath}`, { cause: error }),
+        {
+          code: "ENOENT",
+        },
+      );
+    }
+    throw error;
+  }
+}
+
+/** Create exclusively, or append without overwriting a concurrently created file. */
+export async function createOrAppendFileContent(
+  filePath: string,
+  content: string,
+): Promise<"created" | "appended"> {
+  try {
+    await appendFileContent(filePath, content);
+    return "appended";
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
+    }
+  }
+
+  let handle: FileHandle;
+  try {
+    // Exclusive creation also refuses symlinks. If another process wins this
+    // race, append through the same checked path instead of overwriting it.
+    handle = await fs.open(filePath, "wx");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      await appendFileContent(filePath, content);
+      return "appended";
+    }
+    throw error;
+  }
+  try {
+    await handle.writeFile(content, "utf-8");
+    return "created";
+  } finally {
+    await handle.close();
   }
 }
 

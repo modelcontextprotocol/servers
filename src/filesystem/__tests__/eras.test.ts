@@ -26,7 +26,7 @@ import {
   createServer,
   NO_ALLOWED_DIRECTORIES_MODERN_ERROR,
 } from "../server.js";
-import { makeTempDir, quietStderr } from "./helpers.js";
+import { makeTempDir, quietStderr, textOf } from "./helpers.js";
 
 let allowed: string;
 let other: string;
@@ -84,6 +84,42 @@ async function listAllowed(client: Client): Promise<string> {
   })) as CallToolResult;
   return (result.content[0] as { text: string }).text;
 }
+
+describe.each(["auto", "legacy"] as const)(
+  "append tools with %s negotiation",
+  (mode) => {
+    it("keeps missing files missing, appends at EOF, and creates only through create_or_append_file", async () => {
+      const { client } = await connect([allowed], mode);
+      // Legacy clients supply `other` through Roots; modern clients use argv.
+      const root = mode === "legacy" ? other : allowed;
+      expect(await listAllowed(client)).toBe(`Allowed directories:\n${root}`);
+      const missing = path.join(root, "new.txt");
+      const rejected = (await client.callTool({
+        name: "append_file",
+        arguments: { path: missing, content: "bad" },
+      })) as CallToolResult;
+      expect(rejected.isError).toBe(true);
+      await expect(fs.lstat(missing)).rejects.toMatchObject({ code: "ENOENT" });
+
+      const created = (await client.callTool({
+        name: "create_or_append_file",
+        arguments: { path: missing, content: "before" },
+      })) as CallToolResult;
+      expect(created.isError).toBeFalsy();
+      expect(textOf(created)).toBe(
+        `Successfully created ${missing} with content`,
+      );
+      const before = await fs.stat(missing);
+      const appended = (await client.callTool({
+        name: "append_file",
+        arguments: { path: missing, content: "after" },
+      })) as CallToolResult;
+      expect(appended.isError).toBeFalsy();
+      expect(await fs.readFile(missing, "utf-8")).toBe("beforeafter");
+      expect((await fs.stat(missing)).ino).toBe(before.ino);
+    });
+  },
+);
 
 describe("on 2026-07-28", () => {
   it("serves only the command-line directories, and never asks for roots", async () => {
