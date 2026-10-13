@@ -19,8 +19,11 @@ out; everything else points here.
 into parallel jobs on a fresh install; the gate runs them in sequence on your
 checkout. So a green gate means every check CI applies has already passed on
 your machine. It is the strongest predictor of a green CI there is here, though
-not a proof: CI runs on Linux, on a fresh `npm ci`, with Node 22 and each
-Python server's pinned interpreter.
+not a proof: CI runs on Linux, on a fresh `npm ci`, with Node 22 (the oldest
+supported) and each Python server's pinned interpreter, and `typescript.yml`'s
+`validate` job runs each TypeScript server on Node 22, 24 and 26, one parallel
+leg per version. The gate runs on whichever Node you have; use Node 24, the
+development version.
 
 **There are two exceptions.** The first is the Windows legs (#1149): `test-windows` in both
 workflows runs each server's test suite (`npm test`, `pytest`) on a
@@ -48,7 +51,7 @@ in this order, and the first failure stops the run.
 | 1 | `verify:install-fresh` | Every package in `node_modules` is at the version `package-lock.json` records, and every `package.json` declares what the lockfile says it does | None needed: CI installs with `npm ci` |
 | 2 | `verify:dco` | Every commit in `origin/v2/main..HEAD` carries a `Signed-off-by:` trailer matching its author or committer (merge and bot commits exempt) | `dco.yml` → **DCO signoff**, over the pull request's `base.sha..head.sha` |
 | 3 | `validate` → `validate:guards` | The root guards, listed [below](#the-root-guards) | `typescript.yml` → **Root guards** |
-| 4 | `validate` → each workspace's `validate` | Per TypeScript server: `format:check`, `lint` (`--max-warnings 0`), `typecheck`, `build`, `test` | `typescript.yml` → **Validate \<server\>** (one leg each) |
+| 4 | `validate` → each workspace's `validate` | Per TypeScript server: `format:check`, `lint` (`--max-warnings 0`), `typecheck`, `build`, `test` | `typescript.yml` → **Validate \<server\> (Node \<n\>)** (one leg per server per Node: 22, 24 and 26, in parallel) |
 | 5 | `coverage` | Per TypeScript server: `vitest run --coverage`, failing when any file is below 90% on lines, statements, functions or branches | `typescript.yml` → **Coverage \<server\>** (one leg each) |
 | 6 | `validate:py` | Per Python server: `uv sync --locked`, `ruff check`, `ruff format --check`, `pyright`, `pytest`, `uv build` | `python.yml` → **Test \<server\>** (one leg each) |
 | 7 | `coverage:py` | Per Python server: `uv sync --locked`, then `uv run --frozen pytest --cov --cov-report=term-missing --cov-report=json`; then **every file** in `coverage.json` must reach **90% on lines and 90% on branches** | `python.yml` → **Coverage \<server\>** (one leg each) |

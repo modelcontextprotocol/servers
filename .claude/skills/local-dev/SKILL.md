@@ -14,7 +14,8 @@ Driving a running server with a client is `/client-smoke`; tests are
 
 ## Install and build
 
-Node 22 for the TypeScript servers, and `uv` for the Python ones.
+Node 24 (the development version; 22 is the oldest supported) for the
+TypeScript servers, and `uv` for the Python ones.
 
 ```sh
 npm install        # at the repo root: all four TypeScript workspaces

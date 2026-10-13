@@ -70,6 +70,12 @@ jobs:
   # `validate` (format:check -> lint -> typecheck -> build -> test). What no
   # leg covers — the root tooling and the cross-workspace guards — is the
   # root-guards job above; together they are the root `npm run validate`.
+  #
+  # Each package is also validated on every Node line it supports (#5068):
+  # 22, the oldest supported, through 26. The `node` axis multiplies legs,
+  # not steps, so the versions run side by side and the job takes no longer
+  # than its slowest leg. The other jobs here stay on one Node, 22: the oldest
+  # supported, so an API only newer Node has cannot slip in unnoticed.
   validate:
     timeout-minutes: 15
     needs: [detect-packages]
@@ -77,14 +83,15 @@ jobs:
       fail-fast: false
       matrix:
         package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
-    name: Validate ${{ matrix.package }}
+        node: [22, 24, 26]
+    name: Validate ${{ matrix.package }} (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: ${{ matrix.node }}
           cache: npm
 
       # This package plus the root: run from a workspace directory, `npm ci`
