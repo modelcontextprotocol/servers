@@ -405,9 +405,11 @@ def git_show(repo: git.Repo, revision: str) -> str:
     else:
         diff = commit.diff(git.NULL_TREE, create_patch=True)
     for d in diff:
-        # git prints /dev/null for the missing side of an added or deleted file.
-        a_path = "/dev/null" if d.new_file or d.a_path is None else d.a_path
-        b_path = "/dev/null" if d.deleted_file or d.b_path is None else d.b_path
+        # git prints /dev/null for the missing side of an added or deleted file,
+        # and prefixes an existing side with a/ or b/, which `git apply` and
+        # `patch -p1` strip as the first path component.
+        a_path = "/dev/null" if d.new_file or d.a_path is None else f"a/{d.a_path}"
+        b_path = "/dev/null" if d.deleted_file or d.b_path is None else f"b/{d.b_path}"
         output.append(f"\n--- {a_path}\n+++ {b_path}\n")
         if d.diff is None:
             continue  # pragma: no cover  # with create_patch=True GitPython always assigns the patch as bytes
