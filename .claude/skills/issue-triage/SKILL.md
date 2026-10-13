@@ -86,20 +86,22 @@ D=${D:-$(mktemp -d)}
 # Copy the class's response from Canned responses into "$D/response.md" (the
 # text inside the quote, with #ORIGINAL or the SDK link filled in) first.
 # Close as not planned, with that response (body in a file, so quoting is
-# safe). The comment and the close are two writes, paced apart by AGENTS.md
-# "Pacing GitHub writes" (`gh issue close --comment` sends them back to back).
-# NOT for a duplicate: post the Duplicate response with `gh issue comment`,
-# close it with the `board-ops` state_reason=duplicate call, and delete its
-# card if it has one (`board-ops`, Delete a card), pacing those three writes
-# the same way. An empty or missing response stops here instead of closing
-# silently.
+# safe). The comment and the close are two writes (`gh issue close --comment`
+# sends them back to back), and a run closes several issues, so every write
+# here is followed by the PR-close loop's `sleep 8`, including the last one
+# before the next issue. NOT for a duplicate: post the Duplicate response with
+# `gh issue comment`, close it with the `board-ops` state_reason=duplicate
+# call, and delete its card if it has one (`board-ops`, Delete a card), with
+# the same `sleep 8` after each of those three writes. An empty or missing
+# response stops here instead of closing silently.
 BODY=$(cat "$D/response.md") && [ -n "$BODY" ] \
   && gh issue comment <N> --repo modelcontextprotocol/servers --body "$BODY" \
-  && sleep 1 \
+  && sleep 8 \
   && gh issue close <N> --repo modelcontextprotocol/servers --reason "not planned" \
+  && sleep 8 \
   || { echo "no response, or the comment or close failed for #<N> — look before retrying" >&2; false; }
 # Spam or empty, the one class with no response:
-gh issue close <N> --repo modelcontextprotocol/servers --reason "not planned"
+gh issue close <N> --repo modelcontextprotocol/servers --reason "not planned" && sleep 8
 ```
 
 ## Pass 1 — sweep onto the board (no approval implied)
@@ -466,9 +468,8 @@ while IFS=$'\t' read -r PR CLASS ISSUE _; do
 done < "$D/manifest.tsv"
 ```
 
-Each `sleep 8` paces a sustained loop by `AGENTS.md` **Pacing GitHub writes**:
-one write per 8 s is 450 an hour, under the hourly cap that a 1 s floor alone
-would pass in under ten minutes.
+Each `sleep 8` paces a sustained loop, long enough to stay inside every limit
+in `AGENTS.md` **Pacing GitHub writes** for as long as the batch runs.
 
 The step 0 issue closes take the same two sweep additions during the backlog
 sweep: the close label (`gh issue edit <N> --add-label`) and the `#4875`

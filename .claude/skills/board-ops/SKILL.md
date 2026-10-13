@@ -429,16 +429,16 @@ if [ -s "$BOARD_TMP/lost-ids.json" ]; then
     gh project item-edit --project-id PVT_kwDOCt2Azc4BcZgq --id "$id" \
       --field-id PVTSSF_lADOCt2Azc4BcZgqzhXCpm0 --single-select-option-id <NEW_OPTION_ID> \
       || { echo "item-edit failed on $id — stopping; re-run step 1 to see what is left" >&2; break; }
-    sleep 8   # 450 an hour: under AGENTS.md "Pacing GitHub writes" for a sustained loop
+    sleep 8   # a sustained loop: see AGENTS.md "Pacing GitHub writes"
   done
 else
   echo "no lost-ids.json — step 1 did not complete; nothing re-applied" >&2
 fi
 ```
 
-Step 3 paces its edits by `AGENTS.md` **Pacing GitHub writes**. The 1 s floor
-alone would pass the hourly cap within ten minutes, so the loop sleeps 8 s: a
-restore of 250 cards takes about 35 minutes.
+Step 3 is a sustained loop, so it sleeps 8 s between edits, long enough to stay
+inside every limit in `AGENTS.md` **Pacing GitHub writes** for as long as it
+runs: a restore of 250 cards takes about 35 minutes.
 
 Step 1's join is the safety check: only a card that held the deleted option in
 the snapshot is re-applied, so you don't overwrite a card that was already blank
