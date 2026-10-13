@@ -12,6 +12,13 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+# Every job here only reads the repository (checkout, caches, artifacts), so
+# the token is scoped in the file rather than inherited from the repository's
+# default workflow permission, which could be widened in the UI with no commit
+# (#5091).
+permissions:
+  contents: read
+
 jobs:
   detect-packages:
     timeout-minutes: 5
