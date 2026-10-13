@@ -42,9 +42,9 @@ reporter is notified of each one. So:
   manifest** that lists each item, its class, and the issue it will point at.
   A wrong class is cheap to fix in a file and expensive to fix after a
   notification went out. Closing a single item the maintainer named is fine.
-- **Pace every write loop**: a few seconds between calls, and **stop on the
-  first failed call** rather than carrying on blind. GitHub's secondary rate
-  limit on content creation trips well before its primary one, and a loop that
+- **Pace every write loop** by `AGENTS.md` **Pacing GitHub writes**, and
+  **stop on the first failed call** rather than carrying on blind. GitHub's
+  secondary rate limit trips well before its primary one, and a loop that
   keeps going after a 403 leaves a half-applied batch nobody can see.
 - **Never restate a vulnerability in public**, not even to summarize a report
   that was already filed publicly. See [Security reports](#security-reports).
@@ -447,6 +447,7 @@ while IFS=$'\t' read -r PR CLASS ISSUE _; do
   if [ -n "$SWEEP_LABEL" ]; then
     gh pr edit "$PR" --repo modelcontextprotocol/servers --add-label "$SWEEP_LABEL" </dev/null \
       || { echo "label FAILED on #$PR — stopping" >&2; break; }
+    sleep 1   # AGENTS.md "Pacing GitHub writes": one request per second, even within an item
   fi
   gh pr close "$PR" --repo modelcontextprotocol/servers --comment "$BODY" </dev/null \
     || { echo "close FAILED on #$PR — stopping; re-snapshot to see what is left" >&2; break; }

@@ -338,6 +338,9 @@ worth doing on its own. Implementing a suggestion differently is fine.
     -f body='Fixed in <sha>: …'
   ```
 
+  A round with many comments is a bulk write: send the replies one at a time,
+  paced by `AGENTS.md` **Pacing GitHub writes**.
+
 - ⚠️ **Then post a PR-level summary of the round, in addition, never instead.**
   Inline replies go hidden once the fix is pushed, because the threads become
   outdated, so the summary is what keeps the round readable afterwards. It does
