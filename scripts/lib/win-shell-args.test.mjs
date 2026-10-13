@@ -39,6 +39,68 @@ test("doubles an embedded quote", () => {
   assert.equal(quoteWinArg('a"b c'), '"a""b c"');
 });
 
+test("doubles a trailing backslash run, which the closing quote follows (#5111)", () => {
+  // Undoubled, `"C:\dir with space\"` ends in `\"`, an escaped quote, and the
+  // CRT parser runs the argument on into the next one.
+  assert.equal(quoteWinArg("C:\\a b\\"), '"C:\\a b\\\\"');
+  assert.equal(quoteWinArg("C:\\a b\\\\"), '"C:\\a b\\\\\\\\"');
+});
+
+test("doubles backslashes before an embedded quote, then doubles the quote", () => {
+  assert.equal(quoteWinArg('a\\"b c'), '"a\\\\""b c"');
+  assert.equal(quoteWinArg('a\\\\"b'), '"a\\\\\\\\""b"');
+});
+
+test("leaves backslashes not followed by a quote alone", () => {
+  assert.equal(quoteWinArg("C:\\a b\\c"), '"C:\\a b\\c"');
+  // An inert trailing-backslash path is not quoted, so nothing follows it.
+  assert.equal(quoteWinArg("C:\\dir\\"), "C:\\dir\\");
+});
+
+test("quoted output parses back to the original under the CRT rules", () => {
+  // A reference parser for one quoted argument (the MSVCRT 2008+ rules), so
+  // the expectations above are checked against what the child actually sees.
+  const parse = (s) => {
+    let out = "";
+    let inQuotes = false;
+    for (let i = 0; i < s.length; ) {
+      let n = 0;
+      while (s[i] === "\\") {
+        n++;
+        i++;
+      }
+      if (s[i] === '"') {
+        out += "\\".repeat(n >> 1);
+        if (n & 1) {
+          out += '"';
+        } else if (inQuotes && s[i + 1] === '"') {
+          out += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+        i++;
+      } else {
+        out += "\\".repeat(n);
+        if (i < s.length) out += s[i++];
+      }
+    }
+    return out;
+  };
+  for (const arg of [
+    "C:\\a b\\",
+    "C:\\a b\\\\",
+    'a\\"b c',
+    'a\\\\"b',
+    'a"b c',
+    '"',
+    "\\ \\",
+    "C:\\Temp(1)\\",
+  ]) {
+    assert.equal(parse(quoteWinArg(arg)), arg, `round trip: ${arg}`);
+  }
+});
+
 test("throws on `%` rather than silently mis-expanding it", () => {
   // cmd.exe expands %NAME% before it processes quotes, so quoting cannot save
   // this one — the child would receive a different path than we passed.

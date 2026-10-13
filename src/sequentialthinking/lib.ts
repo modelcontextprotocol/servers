@@ -36,7 +36,8 @@ export class SequentialThinkingServer {
     } = thoughtData;
 
     // The label is coloured only after the header is measured, so the border
-    // is sized from the visible text, not from chalk's escape codes. A missing
+    // and the header's padding are sized from the visible text, not from
+    // chalk's escape codes. A missing
     // revisesThought or branchId is left out of the header rather than printed
     // as "undefined".
     let label: string;
@@ -63,10 +64,14 @@ export class SequentialThinkingServer {
 
     const counts = ` ${thoughtNumber}/${totalThoughts}${context}`;
     const visibleHeader = `${label}${counts}`;
-    const header = `${colour(label)}${counts}`;
     const border = "─".repeat(
       Math.max(visibleHeader.length, thought.length) + 4,
     );
+    // The header row is padded to the border's width like the thought row, by
+    // the visible text's length. Each label's emoji is one surrogate pair, so
+    // its length of 2 is also its display width in a terminal.
+    const padding = " ".repeat(border.length - 2 - visibleHeader.length);
+    const header = `${colour(label)}${counts}${padding}`;
 
     return `
 ┌${border}┐
