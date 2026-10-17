@@ -1,6 +1,7 @@
 import asyncio
 import ipaddress
 import os
+import shutil
 import socket
 from typing import Annotated, Tuple
 from importlib.metadata import version
@@ -143,7 +144,7 @@ async def _refuse_private_destination(request: httpx.Request) -> None:
             )
 
 
-def extract_content_from_html(html: str) -> str:
+def extract_content_from_html(html: str, use_readability_js: bool | None = None) -> str:
     """Extract and convert HTML content to Markdown format.
 
     Args:
@@ -152,8 +153,11 @@ def extract_content_from_html(html: str) -> str:
     Returns:
         Simplified markdown version of the content
     """
+    if use_readability_js is None:
+        use_readability_js = shutil.which("node") is not None
+
     ret = readabilipy.simple_json.simple_json_from_html_string(
-        html, use_readability=True
+        html, use_readability=use_readability_js
     )
     failed = "<error>Page failed to be simplified from HTML</error>"
     if not ret["content"]:
@@ -302,6 +306,7 @@ async def fetch_url(
     force_raw: bool = False,
     proxy_url: str | None = None,
     allow_private_ips: bool = False,
+    use_readability_js: bool | None = None,
 ) -> Tuple[str, str]:
     """
     Fetch the URL and return the content in a form ready for the LLM, as well as a prefix string with status information.
@@ -338,7 +343,9 @@ async def fetch_url(
     )
 
     if is_page_html and not force_raw:
-        return extract_content_from_html(page_raw), ""
+        return extract_content_from_html(
+            page_raw, use_readability_js=use_readability_js
+        ), ""
 
     return (
         page_raw,
@@ -384,6 +391,7 @@ async def serve(
     ignore_robots_txt: bool = False,
     proxy_url: str | None = None,
     allow_private_ips: bool = False,
+    use_readability_js: bool | None = None,
 ) -> None:
     """Run the fetch MCP server.
 
@@ -458,6 +466,7 @@ Although originally you did not have internet access, and were advised to refuse
             force_raw=args.raw,
             proxy_url=proxy_url,
             allow_private_ips=allow_private_ips,
+            use_readability_js=use_readability_js,
         )
         original_length = len(content)
         if args.start_index >= original_length:
@@ -476,6 +485,7 @@ Although originally you did not have internet access, and were advised to refuse
             if actual_content_length == args.max_length and remaining_content > 0:
                 next_start = args.start_index + actual_content_length
                 content += f"\n\n<error>Content truncated. Call the fetch tool with a start_index of {next_start} to get more content.</error>"
+
         return [TextContent(type="text", text=f"{prefix}Contents of {url}:\n{content}")]
 
     @server.get_prompt()
@@ -495,6 +505,7 @@ Although originally you did not have internet access, and were advised to refuse
                 user_agent_manual,
                 proxy_url=proxy_url,
                 allow_private_ips=allow_private_ips,
+                use_readability_js=use_readability_js,
             )
             # TODO: after SDK bug is addressed, don't catch the exception
         except McpError as e:

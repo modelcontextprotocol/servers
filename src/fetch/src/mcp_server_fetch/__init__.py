@@ -21,6 +21,11 @@ def main():
         action="store_true",
         help="Allow fetching private, loopback and link-local addresses (refused by default)",
     )
+    parser.add_argument(
+        "--no-readability-js",
+        action="store_true",
+        help="Use readabilipy's Python-only HTML simplifier instead of the optional Node.js readability path",
+    )
 
     args = parser.parse_args()
     asyncio.run(
@@ -29,6 +34,7 @@ def main():
             args.ignore_robots_txt,
             args.proxy_url,
             args.allow_private_ips,
+            use_readability_js=False if args.no_readability_js else None,
         )
     )
 

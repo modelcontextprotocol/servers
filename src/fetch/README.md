@@ -33,7 +33,7 @@ The fetch tool will truncate the response, but by using the `start_index` argume
 
 ## Installation
 
-Optionally: Install node.js, this will cause the fetch server to use a different HTML simplifier that is more robust.
+Optionally: Install node.js, this will cause the fetch server to use a different HTML simplifier that is more robust. If `node` is not available, the server falls back to the Python-only simplifier.
 
 ### Using uv (recommended)
 
@@ -192,6 +192,10 @@ Without `--proxy-url`, the server uses the proxy in the standard `HTTP_PROXY`, `
 environment variables (honoring `NO_PROXY`). Both `http(s)://` and SOCKS5 proxies are supported (SOCKS support is
 installed with the server). A `socks://` proxy URL, as many desktop proxy settings export it, is treated as
 `socks5://`. A proxy setting the server cannot use makes each fetch fail with a tool error that says so.
+
+### Customization - HTML simplifier
+
+By default, the server uses the Node.js readability simplifier when `node` is available on `PATH`, and otherwise falls back to readabilipy's Python-only simplifier. If a host has Node.js installed but the readability path is slow or misconfigured, add `--no-readability-js` to force the Python-only simplifier.
 
 ## Windows Configuration
 

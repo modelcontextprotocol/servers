@@ -8,6 +8,7 @@ import os
 
 import httpx
 import pytest
+from unittest.mock import patch
 
 from mcp_server_fetch.server import (
     PROXY_ENV_VARS,
@@ -92,6 +93,35 @@ class TestExtractContentFromHtml:
         html = ""
         result = extract_content_from_html(html)
         assert "<error>" in result
+
+    def test_can_disable_readability_js(self):
+        """Callers can force the Python-only extraction path."""
+        html = "<html><body><article><p>Hello World</p></article></body></html>"
+
+        with patch(
+            "readabilipy.simple_json.simple_json_from_html_string",
+            return_value={"content": "<p>Hello World</p>"},
+        ) as mock_extract:
+            result = extract_content_from_html(html, use_readability_js=False)
+
+        assert "Hello World" in result
+        mock_extract.assert_called_once_with(html, use_readability=False)
+
+    def test_auto_disables_readability_js_without_node(self):
+        """Python-only environments do not try the Node.js path."""
+        html = "<html><body><article><p>Hello World</p></article></body></html>"
+
+        with (
+            patch("shutil.which", return_value=None),
+            patch(
+                "readabilipy.simple_json.simple_json_from_html_string",
+                return_value={"content": "<p>Hello World</p>"},
+            ) as mock_extract,
+        ):
+            result = extract_content_from_html(html)
+
+        assert "Hello World" in result
+        mock_extract.assert_called_once_with(html, use_readability=False)
 
 
 class TestNormalizeProxyUrl:

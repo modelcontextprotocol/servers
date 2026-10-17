@@ -21,6 +21,8 @@ from typing import Any
 
 import httpx
 import pytest
+import readabilipy.simple_json
+from unittest.mock import patch
 from mcp import ClientSession
 from mcp.shared.exceptions import McpError
 from mcp.types import INVALID_PARAMS, CallToolResult
@@ -465,6 +467,24 @@ async def test_html_without_node_falls_back_to_pure_python(web: FakeWeb) -> None
     assert "## Sub heading" in text
     assert "This is a link in a test paragraph" in text
     assert "https://example.com/x" not in text
+
+
+async def test_fetch_forwards_python_only_readability_choice(web: FakeWeb) -> None:
+    """serve(use_readability_js=False) reaches the extractor explicitly."""
+    web.add(ROBOTS, plain("", status=404))
+    web.add(PAGE, html(ARTICLE_HTML))
+    with patch(
+        "readabilipy.simple_json.simple_json_from_html_string",
+        wraps=readabilipy.simple_json.simple_json_from_html_string,
+    ) as spy:
+        async with connect(ignore_robots_txt=True, use_readability_js=False) as (
+            session,
+            _,
+        ):
+            result = await call(session, {"url": PAGE})
+    assert wire(result)["isError"] is False
+    spy.assert_called_once()
+    assert spy.call_args.kwargs["use_readability"] is False
 
 
 @pytest.mark.usefixtures("python_readability")
