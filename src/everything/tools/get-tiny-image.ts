@@ -31,7 +31,7 @@ const config = {
  * @param server - The McpServer instance where the tool will be registered.
  */
 export const registerGetTinyImageTool = (server: McpServer) => {
-  server.registerTool(name, config, async (args): Promise<CallToolResult> => {
+  server.registerTool(name, config, async (): Promise<CallToolResult> => {
     return {
       content: [
         {

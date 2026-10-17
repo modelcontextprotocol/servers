@@ -9,23 +9,17 @@
 - Run StreamableHttp server: `npm run start:streamableHttp` - Starts the MCP server with StreamableHttp transport
 - Prepare release: `npm run prepare` - Builds the project for publishing
 
-## Code Style Guidelines
+## Code style
 
-- Use ES modules with `.js` extension in import paths
-- Strictly type all functions and variables with TypeScript
-- Follow zod schema patterns for tool input validation
-- Prefer async/await over callbacks and Promise chains
-- Place all imports at top of file, grouped by external then internal
-- Use descriptive variable names that clearly indicate purpose
-- Implement proper cleanup for timers and resources in server shutdown
-- Handle errors with try/catch blocks and provide clear error messages
-- Use consistent indentation (2 spaces) and trailing commas in multi-line objects
-- Match existing code style, import order, and module layout in the respective folder.
-- Use camelCase for variables/functions,
-- Use PascalCase for types/classes,
-- Use UPPER_CASE for constants
-- Use kebab-case for file names and registered tools, prompts, and resources.
-- Use verbs for tool names, e.g., `get-annotated-message` instead of `annotated-message`
+The repo-wide TypeScript, naming and MCP rules are in the root
+[`AGENTS.md`](../../AGENTS.md), which is loaded in every session. This file holds
+only what is specific to this server, and is loaded when a file in this
+directory is read. Beyond the root rules:
+
+- Match the existing code style, import order and module layout of the folder
+  you are working in.
+- Use kebab-case for file names and for registered tools, prompts and resources
+  (e.g. `get-annotated-message`, not `annotated-message`).
 
 ## Extending the Server
 
@@ -48,5 +42,4 @@ The server factory is `src/everything/server/index.ts` and registers all feature
 - Export a `registerX(server)` function that registers new items with the MCP SDK in the same style as existing ones.
 - Wire your new module into the central index (e.g., update `tools/index.ts`, `resources/index.ts`, or `prompts/index.ts`).
 - Ensure schemas (for tools) are accurate JSON Schema and include helpful descriptions and examples.
-  `server/index.ts` and usages in `logging.ts` and `subscriptions.ts`.
 - Keep the docs in `src/everything/docs/` up to date if you add or modify noteworthy features.

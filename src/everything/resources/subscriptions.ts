@@ -52,7 +52,7 @@ export const setSubscriptionHandlers = (server: McpServer) => {
             sessionId ? `from session ${sessionId}` : ""
           }`,
         },
-        sessionId
+        sessionId,
       );
 
       // Get the subscribers for this URI
@@ -62,7 +62,7 @@ export const setSubscriptionHandlers = (server: McpServer) => {
       subscribers.add(sessionId);
       subscriptions.set(uri, subscribers);
       return {};
-    }
+    },
   );
 
   // Set the unsubscription handler
@@ -83,7 +83,7 @@ export const setSubscriptionHandlers = (server: McpServer) => {
             sessionId ? `from session ${sessionId}` : ""
           }`,
         },
-        sessionId
+        sessionId,
       );
 
       // Remove the subscriber
@@ -92,17 +92,16 @@ export const setSubscriptionHandlers = (server: McpServer) => {
         if (subscribers.has(sessionId)) subscribers.delete(sessionId);
       }
       return {};
-    }
+    },
   );
 };
 
 /**
  * Sends simulated resource update notifications to the subscribed client.
  *
- * This function iterates through all resource URIs stored in the subscriptions
- * and checks if the specified session ID is subscribed to them. If so, it sends
- * a notification through the provided server. If the session ID is no longer valid
- * (disconnected), it removes the session ID from the list of subscribers.
+ * Iterates the URIs in `subscriptions` and emits a
+ * `notifications/resources/updated` notification for each URI the given
+ * sessionId is subscribed to.
  *
  * @param {McpServer} server - The server instance used to send notifications.
  * @param {string | undefined} sessionId - The session ID of the client to check for subscriptions.
@@ -110,7 +109,7 @@ export const setSubscriptionHandlers = (server: McpServer) => {
  */
 const sendSimulatedResourceUpdates = async (
   server: McpServer,
-  sessionId: string | undefined
+  sessionId: string | undefined,
 ): Promise<void> => {
   // Search all URIs for ones this client is subscribed to
   for (const uri of subscriptions.keys()) {
@@ -122,8 +121,6 @@ const sendSimulatedResourceUpdates = async (
         method: "notifications/resources/updated",
         params: { uri },
       });
-    } else {
-      subscribers.delete(sessionId); // subscriber has disconnected
     }
   }
 };
@@ -138,16 +135,24 @@ const sendSimulatedResourceUpdates = async (
  */
 export const beginSimulatedResourceUpdates = (
   server: McpServer,
-  sessionId: string | undefined
+  sessionId: string | undefined,
 ) => {
   if (!subsUpdateIntervals.has(sessionId)) {
-    // Send once immediately
-    sendSimulatedResourceUpdates(server, sessionId);
+    // Send once immediately, then every 5 seconds. Fire-and-forget: this
+    // function is synchronous by contract (its callers start a background
+    // simulation), so neither send can be awaited. A send that fails (e.g. the
+    // transport closed before the updates were stopped) is logged rather than
+    // left to become an unhandled rejection.
+    const send = () =>
+      sendSimulatedResourceUpdates(server, sessionId).catch((error: unknown) =>
+        console.error("Simulated resource update failed:", error),
+      );
+    void send();
 
     // Set the interval to send later resource update notifications to this client
     subsUpdateIntervals.set(
       sessionId,
-      setInterval(() => sendSimulatedResourceUpdates(server, sessionId), 5000)
+      setInterval(() => void send(), 5000),
     );
   }
 };
@@ -167,5 +172,24 @@ export const stopSimulatedResourceUpdates = (sessionId?: string) => {
     const subsUpdateInterval = subsUpdateIntervals.get(sessionId);
     clearInterval(subsUpdateInterval);
     subsUpdateIntervals.delete(sessionId);
+  }
+};
+
+/**
+ * Removes a session from every URI's subscriber set, dropping any URI entry
+ * that ends up with no remaining subscribers.
+ *
+ * A session that disconnects without explicitly unsubscribing otherwise stays
+ * in `subscriptions` for the life of the process. Call this from the
+ * transport's `cleanup(sessionId)` when a session ends.
+ *
+ * @param {string} [sessionId]
+ */
+export const removeSubscriber = (sessionId?: string) => {
+  for (const [uri, subscribers] of subscriptions) {
+    subscribers.delete(sessionId);
+    if (subscribers.size === 0) {
+      subscriptions.delete(uri);
+    }
   }
 };

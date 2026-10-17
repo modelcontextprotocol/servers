@@ -1,0 +1,58 @@
+# Issue chooser configuration (GitHub issue template config schema).
+#
+# Blank issues are disabled so every report lands in a form: the bug form
+# requires the facts triage needs first (server, version, transport, protocol
+# era, client), and the feature form requires the server and a problem
+# statement.
+#
+# Security reports are deliberately a *contact link* rather than a form: a form
+# would still open a public issue, which is exactly what a vulnerability report
+# must not do. The link leaves the issue flow and opens the private advisory
+# form; private vulnerability reporting is enabled on this repository.
+#
+# New servers and server listings are also contact links, to the MCP Server
+# Registry, because this repository accepts neither (CONTRIBUTING.md).
+#
+# GitHub reads this file from the default branch (`main`), so a change here
+# goes live at the next milestone merge from `v2/main`, not when it merges.
+blank_issues_enabled: false
+contact_links:
+  - name: "🔒 Security vulnerability: report privately"
+    url: https://github.com/modelcontextprotocol/servers/security/advisories/new
+    about: >
+      Never report a vulnerability in a public issue. Private vulnerability
+      reporting is enabled on this repository, and this link opens the advisory
+      form. A vulnerability in an MCP SDK goes to that SDK's repository instead.
+
+  - name: "📦 New server, or listing a server: use the MCP Server Registry"
+    url: https://github.com/modelcontextprotocol/registry
+    about: >
+      This repository does not accept new server implementations or server
+      listings. Publish your server to the Registry to make it discoverable;
+      browse published servers at https://registry.modelcontextprotocol.io/.
+
+  - name: '🤝 Contribution policy: why there is no "New pull request"'
+    url: https://github.com/modelcontextprotocol/servers/blob/main/CONTRIBUTING.md
+    about: >
+      This repository accepts issues, not pull requests; maintainers do the
+      implementation. If you already built a change locally, open an issue and
+      share the prompt you used rather than a diff.
+
+  - name: "📐 MCP specification: protocol questions and proposals"
+    url: https://github.com/modelcontextprotocol/modelcontextprotocol/issues
+    about: >
+      If the behavior you're reporting is defined by the protocol rather than by
+      one of these servers, file it against the specification repository.
+
+  - name: "🧰 MCP SDKs: TypeScript and Python"
+    url: https://github.com/modelcontextprotocol
+    about: >
+      The servers are built on the TypeScript and Python SDKs. If a bug
+      reproduces against the SDK directly, outside these servers, file it in
+      that SDK's repository.
+
+  - name: "💬 Questions and community"
+    url: https://modelcontextprotocol.io/community/communication
+    about: >
+      Usage questions and discussion: the MCP Contributor Discord and the other
+      community channels, and how each is used.

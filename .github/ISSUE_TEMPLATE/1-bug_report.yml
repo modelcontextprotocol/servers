@@ -1,0 +1,204 @@
+# Bug report form (GitHub issue forms schema).
+#
+# Requires the facts triage needs before anything else: which server, its
+# version, how it was run, the transport, the protocol era the client speaks,
+# and the client itself. The server dropdown is how triage picks the
+# `server-<name>` scope label; `labels:` below is static, so it cannot apply
+# that label itself. `bug` is the type label and `v2` the version label: this
+# repository has no v1 line, so every issue is a v2 issue (AGENTS.md).
+#
+# GitHub serves issue forms from the default branch (`main`), so a change here
+# goes live at the next milestone merge from `v2/main`, not when it merges.
+name: Bug report
+description: Report something broken in one of the reference servers
+labels: ["bug", "v2"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. **Issues are how work reaches these servers.**
+
+        This repository accepts **issues, not pull requests**: design and
+        implementation are done by the maintainers through a prompt-driven
+        workflow ([`CONTRIBUTING.md`](https://github.com/modelcontextprotocol/servers/blob/main/CONTRIBUTING.md)).
+        So if you have already prototyped a fix locally, **the prompt you used
+        is worth more to us than a diff**. There is a field for it at the bottom
+        of this form.
+
+        > 🔒 **Do not report security vulnerabilities here.** Use the
+        > [private advisory form](https://github.com/modelcontextprotocol/servers/security/advisories/new)
+        > instead.
+
+  - type: dropdown
+    id: server
+    attributes:
+      label: Which server?
+      description: >
+        The servers in this repository. A server you found in the MCP Server
+        Registry or elsewhere is maintained by its own authors; report its bugs
+        to them.
+      options:
+        - everything (@modelcontextprotocol/server-everything)
+        - filesystem (@modelcontextprotocol/server-filesystem)
+        - memory (@modelcontextprotocol/server-memory)
+        - sequentialthinking (@modelcontextprotocol/server-sequential-thinking)
+        - fetch (mcp-server-fetch)
+        - git (mcp-server-git)
+        - time (mcp-server-time)
+        - More than one server
+        - The repository itself (CI, docs, templates, release tooling)
+    validations:
+      required: true
+
+  - type: input
+    id: server-version
+    attributes:
+      label: Server version
+      description: >
+        The version you actually ran, not "latest". For an unreleased build,
+        give the commit. For a repository-level report, write n/a.
+      placeholder: "1.0.0 (npm) or 2026.8.1 (PyPI)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you run the server?
+      options:
+        - npx (npm package)
+        - uvx or pip (PyPI package)
+        - Docker image
+        - From a clone of this repository
+        - Other (say which below)
+        - Not applicable (a repository-level report)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: transport
+    attributes:
+      label: Transport
+      description: >
+        Every server speaks stdio. Only `everything` also serves Streamable HTTP
+        and the deprecated HTTP+SSE transport.
+      options:
+        - stdio
+        - Streamable HTTP
+        - HTTP+SSE (deprecated)
+        - Not sure
+        - Not applicable (a repository-level report)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: spec-era
+    attributes:
+      label: Protocol era
+      description: >
+        Which revision of the MCP specification the client spoke. Modern is
+        2026-07-28, the stateless revision: there is no `initialize` handshake,
+        and the protocol version travels with each request. Legacy is
+        2025-11-25 or earlier, where the version is agreed in `initialize`.
+        The client's logs, or the MCP Inspector, show which one was used.
+      options:
+        - Modern (2026-07-28)
+        - Legacy (2025-11-25 or earlier)
+        - Not sure
+        - Not applicable (a repository-level report)
+    validations:
+      required: true
+
+  - type: input
+    id: client
+    attributes:
+      label: MCP client and version
+      description: >
+        The client that talked to the server, with its version. For a
+        repository-level report, write n/a.
+      placeholder: "Claude Desktop 1.2.3, MCP Inspector 2.0.0, a custom SDK client"
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Operating system and runtime
+      description: Your OS, plus `node --version` or `python --version` as applicable.
+      placeholder: "macOS 15.5, Node v22.19.0"
+    validations:
+      required: false
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Server configuration
+      description: >
+        The command, arguments and environment variables the client launched the
+        server with (for example, the `mcpServers` entry). Redact tokens,
+        secrets and private paths.
+    validations:
+      required: false
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: >
+        Numbered steps from a fresh start of the server, including the tool,
+        resource or prompt you called and its arguments.
+      placeholder: |
+        1. Start the server with the configuration above
+        2. Call `read_text_file` with `{"path": "/allowed/dir/link"}`
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or error output
+      description: >
+        The server's stderr, the client's MCP log, or the error the tool
+        returned. Redact tokens and secrets first.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: prompt
+    attributes:
+      label: Already prototyped a fix?
+      description: >
+        Please don't attach a diff or open a pull request. Share the **exact
+        prompt(s)** you used to produce the change, the behavior before and
+        after, and how you verified it. We reproduce it through our own
+        workflow so it lands with the right conventions, tests and coverage.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Before you submit
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: This is not a security vulnerability report (those go through the private advisory form).
+          required: true

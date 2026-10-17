@@ -17,6 +17,11 @@ def main():
     )
     parser.add_argument("--proxy-url", type=str, help="Proxy URL to use for requests")
     parser.add_argument(
+        "--allow-private-ips",
+        action="store_true",
+        help="Allow fetching private, loopback and link-local addresses (refused by default)",
+    )
+    parser.add_argument(
         "--no-readability-js",
         action="store_true",
         help="Use readabilipy's Python-only HTML simplifier instead of the optional Node.js readability path",
@@ -28,6 +33,7 @@ def main():
             args.user_agent,
             args.ignore_robots_txt,
             args.proxy_url,
+            args.allow_private_ips,
             use_readability_js=False if args.no_readability_js else None,
         )
     )

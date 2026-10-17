@@ -24,6 +24,6 @@ export const registerSimplePrompt = (server: McpServer) => {
           },
         },
       ],
-    })
+    }),
   );
 };

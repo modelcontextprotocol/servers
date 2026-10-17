@@ -1,0 +1,38 @@
+[
+  {
+    "prompt": "Move the board card for issue 4810 to In Review.",
+    "expect": "board-ops"
+  },
+  {
+    "prompt": "How do I set the Priority field on an issue's card on the Servers V2 board?",
+    "expect": "board-ops"
+  },
+  {
+    "prompt": "The project board rejected my Status option ID. How do I get the current one?",
+    "expect": "board-ops"
+  },
+  {
+    "prompt": "I'm about to add an option to one of the board's single-select fields. Should I do anything first?",
+    "expect": "board-ops"
+  },
+  {
+    "prompt": "Several cards lost their Status value after someone edited the field. How do I put it back?",
+    "expect": "board-ops"
+  },
+  {
+    "prompt": "Write out every command I need to run to file an issue, start to finish, for: the time server returns the wrong UTC offset for Australia/Lord_Howe during daylight saving. I'll run them myself.",
+    "chain": ["issue-create", "board-ops"]
+  },
+  {
+    "prompt": "My fix for issue 4810 is committed and the gate is green. Write out every command I need to run from here until the PR is open and tracked, start to finish. I'll run them myself.",
+    "chain": ["pr-flow", "board-ops"]
+  },
+  {
+    "prompt": "Explain the difference between TCP and UDP.",
+    "expect": null
+  },
+  {
+    "prompt": "What year was the first Moon landing?",
+    "expect": null
+  }
+]

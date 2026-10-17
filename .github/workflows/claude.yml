@@ -11,7 +11,13 @@ on:
     types: [submitted]
 
 jobs:
+  # This job holds a credential twice over (`id-token: write`, and the
+  # `ANTHROPIC_API_KEY` secret), so every action in it is pinned to a commit
+  # SHA with the release it came from in a trailing comment. A moving tag
+  # here would let whoever can move it run code next to both.
+  # `verify:action-pins` enforces it.
   claude:
+    timeout-minutes: 30
     if: |
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
@@ -26,13 +32,13 @@ jobs:
       actions: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 1
 
       - name: Run Claude Code
         id: claude
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@12dd8d74c712f5f3669365b2369b558c495b1104 # v1.0.238
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 

@@ -58,6 +58,8 @@ src/everything
      │   ├── trigger-sampling-request-async.ts
      │   └── trigger-url-elicitation.ts
      └── transports
+         ├── in-memory-event-store.ts
+         ├── listen.ts
          ├── sse.ts
          ├── stdio.ts
          └── streamableHttp.ts
@@ -85,9 +87,19 @@ src/everything
 ### `docs/`
 
 - `architecture.md`
-  - This document.
+  - Describes the server architecture, including transport layers, session initialization, and primitive registration.
+- `extension.md`
+  - Explains how to extend the server with new tools, prompts, resources, or transports.
+- `features.md`
+  - A comprehensive reference listing all implemented prompts, resources, tools, and protocol behaviors.
+- `how-it-works.md`
+  - Explains how SSE and Streamable HTTP transports are set up and how sessions are managed.
 - `instructions.md`
   - Human‑readable instructions intended to be passed to the client/LLM as guidance on server use. Loaded by the server at startup and returned in the initialize exchange.
+- `startup.md`
+  - Describes the server startup sequence, environment checks, and initialization.
+- `structure.md`
+  - This document.
 
 ### `prompts/`
 
@@ -178,6 +190,11 @@ src/everything
 
 ### `transports/`
 
+- `in-memory-event-store.ts`
+  - `InMemoryEventStore`: the Streamable HTTP transport's event store for resumability. Replays only the events of the stream a `Last-Event-ID` belongs to, and reports an unknown event ID as having no stream, so the SDK refuses the resume.
+- `listen.ts`
+  - `listenOrExit(app, port, listeningMessage)`: binds an Express app to its port for both HTTP transports.
+  - Prints the listening message only once the port is bound; on a bind failure (such as a port already in use) prints why and exits non-zero.
 - `stdio.ts`
   - Starts a `StdioServerTransport`, created the server via `createServer()`, and connects it.
   - Handles `SIGINT` to close cleanly and calls `cleanup()` to remove any live intervals.
@@ -191,4 +208,5 @@ src/everything
 - `streamableHttp.ts`
   - Express server exposing a single `/mcp` endpoint for POST (JSON‑RPC), GET (SSE stream), and DELETE (session termination) using `StreamableHTTPServerTransport`.
   - Uses an `InMemoryEventStore` for resumable sessions and tracks transports by `sessionId`.
+  - Answers a request for an unknown or ended `Mcp-Session-Id` with `404 Not Found`, and closes every open session on `SIGINT`.
   - Connects a fresh server instance on initialization POST and reuses the transport for subsequent requests.

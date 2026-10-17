@@ -1,0 +1,34 @@
+[
+  {
+    "prompt": "How do I run the everything server over Streamable HTTP on a port other than the default from this checkout?",
+    "expect": "local-dev"
+  },
+  {
+    "prompt": "How do I point Claude Desktop at my local build of the filesystem server instead of the published package?",
+    "expect": "local-dev"
+  },
+  {
+    "prompt": "I just created a git worktree of this repo and the memory server won't start. What do I check?",
+    "expect": "local-dev"
+  },
+  {
+    "prompt": "I edited a tool in the memory server but the running server still shows the old behavior. What do I check?",
+    "expect": "local-dev"
+  },
+  {
+    "prompt": "How do I start the git server from source against a specific repository?",
+    "expect": "local-dev"
+  },
+  {
+    "prompt": "How do I run the time server from this checkout through uvx rather than the PyPI release?",
+    "expect": "local-dev"
+  },
+  {
+    "prompt": "Write a haiku about autumn rain.",
+    "expect": null
+  },
+  {
+    "prompt": "What is 17 multiplied by 23?",
+    "expect": null
+  }
+]
