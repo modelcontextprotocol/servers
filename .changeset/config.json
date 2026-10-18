@@ -2,7 +2,10 @@
   "$schema": "https://unpkg.com/@changesets/config@4.0.1/schema.json",
   "changelog": [
     "@changesets/changelog-github",
-    { "repo": "modelcontextprotocol/servers" }
+    {
+      "repo": "modelcontextprotocol/servers",
+      "template": "\n\n- {pull} {commit} {authors} - {summary}"
+    }
   ],
   "commit": false,
   "fixed": [],
