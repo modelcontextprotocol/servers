@@ -497,7 +497,7 @@ wheels = [
 
 [[package]]
 name = "mcp-server-time"
-version = "2026.10.10"
+version = "2026.10.18"
 source = { editable = "." }
 dependencies = [
     { name = "jsonschema" },
