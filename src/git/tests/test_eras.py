@@ -30,7 +30,13 @@ from mcp import Client
 from mcp.client._transport import TransportStreams
 from mcp.shared.exceptions import MCPError
 from mcp.shared.memory import create_client_server_memory_streams
-from mcp.types import METHOD_NOT_FOUND, CallToolResult, TextContent
+from mcp.types import (
+    INVALID_PARAMS,
+    METHOD_NOT_FOUND,
+    CallToolResult,
+    PromptReference,
+    TextContent,
+)
 
 from mcp_server_git.server import serve
 
@@ -61,7 +67,7 @@ async def connect(mode: str, repository: Path | None) -> AsyncIterator[Client]:
         async def transport() -> AsyncIterator[TransportStreams]:
             yield client_streams
 
-        with patch("mcp_server_git.server.stdio_server", fake_stdio_server):
+        with patch("mcp.server.mcpserver.server.stdio_server", fake_stdio_server):
             async with anyio.create_task_group() as tg:
                 tg.start_soon(serve, repository)
                 async with Client(transport(), mode=mode) as client:
@@ -165,26 +171,47 @@ async def test_repository_confinement_holds_in_each_era(
 async def test_tool_failure_is_an_is_error_result_in_each_era(
     repo: git.Repo, mode: str, negotiated: str
 ) -> None:
+    # A tool's own failure is an isError result the model can read and act on.
     async with connect(mode, repo_dir(repo)) as client:
         missing = await client.call_tool("git_status", {})
-        unknown = await client.call_tool("no_such_tool", {})
+        outside = await client.call_tool("git_status", {"repo_path": "/"})
     assert missing.is_error is True
-    assert text_of(missing) == (
-        "Input validation error: 'repo_path' is a required property"
+    assert text_of(missing).startswith(
+        "Error executing tool git_status: 1 validation error for statusArguments\n"
+        "repo_path\n  Field required"
     )
-    assert unknown.is_error is True
-    assert text_of(unknown) == "Unknown tool: no_such_tool"
+    assert outside.is_error is True
+    assert text_of(outside) == (
+        "Error executing tool git_status: Repository path '/' is outside the "
+        f"allowed repository '{repo_dir(repo)}'"
+    )
+
+
+@pytest.mark.parametrize(("mode", "negotiated"), ERAS)
+async def test_unknown_tool_is_a_json_rpc_invalid_params_error_in_each_era(
+    repo: git.Repo, mode: str, negotiated: str
+) -> None:
+    # #5174: both spec revisions make an unknown tool a protocol error,
+    # JSON-RPC -32602, not an isError result.
+    async with connect(mode, repo_dir(repo)) as client:
+        with pytest.raises(MCPError) as excinfo:
+            await client.call_tool("no_such_tool", {})
+    assert excinfo.value.error.code == INVALID_PARAMS
+    assert excinfo.value.error.message == "Unknown tool: no_such_tool"
 
 
 @pytest.mark.parametrize(("mode", "negotiated"), ERAS)
 async def test_unsupported_method_is_a_json_rpc_error_in_each_era(
     repo: git.Repo, mode: str, negotiated: str
 ) -> None:
-    # The server declares no resources, so resources/list is a protocol error
-    # (an MCPError on the client), not an isError result.
+    # The server registers no completion handler, so completion/complete is a
+    # protocol error (an MCPError on the client), not an isError result.
     async with connect(mode, repo_dir(repo)) as client:
         with pytest.raises(MCPError) as excinfo:
-            await client.list_resources()
+            await client.complete(
+                PromptReference(type="ref/prompt", name="none"),
+                {"name": "x", "value": ""},
+            )
     assert excinfo.value.error.code == METHOD_NOT_FOUND
 
 

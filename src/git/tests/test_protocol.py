@@ -22,16 +22,25 @@ import anyio
 import git
 import pytest
 from mcp.client.session import ClientRequestContext
+from mcp.shared.exceptions import MCPError
 from mcp.shared.memory import create_client_server_memory_streams
 from mcp.shared.message import SessionMessage
-from mcp.types import JSONRPCRequest, ListRootsResult, Root
+from mcp.types import INVALID_PARAMS, JSONRPCRequest, ListRootsResult, Root
 from pydantic import FileUrl
 
 from mcp_server_git.server import serve
 
-from conftest import connect, make_repo, text_result, wire
+from conftest import connect, make_repo, text_result, tool_error, wire
 
 SNAPSHOTS = Path(__file__).parent / "snapshots"
+
+# What the server advertises in either era. MCPServer serves empty prompt and
+# resource lists, so both appear; nothing ever changes, so no listChanged.
+CAPABILITIES = {
+    "prompts": {"listChanged": False},
+    "resources": {"listChanged": False, "subscribe": False},
+    "tools": {"listChanged": False},
+}
 
 
 def root_of(repo: git.Repo) -> Path:
@@ -45,11 +54,6 @@ async def call(
     """One tool call against a fresh server, as wire JSON."""
     async with connect(repository) as session:
         return wire(await session.call_tool(name, arguments))
-
-
-def rejected(message: str) -> dict[str, Any]:
-    """The error a flag-injection guard returns: its message, as written."""
-    return text_result(message, is_error=True)
 
 
 def staged_paths(repo: git.Repo) -> set[str]:
@@ -71,9 +75,9 @@ async def test_initialize_reports_package_version_as_server_version(repo: git.Re
         "version": version("mcp-server-git"),
     }
     assert version("mcp") != version("mcp-server-git")
-    # Behavior change in the SDK v2 port (#4851): v2 omits the empty
-    # `experimental: {}` object v1 always sent. It advertised nothing.
-    assert init["capabilities"] == {"tools": {"listChanged": False}}
+    # MCPServer (#5174) always serves prompts/list and resources/list (empty
+    # here), so it advertises both capabilities beside tools.
+    assert init["capabilities"] == CAPABILITIES
 
 
 async def test_list_tools_matches_wire_snapshot():
@@ -108,30 +112,42 @@ async def test_list_tools_names_in_order():
 
 
 async def test_missing_required_argument_is_input_validation_error(repo: git.Repo):
-    assert await call(None, "git_status", {}) == text_result(
-        "Input validation error: 'repo_path' is a required property", is_error=True
+    # #5174: MCPServer validates arguments against the signature-derived
+    # schema and reports pydantic's message, prefixed with the tool name.
+    result = await call(None, "git_status", {})
+    assert result["isError"] is True
+    text = result["content"][0]["text"]
+    assert text.startswith(
+        "Error executing tool git_status: 1 validation error for statusArguments\n"
+        "repo_path\n  Field required"
     )
 
 
-async def test_unknown_tool_is_error(repo: git.Repo):
-    assert await call(
-        None, "git_nope", {"repo_path": str(root_of(repo))}
-    ) == text_result("Unknown tool: git_nope", is_error=True)
+async def test_unknown_tool_is_a_json_rpc_invalid_params_error(repo: git.Repo):
+    # #5174: an unknown tool is a protocol error, JSON-RPC -32602, as the spec
+    # requires (server/tools, "Error Handling"), not an isError result.
+    async with connect(None) as session:
+        with pytest.raises(MCPError) as exc:
+            await session.call_tool("git_nope", {"repo_path": str(root_of(repo))})
+    assert exc.value.error.code == INVALID_PARAMS
+    assert exc.value.error.message == "Unknown tool: git_nope"
 
 
 async def test_unknown_tool_without_repo_path_is_unknown_tool():
-    # An unlisted tool skips schema validation; the name is checked before
-    # any argument is read, so a missing repo_path does not mask it.
-    assert await call(None, "git_nope", {}) == text_result(
-        "Unknown tool: git_nope", is_error=True
-    )
+    # The name is checked before any argument is read, so a missing repo_path
+    # does not mask it (#4994).
+    async with connect(None) as session:
+        with pytest.raises(MCPError) as exc:
+            await session.call_tool("git_nope", {})
+    assert exc.value.error.code == INVALID_PARAMS
+    assert exc.value.error.message == "Unknown tool: git_nope"
 
 
 async def test_nonexistent_repo_path_error_is_the_bare_path(tmp_path: Path):
     # NoSuchPathError's message is just the path.
     missing = tmp_path / "missing"
     assert await call(None, "git_status", {"repo_path": str(missing)}) == (
-        text_result(str(missing), is_error=True)
+        tool_error("git_status", str(missing))
     )
 
 
@@ -140,7 +156,7 @@ async def test_non_repository_repo_path_error_is_the_bare_path(tmp_path: Path):
     plain = tmp_path / "plain"
     plain.mkdir()
     assert await call(None, "git_status", {"repo_path": str(plain)}) == (
-        text_result(str(plain), is_error=True)
+        tool_error("git_status", str(plain))
     )
 
 
@@ -149,8 +165,8 @@ async def test_repo_path_subdirectory_is_not_a_repository(repo: git.Repo):
     # inside a working tree is rejected even though git itself accepts it.
     sub = root_of(repo) / "sub"
     sub.mkdir()
-    assert await call(None, "git_status", {"repo_path": str(sub)}) == text_result(
-        str(sub), is_error=True
+    assert await call(None, "git_status", {"repo_path": str(sub)}) == tool_error(
+        "git_status", str(sub)
     )
 
 
@@ -284,7 +300,7 @@ async def test_git_diff_honors_context_lines(repo: git.Repo):
 async def test_git_diff_unknown_target_is_error(repo: git.Repo):
     assert await call(
         None, "git_diff", {"repo_path": str(root_of(repo)), "target": "nope"}
-    ) == text_result("Ref 'nope' did not resolve to an object", is_error=True)
+    ) == tool_error("git_diff", "Ref 'nope' did not resolve to an object")
 
 
 async def test_git_diff_rejects_flag_injection(repo: git.Repo):
@@ -292,7 +308,9 @@ async def test_git_diff_rejects_flag_injection(repo: git.Repo):
         None,
         "git_diff",
         {"repo_path": str(root_of(repo)), "target": "--output=/tmp/evil"},
-    ) == rejected("Invalid target: '--output=/tmp/evil' - cannot start with '-'")
+    ) == tool_error(
+        "git_diff", "Invalid target: '--output=/tmp/evil' - cannot start with '-'"
+    )
 
 
 # --------------------------------------------------------------------------
@@ -324,10 +342,10 @@ async def test_git_commit_with_nothing_staged_is_refused(repo: git.Repo):
     result = await call(
         None, "git_commit", {"repo_path": str(root), "message": "claims a fix"}
     )
-    assert result == text_result(
+    assert result == tool_error(
+        "git_commit",
         "No changes staged for commit. Use git_add to stage changes first; "
         "git_status shows what is currently staged.",
-        is_error=True,
     )
     assert repo.head.commit == before
     assert repo.is_dirty()
@@ -388,12 +406,14 @@ async def test_git_add_file_starting_with_dash_is_a_path(repo: git.Repo):
 
 async def test_git_add_empty_list_is_rejected(repo: git.Repo):
     # #4763: `files: []` would run `git add --`, a no-op. The schema's
-    # minItems makes call_tool reject it before the tool runs.
+    # minItems makes MCPServer reject it before the tool runs.
     root = root_of(repo)
     (root / "test.txt").write_text("edited\n", newline="\n")
     result = await call(None, "git_add", {"repo_path": str(root), "files": []})
-    assert result == text_result(
-        "Input validation error: [] should be non-empty", is_error=True
+    assert result["isError"] is True
+    assert result["content"][0]["text"].startswith(
+        "Error executing tool git_add: 1 validation error for addArguments\n"
+        "files\n  List should have at least 1 item after validation, not 0"
     )
     assert staged_paths(repo) == set()
 
@@ -428,9 +448,8 @@ async def test_git_add_rejects_relative_traversal(repo: git.Repo):
     result = await call(
         None, "git_add", {"repo_path": str(root), "files": ["../outside.txt"]}
     )
-    assert result == text_result(
-        f"Path '../outside.txt' is outside the repository '{root.resolve()}'",
-        is_error=True,
+    assert result == tool_error(
+        "git_add", f"Path '../outside.txt' is outside the repository '{root.resolve()}'"
     )
     assert staged_paths(repo) == set()
 
@@ -442,9 +461,8 @@ async def test_git_add_rejects_absolute_path_outside(repo: git.Repo):
     result = await call(
         None, "git_add", {"repo_path": str(root), "files": [str(outside)]}
     )
-    assert result == text_result(
-        f"Path '{outside}' is outside the repository '{root.resolve()}'",
-        is_error=True,
+    assert result == tool_error(
+        "git_add", f"Path '{outside}' is outside the repository '{root.resolve()}'"
     )
 
 
@@ -456,9 +474,8 @@ async def test_git_add_rejects_symlink_out_of_repository(repo: git.Repo):
     result = await call(
         None, "git_add", {"repo_path": str(root), "files": ["link.txt"]}
     )
-    assert result == text_result(
-        f"Path 'link.txt' is outside the repository '{root.resolve()}'",
-        is_error=True,
+    assert result == tool_error(
+        "git_add", f"Path 'link.txt' is outside the repository '{root.resolve()}'"
     )
 
 
@@ -478,7 +495,7 @@ async def test_git_add_unresolvable_path_is_invalid_path(repo: git.Repo):
         result = await call(
             None, "git_add", {"repo_path": str(root), "files": ["unresolvable"]}
         )
-    assert result == text_result("Invalid path: 'unresolvable'", is_error=True)
+    assert result == tool_error("git_add", "Invalid path: 'unresolvable'")
 
 
 # --------------------------------------------------------------------------
@@ -570,14 +587,12 @@ async def test_git_log_rejects_timestamp_flag_injection(repo: git.Repo):
     root = str(root_of(repo))
     assert await call(
         None, "git_log", {"repo_path": root, "start_timestamp": "--all"}
-    ) == text_result(
-        "Invalid start_timestamp: '--all' - cannot start with '-'", is_error=True
+    ) == tool_error(
+        "git_log", "Invalid start_timestamp: '--all' - cannot start with '-'"
     )
     assert await call(
         None, "git_log", {"repo_path": root, "end_timestamp": "--all"}
-    ) == text_result(
-        "Invalid end_timestamp: '--all' - cannot start with '-'", is_error=True
-    )
+    ) == tool_error("git_log", "Invalid end_timestamp: '--all' - cannot start with '-'")
 
 
 # --------------------------------------------------------------------------
@@ -615,7 +630,7 @@ async def test_git_create_branch_unknown_base_is_error(repo: git.Repo):
         None,
         "git_create_branch",
         {"repo_path": str(root_of(repo)), "branch_name": "x", "base_branch": "nope"},
-    ) == text_result("No item found with id nope", is_error=True)
+    ) == tool_error("git_create_branch", "No item found with id nope")
 
 
 async def test_git_create_branch_existing_name_at_same_commit_is_error(
@@ -627,8 +642,9 @@ async def test_git_create_branch_existing_name_at_same_commit_is_error(
         None,
         "git_create_branch",
         {"repo_path": str(root_of(repo)), "branch_name": "main"},
-    ) == text_result(
-        "Cannot create branch 'main': refs/heads/main already exists", is_error=True
+    ) == tool_error(
+        "git_create_branch",
+        "Cannot create branch 'main': refs/heads/main already exists",
     )
 
 
@@ -658,16 +674,52 @@ async def test_git_create_branch_existing_name_at_other_commit_is_error(
     assert "already exist" in result["content"][0]["text"]
 
 
+async def test_git_create_branch_on_detached_head_reports_gitpython_message(
+    repo: git.Repo,
+):
+    # With no base_branch the base is the active branch, and GitPython raises
+    # TypeError for `active_branch` on a detached HEAD. #5174: that is an
+    # anticipated failure, so the model still sees GitPython's message rather
+    # than MCPServer's generic "Error executing tool git_create_branch".
+    repo.git.checkout("--detach")
+    result = await call(
+        None,
+        "git_create_branch",
+        {"repo_path": str(root_of(repo)), "branch_name": "x"},
+    )
+    assert result == tool_error(
+        "git_create_branch",
+        f"HEAD is a detached symbolic reference as it points to "
+        f"'{repo.head.commit.hexsha}'. Use .commit or .object to access the "
+        "target directly.",
+    )
+
+
+async def test_an_unanticipated_exception_is_reported_generically(repo: git.Repo):
+    # #5174: only the failures listed in ANTICIPATED_ERRORS reach the model
+    # with their message. Anything else is a crash: MCPServer withholds its
+    # text and logs the traceback.
+    with mock.patch(
+        "mcp_server_git.server.git_status", side_effect=RuntimeError("internal")
+    ):
+        result = await call(None, "git_status", {"repo_path": str(root_of(repo))})
+    assert result == text_result("Error executing tool git_status", is_error=True)
+
+
 async def test_git_create_branch_rejects_flag_injection(repo: git.Repo):
     root = str(root_of(repo))
     assert await call(
         None, "git_create_branch", {"repo_path": root, "branch_name": "-f"}
-    ) == rejected("Invalid branch name: '-f' - cannot start with '-'")
+    ) == tool_error(
+        "git_create_branch", "Invalid branch name: '-f' - cannot start with '-'"
+    )
     assert await call(
         None,
         "git_create_branch",
         {"repo_path": root, "branch_name": "x", "base_branch": "--track"},
-    ) == rejected("Invalid base branch: '--track' - cannot start with '-'")
+    ) == tool_error(
+        "git_create_branch", "Invalid base branch: '--track' - cannot start with '-'"
+    )
 
 
 # --------------------------------------------------------------------------
@@ -713,7 +765,7 @@ async def test_git_checkout_unknown_branch_is_error(repo: git.Repo):
         None,
         "git_checkout",
         {"repo_path": str(root_of(repo)), "branch_name": "nope"},
-    ) == text_result("Ref 'nope' did not resolve to an object", is_error=True)
+    ) == tool_error("git_checkout", "Ref 'nope' did not resolve to an object")
     assert repo.active_branch.name == "main"
 
 
@@ -722,7 +774,9 @@ async def test_git_checkout_rejects_flag_injection(repo: git.Repo):
         None,
         "git_checkout",
         {"repo_path": str(root_of(repo)), "branch_name": "--orphan=evil"},
-    ) == rejected("Invalid branch name: '--orphan=evil' - cannot start with '-'")
+    ) == tool_error(
+        "git_checkout", "Invalid branch name: '--orphan=evil' - cannot start with '-'"
+    )
 
 
 # --------------------------------------------------------------------------
@@ -902,21 +956,23 @@ async def test_git_show_revision_path_not_found_is_error(repo: git.Repo):
         "git_show",
         {"repo_path": str(root_of(repo)), "revision": "HEAD:nope.txt"},
     )
-    assert result == text_result(
-        "\"Blob or Tree named 'nope.txt' not found\"", is_error=True
+    assert result == tool_error(
+        "git_show", "\"Blob or Tree named 'nope.txt' not found\""
     )
 
 
 async def test_git_show_unknown_revision_is_error(repo: git.Repo):
     assert await call(
         None, "git_show", {"repo_path": str(root_of(repo)), "revision": "nope"}
-    ) == text_result("Ref 'nope' did not resolve to an object", is_error=True)
+    ) == tool_error("git_show", "Ref 'nope' did not resolve to an object")
 
 
 async def test_git_show_rejects_flag_injection(repo: git.Repo):
     assert await call(
         None, "git_show", {"repo_path": str(root_of(repo)), "revision": "--format=x"}
-    ) == rejected("Invalid revision: '--format=x' - cannot start with '-'")
+    ) == tool_error(
+        "git_show", "Invalid revision: '--format=x' - cannot start with '-'"
+    )
 
 
 # --------------------------------------------------------------------------
@@ -974,7 +1030,7 @@ async def test_git_branch_contains_and_not_contains(repo: git.Repo):
 async def test_git_branch_unknown_type_is_error(repo: git.Repo):
     assert await call(
         None, "git_branch", {"repo_path": str(root_of(repo)), "branch_type": "bogus"}
-    ) == text_result("Invalid branch type: bogus", is_error=True)
+    ) == tool_error("git_branch", "Invalid branch type: bogus")
 
 
 async def test_git_branch_rejects_flag_injection(repo: git.Repo):
@@ -983,12 +1039,16 @@ async def test_git_branch_rejects_flag_injection(repo: git.Repo):
         None,
         "git_branch",
         {"repo_path": root, "branch_type": "local", "contains": "--x"},
-    ) == rejected("Invalid contains value: '--x' - cannot start with '-'")
+    ) == tool_error(
+        "git_branch", "Invalid contains value: '--x' - cannot start with '-'"
+    )
     assert await call(
         None,
         "git_branch",
         {"repo_path": root, "branch_type": "local", "not_contains": "--x"},
-    ) == rejected("Invalid not_contains value: '--x' - cannot start with '-'")
+    ) == tool_error(
+        "git_branch", "Invalid not_contains value: '--x' - cannot start with '-'"
+    )
 
 
 # --------------------------------------------------------------------------
@@ -997,10 +1057,10 @@ async def test_git_branch_rejects_flag_injection(repo: git.Repo):
 
 
 def outside_error(repo_path: Path | str, allowed: Path) -> dict[str, Any]:
-    return text_result(
+    return tool_error(
+        "git_status",
         f"Repository path '{repo_path}' is outside the allowed repository "
         f"'{allowed}'",
-        is_error=True,
     )
 
 
@@ -1106,8 +1166,8 @@ async def test_restricted_server_subdirectory_passes_check_but_is_not_a_repo(
     root = root_of(repo)
     sub = root / "sub"
     sub.mkdir()
-    assert await call(root, "git_status", {"repo_path": str(sub)}) == text_result(
-        str(sub), is_error=True
+    assert await call(root, "git_status", {"repo_path": str(sub)}) == tool_error(
+        "git_status", str(sub)
     )
 
 
@@ -1137,7 +1197,7 @@ async def test_restricted_server_unresolvable_repo_path_is_invalid_path(
     target = root / "unresolvable"
     with mock.patch.object(Path, "resolve", resolve):
         result = await call(root, "git_status", {"repo_path": str(target)})
-    assert result == text_result(f"Invalid path: {target}", is_error=True)
+    assert result == tool_error("git_status", f"Invalid path: {target}")
 
 
 # --------------------------------------------------------------------------
@@ -1217,7 +1277,7 @@ async def test_server_discover_answers_the_2026_07_28_era() -> None:
         async def fake_stdio_server() -> AsyncIterator[Any]:
             yield server_streams
 
-        with patch("mcp_server_git.server.stdio_server", fake_stdio_server):
+        with patch("mcp.server.mcpserver.server.stdio_server", fake_stdio_server):
             async with anyio.create_task_group() as tg:
                 tg.start_soon(serve, None)
                 await client_write.send(SessionMessage(discover))
@@ -1230,7 +1290,7 @@ async def test_server_discover_answers_the_2026_07_28_era() -> None:
         "jsonrpc": "2.0",
         "id": 1,
         "result": {
-            "capabilities": {"tools": {"listChanged": False}},
+            "capabilities": CAPABILITIES,
             "supportedVersions": ["2026-07-28"],
             "resultType": "complete",
             "ttlMs": 0,
