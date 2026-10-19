@@ -12,7 +12,15 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import {
+  chmodSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
@@ -65,6 +73,99 @@ for (const { file, context } of CI) {
     assert.ok(run.includes(`gh run list --workflow ${file}`));
     assert.match(run, /STATE=error/);
   });
+}
+
+// Run a `dispatch-status` script with a stub `gh` on PATH. The stub answers
+// `gh run list` with the number of newer dispatched runs and records every
+// other call, so a test sees exactly which status, if any, the run posts.
+function runResultScript(script, { needs, newer }) {
+  const dir = mkdtempSync(path.join(tmpdir(), "dispatch-status-"));
+  try {
+    const calls = path.join(dir, "calls");
+    writeFileSync(calls, "");
+    writeFileSync(
+      path.join(dir, "gh"),
+      [
+        "#!/usr/bin/env bash",
+        `if [ "$1 $2" = "run list" ]; then echo ${newer}; exit 0; fi`,
+        `printf '%s\\n' "$*" >> "${calls}"`,
+      ].join("\n"),
+    );
+    chmodSync(path.join(dir, "gh"), 0o755);
+    const result = spawnSync("bash", ["-e", "-c", script], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PATH: `${dir}${path.delimiter}${process.env.PATH}`,
+        NEEDS: JSON.stringify(needs),
+        GITHUB_SHA: "0123abcd",
+        GITHUB_RUN_ID: "100",
+        GITHUB_REPOSITORY: "owner/repo",
+        GITHUB_SERVER_URL: "https://github.com",
+      },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const posted = readFileSync(calls, "utf8").trim();
+    return posted ? posted.match(/state=(\w+)/)?.[1] : null;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+// The job's script needs bash and jq, as on the ubuntu runner. Without
+// either (Windows, or a machine with no jq), skip rather than fail the gate
+// over a missing test prerequisite.
+const hasTool = (cmd) => spawnSync(cmd, ["--version"]).status === 0;
+const SCRIPT_SKIP =
+  process.platform === "win32"
+    ? "runs the job's bash script"
+    : !hasTool("bash")
+      ? "needs bash"
+      : !hasTool("jq")
+        ? "needs jq, which the job's script calls"
+        : false;
+
+const FAILED = { a: { result: "failure" }, b: { result: "cancelled" } };
+const PASSED = { a: { result: "success" }, b: { result: "skipped" } };
+const CANCELLED = { a: { result: "success" }, b: { result: "cancelled" } };
+
+for (const { file } of CI) {
+  const script = workflow(file).jobs["dispatch-status"].steps[0].run;
+
+  // #5178: the newer-run check guarded only the cancellation branch, so a
+  // superseded run whose job had already failed posted `failure` over the
+  // newer run's status. A superseded run now posts nothing at all.
+  test(
+    `${file}: a superseded run posts no status, whatever its jobs did`,
+    {
+      skip: SCRIPT_SKIP,
+    },
+    () => {
+      for (const needs of [FAILED, PASSED, CANCELLED])
+        assert.equal(runResultScript(script, { needs, newer: 1 }), null);
+    },
+  );
+
+  test(
+    `${file}: the latest run posts success, failure or error`,
+    {
+      skip: SCRIPT_SKIP,
+    },
+    () => {
+      assert.equal(
+        runResultScript(script, { needs: PASSED, newer: 0 }),
+        "success",
+      );
+      assert.equal(
+        runResultScript(script, { needs: FAILED, newer: 0 }),
+        "failure",
+      );
+      assert.equal(
+        runResultScript(script, { needs: CANCELLED, newer: 0 }),
+        "error",
+      );
+    },
+  );
 }
 
 for (const { file, job } of VERSION_WORKFLOWS) {

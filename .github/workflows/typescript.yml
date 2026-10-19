@@ -241,8 +241,8 @@ jobs:
             -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
 
   # `always()`, so a cancelled run cannot leave the status pending. A run that
-  # was cancelled because a newer dispatch on the same commit superseded it
-  # posts nothing, and the newer run reports instead; any other cancellation
+  # a newer dispatch on the same commit superseded posts nothing, whatever its
+  # jobs' results, and the newer run reports instead; any other cancellation
   # is reported as an error. A job skipped by its own `if:` counts as passed.
   dispatch-status:
     name: Report the dispatched run's result
@@ -270,20 +270,22 @@ jobs:
           GH_REPO: ${{ github.repository }}
           NEEDS: ${{ toJSON(needs) }}
         run: |
+          # A run superseded by a newer dispatch on the same commit posts
+          # nothing, whatever its jobs' results: the newer run owns the status
+          # (#5178). A failed lookup counts as no newer run, so this run still
+          # reports: a stale status is better than one left pending.
+          NEWER=$(gh run list --workflow typescript.yml --event workflow_dispatch \
+            --commit "$GITHUB_SHA" --json databaseId \
+            --jq "[.[] | select(.databaseId > $GITHUB_RUN_ID)] | length") || NEWER=0
+          if [ "${NEWER:-0}" -gt 0 ]; then
+            echo "Superseded by a newer dispatched run, which reports instead"
+            exit 0
+          fi
           if jq -e 'all(.[]; .result == "success" or .result == "skipped")' <<<"$NEEDS" >/dev/null; then
             STATE=success DESCRIPTION="Every job passed"
           elif jq -e 'any(.[]; .result == "failure")' <<<"$NEEDS" >/dev/null; then
             STATE=failure DESCRIPTION="A job failed; open the run for details"
           else
-            NEWER=$(gh run list --workflow typescript.yml --event workflow_dispatch \
-              --commit "$GITHUB_SHA" --json databaseId \
-              --jq "[.[] | select(.databaseId > $GITHUB_RUN_ID)] | length") || NEWER=0
-            # A failed lookup counts as no newer run: an error status is
-            # better than one left pending.
-            if [ "${NEWER:-0}" -gt 0 ]; then
-              echo "Superseded by a newer dispatched run, which reports instead"
-              exit 0
-            fi
             STATE=error DESCRIPTION="The run was cancelled; dispatch it again"
           fi
           gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
