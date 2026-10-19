@@ -10,6 +10,8 @@ means changing that test.
 
 import json
 import re
+import threading
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from importlib.metadata import version
@@ -702,6 +704,33 @@ async def test_an_unanticipated_exception_is_reported_generically(repo: git.Repo
     ):
         result = await call(None, "git_status", {"repo_path": str(root_of(repo))})
     assert result == text_result("Error executing tool git_status", is_error=True)
+
+
+async def test_overlapping_tool_calls_run_one_at_a_time(repo: git.Repo):
+    # #5175 review: MCPServer runs a synchronous tool in a worker thread, so
+    # two calls can overlap, and a git operation is a check and then a change
+    # on a shared index. The server runs one tool call at a time.
+    active = 0
+    peak = 0
+    guard = threading.Lock()
+
+    def slow_status(_repo: git.Repo) -> str:
+        nonlocal active, peak
+        with guard:
+            active += 1
+            peak = max(peak, active)
+        time.sleep(0.2)
+        with guard:
+            active -= 1
+        return "clean"
+
+    root = str(root_of(repo))
+    with mock.patch("mcp_server_git.server.git_status", side_effect=slow_status):
+        async with connect(None) as session:
+            async with anyio.create_task_group() as tg:
+                for _ in range(3):
+                    tg.start_soon(session.call_tool, "git_status", {"repo_path": root})
+    assert peak == 1
 
 
 async def test_git_create_branch_rejects_flag_injection(repo: git.Repo):

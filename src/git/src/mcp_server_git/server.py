@@ -17,6 +17,7 @@
 # logging), so nothing differs between them.
 
 import logging
+import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from enum import Enum
@@ -445,8 +446,15 @@ def reported_to_model() -> Iterator[None]:
 _P = ParamSpec("_P")
 
 
+# `MCPServer` runs a synchronous tool in a worker thread, so two calls can
+# overlap. A git operation is a check followed by a change (staged changes,
+# then the commit), and the index is shared, so one call at a time: the lock
+# keeps the serial behavior the server had when tools ran on the event loop.
+_GIT_LOCK = threading.Lock()
+
+
 def reports_failures(fn: Callable[_P, str]) -> Callable[_P, str]:
-    """Run a tool function inside `reported_to_model()`.
+    """Run a tool function alone, inside `reported_to_model()`.
 
     `wraps` keeps the signature, which is what `MCPServer` reads to build the
     tool's input schema.
@@ -454,7 +462,7 @@ def reports_failures(fn: Callable[_P, str]) -> Callable[_P, str]:
 
     @wraps(fn)
     def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> str:
-        with reported_to_model():
+        with _GIT_LOCK, reported_to_model():
             return fn(*args, **kwargs)
 
     return wrapper

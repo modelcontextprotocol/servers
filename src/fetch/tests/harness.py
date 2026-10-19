@@ -30,7 +30,14 @@ import pytest
 import readabilipy.simple_json
 from mcp import ClientSession
 from mcp.shared.memory import create_client_server_memory_streams
-from mcp.types import InitializeResult
+from mcp.shared.message import SessionMessage
+from mcp.types import (
+    InitializeResult,
+    JSONRPCError,
+    JSONRPCNotification,
+    JSONRPCRequest,
+    JSONRPCResponse,
+)
 
 import mcp_server_fetch.server as server_module
 
@@ -152,3 +159,70 @@ def private_tempdir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     each other's pages.
     """
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+
+
+async def raw_request(
+    method: str, params: dict[str, Any]
+) -> Union[JSONRPCResponse, JSONRPCError]:
+    """Send one request exactly as given, bypassing the client's own checks.
+
+    `ClientSession` validates what it sends, so a malformed request (a list as
+    a tool name, a number as the arguments) can only reach the server as raw
+    JSON-RPC: a 2025-11-25 handshake, then the request, and its response.
+    """
+    async with create_client_server_memory_streams() as (
+        (client_read, client_write),
+        server_streams,
+    ):
+
+        @asynccontextmanager
+        async def fake_stdio_server() -> AsyncIterator[Any]:
+            yield server_streams
+
+        async def receive(request_id: int) -> Union[JSONRPCResponse, JSONRPCError]:
+            async for item in client_read:
+                assert isinstance(item, SessionMessage)
+                message = item.message
+                if (
+                    isinstance(message, (JSONRPCResponse, JSONRPCError))
+                    and message.id == request_id
+                ):
+                    return message
+            raise AssertionError("the server closed the stream")  # pragma: no cover
+
+        with patch("mcp.server.mcpserver.server.stdio_server", fake_stdio_server):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(lambda: server_module.serve())
+                await client_write.send(
+                    SessionMessage(
+                        JSONRPCRequest(
+                            jsonrpc="2.0",
+                            id=1,
+                            method="initialize",
+                            params={
+                                "protocolVersion": "2025-11-25",
+                                "capabilities": {},
+                                "clientInfo": {"name": "raw", "version": "0"},
+                            },
+                        )
+                    )
+                )
+                await receive(1)
+                await client_write.send(
+                    SessionMessage(
+                        JSONRPCNotification(
+                            jsonrpc="2.0", method="notifications/initialized"
+                        )
+                    )
+                )
+                await client_write.send(
+                    SessionMessage(
+                        JSONRPCRequest(
+                            jsonrpc="2.0", id=2, method=method, params=params
+                        )
+                    )
+                )
+                response = await receive(2)
+                tg.cancel_scope.cancel()
+                return response
+    raise AssertionError("unreachable")  # pragma: no cover

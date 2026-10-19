@@ -29,7 +29,7 @@ from mcp import ClientSession
 from mcp.shared.exceptions import MCPError
 from mcp.shared.memory import create_client_server_memory_streams
 from mcp.shared.message import SessionMessage
-from mcp.types import INVALID_PARAMS, CallToolResult, JSONRPCRequest
+from mcp.types import INVALID_PARAMS, CallToolResult, JSONRPCError, JSONRPCRequest
 
 from mcp_server_fetch.server import (
     DEFAULT_USER_AGENT_AUTONOMOUS,
@@ -37,7 +37,7 @@ from mcp_server_fetch.server import (
     serve,
 )
 
-from .harness import FakeWeb, connect
+from .harness import FakeWeb, connect, raw_request
 
 PAGE = "https://example.com/page"
 ROBOTS = "https://example.com/robots.txt"
@@ -284,6 +284,33 @@ async def test_unknown_tool_name_is_a_jsonrpc_error(web: FakeWeb) -> None:
         "code": INVALID_PARAMS,
         "message": "Unknown tool: nope",
     }
+    assert web.requests == []
+
+
+@pytest.mark.parametrize(
+    ("method", "params"),
+    [
+        ("tools/call", {"name": [], "arguments": {}}),
+        ("tools/call", {"name": {}, "arguments": {}}),
+        ("prompts/get", {"name": [], "arguments": {}}),
+        ("prompts/get", {"name": "fetch", "arguments": 1}),
+    ],
+    ids=[
+        "tool-name-list",
+        "tool-name-object",
+        "prompt-name-list",
+        "prompt-arguments-number",
+    ],
+)
+async def test_malformed_request_is_invalid_params_not_an_internal_error(
+    web: FakeWeb, method: str, params: dict[str, Any]
+) -> None:
+    # #5175 review: the unknown-name middleware sees raw params, so it leaves
+    # a non-string name or non-mapping arguments to the SDK's validation,
+    # which answers -32602, instead of failing on them with -32603.
+    response = await raw_request(method, params)
+    assert isinstance(response, JSONRPCError), response
+    assert response.error.code == INVALID_PARAMS
     assert web.requests == []
 
 

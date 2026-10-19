@@ -359,8 +359,13 @@ def reject_unknown_names(server: MCPServer) -> ServerMiddleware[Any]:
     async def middleware(
         ctx: ServerRequestContext[Any, Any], call_next: CallNext
     ) -> HandlerResult:
-        params: Mapping[str, Any] = ctx.params or {}
+        # Raw params, not yet validated: only a string name and a mapping of
+        # arguments are inspected here. Anything malformed is left to the
+        # SDK's own params validation, which answers it with -32602.
+        params = ctx.params if isinstance(ctx.params, Mapping) else {}
         name = params.get("name")
+        if not isinstance(name, str):
+            return await call_next(ctx)
         if ctx.method == "tools/call":
             if name not in {tool.name for tool in await server.list_tools()}:
                 raise MCPError(code=INVALID_PARAMS, message=f"Unknown tool: {name}")
@@ -368,7 +373,7 @@ def reject_unknown_names(server: MCPServer) -> ServerMiddleware[Any]:
             if name not in {prompt.name for prompt in await server.list_prompts()}:
                 raise MCPError(code=INVALID_PARAMS, message=f"Unknown prompt: {name}")
             arguments = params.get("arguments") or {}
-            if "url" not in arguments:
+            if isinstance(arguments, Mapping) and "url" not in arguments:
                 raise MCPError(code=INVALID_PARAMS, message="URL is required")
         return await call_next(ctx)
 

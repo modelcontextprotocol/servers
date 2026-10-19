@@ -770,7 +770,7 @@ dev = [
 requires-dist = [
     { name = "httpx", extras = ["socks"], specifier = ">=0.27" },
     { name = "markdownify", specifier = ">=0.13.1" },
-    { name = "mcp", specifier = ">=2.2,<3" },
+    { name = "mcp", specifier = ">=2.3,<3" },
     { name = "protego", specifier = ">=0.6.2" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "readabilipy", specifier = ">=0.2.0" },

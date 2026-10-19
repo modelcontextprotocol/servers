@@ -6,7 +6,7 @@ A Model Context Protocol server that provides web content fetching capabilities.
 
 Source: https://github.com/modelcontextprotocol/servers/tree/main/src/fetch
 
-Requires MCP Python SDK 2.x (`mcp>=2.2,<3`).
+Requires MCP Python SDK 2.x (`mcp>=2.3,<3`).
 
 > [!CAUTION]
 > This server can access local/internal IP addresses and may represent a security risk. Exercise caution when using this MCP server to ensure this does not expose any sensitive data.

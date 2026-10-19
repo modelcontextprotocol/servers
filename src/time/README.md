@@ -6,7 +6,7 @@ A Model Context Protocol server that provides time and timezone conversion capab
 
 Source: https://github.com/modelcontextprotocol/servers/tree/main/src/time
 
-Requires MCP Python SDK 2.x (`mcp>=2.2,<3`).
+Requires MCP Python SDK 2.x (`mcp>=2.3,<3`).
 
 ### Available Tools
 
