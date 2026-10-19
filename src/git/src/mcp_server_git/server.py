@@ -258,6 +258,12 @@ def git_create_branch(
         )
     if base_branch:
         base = repo.references[base_branch]
+    elif repo.head.is_detached:
+        # GitPython's `active_branch` raises TypeError on a detached HEAD.
+        raise ValueError(
+            "HEAD is detached, so there is no current branch to branch from; "
+            "pass base_branch"
+        )
     else:
         base = repo.active_branch
 
@@ -412,15 +418,15 @@ def git_branch(
 # command, a missing or invalid repository), gitdb's lookup errors (`ODBError`:
 # `BadName` for an unknown revision, `BadObject`), and the builtins GitPython
 # raises for a failed lookup: `KeyError` for a path not in a tree, `IndexError`
-# for a missing ref in `repo.references[...]`, `TypeError` for
-# `active_branch` on a detached HEAD, `OSError` for an unreadable path.
+# for a missing ref in `repo.references[...]`, `OSError` for an unreadable
+# path. A detached HEAD is checked before `active_branch` (whose TypeError
+# would otherwise be a crash), so TypeError stays a crash, as a bug should.
 # Anything else escapes as a crash, which the SDK reports only as
 # "Error executing tool <name>", logging the traceback.
 ANTICIPATED_ERRORS = (
     ValueError,
     KeyError,
     IndexError,
-    TypeError,
     OSError,
     git.GitError,
     ODBError,

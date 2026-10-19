@@ -674,13 +674,12 @@ async def test_git_create_branch_existing_name_at_other_commit_is_error(
     assert "already exist" in result["content"][0]["text"]
 
 
-async def test_git_create_branch_on_detached_head_reports_gitpython_message(
+async def test_git_create_branch_on_detached_head_asks_for_a_base(
     repo: git.Repo,
 ):
-    # With no base_branch the base is the active branch, and GitPython raises
-    # TypeError for `active_branch` on a detached HEAD. #5174: that is an
-    # anticipated failure, so the model still sees GitPython's message rather
-    # than MCPServer's generic "Error executing tool git_create_branch".
+    # With no base_branch the base is the active branch, which a detached HEAD
+    # does not have (GitPython would raise TypeError, a crash under MCPServer).
+    # #5174: the tool says so instead, as an anticipated failure.
     repo.git.checkout("--detach")
     result = await call(
         None,
@@ -689,9 +688,8 @@ async def test_git_create_branch_on_detached_head_reports_gitpython_message(
     )
     assert result == tool_error(
         "git_create_branch",
-        f"HEAD is a detached symbolic reference as it points to "
-        f"'{repo.head.commit.hexsha}'. Use .commit or .object to access the "
-        "target directly.",
+        "HEAD is detached, so there is no current branch to branch from; "
+        "pass base_branch",
     )
 
 
