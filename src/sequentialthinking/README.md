@@ -72,7 +72,7 @@ After installing the server in your MCP host:
 
 ## Requirements
 
-Node.js 20 or later, when the server runs through `npx` or from source.
+Node.js 24 or later, when the server runs through `npx` or from source.
 
 ## Configuration
 

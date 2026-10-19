@@ -141,7 +141,7 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       # The registry-diff guard: skip (not fail) a version that is already
@@ -213,13 +213,13 @@ jobs:
     steps:
       # No `cache: npm`: there is no checkout, so no lockfile to key it on, and
       # nothing here installs dependencies to cache.
-      # OIDC trusted publishing requires npm >= 11.5.1. Node 22 bundles npm
-      # 10.x, so this job runs Node 24, whose bundled npm meets the floor, and
+      # OIDC trusted publishing requires npm >= 11.5.1. Not every Node 24 bundles
+      # it, so this job pins a Node 24 release whose bundled npm meets the floor, and
       # installs nothing: no package is fetched from the registry and run
       # next to `id-token: write` (#5104). Pinned EXACTLY, not to a major: the
       # runtime is the one thing this job trusts besides the pinned actions,
       # and a range would let whatever 24.x is current at release time in.
-      # The build jobs keep Node 22; this job only reads a manifest and runs
+      # The build jobs take the current 24.x; this job only reads a manifest and runs
       # `npm publish` on the verified tarball.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -390,7 +390,7 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       # Defense in depth: the same per-server chain CI and the gate run
