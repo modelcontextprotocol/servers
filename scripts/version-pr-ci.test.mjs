@@ -112,6 +112,19 @@ function runResultScript(script, { needs, newer }) {
   }
 }
 
+// The job's script needs bash and jq, as on the ubuntu runner. Without
+// either (Windows, or a machine with no jq), skip rather than fail the gate
+// over a missing test prerequisite.
+const hasTool = (cmd) => spawnSync(cmd, ["--version"]).status === 0;
+const SCRIPT_SKIP =
+  process.platform === "win32"
+    ? "runs the job's bash script"
+    : !hasTool("bash")
+      ? "needs bash"
+      : !hasTool("jq")
+        ? "needs jq, which the job's script calls"
+        : false;
+
 const FAILED = { a: { result: "failure" }, b: { result: "cancelled" } };
 const PASSED = { a: { result: "success" }, b: { result: "skipped" } };
 const CANCELLED = { a: { result: "success" }, b: { result: "cancelled" } };
@@ -125,7 +138,7 @@ for (const { file } of CI) {
   test(
     `${file}: a superseded run posts no status, whatever its jobs did`,
     {
-      skip: process.platform === "win32" && "runs the job's bash script",
+      skip: SCRIPT_SKIP,
     },
     () => {
       for (const needs of [FAILED, PASSED, CANCELLED])
@@ -136,7 +149,7 @@ for (const { file } of CI) {
   test(
     `${file}: the latest run posts success, failure or error`,
     {
-      skip: process.platform === "win32" && "runs the job's bash script",
+      skip: SCRIPT_SKIP,
     },
     () => {
       assert.equal(
