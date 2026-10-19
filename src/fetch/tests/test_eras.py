@@ -63,7 +63,7 @@ async def connect(mode: str, **serve_kwargs: Any) -> AsyncIterator[Client]:
         async def transport() -> AsyncIterator[TransportStreams]:
             yield client_streams
 
-        with patch("mcp_server_fetch.server.stdio_server", fake_stdio_server):
+        with patch("mcp.server.mcpserver.server.stdio_server", fake_stdio_server):
             async with anyio.create_task_group() as tg:
                 tg.start_soon(lambda: serve(**serve_kwargs))
                 async with Client(transport(), mode=mode) as client:
@@ -137,7 +137,7 @@ async def test_prompt_succeeds_in_each_era(
     web.add(PAGE, plain("prompted"))
     async with connect(mode) as client:
         result = await client.get_prompt("fetch", {"url": PAGE})
-    assert result.description == f"Contents of {PAGE}"
+    assert result.description == "Fetch a URL and extract its contents as markdown"
     content = result.messages[0].content
     assert isinstance(content, TextContent)
     assert content.text.endswith("prompted")
@@ -147,29 +147,44 @@ async def test_prompt_succeeds_in_each_era(
 async def test_tool_failure_is_an_is_error_result_in_each_era(
     web: FakeWeb, mode: str, negotiated: str
 ) -> None:
+    # Arguments that fail the tool's schema are the model's to correct, so
+    # MCPServer returns them as an isError result.
     async with connect(mode) as client:
         missing = await client.call_tool("fetch", {})
-        unknown = await client.call_tool("no_such_tool", {})
     assert missing.is_error is True
-    assert text_of(missing) == "Input validation error: 'url' is a required property"
-    assert unknown.is_error is True
-    assert text_of(unknown) == "Unknown tool: no_such_tool"
+    assert text_of(missing).startswith(
+        "Error executing tool fetch: 1 validation error for fetchArguments\nurl\n"
+    )
+
+
+@pytest.mark.parametrize(("mode", "negotiated"), ERAS)
+async def test_unknown_tool_is_a_json_rpc_error_in_each_era(
+    web: FakeWeb, mode: str, negotiated: str
+) -> None:
+    # Both spec revisions make an unknown tool a protocol error, -32602
+    # (#5174), not an isError result.
+    async with connect(mode) as client:
+        with pytest.raises(MCPError) as unknown:
+            await client.call_tool("no_such_tool", {})
+    assert unknown.value.error.code == INVALID_PARAMS
+    assert unknown.value.error.message == "Unknown tool: no_such_tool"
 
 
 @pytest.mark.parametrize(("mode", "negotiated"), ERAS)
 async def test_prompt_failure_is_a_json_rpc_error_in_each_era(
     web: FakeWeb, mode: str, negotiated: str
 ) -> None:
-    # get_prompt raises MCPError, which reaches the client as a JSON-RPC error
-    # rather than a result, and an undeclared method is one too.
+    # An unknown prompt, or a prompt call without its `url`, reaches the
+    # client as a JSON-RPC -32602 error rather than a result.
     async with connect(mode) as client:
         with pytest.raises(MCPError) as unknown_prompt:
             await client.get_prompt("no_such_prompt", {"url": PAGE})
-        with pytest.raises(MCPError) as no_resources:
-            await client.list_resources()
+        with pytest.raises(MCPError) as no_url:
+            await client.get_prompt("fetch", {})
     assert unknown_prompt.value.error.code == INVALID_PARAMS
     assert unknown_prompt.value.error.message == "Unknown prompt: no_such_prompt"
-    assert no_resources.value.error.code == METHOD_NOT_FOUND
+    assert no_url.value.error.code == INVALID_PARAMS
+    assert no_url.value.error.message == "URL is required"
 
 
 async def test_ping_is_served_only_in_the_legacy_era(web: FakeWeb) -> None:

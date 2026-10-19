@@ -514,7 +514,6 @@ source = { editable = "." }
 dependencies = [
     { name = "click" },
     { name = "gitpython" },
-    { name = "jsonschema" },
     { name = "mcp" },
     { name = "pydantic" },
 ]
@@ -532,8 +531,7 @@ dev = [
 requires-dist = [
     { name = "click", specifier = ">=8.1.7" },
     { name = "gitpython", specifier = ">=3.1.60" },
-    { name = "jsonschema", specifier = ">=4.20.0" },
-    { name = "mcp", specifier = ">=2.2,<3" },
+    { name = "mcp", specifier = ">=2.3,<3" },
     { name = "pydantic", specifier = ">=2.0.0" },
 ]
 

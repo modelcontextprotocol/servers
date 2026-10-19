@@ -8,9 +8,8 @@
 # JSON-RPC path stdio takes, rather than the SDK's in-process shortcut, which
 # would bypass serve() and its era dispatch.
 #
-# The legacy-era characterization tests in test_protocol.py stay as the
-# backward-compatibility net; this file adds what differs by era and shows
-# that the rest does not.
+# The detailed protocol tests in test_protocol.py run in the legacy era; this
+# file adds what differs by era and shows that the rest does not.
 
 import json
 from collections.abc import AsyncIterator
@@ -24,7 +23,13 @@ from mcp import Client
 from mcp.client._transport import TransportStreams
 from mcp.shared.exceptions import MCPError
 from mcp.shared.memory import create_client_server_memory_streams
-from mcp.types import METHOD_NOT_FOUND, CallToolResult, TextContent
+from mcp.types import (
+    INVALID_PARAMS,
+    METHOD_NOT_FOUND,
+    CallToolResult,
+    PromptReference,
+    TextContent,
+)
 
 from mcp_server_time.server import serve
 
@@ -55,7 +60,7 @@ async def connect(
         async def transport() -> AsyncIterator[TransportStreams]:
             yield client_streams
 
-        with patch("mcp_server_time.server.stdio_server", fake_stdio_server):
+        with patch("mcp.server.mcpserver.server.stdio_server", fake_stdio_server):
             async with anyio.create_task_group() as tg:
                 tg.start_soon(serve, local_timezone)
                 async with Client(transport(), mode=mode) as client:
@@ -116,6 +121,8 @@ async def test_tool_call_succeeds_in_each_era(mode: str, negotiated: str) -> Non
     data = json.loads(text_of(result))
     assert data["target"]["datetime"].endswith("T17:00:00+05:00")
     assert data["time_difference"] == "+5.0h"
+    # The same object, structured, in either era.
+    assert result.structured_content == data
 
 
 @pytest.mark.parametrize(("mode", "negotiated"), ERAS)
@@ -126,25 +133,50 @@ async def test_tool_failure_is_an_is_error_result_in_each_era(
         bad_zone = await client.call_tool(
             "get_current_time", {"timezone": "Nope/Nowhere"}
         )
-        unknown = await client.call_tool("no_such_tool", {})
     assert bad_zone.is_error is True
-    assert "Invalid timezone" in text_of(bad_zone)
-    assert unknown.is_error is True
-    assert text_of(unknown) == (
-        "Error processing mcp-server-time query: Unknown tool: no_such_tool"
+    assert text_of(bad_zone) == (
+        "Error executing tool get_current_time: "
+        "Invalid timezone: 'No time zone found with key Nope/Nowhere'"
     )
+
+
+@pytest.mark.parametrize(("mode", "negotiated"), ERAS)
+async def test_unknown_tool_is_a_json_rpc_error_in_each_era(
+    mode: str, negotiated: str
+) -> None:
+    # Both spec revisions make an unknown tool a protocol error, -32602, not
+    # an isError result (#5174).
+    async with connect(mode) as client:
+        with pytest.raises(MCPError) as excinfo:
+            await client.call_tool("no_such_tool", {})
+    assert excinfo.value.error.code == INVALID_PARAMS
+    assert excinfo.value.error.message == "Unknown tool: no_such_tool"
 
 
 @pytest.mark.parametrize(("mode", "negotiated"), ERAS)
 async def test_unsupported_method_is_a_json_rpc_error_in_each_era(
     mode: str, negotiated: str
 ) -> None:
-    # The server declares no resources, so resources/list is a protocol error
-    # (an MCPError on the client), not an isError result.
+    # The server offers no completions, so completion/complete is a protocol
+    # error (an MCPError on the client), not an isError result.
     async with connect(mode) as client:
         with pytest.raises(MCPError) as excinfo:
-            await client.list_resources()
+            await client.complete(
+                PromptReference(type="ref/prompt", name="none"),
+                {"name": "a", "value": "b"},
+            )
     assert excinfo.value.error.code == METHOD_NOT_FOUND
+
+
+@pytest.mark.parametrize(("mode", "negotiated"), ERAS)
+async def test_prompts_and_resources_are_empty_in_each_era(
+    mode: str, negotiated: str
+) -> None:
+    # MCPServer serves prompts/list and resources/list for every server; this
+    # one registers neither.
+    async with connect(mode) as client:
+        assert (await client.list_prompts()).prompts == []
+        assert (await client.list_resources()).resources == []
 
 
 async def test_ping_is_served_only_in_the_legacy_era() -> None:

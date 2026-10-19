@@ -4,49 +4,40 @@
 # check) must go through it: the private-address guard on each request and
 # redirect hop, robots.txt for autonomous fetches, and proxy normalization.
 #
-# Built on the MCP Python SDK v2's low-level `Server` (#4851). That SDK no
-# longer validates tool arguments or folds tool exceptions into `isError`
-# results, so `call_tool` does both with SDK v1's messages, keeping tool
-# results as they were on v1. `serve()` serves both protocol eras (#4853): a
-# 2025-11-25 client through the initialize handshake, and a 2026-07-28 client
-# sessionlessly. No handler reads the session or calls back to the client
-# (roots, sampling, elicitation, logging), so nothing differs between them.
+# Built on the MCP Python SDK's high-level `MCPServer` (#5174), as the example
+# to follow: the tool and the prompt are plain decorated functions, whose type
+# hints and `Field` descriptions become the input schema and the prompt's
+# arguments, and which the SDK validates before calling. A failure the server
+# anticipated (robots.txt refusal, an unreachable or erroring URL, a private
+# destination, a bad proxy setting) is raised as `ToolError`, which the SDK
+# returns to the model as an `isError` result. A request naming a tool or a
+# prompt the server does not have, or a prompt call without its `url`, is a
+# malformed request, answered with a JSON-RPC `-32602` protocol error by
+# `reject_unknown_names` before `MCPServer` sees it (see there for why).
+# `serve()` serves both protocol eras (#4853): a 2025-11-25 client through the
+# initialize handshake, and a 2026-07-28 client sessionlessly. No handler reads
+# the session or calls back to the client (roots, sampling, elicitation,
+# logging), so nothing differs between them.
 
 import asyncio
 import ipaddress
 import os
 import socket
+from collections.abc import Mapping
 from typing import Annotated, Any, Tuple
 from importlib.metadata import version
 from urllib.parse import urlparse, urlunparse
 
 import httpx
-import jsonschema
 import markdownify
 import readabilipy.simple_json
+from mcp.server import MCPServer, ServerRequestContext
+from mcp.server.context import CallNext, HandlerResult, ServerMiddleware
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.shared.exceptions import MCPError
-from mcp.server import Server, ServerRequestContext
-from mcp.server.stdio import stdio_server
-from mcp.types import (
-    CallToolRequestParams,
-    CallToolResult,
-    ContentBlock,
-    GetPromptRequestParams,
-    GetPromptResult,
-    ListPromptsResult,
-    ListToolsResult,
-    PaginatedRequestParams,
-    Prompt,
-    PromptArgument,
-    PromptMessage,
-    TextContent,
-    Tool,
-    ToolAnnotations,
-    INVALID_PARAMS,
-    INTERNAL_ERROR,
-)
+from mcp.types import INVALID_PARAMS, ToolAnnotations
 from protego import Protego
-from pydantic import BaseModel, Field, AnyUrl
+from pydantic import AnyUrl, Field
 
 # The version this server reports in serverInfo, read from the installed
 # distribution's metadata (pyproject.toml) so it cannot drift from the
@@ -154,11 +145,10 @@ async def _refuse_private_destination(request: httpx.Request) -> None:
         return
     for address in addresses:
         if not _is_public_address(address):
-            raise MCPError(
-                code=INVALID_PARAMS,
-                message=f"Refused to fetch {request.url}: {host} resolves to {address}, "
+            raise ToolError(
+                f"Refused to fetch {request.url}: {host} resolves to {address}, "
                 "which is not a public address. Start the server with "
-                "--allow-private-ips to allow private, loopback and link-local addresses.",
+                "--allow-private-ips to allow private, loopback and link-local addresses."
             )
 
 
@@ -238,7 +228,7 @@ def normalize_proxy_env() -> None:
 
 
 def make_client(proxy_url: str | None) -> httpx.AsyncClient:
-    """Build the httpx client, turning a bad proxy setting into a tool error.
+    """Build the httpx client, turning a bad proxy setting into a ``ToolError``.
 
     httpx validates the proxy (``--proxy-url`` or the proxy environment
     variables) when the client is constructed, before any request, so this
@@ -247,11 +237,10 @@ def make_client(proxy_url: str | None) -> httpx.AsyncClient:
     try:
         return httpx.AsyncClient(proxy=proxy_url)
     except (ValueError, ImportError) as e:
-        raise MCPError(
-            code=INTERNAL_ERROR,
-            message=f"Failed to set up the HTTP client, check the proxy "
+        raise ToolError(
+            f"Failed to set up the HTTP client, check the proxy "
             f"configuration (--proxy-url or the HTTP_PROXY, HTTPS_PROXY and "
-            f"ALL_PROXY environment variables): {e}",
+            f"ALL_PROXY environment variables): {e}"
         )
 
 
@@ -263,7 +252,7 @@ async def check_may_autonomously_fetch_url(
 ) -> None:
     """
     Check if the URL can be fetched by the user agent according to the robots.txt file.
-    Raises an MCPError if not.
+    Raises a ToolError if not.
     """
     from httpx import HTTPError
 
@@ -279,14 +268,12 @@ async def check_may_autonomously_fetch_url(
                 headers={"User-Agent": user_agent},
             )
         except HTTPError:
-            raise MCPError(
-                code=INTERNAL_ERROR,
-                message=f"Failed to fetch robots.txt {robot_txt_url} due to a connection issue",
+            raise ToolError(
+                f"Failed to fetch robots.txt {robot_txt_url} due to a connection issue"
             )
         if response.status_code in (401, 403):
-            raise MCPError(
-                code=INTERNAL_ERROR,
-                message=f"When fetching robots.txt ({robot_txt_url}), received status {response.status_code} so assuming that autonomous fetching is not allowed, the user can try manually fetching by using the fetch prompt",
+            raise ToolError(
+                f"When fetching robots.txt ({robot_txt_url}), received status {response.status_code} so assuming that autonomous fetching is not allowed, the user can try manually fetching by using the fetch prompt"
             )
         elif 400 <= response.status_code < 500:
             return
@@ -296,14 +283,13 @@ async def check_may_autonomously_fetch_url(
     )
     robot_parser = Protego.parse(processed_robot_txt)
     if not robot_parser.can_fetch(str(url), user_agent):
-        raise MCPError(
-            code=INTERNAL_ERROR,
-            message=f"The sites robots.txt ({robot_txt_url}), specifies that autonomous fetching of this page is not allowed, "
+        raise ToolError(
+            f"The sites robots.txt ({robot_txt_url}), specifies that autonomous fetching of this page is not allowed, "
             f"<useragent>{user_agent}</useragent>\n"
             f"<url>{url}</url>"
             f"<robots>\n{robot_txt}\n</robots>\n"
             f"The assistant must let the user know that it failed to view the page. The assistant may provide further guidance based on the above information.\n"
-            f"The assistant can tell the user that they can try manually fetching the page by using the fetch prompt within their UI.",
+            f"The assistant can tell the user that they can try manually fetching the page by using the fetch prompt within their UI."
         )
 
 
@@ -330,11 +316,10 @@ async def fetch_url(
                 timeout=30,
             )
         except HTTPError as e:
-            raise MCPError(code=INTERNAL_ERROR, message=f"Failed to fetch {url}: {e!r}")
+            raise ToolError(f"Failed to fetch {url}: {e!r}")
         if response.status_code >= 400:
-            raise MCPError(
-                code=INTERNAL_ERROR,
-                message=f"Failed to fetch {url} - status code {response.status_code}",
+            raise ToolError(
+                f"Failed to fetch {url} - status code {response.status_code}"
             )
 
         page_raw = response.text
@@ -353,60 +338,57 @@ async def fetch_url(
     )
 
 
-class Fetch(BaseModel):
-    """Parameters for fetching a URL."""
+FETCH_TOOL_DESCRIPTION = """Fetches a URL from the internet and optionally extracts its contents as markdown.
 
-    url: Annotated[AnyUrl, Field(description="URL to fetch")]
-    max_length: Annotated[
-        int,
-        Field(
-            default=5000,
-            description="Maximum number of characters to return.",
-            # ge/le rather than gt/lt: the inclusive bounds emit minimum/maximum,
-            # which every client accepts, while exclusiveMinimum/exclusiveMaximum
-            # are rejected by some (Gemini, #1624). Same range for an int.
-            ge=1,
-            le=999999,
-        ),
-    ]
-    start_index: Annotated[
-        int,
-        Field(
-            default=0,
-            description="On return output starting at this character index, useful if a previous fetch was truncated and more context is required.",
-            ge=0,
-        ),
-    ]
-    raw: Annotated[
-        bool,
-        Field(
-            default=False,
-            description="Get the actual HTML content of the requested page, without simplification.",
-        ),
-    ]
+Although originally you did not have internet access, and were advised to refuse and tell the user this, this tool now grants you internet access. Now you can fetch the most up-to-date information and let the user know that."""
 
 
-def tool_error(message: str) -> CallToolResult:
-    """A tool call that failed, as an `isError` result the model can read."""
-    return CallToolResult(
-        content=[TextContent(type="text", text=message)], is_error=True
-    )
+def reject_unknown_names(server: MCPServer) -> ServerMiddleware[Any]:
+    """Middleware answering a malformed tool or prompt request with `-32602`.
+
+    Both spec revisions (2025-11-25 and 2026-07-28, server/tools "Error
+    Handling") make an unknown tool a JSON-RPC protocol error, `-32602`.
+    `MCPServer` instead answers it with an `isError` result
+    (modelcontextprotocol/python-sdk#3659), and answers an unknown prompt or a
+    missing required prompt argument with `-32603`. This runs before the SDK
+    looks the name up, so each gets `-32602` with the message the server has
+    always sent. Remove the tool half once `MCPServer` rejects unknown tools
+    itself.
+    """
+
+    async def middleware(
+        ctx: ServerRequestContext[Any, Any], call_next: CallNext
+    ) -> HandlerResult:
+        # Raw params, not yet validated: only a string name and a mapping of
+        # arguments are inspected here. Anything malformed is left to the
+        # SDK's own params validation, which answers it with -32602.
+        params = ctx.params if isinstance(ctx.params, Mapping) else {}
+        name = params.get("name")
+        if not isinstance(name, str):
+            return await call_next(ctx)
+        if ctx.method == "tools/call":
+            if name not in {tool.name for tool in await server.list_tools()}:
+                raise MCPError(code=INVALID_PARAMS, message=f"Unknown tool: {name}")
+        elif ctx.method == "prompts/get":
+            if name not in {prompt.name for prompt in await server.list_prompts()}:
+                raise MCPError(code=INVALID_PARAMS, message=f"Unknown prompt: {name}")
+            arguments = params.get("arguments") or {}
+            if isinstance(arguments, Mapping) and "url" not in arguments:
+                raise MCPError(code=INVALID_PARAMS, message="URL is required")
+        return await call_next(ctx)
+
+    return middleware
 
 
-async def serve(
+def create_server(
     custom_user_agent: str | None = None,
     ignore_robots_txt: bool = False,
     proxy_url: str | None = None,
     allow_private_ips: bool = False,
-) -> None:
-    """Run the fetch MCP server.
+) -> MCPServer:
+    """Build the fetch server: the `fetch` tool, the `fetch` prompt, and the guard.
 
-    Args:
-        custom_user_agent: Optional custom User-Agent string to use for requests
-        ignore_robots_txt: Whether to ignore robots.txt restrictions
-        proxy_url: Optional proxy URL to use for requests
-        allow_private_ips: Allow fetching private, loopback and link-local
-            addresses, which are refused by default
+    Args mirror `serve()`'s.
     """
     if proxy_url:
         proxy_url = normalize_proxy_url(proxy_url)
@@ -414,12 +396,15 @@ async def serve(
     user_agent_autonomous = custom_user_agent or DEFAULT_USER_AGENT_AUTONOMOUS
     user_agent_manual = custom_user_agent or DEFAULT_USER_AGENT_MANUAL
 
-    tool = Tool(
-        name="fetch",
-        description="""Fetches a URL from the internet and optionally extracts its contents as markdown.
+    # subscriptions=False: the tool and prompt lists never change and there are
+    # no resources to watch, so `subscriptions/listen` is not served and the
+    # 2026-07-28 capabilities say `listChanged: false`.
+    server = MCPServer("mcp-fetch", version=SERVER_VERSION, subscriptions=False)
+    server.middleware.append(reject_unknown_names(server))
 
-Although originally you did not have internet access, and were advised to refuse and tell the user this, this tool now grants you internet access. Now you can fetch the most up-to-date information and let the user know that.""",
-        input_schema=Fetch.model_json_schema(),
+    @server.tool(
+        name="fetch",
+        description=FETCH_TOOL_DESCRIPTION,
         # Reads only, changes nothing, and repeating a request has no further
         # side effect; it reaches arbitrary hosts on the internet (#3572).
         annotations=ToolAnnotations(
@@ -428,99 +413,80 @@ Although originally you did not have internet access, and were advised to refuse
             idempotent_hint=True,
             open_world_hint=True,
         ),
+        # The result is page text for the model, so no outputSchema.
+        structured_output=False,
     )
-
-    async def list_tools(
-        ctx: ServerRequestContext, params: PaginatedRequestParams | None
-    ) -> ListToolsResult:
-        return ListToolsResult(tools=[tool])
-
-    async def list_prompts(
-        ctx: ServerRequestContext, params: PaginatedRequestParams | None
-    ) -> ListPromptsResult:
-        return ListPromptsResult(
-            prompts=[
-                Prompt(
-                    name="fetch",
-                    description="Fetch a URL and extract its contents as markdown",
-                    arguments=[
-                        PromptArgument(
-                            name="url", description="URL to fetch", required=True
-                        )
-                    ],
-                )
-            ]
-        )
-
-    async def run_tool(name: str, arguments: dict[str, Any]) -> list[ContentBlock]:
-        if name != "fetch":
-            raise ValueError(f"Unknown tool: {name}")
-        try:
-            args = Fetch(**arguments)
-        except ValueError as e:
-            raise MCPError(code=INVALID_PARAMS, message=str(e))
-
-        url = str(args.url)
+    # strict=True: pydantic would otherwise coerce "yes" to True or "10" to 10,
+    # accepting arguments the advertised inputSchema rejects.
+    async def fetch(
+        url: Annotated[AnyUrl, Field(description="URL to fetch")],
+        max_length: Annotated[
+            int,
+            Field(
+                description="Maximum number of characters to return.",
+                # ge/le rather than gt/lt: the inclusive bounds emit
+                # minimum/maximum, which every client accepts, while
+                # exclusiveMinimum/exclusiveMaximum are rejected by some
+                # (Gemini, #1624). Same range for an int.
+                ge=1,
+                le=999999,
+                strict=True,
+            ),
+        ] = 5000,
+        start_index: Annotated[
+            int,
+            Field(
+                description="On return output starting at this character index, useful if a previous fetch was truncated and more context is required.",
+                ge=0,
+                strict=True,
+            ),
+        ] = 0,
+        raw: Annotated[
+            bool,
+            Field(
+                description="Get the actual HTML content of the requested page, without simplification.",
+                strict=True,
+            ),
+        ] = False,
+    ) -> str:
+        page_url = str(url)
 
         if not ignore_robots_txt:
             await check_may_autonomously_fetch_url(
-                url, user_agent_autonomous, proxy_url, allow_private_ips
+                page_url, user_agent_autonomous, proxy_url, allow_private_ips
             )
 
         content, prefix = await fetch_url(
-            url,
+            page_url,
             user_agent_autonomous,
-            force_raw=args.raw,
+            force_raw=raw,
             proxy_url=proxy_url,
             allow_private_ips=allow_private_ips,
         )
         original_length = len(content)
-        if args.start_index >= original_length:
+        if start_index >= original_length:
             content = "<error>No more content available.</error>"
         else:
             # Never empty: start_index < original_length and max_length > 0.
-            truncated_content = content[
-                args.start_index : args.start_index + args.max_length
-            ]
+            truncated_content = content[start_index : start_index + max_length]
             content = truncated_content
             actual_content_length = len(truncated_content)
-            remaining_content = original_length - (
-                args.start_index + actual_content_length
-            )
+            remaining_content = original_length - (start_index + actual_content_length)
             # Only add the prompt to continue fetching if there is still remaining content
-            if actual_content_length == args.max_length and remaining_content > 0:
-                next_start = args.start_index + actual_content_length
+            if actual_content_length == max_length and remaining_content > 0:
+                next_start = start_index + actual_content_length
                 content += f"\n\n<error>Content truncated. Call the fetch tool with a start_index of {next_start} to get more content.</error>"
-        return [TextContent(type="text", text=f"{prefix}Contents of {url}:\n{content}")]
+        return f"{prefix}Contents of {page_url}:\n{content}"
 
-    async def call_tool(
-        ctx: ServerRequestContext, params: CallToolRequestParams
-    ) -> CallToolResult:
-        # SDK v2's low-level server neither validates arguments nor turns a
-        # handler exception into an isError result, both of which SDK v1 did.
-        # Both are done here, with v1's messages, so tool results are unchanged.
-        arguments = params.arguments or {}
-        if params.name == tool.name:
-            try:
-                jsonschema.validate(instance=arguments, schema=tool.input_schema)
-            except jsonschema.ValidationError as e:
-                return tool_error(f"Input validation error: {e.message}")
-        try:
-            return CallToolResult(content=await run_tool(params.name, arguments))
-        except Exception as e:
-            return tool_error(str(e))
-
-    async def get_prompt(
-        ctx: ServerRequestContext, params: GetPromptRequestParams
-    ) -> GetPromptResult:
-        name, arguments = params.name, params.arguments
-        if name != "fetch":
-            raise MCPError(code=INVALID_PARAMS, message=f"Unknown prompt: {name}")
-        if not arguments or "url" not in arguments:
-            raise MCPError(code=INVALID_PARAMS, message="URL is required")
-
-        url = arguments["url"]
-
+    @server.prompt(
+        name="fetch",
+        description="Fetch a URL and extract its contents as markdown",
+    )
+    async def fetch_prompt(
+        url: Annotated[str, Field(description="URL to fetch")],
+    ) -> str:
+        # The user asked for this page, so robots.txt is not consulted, and a
+        # failure is shown to them as the prompt's text rather than raised.
         try:
             content, prefix = await fetch_url(
                 url,
@@ -528,40 +494,34 @@ Although originally you did not have internet access, and were advised to refuse
                 proxy_url=proxy_url,
                 allow_private_ips=allow_private_ips,
             )
-            # TODO: after SDK bug is addressed, don't catch the exception
-        except MCPError as e:
-            return GetPromptResult(
-                description=f"Failed to fetch {url}",
-                messages=[
-                    PromptMessage(
-                        role="user",
-                        content=TextContent(type="text", text=str(e)),
-                    )
-                ],
-            )
-        return GetPromptResult(
-            description=f"Contents of {url}",
-            messages=[
-                PromptMessage(
-                    role="user", content=TextContent(type="text", text=prefix + content)
-                )
-            ],
-        )
+        except ToolError as e:
+            return str(e)
+        return prefix + content
 
-    server = Server(
-        "mcp-fetch",
-        version=SERVER_VERSION,
-        on_list_tools=list_tools,
-        on_list_prompts=list_prompts,
-        on_call_tool=call_tool,
-        on_get_prompt=get_prompt,
+    return server
+
+
+async def serve(
+    custom_user_agent: str | None = None,
+    ignore_robots_txt: bool = False,
+    proxy_url: str | None = None,
+    allow_private_ips: bool = False,
+) -> None:
+    """Run the fetch MCP server over stdio.
+
+    Args:
+        custom_user_agent: Optional custom User-Agent string to use for requests
+        ignore_robots_txt: Whether to ignore robots.txt restrictions
+        proxy_url: Optional proxy URL to use for requests
+        allow_private_ips: Allow fetching private, loopback and link-local
+            addresses, which are refused by default
+    """
+    server = create_server(
+        custom_user_agent, ignore_robots_txt, proxy_url, allow_private_ips
     )
-
-    options = server.create_initialization_options()
-    async with stdio_server() as (read_stream, write_stream):
-        # Both eras (#4853): Server.run()'s dual-era loop lets the client's
-        # first request decide. `initialize` gets the 2025-11-25 handshake;
-        # `server/discover` or a request carrying a 2026-07-28 envelope gets
-        # the modern, sessionless era, with its required result fields
-        # (resultType, ttlMs, cacheScope) filled in by the SDK.
-        await server.run(read_stream, write_stream, options)
+    # Both eras (#4853): the SDK's dual-era loop lets the client's first
+    # request decide. `initialize` gets the 2025-11-25 handshake;
+    # `server/discover` or a request carrying a 2026-07-28 envelope gets the
+    # modern, sessionless era, with its required result fields (resultType,
+    # ttlMs, cacheScope) filled in by the SDK.
+    await server.run_stdio_async()

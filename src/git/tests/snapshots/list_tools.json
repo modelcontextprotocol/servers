@@ -13,8 +13,8 @@
         "required": [
           "repo_path"
         ],
-        "title": "GitStatus",
-        "type": "object"
+        "type": "object",
+        "title": "statusArguments"
       },
       "annotations": {
         "readOnlyHint": true,
@@ -41,8 +41,8 @@
         "required": [
           "repo_path"
         ],
-        "title": "GitDiffUnstaged",
-        "type": "object"
+        "type": "object",
+        "title": "diff_unstagedArguments"
       },
       "annotations": {
         "readOnlyHint": true,
@@ -69,8 +69,8 @@
         "required": [
           "repo_path"
         ],
-        "title": "GitDiffStaged",
-        "type": "object"
+        "type": "object",
+        "title": "diff_stagedArguments"
       },
       "annotations": {
         "readOnlyHint": true,
@@ -102,8 +102,8 @@
           "repo_path",
           "target"
         ],
-        "title": "GitDiff",
-        "type": "object"
+        "type": "object",
+        "title": "diffArguments"
       },
       "annotations": {
         "readOnlyHint": true,
@@ -130,8 +130,8 @@
           "repo_path",
           "message"
         ],
-        "title": "GitCommit",
-        "type": "object"
+        "type": "object",
+        "title": "commitArguments"
       },
       "annotations": {
         "readOnlyHint": false,
@@ -162,8 +162,8 @@
           "repo_path",
           "files"
         ],
-        "title": "GitAdd",
-        "type": "object"
+        "type": "object",
+        "title": "addArguments"
       },
       "annotations": {
         "readOnlyHint": false,
@@ -185,8 +185,8 @@
         "required": [
           "repo_path"
         ],
-        "title": "GitReset",
-        "type": "object"
+        "type": "object",
+        "title": "resetArguments"
       },
       "annotations": {
         "readOnlyHint": false,
@@ -239,8 +239,8 @@
         "required": [
           "repo_path"
         ],
-        "title": "GitLog",
-        "type": "object"
+        "type": "object",
+        "title": "logArguments"
       },
       "annotations": {
         "readOnlyHint": true,
@@ -279,8 +279,8 @@
           "repo_path",
           "branch_name"
         ],
-        "title": "GitCreateBranch",
-        "type": "object"
+        "type": "object",
+        "title": "create_branchArguments"
       },
       "annotations": {
         "readOnlyHint": false,
@@ -307,8 +307,8 @@
           "repo_path",
           "branch_name"
         ],
-        "title": "GitCheckout",
-        "type": "object"
+        "type": "object",
+        "title": "checkoutArguments"
       },
       "annotations": {
         "readOnlyHint": false,
@@ -335,8 +335,8 @@
           "repo_path",
           "revision"
         ],
-        "title": "GitShow",
-        "type": "object"
+        "type": "object",
+        "title": "showArguments"
       },
       "annotations": {
         "readOnlyHint": true,
@@ -391,8 +391,8 @@
           "repo_path",
           "branch_type"
         ],
-        "title": "GitBranch",
-        "type": "object"
+        "type": "object",
+        "title": "branchArguments"
       },
       "annotations": {
         "readOnlyHint": true,

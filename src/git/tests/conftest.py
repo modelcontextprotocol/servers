@@ -116,7 +116,7 @@ async def connect(
         async def fake_stdio_server() -> AsyncIterator[Any]:
             yield server_streams
 
-        with mock.patch("mcp_server_git.server.stdio_server", fake_stdio_server):
+        with mock.patch("mcp.server.mcpserver.server.stdio_server", fake_stdio_server):
             async with anyio.create_task_group() as tg:
                 tg.start_soon(serve, repository)
                 async with ClientSession(
@@ -141,3 +141,11 @@ def wire(model: BaseModel) -> dict[str, Any]:
 def text_result(text: str, *, is_error: bool = False) -> dict[str, Any]:
     """The wire shape of a tool result holding a single text block."""
     return {"content": [{"type": "text", "text": text}], "isError": is_error}
+
+
+def tool_error(tool: str, message: str) -> dict[str, Any]:
+    """The wire shape of a tool's `ToolError`, as MCPServer reports it.
+
+    MCPServer prefixes the tool's own message with the tool's name.
+    """
+    return text_result(f"Error executing tool {tool}: {message}", is_error=True)

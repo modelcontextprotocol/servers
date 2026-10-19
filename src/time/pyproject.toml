@@ -17,8 +17,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
 ]
 dependencies = [
-    "jsonschema>=4.20.0",
-    "mcp>=2.2,<3",
+    "mcp>=2.3,<3",
     "pydantic>=2.0.0",
     "tzdata>=2024.2",
     "tzlocal>=5.3.1",

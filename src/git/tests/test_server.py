@@ -862,7 +862,7 @@ async def test_serve_does_not_raise_exceptions(tmp_path: Path):
     repo_path = tmp_path / "serve_test_repo"
     git.Repo.init(repo_path).close()
 
-    with mock.patch("mcp_server_git.server.stdio_server") as mock_stdio:
+    with mock.patch("mcp.server.mcpserver.server.stdio_server") as mock_stdio:
         mock_read = mock.AsyncMock()
         mock_write = mock.AsyncMock()
         mock_stdio.return_value.__aenter__.return_value = (mock_read, mock_write)

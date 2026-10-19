@@ -6,7 +6,7 @@ A Model Context Protocol server that provides web content fetching capabilities.
 
 Source: https://github.com/modelcontextprotocol/servers/tree/main/src/fetch
 
-Requires MCP Python SDK 2.x (`mcp>=2.2,<3`).
+Requires MCP Python SDK 2.x (`mcp>=2.3,<3`).
 
 > [!CAUTION]
 > This server can access local/internal IP addresses and may represent a security risk. Exercise caution when using this MCP server to ensure this does not expose any sensitive data.
@@ -30,6 +30,14 @@ The fetch tool will truncate the response, but by using the `start_index` argume
   - Fetch a URL and extract its contents as markdown
   - Arguments:
     - `url` (string, required): URL to fetch
+
+### Errors
+
+- A failed fetch (a robots.txt refusal, an unreachable page, an HTTP error status, a refused private address, an unusable proxy setting) and arguments that do not match the tool's schema are returned as a tool result with `isError: true`, whose text starts `Error executing tool fetch:` and says what went wrong, so the model can read it and decide what to do.
+- Calling a tool the server does not have is a JSON-RPC protocol error, `-32602` (`Unknown tool: <name>`), as the specification requires. So is getting a prompt it does not have (`Unknown prompt: <name>`), or the `fetch` prompt without its `url` (`URL is required`).
+- When the `fetch` prompt's fetch fails, the prompt still returns: its message holds the reason the fetch failed.
+
+The server is built on the MCP Python SDK's high-level `MCPServer`: the tool and the prompt are decorated functions, and their type hints and field descriptions are the input schema and the prompt's arguments.
 
 ### Protocol versions
 
