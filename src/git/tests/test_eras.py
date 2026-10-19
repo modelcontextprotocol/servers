@@ -182,8 +182,10 @@ async def test_tool_failure_is_an_is_error_result_in_each_era(
     )
     assert outside.is_error is True
     assert text_of(outside) == (
-        "Error executing tool git_status: Repository path '/' is outside the "
-        f"allowed repository '{repo_dir(repo)}'"
+        # repo_path is a Path parameter, so the message echoes the platform's
+        # form of "/" ("\\" on Windows).
+        f"Error executing tool git_status: Repository path '{Path('/')}' is "
+        f"outside the allowed repository '{repo_dir(repo)}'"
     )
 
 
