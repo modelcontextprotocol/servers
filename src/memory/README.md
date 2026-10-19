@@ -136,6 +136,15 @@ Example:
   - MIME type: `application/json`
   - Returns the same shape as `read_graph` (entities and relations)
   - Mutation tools (`create_entities`, `create_relations`, `add_observations`, `delete_entities`, `delete_observations`, `delete_relations`) emit `notifications/resources/updated` for this URI, so subscribed clients see live changes
+  - How a client subscribes depends on its protocol version: a 2026-07-28 client names the URI in the `resourceSubscriptions` of its `subscriptions/listen` request and gets the updates on that stream; a 2025-era client calls `resources/subscribe`
+
+## Protocol versions
+
+The server serves both protocol eras on stdio from the same process. The client's first message picks the era of the connection: a 2026-07-28 client opens with `server/discover` and sends its protocol version, identity and capabilities with each request, and a 2025-era client opens with the `initialize` handshake. The tools and the resource are the same on both.
+
+## Requirements
+
+Node.js 24 or later, when the server runs through `npx` or from source.
 
 # Usage with Claude Desktop
 

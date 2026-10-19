@@ -42,7 +42,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
 
       # Node built-ins and git only, so no `npm ci`.
       - name: Check every commit is signed off

@@ -69,13 +69,21 @@ branch and reach `main` with everything else. **All are merged before the merge
 PR is opened.** A milestone that touches only one language, with a clean audit,
 has one.
 
+Each branch this skill cuts by hand (the audit, the hand-run CalVer stamp, the
+merge branch) goes into **its own sibling worktree**, as `/pr-flow` step 2
+does, never by switching branches in the primary checkout. Run each recipe from
+the primary checkout; the worktree is named for the checkout, the release
+issue and the branch's role, since one issue owns several branches.
+
 ### 2a. The audit
 
 Audit first, so the version bumps sit on a tree that was just checked.
 
 ```sh
 git fetch origin v2/main
-git switch -c "v2/chore/$N-release-audit" origin/v2/main
+git worktree add --no-track "../$(basename "$PWD")-$N-audit" \
+  -b "v2/chore/$N-release-audit" origin/v2/main
+cd "../$(basename "$PWD")-$N-audit" && npm install
 
 # npm: one lockfile covers the root and all four TypeScript workspaces.
 npm audit --audit-level=high
@@ -169,8 +177,15 @@ Then, on the PR:
 1. **Tie it to the release issue with a comment**, `Part of #N`. The action
    rewrites the PR's body on every push to `v2/main`, so a `Closes` line there
    would not survive; this is the exception `AGENTS.md` names.
-2. **Close and reopen it to start CI.** A PR opened with the workflow token
-   does not trigger workflows.
+2. **Wait for its CI to pass.** The workflow token's push starts no workflow,
+   so the Version Packages workflow dispatches the TypeScript and Python
+   workflows on `changeset-release/v2/main` after each update. A PR does not
+   list dispatched checks, so the result shows as two commit statuses,
+   `TypeScript (dispatched)` and `Python (dispatched)`. Closing and reopening
+   the PR does not start them (that fires `pull_request`; they run on `push`).
+   If neither status appears, run them by hand:
+   `gh workflow run typescript.yml --ref changeset-release/v2/main` (and
+   `python.yml`).
 3. **Read it**: each bump matches the semver policy in `RELEASING.md`, each
    `CHANGELOG.md` entry says what a user of the server needs to know, the
    consumed changeset files are deleted, and `package-lock.json` records the
@@ -187,8 +202,10 @@ gh workflow run prepare-python-release.yml --repo modelcontextprotocol/servers \
 ```
 
 It opens a PR that starts with `Closes #N`, on a branch named
-`v2/chore/<N>-python-calver-<date>`, labeled `v2`. Close and reopen it to start
-CI, check that each stamped package really changed, and a maintainer merges it.
+`v2/chore/<N>-python-calver-<date>`, labeled `v2`, and dispatches the
+TypeScript and Python workflows on that branch, as the Version Packages
+workflow does. Wait for its two `(dispatched)` statuses to pass, check that each stamped package really
+changed, and a maintainer merges it.
 No PR means no Python server has a shipped change since its last stamp.
 
 ⚠️ GitHub only dispatches a workflow that exists on the default branch. Until
@@ -197,7 +214,9 @@ the same script:
 
 ```sh
 git fetch origin v2/main
-git switch -c "v2/chore/$N-python-calver-$(date -u +%Y.%-m.%-d)" origin/v2/main
+git worktree add --no-track "../$(basename "$PWD")-$N-calver" \
+  -b "v2/chore/$N-python-calver-$(date -u +%Y.%-m.%-d)" origin/v2/main
+cd "../$(basename "$PWD")-$N-calver" && npm install
 node scripts/prepare-python-release.mjs     # prints "name: old -> new" per stamped package
 git commit -s -am "chore: stamp Python CalVer versions for $(date -u +%Y.%-m.%-d)"
 ```
@@ -216,7 +235,9 @@ PR would then add a second.)
 
 ```sh
 git fetch origin main v2/main
-git switch -c "v2/chore/$N-release-$MILESTONE" origin/v2/main
+git worktree add --no-track "../$(basename "$PWD")-$N-merge" \
+  -b "v2/chore/$N-release-$MILESTONE" origin/v2/main
+cd "../$(basename "$PWD")-$N-merge"
 ```
 
 **The merge's result is the release candidate. Prove it will be `v2/main`'s
@@ -256,19 +277,88 @@ This is the one PR in the repository that targets `main`.
 ⚠️ **It is merged with "Create a merge commit", never squashed or rebased.** A
 squash writes one new commit that `v2/main` does not contain, so the two
 branches stop sharing history and the next milestone merge conflicts with
-itself.
+itself. `main`'s ruleset allows only merge commits, so the other two buttons
+are not offered.
+
+⚠️ **Do not click "Update branch" on the merge PR.** GitHub always offers it
+here, because `main` always holds commits the merge branch lacks (its own
+earlier merge commits), so it does not mean the PR is out of date. Clicking it
+merges `main` into the merge branch: the PR gains a commit of its own (which
+fails the required **Source is v2/main** check, `main-source.yml`), `main`
+receives two merge commits, and the branch head is no longer the commit the
+ledger names. If it was clicked, put the branch back on its head from before
+the click: the update merge's **first parent**, which is the commit the ledger
+verified. Not `origin/v2/main`, which may have moved on to a commit nothing has
+verified. Then repeat the `git merge-tree` check above:
+
+```sh
+B="v2/chore/$N-release-$MILESTONE"
+git fetch origin
+UPDATE=$(git rev-parse "origin/$B")
+git log -1 --format='%s' "$UPDATE"   # must be "Merge branch 'main' into …"
+git push --force-with-lease="$B:$UPDATE" origin "$UPDATE^1:refs/heads/$B"
+```
 
 ⚠️ **Never merge `main` back into `v2/main`** to "sync" them. Everything
 reaches `main` through `v2/main`, so there is nothing on `main` to bring back
 except the merge commits themselves. `v2/main` ahead of `main` means a release
 is in flight; that is the normal state.
 
+### A release that cannot be a pure merge
+
+Sometimes `v2/main` holds work that must not ship yet, and the release has to
+come from a branch of its own: a release branch with cherry-picks (1.0.0
+shipped that way, from `v2/release/1.0.0` in #5090), or a hotfix. The required
+**Source is v2/main** check fails that PR, by design, and nobody can bypass
+it, admins included. The only way through is a deliberate act by a repo
+admin: disable the `main: milestone merges only` ruleset for that one merge,
+and turn it straight back on.
+
+The disable, the merge and the re-enable run as one command, in a subshell
+whose exit trap re-enables the ruleset however it ends: the merge failing, an
+error, or Ctrl-C. Approve the PR first; the other rulesets on `main` still
+require that.
+
+```sh
+PR=<the release PR's number>
+RS=$(gh api repos/modelcontextprotocol/servers/rulesets \
+  --jq '.[] | select(.name == "main: milestone merges only") | .id')
+[ -n "$RS" ] || echo "ruleset not found by name; list them and look" >&2
+[ -n "$RS" ] && (
+  set -e
+  restore() {
+    gh api -X PUT "repos/modelcontextprotocol/servers/rulesets/$RS" \
+      -f enforcement=active --jq '"ruleset: \(.enforcement)"'
+  }
+  trap restore EXIT
+  trap 'exit 130' INT TERM HUP   # exit, so the EXIT trap restores
+  gh api -X PUT "repos/modelcontextprotocol/servers/rulesets/$RS" \
+    -f enforcement=disabled >/dev/null
+  # --merge: with the ruleset off, squash and rebase are allowed again.
+  gh pr merge "$PR" --repo modelcontextprotocol/servers --merge
+)
+gh api "repos/modelcontextprotocol/servers/rulesets/$RS" --jq .enforcement   # must print "active"
+```
+
+A trap cannot run if the machine itself dies mid-command, so the last line
+is not optional: if it prints anything but `active`, set it back by hand
+(Settings → Rules → Rulesets) before doing anything else.
+
+- **Only a human admin does this**, and only for a PR whose diff has been
+  reviewed as the release. Never disable the ruleset outside the command
+  above.
+- **Record it in the release ledger**: the PR, why it could not be a pure
+  merge, and the times the ruleset was disabled and re-enabled.
+- **Then merge the release branch back into `v2/main`** through a PR of its
+  own (#5118 did this for 1.0.0), so its commits are on `v2/main` and the
+  next milestone merge is a pure one again.
+
 ## 4. Verify the release candidate, and write the ledger
 
 Work from a **dedicated worktree** with its own install, so nothing stale from
 another branch is tested. It is added **detached** at the pushed merge branch:
-the branch itself is still checked out where step 3 created it, and git
-refuses to check one branch out twice.
+the branch itself is still checked out in step 3's worktree, and git refuses
+to check one branch out twice.
 
 ```sh
 git worktree add --detach ../servers-release "origin/v2/chore/$N-release-$MILESTONE"
@@ -368,14 +458,16 @@ what changed in the server they use:
    whether this release publishes it (the registry does not have that version
    yet) or leaves it unchanged. The tag is the milestone's name, not a
    version, so this table is where a reader finds the versions.
-2. **One `## <package> <version>` section per published package**, whose
+2. **The release-ledger line**, linking the artifact from 4d, directly under
+   the table, so what was published and the evidence behind it are read
+   together.
+3. **One `## <package> <version>` section per published package**, whose
    `### What's Changed` lists the PRs that change files under its
    `src/<dir>/`. A PR that touches several servers is listed under each.
-3. **`## Repository`**: every PR no published section took (CI, docs, skills,
+4. **`## Repository`**: every PR no published section took (CI, docs, skills,
    a server whose version did not change), so no PR in the generated list is
    dropped.
-4. GitHub's **New Contributors** block and **Full Changelog** link, verbatim.
-5. **The release-ledger line**, linking the artifact from 4d.
+5. GitHub's **New Contributors** block and **Full Changelog** link, verbatim.
 6. **`## Known issues`**, only when you pass one. It names the issue, who is
    affected and the workaround. What counts as a known issue is a maintainer's
    judgment, so it is written by hand, never generated.
@@ -546,9 +638,10 @@ Then close out, by hand, since nothing closed the release issue:
 gh issue close "$N" --repo modelcontextprotocol/servers --reason completed
 ```
 
-Move its card to **Done** (`/board-ops`), remove the worktree
-(`git worktree remove ../servers-release`), and tell the maintainer the
-milestone can be closed.
+Move its card to **Done** (`/board-ops`), remove the worktrees from the
+primary checkout (`git worktree remove ../servers-release`, and each
+`../<checkout>-$N-<role>` from steps 2 and 3 with its local branch, as in
+`/pr-flow` step 10), and tell the maintainer the milestone can be closed.
 
 **If the run failed**, `RELEASING.md` **When a publish fails** has the two
 cases: a transient failure is re-run on the same run; a defect is fixed on

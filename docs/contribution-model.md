@@ -137,9 +137,9 @@ issue so triage can score it.
 ### 3. Close
 
 Close each outside PR with the comment for its class, naming the harvest issue
-where there is one. Pace the closes (a pause of a few seconds between them, in
-batches) to stay under GitHub's secondary rate limit on content creation, and
-stop on the first failed call rather than carrying on blind.
+where there is one. Pace the closes as
+[`AGENTS.md` **Pacing GitHub writes**](../AGENTS.md#pacing-github-writes) says,
+and stop on the first failed call rather than carrying on blind.
 
 Closing a PR does not delete it: its branch, diff and discussion stay readable,
 and the harvest issue links it.

@@ -1,18 +1,40 @@
+# The git MCP server: tools that read and change a Git repository through
+# GitPython. Repository confinement (`--repository`, `validate_repo_path`) and
+# the flag-injection guards live beside the handlers because every tool call
+# must pass them before any git command runs.
+#
+# Built on the MCP Python SDK's high-level `MCPServer` (#5174), the API these
+# reference servers are meant to teach: each tool is a typed function, and the
+# SDK derives its input schema from the signature and validates arguments
+# against it. A failure the model can act on (a git error, a path outside the
+# repository, a guard's rejection) is raised as `ToolError`, which the SDK
+# returns as an `isError` result carrying the message. An unknown tool name is
+# a protocol error, JSON-RPC -32602, as both spec revisions require.
+#
+# `serve()` serves both protocol eras (#4853): a 2025-11-25 client through the
+# initialize handshake, and a 2026-07-28 client sessionlessly. No tool reads
+# the session or calls back to the client (roots, sampling, elicitation,
+# logging), so nothing differs between them.
+
 import logging
+import threading
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from enum import Enum
+from functools import wraps
 from importlib.metadata import version
 from pathlib import Path
-from typing import Any, Optional
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
-from mcp.types import (
-    TextContent,
-    Tool,
-    ToolAnnotations,
-)
-from enum import Enum
+from typing import Annotated, Any, Optional, ParamSpec
+
 import git
 from git.exc import BadName
-from pydantic import BaseModel, Field
+from gitdb.exc import ODBError
+from mcp.server.context import CallNext, HandlerResult, ServerRequestContext
+from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
+from mcp.shared.exceptions import MCPError
+from mcp.types import INVALID_PARAMS, ToolAnnotations
+from pydantic import Field
 
 # The version this server reports in serverInfo, read from the installed
 # distribution's metadata (pyproject.toml) so it cannot drift from the
@@ -33,88 +55,6 @@ class FlagInjectionError(BadName):
 
     def __str__(self) -> str:
         return str(self.args[0])
-
-
-class GitStatus(BaseModel):
-    repo_path: str
-
-
-class GitDiffUnstaged(BaseModel):
-    repo_path: str
-    context_lines: int = DEFAULT_CONTEXT_LINES
-
-
-class GitDiffStaged(BaseModel):
-    repo_path: str
-    context_lines: int = DEFAULT_CONTEXT_LINES
-
-
-class GitDiff(BaseModel):
-    repo_path: str
-    target: str
-    context_lines: int = DEFAULT_CONTEXT_LINES
-
-
-class GitCommit(BaseModel):
-    repo_path: str
-    message: str
-
-
-class GitAdd(BaseModel):
-    repo_path: str
-    files: list[str] = Field(..., min_length=1)
-
-
-class GitReset(BaseModel):
-    repo_path: str
-
-
-class GitLog(BaseModel):
-    repo_path: str
-    max_count: int = 10
-    start_timestamp: Optional[str] = Field(
-        None,
-        description="Start timestamp for filtering commits. Accepts: ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')",
-    )
-    end_timestamp: Optional[str] = Field(
-        None,
-        description="End timestamp for filtering commits. Accepts: ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')",
-    )
-
-
-class GitCreateBranch(BaseModel):
-    repo_path: str
-    branch_name: str
-    base_branch: str | None = None
-
-
-class GitCheckout(BaseModel):
-    repo_path: str
-    branch_name: str
-
-
-class GitShow(BaseModel):
-    repo_path: str
-    revision: str
-
-
-class GitBranch(BaseModel):
-    repo_path: str = Field(
-        ...,
-        description="The path to the Git repository.",
-    )
-    branch_type: str = Field(
-        ...,
-        description="Whether to list local branches ('local'), remote branches ('remote') or all branches('all').",
-    )
-    contains: Optional[str] = Field(
-        None,
-        description="The commit sha that branch should contain. Do not pass anything to this param if no commit sha is specified",
-    )
-    not_contains: Optional[str] = Field(
-        None,
-        description="The commit sha that branch should NOT contain. Do not pass anything to this param if no commit sha is specified",
-    )
 
 
 class GitTools(str, Enum):
@@ -319,6 +259,12 @@ def git_create_branch(
         )
     if base_branch:
         base = repo.references[base_branch]
+    elif repo.head.is_detached:
+        # GitPython's `active_branch` raises TypeError on a detached HEAD.
+        raise ValueError(
+            "HEAD is detached, so there is no current branch to branch from; "
+            "pass base_branch"
+        )
     else:
         base = repo.active_branch
 
@@ -386,9 +332,11 @@ def git_show(repo: git.Repo, revision: str) -> str:
     else:
         diff = commit.diff(git.NULL_TREE, create_patch=True)
     for d in diff:
-        # git prints /dev/null for the missing side of an added or deleted file.
-        a_path = "/dev/null" if d.new_file or d.a_path is None else d.a_path
-        b_path = "/dev/null" if d.deleted_file or d.b_path is None else d.b_path
+        # git prints /dev/null for the missing side of an added or deleted file,
+        # and prefixes an existing side with a/ or b/, which `git apply` and
+        # `patch -p1` strip as the first path component.
+        a_path = "/dev/null" if d.new_file or d.a_path is None else f"a/{d.a_path}"
+        b_path = "/dev/null" if d.deleted_file or d.b_path is None else f"b/{d.b_path}"
         output.append(f"\n--- {a_path}\n+++ {b_path}\n")
         if d.diff is None:
             continue  # pragma: no cover  # with create_patch=True GitPython always assigns the patch as bytes
@@ -465,6 +413,289 @@ def git_branch(
     return branch_info
 
 
+# The failures a tool reports to the model as a `ToolError`, each with the
+# message it was raised with: the guards' `ValueError`s and
+# `FlagInjectionError`s, git and GitPython errors (`GitError`: a failed
+# command, a missing or invalid repository), gitdb's lookup errors (`ODBError`:
+# `BadName` for an unknown revision, `BadObject`), and the builtins GitPython
+# raises for a failed lookup: `KeyError` for a path not in a tree, `IndexError`
+# for a missing ref in `repo.references[...]`, `OSError` for an unreadable
+# path. A detached HEAD is checked before `active_branch` (whose TypeError
+# would otherwise be a crash), so TypeError stays a crash, as a bug should.
+# Anything else escapes as a crash, which the SDK reports only as
+# "Error executing tool <name>", logging the traceback.
+ANTICIPATED_ERRORS = (
+    ValueError,
+    KeyError,
+    IndexError,
+    OSError,
+    git.GitError,
+    ODBError,
+)
+
+
+@contextmanager
+def reported_to_model() -> Iterator[None]:
+    """Turn an anticipated failure into a `ToolError` with the same message."""
+    try:
+        yield
+    except ANTICIPATED_ERRORS as e:
+        raise ToolError(str(e)) from e
+
+
+_P = ParamSpec("_P")
+
+
+# `MCPServer` runs a synchronous tool in a worker thread, so two calls can
+# overlap. A git operation is a check followed by a change (staged changes,
+# then the commit), and the index is shared, so one call at a time: the lock
+# keeps the serial behavior the server had when tools ran on the event loop.
+_GIT_LOCK = threading.Lock()
+
+
+def reports_failures(fn: Callable[_P, str]) -> Callable[_P, str]:
+    """Run a tool function alone, inside `reported_to_model()`.
+
+    `wraps` keeps the signature, which is what `MCPServer` reads to build the
+    tool's input schema.
+    """
+
+    @wraps(fn)
+    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> str:
+        with _GIT_LOCK, reported_to_model():
+            return fn(*args, **kwargs)
+
+    return wrapper
+
+
+READ_ONLY = ToolAnnotations(
+    read_only_hint=True,
+    destructive_hint=False,
+    idempotent_hint=True,
+    open_world_hint=False,
+)
+
+
+def writes(*, destructive: bool, idempotent: bool) -> ToolAnnotations:
+    return ToolAnnotations(
+        read_only_hint=False,
+        destructive_hint=destructive,
+        idempotent_hint=idempotent,
+        open_world_hint=False,
+    )
+
+
+TIMESTAMP_FORMATS = (
+    "Accepts: ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates "
+    "(e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', "
+    "'Jan 15 2024')"
+)
+
+
+def create_server(repository: Path | None) -> MCPServer:
+    """The git server, confined to `repository` when one is given."""
+
+    async def reject_unknown_tools(
+        ctx: ServerRequestContext[Any, Any], call_next: CallNext
+    ) -> HandlerResult:
+        # An unknown tool is a protocol error, JSON-RPC -32602 (spec
+        # server/tools, "Error Handling"). MCPServer still answers one with an
+        # isError result (python-sdk#3659), so the name is checked here,
+        # before MCPServer looks it up; remove this once MCPServer does it
+        # itself. It also runs before argument validation, so a call without
+        # repo_path still reports the unknown tool (#4994).
+        if ctx.method == "tools/call" and ctx.params is not None:
+            name = ctx.params.get("name")
+            if isinstance(name, str) and name not in {
+                tool.name for tool in await server.list_tools()
+            }:
+                raise MCPError(code=INVALID_PARAMS, message=f"Unknown tool: {name}")
+        return await call_next(ctx)
+
+    server = MCPServer(
+        "mcp-git",
+        version=SERVER_VERSION,
+        middleware=[reject_unknown_tools],
+        # The tool list never changes, so `subscriptions/listen` is not
+        # served, and the 2026-07-28 capabilities say so (listChanged false).
+        subscriptions=False,
+    )
+
+    def open_repo(repo_path: str) -> git.Repo:
+        path = Path(repo_path)
+        validate_repo_path(path, repository)
+        return git.Repo(path)
+
+    @server.tool(
+        name=GitTools.STATUS.value,
+        description="Shows the working tree status",
+        annotations=READ_ONLY,
+        structured_output=False,
+    )
+    @reports_failures
+    def status(repo_path: str) -> str:
+        return f"Repository status:\n{git_status(open_repo(repo_path))}"
+
+    @server.tool(
+        name=GitTools.DIFF_UNSTAGED.value,
+        description="Shows changes in the working directory that are not yet staged",
+        annotations=READ_ONLY,
+        structured_output=False,
+    )
+    @reports_failures
+    def diff_unstaged(
+        repo_path: str, context_lines: int = DEFAULT_CONTEXT_LINES
+    ) -> str:
+        diff = git_diff_unstaged(open_repo(repo_path), context_lines)
+        return f"Unstaged changes:\n{diff}"
+
+    @server.tool(
+        name=GitTools.DIFF_STAGED.value,
+        description="Shows changes that are staged for commit",
+        annotations=READ_ONLY,
+        structured_output=False,
+    )
+    @reports_failures
+    def diff_staged(repo_path: str, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
+        diff = git_diff_staged(open_repo(repo_path), context_lines)
+        return f"Staged changes:\n{diff}"
+
+    @server.tool(
+        name=GitTools.DIFF.value,
+        description="Shows differences between branches or commits",
+        annotations=READ_ONLY,
+        structured_output=False,
+    )
+    @reports_failures
+    def diff(
+        repo_path: str, target: str, context_lines: int = DEFAULT_CONTEXT_LINES
+    ) -> str:
+        result = git_diff(open_repo(repo_path), target, context_lines)
+        return f"Diff with {target}:\n{result}"
+
+    @server.tool(
+        name=GitTools.COMMIT.value,
+        description="Records changes to the repository",
+        annotations=writes(destructive=False, idempotent=False),
+        structured_output=False,
+    )
+    @reports_failures
+    def commit(repo_path: str, message: str) -> str:
+        return git_commit(open_repo(repo_path), message)
+
+    @server.tool(
+        name=GitTools.ADD.value,
+        description="Adds file contents to the staging area",
+        annotations=writes(destructive=False, idempotent=True),
+        structured_output=False,
+    )
+    @reports_failures
+    def add(repo_path: str, files: Annotated[list[str], Field(min_length=1)]) -> str:
+        return git_add(open_repo(repo_path), files)
+
+    @server.tool(
+        name=GitTools.RESET.value,
+        description="Unstages all staged changes",
+        annotations=writes(destructive=True, idempotent=True),
+        structured_output=False,
+    )
+    @reports_failures
+    def reset(repo_path: str) -> str:
+        return git_reset(open_repo(repo_path))
+
+    @server.tool(
+        name=GitTools.LOG.value,
+        description="Shows the commit logs",
+        annotations=READ_ONLY,
+        structured_output=False,
+    )
+    @reports_failures
+    def log(
+        repo_path: str,
+        max_count: int = 10,
+        start_timestamp: Annotated[
+            Optional[str],
+            Field(
+                description=f"Start timestamp for filtering commits. {TIMESTAMP_FORMATS}"
+            ),
+        ] = None,
+        end_timestamp: Annotated[
+            Optional[str],
+            Field(
+                description=f"End timestamp for filtering commits. {TIMESTAMP_FORMATS}"
+            ),
+        ] = None,
+    ) -> str:
+        entries = git_log(
+            open_repo(repo_path), max_count, start_timestamp, end_timestamp
+        )
+        return "Commit history:\n" + "\n".join(entries)
+
+    @server.tool(
+        name=GitTools.CREATE_BRANCH.value,
+        description="Creates a new branch from an optional base branch",
+        annotations=writes(destructive=False, idempotent=False),
+        structured_output=False,
+    )
+    @reports_failures
+    def create_branch(
+        repo_path: str, branch_name: str, base_branch: str | None = None
+    ) -> str:
+        return git_create_branch(open_repo(repo_path), branch_name, base_branch)
+
+    @server.tool(
+        name=GitTools.CHECKOUT.value,
+        description="Switches branches",
+        annotations=writes(destructive=False, idempotent=False),
+        structured_output=False,
+    )
+    @reports_failures
+    def checkout(repo_path: str, branch_name: str) -> str:
+        return git_checkout(open_repo(repo_path), branch_name)
+
+    @server.tool(
+        name=GitTools.SHOW.value,
+        description="Shows the contents of a commit, or of a file or directory given as <revision>:<path>",
+        annotations=READ_ONLY,
+        structured_output=False,
+    )
+    @reports_failures
+    def show(repo_path: str, revision: str) -> str:
+        return git_show(open_repo(repo_path), revision)
+
+    @server.tool(
+        name=GitTools.BRANCH.value,
+        description="List Git branches",
+        annotations=READ_ONLY,
+        structured_output=False,
+    )
+    @reports_failures
+    def branch(
+        repo_path: Annotated[str, Field(description="The path to the Git repository.")],
+        branch_type: Annotated[
+            str,
+            Field(
+                description="Whether to list local branches ('local'), remote branches ('remote') or all branches('all')."
+            ),
+        ],
+        contains: Annotated[
+            Optional[str],
+            Field(
+                description="The commit sha that branch should contain. Do not pass anything to this param if no commit sha is specified"
+            ),
+        ] = None,
+        not_contains: Annotated[
+            Optional[str],
+            Field(
+                description="The commit sha that branch should NOT contain. Do not pass anything to this param if no commit sha is specified"
+            ),
+        ] = None,
+    ) -> str:
+        return git_branch(open_repo(repo_path), branch_type, contains, not_contains)
+
+    return server
+
+
 async def serve(repository: Path | None) -> None:
     logger = logging.getLogger(__name__)
 
@@ -486,240 +717,9 @@ async def serve(repository: Path | None) -> None:
         repository = root
         logger.info(f"Using repository at {repository}")
 
-    server = Server("mcp-git", version=SERVER_VERSION)
-
-    @server.list_tools()
-    async def list_tools() -> list[Tool]:
-        return [
-            Tool(
-                name=GitTools.STATUS,
-                description="Shows the working tree status",
-                inputSchema=GitStatus.model_json_schema(),
-                annotations=ToolAnnotations(
-                    readOnlyHint=True,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
-                ),
-            ),
-            Tool(
-                name=GitTools.DIFF_UNSTAGED,
-                description="Shows changes in the working directory that are not yet staged",
-                inputSchema=GitDiffUnstaged.model_json_schema(),
-                annotations=ToolAnnotations(
-                    readOnlyHint=True,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
-                ),
-            ),
-            Tool(
-                name=GitTools.DIFF_STAGED,
-                description="Shows changes that are staged for commit",
-                inputSchema=GitDiffStaged.model_json_schema(),
-                annotations=ToolAnnotations(
-                    readOnlyHint=True,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
-                ),
-            ),
-            Tool(
-                name=GitTools.DIFF,
-                description="Shows differences between branches or commits",
-                inputSchema=GitDiff.model_json_schema(),
-                annotations=ToolAnnotations(
-                    readOnlyHint=True,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
-                ),
-            ),
-            Tool(
-                name=GitTools.COMMIT,
-                description="Records changes to the repository",
-                inputSchema=GitCommit.model_json_schema(),
-                annotations=ToolAnnotations(
-                    readOnlyHint=False,
-                    destructiveHint=False,
-                    idempotentHint=False,
-                    openWorldHint=False,
-                ),
-            ),
-            Tool(
-                name=GitTools.ADD,
-                description="Adds file contents to the staging area",
-                inputSchema=GitAdd.model_json_schema(),
-                annotations=ToolAnnotations(
-                    readOnlyHint=False,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
-                ),
-            ),
-            Tool(
-                name=GitTools.RESET,
-                description="Unstages all staged changes",
-                inputSchema=GitReset.model_json_schema(),
-                annotations=ToolAnnotations(
-                    readOnlyHint=False,
-                    destructiveHint=True,
-                    idempotentHint=True,
-                    openWorldHint=False,
-                ),
-            ),
-            Tool(
-                name=GitTools.LOG,
-                description="Shows the commit logs",
-                inputSchema=GitLog.model_json_schema(),
-                annotations=ToolAnnotations(
-                    readOnlyHint=True,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
-                ),
-            ),
-            Tool(
-                name=GitTools.CREATE_BRANCH,
-                description="Creates a new branch from an optional base branch",
-                inputSchema=GitCreateBranch.model_json_schema(),
-                annotations=ToolAnnotations(
-                    readOnlyHint=False,
-                    destructiveHint=False,
-                    idempotentHint=False,
-                    openWorldHint=False,
-                ),
-            ),
-            Tool(
-                name=GitTools.CHECKOUT,
-                description="Switches branches",
-                inputSchema=GitCheckout.model_json_schema(),
-                annotations=ToolAnnotations(
-                    readOnlyHint=False,
-                    destructiveHint=False,
-                    idempotentHint=False,
-                    openWorldHint=False,
-                ),
-            ),
-            Tool(
-                name=GitTools.SHOW,
-                description="Shows the contents of a commit, or of a file or directory given as <revision>:<path>",
-                inputSchema=GitShow.model_json_schema(),
-                annotations=ToolAnnotations(
-                    readOnlyHint=True,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
-                ),
-            ),
-            Tool(
-                name=GitTools.BRANCH,
-                description="List Git branches",
-                inputSchema=GitBranch.model_json_schema(),
-                annotations=ToolAnnotations(
-                    readOnlyHint=True,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
-                ),
-            ),
-        ]
-
-    @server.call_tool()
-    async def call_tool(name: str, arguments: dict) -> list[TextContent]:
-        # Reject an unknown tool before reading its arguments, so a call
-        # without repo_path still reports "Unknown tool" (#4994).
-        if name not in {tool.value for tool in GitTools}:
-            raise ValueError(f"Unknown tool: {name}")
-
-        repo_path = Path(arguments["repo_path"])
-
-        # Validate repo_path is within allowed repository
-        validate_repo_path(repo_path, repository)
-
-        # For all commands, we need an existing repo
-        repo = git.Repo(repo_path)
-
-        match name:
-            case GitTools.STATUS:
-                status = git_status(repo)
-                return [TextContent(type="text", text=f"Repository status:\n{status}")]
-
-            case GitTools.DIFF_UNSTAGED:
-                diff = git_diff_unstaged(
-                    repo, arguments.get("context_lines", DEFAULT_CONTEXT_LINES)
-                )
-                return [TextContent(type="text", text=f"Unstaged changes:\n{diff}")]
-
-            case GitTools.DIFF_STAGED:
-                diff = git_diff_staged(
-                    repo, arguments.get("context_lines", DEFAULT_CONTEXT_LINES)
-                )
-                return [TextContent(type="text", text=f"Staged changes:\n{diff}")]
-
-            case GitTools.DIFF:
-                diff = git_diff(
-                    repo,
-                    arguments["target"],
-                    arguments.get("context_lines", DEFAULT_CONTEXT_LINES),
-                )
-                return [
-                    TextContent(
-                        type="text", text=f"Diff with {arguments['target']}:\n{diff}"
-                    )
-                ]
-
-            case GitTools.COMMIT:
-                result = git_commit(repo, arguments["message"])
-                return [TextContent(type="text", text=result)]
-
-            case GitTools.ADD:
-                result = git_add(repo, arguments["files"])
-                return [TextContent(type="text", text=result)]
-
-            case GitTools.RESET:
-                result = git_reset(repo)
-                return [TextContent(type="text", text=result)]
-
-            # Update the LOG case:
-            case GitTools.LOG:
-                log = git_log(
-                    repo,
-                    arguments.get("max_count", 10),
-                    arguments.get("start_timestamp"),
-                    arguments.get("end_timestamp"),
-                )
-                return [
-                    TextContent(type="text", text="Commit history:\n" + "\n".join(log))
-                ]
-
-            case GitTools.CREATE_BRANCH:
-                result = git_create_branch(
-                    repo, arguments["branch_name"], arguments.get("base_branch")
-                )
-                return [TextContent(type="text", text=result)]
-
-            case GitTools.CHECKOUT:
-                result = git_checkout(repo, arguments["branch_name"])
-                return [TextContent(type="text", text=result)]
-
-            case GitTools.SHOW:
-                result = git_show(repo, arguments["revision"])
-                return [TextContent(type="text", text=result)]
-
-            case GitTools.BRANCH:
-                result = git_branch(
-                    repo,
-                    arguments.get("branch_type", "local"),
-                    arguments.get("contains", None),
-                    arguments.get("not_contains", None),
-                )
-                return [TextContent(type="text", text=result)]
-
-            # Unreachable: unknown names are rejected before the repo is opened.
-            case _:  # pragma: no cover
-                raise ValueError(f"Unknown tool: {name}")
-
-    options = server.create_initialization_options()
-    async with stdio_server() as (read_stream, write_stream):
-        await server.run(read_stream, write_stream, options)
+    # Both eras (#4853): the SDK's dual-era loop lets the client's first
+    # request decide. `initialize` gets the 2025-11-25 handshake;
+    # `server/discover` or a request carrying a 2026-07-28 envelope gets the
+    # modern, sessionless era, with its required result fields (resultType,
+    # ttlMs, cacheScope) filled in by the SDK.
+    await create_server(repository).run_stdio_async()

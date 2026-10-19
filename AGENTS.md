@@ -52,7 +52,7 @@ servers/
 │   └── time/                 Py  mcp-server-time                                  PyPI  Time and timezone conversion
 ├── .claude/skills/            On-demand procedures (see the Skills index above)
 ├── .changeset/               Pending changesets for the TypeScript servers, and the changesets config
-├── scripts/                  The pre-push gate (gate-lease, smoke-servers, validate-py, coverage-py), its guards (verify-*),
+├── scripts/                  The pre-push gate (gate-lease, smoke-servers, validate-py, coverage-py, interface-diff), its guards (verify-*),
 │                             the skills tooling, release tooling (npm-publish-guard, prepare-python-release,
 │                             pack-and-verify, release-manifest, release-notes), and the issue-filing sweeps
 │                             (dependency-refresh, dependabot-alerts, sdk-watch)
@@ -61,8 +61,9 @@ servers/
 │                             overview of how the rules, skills, gates and sweeps fit together
 ├── .github/workflows/        typescript.yml, python.yml (per-package CI), release.yml (publishes on a GitHub Release),
 │                             version-packages.yml (the changesets PR), prepare-python-release.yml (the CalVer PR),
-│                             claude.yml (@claude mentions), and the scheduled sweeps that file issues:
-│                             dependency-refresh.yml, dependabot-alerts.yml, sdk-watch.yml
+│                             claude.yml (@claude mentions), everything-mcp-diff.yml (everything's interface diff on PRs),
+│                             main-source.yml (a PR into main must bring nothing that is not on v2/main),
+│                             and the scheduled sweeps that file issues: dependency-refresh.yml, dependabot-alerts.yml, sdk-watch.yml
 ├── .github/ISSUE_TEMPLATE/   Bug and feature issue forms; config.yml routes security and new servers away
 ├── .github/pull_request_template.md   The "issues, not PRs" banner that turns outside PRs away
 ├── RELEASING.md              How packages are versioned and published, and how to recover a failed publish
@@ -95,8 +96,9 @@ opening paragraph instead, as this one does. A format with no comment syntax
 
 ## Development setup
 
-Node **22** for the TypeScript servers. Python **>= 3.10** for the Python
-servers, at the version each server's `.python-version` pins. Python
+Node **24** for the TypeScript servers: the development version and the oldest
+supported (`engines` is `>=24`), and CI validates each TypeScript server on 24
+and 26 in parallel legs. Python **>= 3.10** for the Python servers, at the version each server's `.python-version` pins. Python
 dependencies are managed with **`uv`, never `pip`**.
 
 ```sh
@@ -129,14 +131,15 @@ workspace's format check, lint, typecheck, build and tests), `coverage` (each
 TypeScript workspace's per-file coverage gate), `validate:py`
 (each Python server's locked sync, `ruff check`, `ruff format --check`,
 pyright, pytest and build), `coverage:py` (each Python server's per-file
-coverage gate), `verify:skills:cli`, and `smoke` (every server
-booted over each transport it implements). The stage-by-stage reference, and
-what CI runs where, is [`docs/quality-gate.md`](./docs/quality-gate.md);
+coverage gate), `verify:skills:cli`, `smoke` (every server booted over each
+transport it implements), and `interface-diff` (the `everything` server's MCP
+interface diffed against the base it branched from). The stage-by-stage
+reference, and what CI runs where, is [`docs/quality-gate.md`](./docs/quality-gate.md);
 diagnosing a red stage is the `pre-push-gate` skill.
 
 - **`npm run validate` and the per-package commands above are the inner loop,
-  not a substitute.** They skip the other language, the pinned skills validator
-  and the boot smoke.
+  not a substitute.** They skip the other language, the pinned skills validator,
+  the boot smoke and the interface diff.
 - **Format before committing**: `npm run format` at the root (TypeScript), and
   `uv run --frozen ruff format .` in a Python server you changed. The gate only
   checks formatting; it never rewrites files.
@@ -152,6 +155,10 @@ diagnosing a red stage is the `pre-push-gate` skill.
   publish artifact into an empty directory and boots it, which needs the
   network. `release.yml` runs it before anything publishes, and the `release`
   skill runs it by hand for the ledger.
+- **`verify-main-source` is not a gate stage either.** It applies only to a
+  pull request into `main` (see the merge PR exception under
+  [Contributing](#contributing)), and every local push targets a v2 branch.
+  `main-source.yml` runs it.
 - **`local:*` scripts never run in a workflow, and every CI job declares
   `timeout-minutes`.** The script tests enforce both
   (`scripts/lib/workflow-gate.mjs`). A check added to CI is added to
@@ -268,6 +275,15 @@ Cut feature branches from **`origin/v2/main`**. **Never open a PR against
 `main`**, with one exception: a milestone's merge PR, which the `release`
 skill opens. There is no `v1` line in this repository.
 
+**`v2/main` changes only through a merged PR.** Its ruleset, `v2/main: PRs
+only`, refuses deletion, force-pushes and direct pushes, and has no bypass
+actors. It requires no approvals, so a maintainer can merge their own PR. No
+automation pushes to `v2/main`: the Version Packages and Prepare Python
+Release workflows push branches of their own and open PRs. A workflow that
+needs to push to `v2/main` directly is a change to this rule and its ruleset,
+decided first. The `main` guard (**Source is v2/main**) trusts `v2/main`'s
+history, so this ruleset is what makes that trust hold.
+
 - **Repo**: https://github.com/modelcontextprotocol/servers
 - **Project board**: [Servers V2 (#43)](https://github.com/orgs/modelcontextprotocol/projects/43)
 
@@ -352,8 +368,14 @@ holds for a maintainer's own one-line fix as much as for a feature.
   default branch a closing keyword would close that issue at merge, before
   anything is published. The release issue is closed by hand once the Release
   is published. In place of the checklist it links the **release ledger**. It
-  is merged with a merge commit, never squashed. The flow is the `release`
-  skill.
+  is merged with a merge commit, never squashed. Both are enforced on `main`:
+  its ruleset allows only merge commits, and requires the **Source is
+  v2/main** check (`main-source.yml`), which fails a PR whose head carries
+  any commit not already on `v2/main`. That ruleset has no bypass actors; a
+  release that cannot be a pure merge (a release branch, a hotfix) goes
+  through only by a repo admin disabling it for that one merge and
+  re-enabling it at once, which is never automated. The flow is the
+  `release` skill.
 - **Exception: the two version PRs that automation opens.** Each changes
   version metadata only, so neither answers the PR checklist below, and each
   is tied to its milestone's **release issue** rather than to an issue of its
@@ -479,7 +501,11 @@ here.
 - **When work begins**, assign the issue to yourself, set Status to
   **In Progress**, and create a branch named
   `v2/<type>/<ISSUE_NUMBER>-<slug>` (for example
-  `v2/fix/4810-filesystem-symlink-escape`) from `origin/v2/main`.
+  `v2/fix/4810-filesystem-symlink-escape`) from `origin/v2/main`, **in a new
+  git worktree**: never by switching branches in the primary checkout, which
+  concurrent agent sessions share. Remove the worktree once the PR merges or
+  is closed. The recipe is the `pr-flow` skill (step 2, and step 10 for the
+  removal).
 - **When work is complete**, run the checks under
   [Before pushing](#before-pushing), open a PR against `v2/main` labeled `v2`
   with `Closes #<ISSUE_NUMBER>` as the body's first line, and set Status to
@@ -575,6 +601,14 @@ would not, burns turns, and buries the result under no-op turns.
 - ⚠️ **If a notifier is already armed, wait for it.** Re-checking by hand
   alongside it is the polling this rule forbids.
 
+## Pacing GitHub writes
+
+**Pace bulk GitHub writes: 1 s between requests, never in parallel, under 80 a
+minute and 500 an hour.** The secondary limit refuses while `gh api rate_limit`
+still shows quota, and most `gh` writes are GraphQL. After a refusal, wait out
+`retry-after`, or a minute without one; a refused create can still land, so
+look before retrying.
+
 ## MCP protocol
 
 - **Look protocol questions up; do not answer them from memory.** The repo
@@ -582,6 +616,14 @@ would not, burns turns, and buries the result under no-op turns.
   `https://modelcontextprotocol.io/mcp`). For schema details use the versioned
   schemas (JSON and TypeScript) in
   [modelcontextprotocol/schema](https://github.com/modelcontextprotocol/modelcontextprotocol/tree/main/schema).
+- **Protocol eras**: every TypeScript server serves both 2026-07-28 clients
+  and 2025-era clients from one factory: stdio through the SDK's
+  `serveStdio`, Streamable HTTP through `createMcpHandler`. Keep no state in
+  a map keyed by session id, since 2026-07-28 has no sessions: per-connection
+  state lives on the server instance, and state that must outlive a
+  2026-07-28 request lives under a handle the server mints. Ask a client for
+  input (elicitation, sampling, roots) by returning `inputRequired(...)`,
+  which the SDK's legacy shim also serves to 2025-era clients.
 - **Transports**: stdio is the default and every server supports it.
   `everything` also serves Streamable HTTP and HTTP+SSE. **HTTP+SSE is
   deprecated**: keep what exists working, and never make it the default or the

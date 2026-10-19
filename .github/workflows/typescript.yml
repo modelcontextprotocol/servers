@@ -5,12 +5,27 @@ on:
   # PR branch ran each workflow twice (once per event). PR checks still report
   # from the push run of the head commit.
   push:
+  # A push made with the workflow token starts no workflow, so the version PRs
+  # that automation opens (Version Packages, Prepare Python Release) get no
+  # push run. Their workflows dispatch this one on the PR's branch instead
+  # (#5110): `workflow_dispatch` is the one event that token can start, and its
+  # run's checks attach to the branch's head commit. The rollup a PR reads
+  # leaves dispatched checks out, so the `dispatch-status` jobs below report
+  # the run as a commit status instead.
+  workflow_dispatch:
 
 # Superseded runs on the same ref are cancelled (e.g. rapid amend-pushes),
 # except on main, where every merge keeps its own CI run
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+# Every job here only reads the repository (checkout, caches, artifacts), so
+# the token is scoped in the file rather than inherited from the repository's
+# default workflow permission, which could be widened in the UI with no commit
+# (#5091).
+permissions:
+  contents: read
 
 jobs:
   # Root-level guards: the checks over repo-wide tooling that no per-package
@@ -31,7 +46,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
@@ -63,6 +78,12 @@ jobs:
   # `validate` (format:check -> lint -> typecheck -> build -> test). What no
   # leg covers — the root tooling and the cross-workspace guards — is the
   # root-guards job above; together they are the root `npm run validate`.
+  #
+  # Each package is also validated on every Node line it supports (#5068):
+  # 24, the oldest supported (#5168), through 26. The `node` axis multiplies
+  # legs, not steps, so the versions run side by side and the job takes no
+  # longer than its slowest leg. The other jobs here stay on one Node, 24: the
+  # oldest supported, so an API only newer Node has cannot slip in unnoticed.
   validate:
     timeout-minutes: 15
     needs: [detect-packages]
@@ -70,14 +91,15 @@ jobs:
       fail-fast: false
       matrix:
         package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
-    name: Validate ${{ matrix.package }}
+        node: [24, 26]
+    name: Validate ${{ matrix.package }} (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: ${{ matrix.node }}
           cache: npm
 
       # This package plus the root: run from a workspace directory, `npm ci`
@@ -112,7 +134,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       # The same install as the `validate` leg: this package plus the root. Its
@@ -144,7 +166,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       # The same install as the `validate` leg; its `prepare` builds `dist/`.
@@ -171,7 +193,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Install uv
@@ -193,3 +215,80 @@ jobs:
 
       - name: Boot every server
         run: npm run smoke
+
+  # A dispatched run's checks attach to the branch's head commit but are left
+  # out of its status rollup, which is what a pull request reads (verified on
+  # #5110: 29 successful dispatched check runs, a rollup of null). So on a
+  # dispatch, which is how a version PR opened by automation gets CI, these two
+  # jobs mirror the run onto the commit as a status, which the rollup does
+  # include: pending at the start, then the result of every job above. A push
+  # run reports through its own checks and skips both.
+  dispatch-status-pending:
+    name: Report the dispatched run as pending
+    if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+    steps:
+      - name: Set the commit status to pending
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -f state=pending -f context="TypeScript (dispatched)" \
+            -f description="Dispatched run in progress" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+  # `always()`, so a cancelled run cannot leave the status pending. A run that
+  # a newer dispatch on the same commit superseded posts nothing, whatever its
+  # jobs' results, and the newer run reports instead; any other cancellation
+  # is reported as an error. A job skipped by its own `if:` counts as passed.
+  dispatch-status:
+    name: Report the dispatched run's result
+    if: github.event_name == 'workflow_dispatch' && always()
+    needs:
+      [
+        dispatch-status-pending,
+        root-guards,
+        detect-packages,
+        validate,
+        coverage,
+        test-windows,
+        smoke,
+      ]
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+      # To look for a newer dispatched run of this workflow on the commit.
+      actions: read
+    steps:
+      - name: Set the commit status to the run's result
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          # A run superseded by a newer dispatch on the same commit posts
+          # nothing, whatever its jobs' results: the newer run owns the status
+          # (#5178). A failed lookup counts as no newer run, so this run still
+          # reports: a stale status is better than one left pending.
+          NEWER=$(gh run list --workflow typescript.yml --event workflow_dispatch \
+            --commit "$GITHUB_SHA" --json databaseId \
+            --jq "[.[] | select(.databaseId > $GITHUB_RUN_ID)] | length") || NEWER=0
+          if [ "${NEWER:-0}" -gt 0 ]; then
+            echo "Superseded by a newer dispatched run, which reports instead"
+            exit 0
+          fi
+          if jq -e 'all(.[]; .result == "success" or .result == "skipped")' <<<"$NEEDS" >/dev/null; then
+            STATE=success DESCRIPTION="Every job passed"
+          elif jq -e 'any(.[]; .result == "failure")' <<<"$NEEDS" >/dev/null; then
+            STATE=failure DESCRIPTION="A job failed; open the run for details"
+          else
+            STATE=error DESCRIPTION="The run was cancelled; dispatch it again"
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -f state="$STATE" -f context="TypeScript (dispatched)" \
+            -f description="$DESCRIPTION" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"

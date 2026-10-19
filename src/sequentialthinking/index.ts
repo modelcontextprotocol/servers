@@ -2,15 +2,21 @@
 
 // Entry point of the sequential-thinking server. `createServer()` builds a
 // fully registered server without connecting it, so tests can link it to an
-// SDK Client over an in-memory transport (#4854); `main()` connects a given
-// transport; and stdio is only attached when this file is run as the binary,
-// so importing it from a test never touches the runner's stdin/stdout.
+// SDK Client over an in-memory transport (#4854); `main()` serves it through
+// the SDK's `serveStdio` entry, which answers both 2026-07-28 clients
+// (`server/discover`, no handshake) and 2025-era clients (`initialize`) from
+// the same factory (#4852); and stdio is only attached when this file is run
+// as the binary, so importing it from a test never touches the runner's
+// stdin/stdout.
 
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
+import {
+  serveStdio,
+  type StdioServerHandle,
+} from "@modelcontextprotocol/server/stdio";
+import { McpServer } from "@modelcontextprotocol/server";
+import type { Transport } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { SequentialThinkingServer } from "./lib.js";
 import { SERVER_VERSION } from "./version.js";
@@ -33,6 +39,8 @@ const coercedBoolean = z
 /**
  * Build the sequential-thinking server with its one tool registered. Each call
  * returns an independent server with its own thought history and branches.
+ * `serveStdio` calls it once per connection, so the history lives exactly as
+ * long as the client's connection, on either protocol era.
  */
 export function createServer(): McpServer {
   const server = new McpServer({
@@ -100,7 +108,7 @@ You should:
 9. Repeat the process until satisfied with the solution
 10. Provide a single, ideally correct answer as the final output
 11. Only set nextThoughtNeeded to false when truly done and a satisfactory answer is reached`,
-      inputSchema: {
+      inputSchema: z.object({
         thought: z.string().describe("Your current thinking step"),
         nextThoughtNeeded: coercedBoolean.describe(
           "Whether another thought step is needed",
@@ -136,7 +144,7 @@ You should:
         needsMoreThoughts: coercedBoolean
           .optional()
           .describe("If more thoughts are needed"),
-      },
+      }),
       annotations: {
         // Every call appends to the server's in-memory thought history, and a
         // call with both branchFromThought and branchId also appends to that
@@ -146,13 +154,13 @@ You should:
         idempotentHint: false,
         openWorldHint: false,
       },
-      outputSchema: {
+      outputSchema: z.object({
         thoughtNumber: z.number(),
         totalThoughts: z.number(),
         nextThoughtNeeded: z.boolean(),
         branches: z.array(z.string()),
         thoughtHistoryLength: z.number(),
-      },
+      }),
     },
     async (args) => {
       const result = thinkingServer.processThought(args);
@@ -174,11 +182,25 @@ You should:
   return server;
 }
 
-/** Connect a new server to `transport` and announce it on stderr. */
-export async function main(transport: Transport): Promise<void> {
-  const server = createServer();
-  await server.connect(transport);
+/**
+ * Serve the server on `transport` (the process's stdio by default) and
+ * announce it on stderr. The first message the client sends picks the
+ * connection's protocol era. A transport error, including one that stops the
+ * transport from starting, is reported on stderr.
+ */
+export function main(transport?: Transport): StdioServerHandle {
+  const handle = serveStdio(() => createServer(), {
+    transport,
+    // serveStdio reports a transport that fails, including one that cannot
+    // start, here rather than by rejecting, so record the failure in the
+    // exit status for whatever supervises the process.
+    onerror: (error) => {
+      console.error("Transport error:", error);
+      process.exitCode = 1;
+    },
+  });
   console.error("Sequential Thinking MCP Server running on stdio");
+  return handle;
 }
 
 /**
@@ -202,9 +224,6 @@ export function isEntryPoint(
 
 /* v8 ignore start -- runs only when this file is the process entry point (the spawned bin), which stdio-smoke.test.ts exercises; v8 cannot see into that child */
 if (isEntryPoint(import.meta.url, process.argv[1])) {
-  main(new StdioServerTransport()).catch((error) => {
-    console.error("Fatal error running server:", error);
-    process.exit(1);
-  });
+  main();
 }
 /* v8 ignore stop */

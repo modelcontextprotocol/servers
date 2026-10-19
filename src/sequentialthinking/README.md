@@ -11,6 +11,7 @@ Published on npm as [`@modelcontextprotocol/server-sequential-thinking`](https:/
 - Branch into alternative paths of reasoning
 - Adjust the total number of thoughts dynamically
 - Generate and verify solution hypotheses
+- Serves both protocol eras on stdio: 2026-07-28 clients (`server/discover`, no handshake) and 2025-era clients (`initialize`). The thought history lasts as long as the client's connection, on either era
 
 ## Tool
 
@@ -68,6 +69,10 @@ After installing the server in your MCP host:
 2. Confirm the `sequential_thinking` tool appears in the host's MCP tool list or inspector.
 3. Ask the host to solve a non-trivial problem in a step-by-step way.
 4. Verify that the host invokes the tool multiple times instead of returning a one-shot answer.
+
+## Requirements
+
+Node.js 24 or later, when the server runs through `npx` or from source.
 
 ## Configuration
 

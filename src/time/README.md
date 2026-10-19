@@ -6,7 +6,7 @@ A Model Context Protocol server that provides time and timezone conversion capab
 
 Source: https://github.com/modelcontextprotocol/servers/tree/main/src/time
 
-Requires MCP Python SDK 1.x (`mcp>=1.29.0,<2`). SDK 2.0 renamed APIs this server uses. The port to v2 is in progress.
+Requires MCP Python SDK 2.x (`mcp>=2.3,<3`).
 
 ### Available Tools
 
@@ -21,6 +21,18 @@ Requires MCP Python SDK 1.x (`mcp>=1.29.0,<2`). SDK 2.0 renamed APIs this server
     - `target_timezone` (string): Target IANA timezone name
 
 A timezone name, here and in `--local-timezone`, must be an exact IANA key, case included: `Europe/Warsaw` is accepted and `europe/warsaw` is rejected on every platform, including macOS, whose case-insensitive filesystem would otherwise resolve it.
+
+### Protocol versions
+
+The server speaks both eras of the Model Context Protocol over stdio, with nothing to configure: a **2026-07-28** client (discovered with `server/discover`, no session) and a **2025-11-25** client (the `initialize` handshake). The client's first request decides which. Tools behave the same in both. Methods the 2026-07-28 specification removes, such as `ping`, are answered only on a 2025-11-25 connection.
+
+### Results and errors
+
+The server is built on the SDK's high-level `MCPServer`. Each tool declares an `outputSchema` and returns its result twice: as `structuredContent`, and as the same object in indented JSON in a text block, for a client that does not read structured output.
+
+- **A tool failure is an `isError` result** whose text the model can read and act on, prefixed `Error executing tool <name>: `. That covers an unknown or non-exact timezone (`Invalid timezone: ...`), an empty timezone (`Missing required argument: <argument>`), a time not in `HH:MM` 24-hour form, a wall-clock time skipped by a clock change, and an argument missing or of the wrong type (the SDK's validation message).
+- **An unknown tool name is a JSON-RPC `-32602` error** (`Unknown tool: <name>`), not an `isError` result, as both protocol versions specify.
+- The server registers no prompts or resources. Their list methods answer with empty lists.
 
 ## Installation
 
@@ -217,11 +229,12 @@ Example:
   }
 }
 ```
-Response:
+Response (`structuredContent`, and the same JSON as text):
 ```json
 {
   "timezone": "Europe/Warsaw",
   "datetime": "2024-01-01T13:00:00+01:00",
+  "day_of_week": "Monday",
   "is_dst": false
 }
 ```
@@ -237,20 +250,22 @@ Response:
   }
 }
 ```
-Response:
+Response (`structuredContent`, and the same JSON as text):
 ```json
 {
   "source": {
     "timezone": "America/New_York",
-    "datetime": "2024-01-01T12:30:00-05:00",
+    "datetime": "2024-01-01T16:30:00-05:00",
+    "day_of_week": "Monday",
     "is_dst": false
   },
   "target": {
     "timezone": "Asia/Tokyo",
-    "datetime": "2024-01-01T12:30:00+09:00",
+    "datetime": "2024-01-02T06:30:00+09:00",
+    "day_of_week": "Tuesday",
     "is_dst": false
   },
-  "time_difference": "+13.0h",
+  "time_difference": "+14.0h"
 }
 ```
 
@@ -279,7 +294,8 @@ npx @modelcontextprotocol/inspector uv run mcp-server-time
 ## Development
 
 Run the tests from `src/time`. They live in `tests/`: `test_protocol.py` drives
-the server through an MCP `ClientSession` in-process, `test_entrypoints.py`
+the server through an MCP `ClientSession` in-process, `test_eras.py` runs a
+`Client` against it as a 2026-07-28 and as a 2025-11-25 client, `test_entrypoints.py`
 covers `main()`, `python -m mcp_server_time` and the console script, and
 `test_server.py` unit-tests the time helpers.
 

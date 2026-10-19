@@ -1,5 +1,15 @@
 # @modelcontextprotocol/server-memory
 
+## 2.0.0
+
+### Major Changes
+
+- [#5118](https://github.com/modelcontextprotocol/servers/pull/5118) [`5b400a6`](https://github.com/modelcontextprotocol/servers/commit/5b400a6ec05bd883522665ebeae110bf1a2744ff) [@cliffhall](https://github.com/cliffhall) - Move to the TypeScript SDK v2 packages (`@modelcontextprotocol/server`) from `@modelcontextprotocol/sdk` 1.x ([#4856](https://github.com/modelcontextprotocol/servers/issues/4856)). Breaking for clients: the server now requires Node.js 24 or later; over stdio, a single incoming JSON-RPC message larger than 10 MiB now closes the connection (the SDK v2 default read-buffer cap; SDK 1.x buffered without a limit); an unknown tool name is rejected with JSON-RPC error `-32602` instead of returning an `isError` result; error messages no longer carry the `MCP error <code>: ` prefix, and input-validation messages name the field first (`field: message`); tool schemas in `tools/list` declare JSON Schema 2020-12 instead of draft-07; and tools no longer advertise `execution.taskSupport`.
+
+### Minor Changes
+
+- [#5131](https://github.com/modelcontextprotocol/servers/pull/5131) [`419200b`](https://github.com/modelcontextprotocol/servers/commit/419200b8a4d1e66c294575930ac7be29d4b37330) [@cliffhall](https://github.com/cliffhall) - Serve the 2026-07-28 protocol revision alongside the 2025 era on stdio, through the SDK's `serveStdio` entry ([#4852](https://github.com/modelcontextprotocol/servers/issues/4852)). A 2026-07-28 client gets `notifications/resources/updated` for `memory://knowledge-graph` on a `subscriptions/listen` stream whose `resourceSubscriptions` name it; 2025-era clients still subscribe with `resources/subscribe`.
+
 ## 1.0.0
 
 The first semantic version, resuming semver after the date-stamped releases (last `2026.8.31`). It describes everything since `2026.8.31`, and is the last release of the legacy-era server, on the 1.x MCP SDK.

@@ -2,6 +2,7 @@ import pytest
 from pathlib import Path
 import git
 from git.exc import BadName
+from mcp.server import Server
 from mcp_server_git.server import (
     git_checkout,
     git_branch,
@@ -852,20 +853,22 @@ def test_git_log_date_filtering(test_repository):
     assert len(valid_result) == 1
 
 
-async def test_serve_run_does_not_raise_exceptions(tmp_path: Path):
-    """Verify that serve() runs server.run without raise_exceptions=True."""
+async def test_serve_does_not_raise_exceptions(tmp_path: Path):
+    """Verify that serve() runs the server loop without raise_exceptions=True.
+
+    serve() drives Server.run, the SDK's dual-era loop (#4853), so that is
+    what is patched.
+    """
     repo_path = tmp_path / "serve_test_repo"
     git.Repo.init(repo_path).close()
 
-    with mock.patch("mcp_server_git.server.stdio_server") as mock_stdio:
+    with mock.patch("mcp.server.mcpserver.server.stdio_server") as mock_stdio:
         mock_read = mock.AsyncMock()
         mock_write = mock.AsyncMock()
         mock_stdio.return_value.__aenter__.return_value = (mock_read, mock_write)
         mock_stdio.return_value.__aexit__.return_value = None
 
-        with mock.patch(
-            "mcp_server_git.server.Server.run", new_callable=mock.AsyncMock
-        ) as mock_run:
+        with mock.patch.object(Server, "run", new_callable=mock.AsyncMock) as mock_run:
             await serve(repo_path)
             mock_run.assert_awaited_once()
             _, kwargs = mock_run.call_args

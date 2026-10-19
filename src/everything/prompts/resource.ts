@@ -1,4 +1,5 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import { z } from "zod";
 import {
   resourceTypeCompleter,
   resourceIdForPromptCompleter,
@@ -22,10 +23,10 @@ import {
  */
 export const registerEmbeddedResourcePrompt = (server: McpServer) => {
   // Prompt arguments
-  const promptArgsSchema = {
+  const promptArgsSchema = z.object({
     resourceType: resourceTypeCompleter,
     resourceId: resourceIdForPromptCompleter,
-  };
+  });
 
   // Register the prompt
   server.registerPrompt(

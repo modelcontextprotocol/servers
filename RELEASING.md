@@ -39,7 +39,7 @@ node scripts/prepare-python-release.mjs    # prints one "name: old -> new" line 
 ### PRs opened by these workflows
 
 > [!NOTE]
-> Both workflows open their PR with the workflow token, and GitHub does not start CI for a PR opened that way. Close and reopen the PR to run CI before merging. The Version Packages PR's body is rewritten on every push to `v2/main`, so it is tied to the release issue by a comment (`Part of #N`) instead of a body line. The repository setting **Settings → Actions → General → Allow GitHub Actions to create and approve pull requests** must be on, or the workflows fail at the step that opens the PR.
+> Both workflows push their PR's branch with the workflow token, and a push made with that token starts no workflow, so each one then dispatches the TypeScript and Python workflows on that branch (`workflow_dispatch` is the one event the token can start). A PR does not list dispatched checks, so each dispatched run also reports itself on the PR's head commit as a status, `TypeScript (dispatched)` and `Python (dispatched)`; wait for both to pass before merging. Closing and reopening the PR does not start them: that fires `pull_request`, and those workflows run on `push`. To run them again by hand: `gh workflow run typescript.yml --ref <branch>` (and `python.yml`). The Version Packages PR's body is rewritten on every push to `v2/main`, so it is tied to the release issue by a comment (`Part of #N`) instead of a body line. The repository setting **Settings → Actions → General → Allow GitHub Actions to create and approve pull requests** must be on, or the workflows fail at the step that opens the PR.
 
 ## How publishing works
 

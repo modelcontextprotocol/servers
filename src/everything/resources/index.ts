@@ -1,17 +1,25 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import type { ServerContext } from "../server/context.js";
 import { registerResourceTemplates } from "./templates.js";
 import { registerFileResources } from "./files.js";
+import { registerMintedResources } from "./minted.js";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { readFileSync } from "fs";
 
 /**
- * Register the resources with the MCP server.
+ * Register the resources with the MCP server. A 2026-07-28 server also serves
+ * the resources tools mint for later reading (see minted.ts).
  * @param server
+ * @param context
  */
-export const registerResources = (server: McpServer) => {
+export const registerResources = (
+  server: McpServer,
+  context: ServerContext,
+) => {
   registerResourceTemplates(server);
   registerFileResources(server);
+  if (context.era === "modern") registerMintedResources(server);
 };
 
 /**

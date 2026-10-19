@@ -273,6 +273,31 @@ of the server's stderr. Re-run a subset with
 - **A new server fails `test:scripts`** with "every server directory in the
   repo has a smoke entry": add it to `SERVERS` in `scripts/smoke-servers.mjs`.
 
+### `interface-diff`
+
+The last stage diffs the `everything` server's MCP interface (capabilities,
+tools, prompts, resources, resource templates) in this checkout's build
+against the same server built from the merge-base with `origin/v2/main`, and
+prints the report. **A changed interface does not fail it**: the report is
+what the PR's sticky comment will show, so read it, and if a change is not
+one you meant, that is the finding. It fails only when the diff cannot run,
+with `❌ The interface diff could not run` and the reason:
+
+- **"origin/v2/main is not available"**: `git fetch origin v2/main`.
+- **"src/everything/dist/index.js does not exist"**: you ran it on its own
+  before building: `npm run build -w src/everything`.
+- **An `npm ci` or `npm run build` failure**: the _base_ did not install or
+  build. Offline with a cold npm cache is the usual cause; otherwise name a
+  base that builds with `npm run interface-diff -- --base <ref>`.
+- **"Base server probe failed" / "Target probe failed"**: a server did not
+  answer the probe. A target failure is this checkout's server and is the
+  real defect; the smoke stage before it usually fails first.
+
+Re-run it on its own with `npm run interface-diff` (about ten seconds). What
+it compares against in CI, and why it is a script rather than an action, is
+in [`docs/quality-gate.md`](../../../docs/quality-gate.md) and the header of
+`scripts/interface-diff.mjs`.
+
 ## Waiting on the lease
 
 A gate that starts with

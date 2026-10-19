@@ -1,5 +1,6 @@
-// The in-process half of the entry point: `main()` connects a server to the
-// transport it is given, and `isEntryPoint()` decides whether index.ts was run
+// The in-process half of the entry point: `main()` serves the server on the
+// transport it is given (through `serveStdio`, which eras.test.ts covers per
+// protocol era), and `isEntryPoint()` decides whether index.ts was run
 // as the binary (and so attaches stdio) or merely imported, as these tests do.
 // The bootstrap that calls them only runs in a spawned process, which
 // stdio-smoke.test.ts covers.
@@ -17,8 +18,7 @@ import { mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { isEntryPoint, main } from "../index.js";
 
 const indexUrl = new URL("../index.ts", import.meta.url).href;
@@ -39,11 +39,9 @@ describe("main", () => {
     const [clientTransport, serverTransport] =
       InMemoryTransport.createLinkedPair();
     const client = new Client({ name: "main-test", version: "0.0.0" });
+    const handle = main(serverTransport);
     try {
-      await Promise.all([
-        main(serverTransport),
-        client.connect(clientTransport),
-      ]);
+      await client.connect(clientTransport);
       expect(errorSpy).toHaveBeenCalledWith(
         "Sequential Thinking MCP Server running on stdio",
       );
@@ -51,14 +49,20 @@ describe("main", () => {
       expect(tools.map((t) => t.name)).toEqual(["sequentialthinking"]);
     } finally {
       await client.close();
+      await handle.close();
     }
   });
 
-  it("rejects when the transport cannot start", async () => {
+  it("reports a transport that cannot start on stderr and in the exit status", async () => {
     const [, serverTransport] = InMemoryTransport.createLinkedPair();
-    vi.spyOn(serverTransport, "start").mockRejectedValue(new Error("no pipe"));
-    await expect(main(serverTransport)).rejects.toThrow("no pipe");
-    expect(errorSpy).not.toHaveBeenCalled();
+    const failure = new Error("no pipe");
+    vi.spyOn(serverTransport, "start").mockRejectedValue(failure);
+    const handle = main(serverTransport);
+    await handle.close();
+    expect(errorSpy).toHaveBeenCalledWith("Transport error:", failure);
+    // The failure is in the exit status too; reset it so the run is not failed.
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined;
   });
 });
 

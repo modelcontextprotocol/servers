@@ -43,8 +43,16 @@ export function quoteWinArg(arg) {
     );
   }
   if (!NEEDS_QUOTING.test(arg)) return arg;
-  // A literal `"` inside a quoted string is doubled, per the CRT parser.
-  return `"${arg.replace(/"/g, '""')}"`;
+  // The CRT parser reads backslashes literally except before a `"`, where 2n
+  // backslashes yield n and leave the quote special. So any run of backslashes
+  // that ends up in front of a quote is doubled: one before an embedded `"`,
+  // and a trailing run, which the closing quote follows (#5111). Undoubled,
+  // `C:\dir\` becomes `"C:\dir\"`, whose `\"` is an escaped quote and swallows
+  // the rest of the command line. The embedded `"` itself is then doubled
+  // rather than written `\"`: `""` keeps `cmd.exe`'s own quote tracking in
+  // step, while `\"` would flip it and expose any metacharacter after it.
+  const escaped = arg.replace(/(\\*)"/g, '$1$1""').replace(/(\\+)$/, "$1$1");
+  return `"${escaped}"`;
 }
 
 /**

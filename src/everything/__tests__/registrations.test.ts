@@ -3,10 +3,31 @@
 // imports they replace ran inside the 5 s test timeout, and a cold start
 // (transforming the whole tool tree) could take longer than that.
 import { describe, it, expect, vi } from "vitest";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { registerConditionalTools, registerTools } from "../tools/index.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import {
+  registerConditionalTools,
+  registerLegacyTools,
+  registerModernTools,
+  registerTools,
+} from "../tools/index.js";
 import { registerPrompts } from "../prompts/index.js";
 import { readInstructions, registerResources } from "../resources/index.js";
+import type { ServerContext } from "../server/context.js";
+
+/** A server context for the given era, with a publisher that does nothing. */
+function contextFor(era: "legacy" | "modern"): ServerContext {
+  return {
+    era,
+    subscribed: new Set(),
+    publish: {
+      toolsChanged: vi.fn(),
+      promptsChanged: vi.fn(),
+      resourcesChanged: vi.fn(),
+      resourceUpdated: vi.fn(),
+    },
+    onCleanup: vi.fn(),
+  };
+}
 
 // Create mock server
 function createMockServer() {
@@ -28,10 +49,10 @@ describe("Registration Index Files", () => {
     it("should register all standard tools", () => {
       const mockServer = createMockServer();
 
-      registerTools(mockServer);
+      registerTools(mockServer, contextFor("legacy"));
 
-      // Should register 12 standard tools (non-conditional)
-      expect(mockServer.registerTool).toHaveBeenCalledTimes(12);
+      // Should register 14 standard tools (on both eras, non-conditional)
+      expect(mockServer.registerTool).toHaveBeenCalledTimes(14);
 
       // Verify specific tools are registered
       const registeredTools = vi
@@ -47,12 +68,48 @@ describe("Registration Index Files", () => {
       expect(registeredTools).toContain("get-resource-links");
       expect(registeredTools).toContain("get-resource-reference");
       expect(registeredTools).toContain("gzip-file-as-resource");
-      expect(registeredTools).toContain("toggle-simulated-logging");
-      expect(registeredTools).toContain("toggle-subscriber-updates");
+      expect(registeredTools).toContain("get-header-params");
+      expect(registeredTools).toContain("trigger-list-changed");
+      expect(registeredTools).toContain("trigger-log-messages");
+      expect(registeredTools).toContain("trigger-resource-update");
+    });
+
+    it("should register the deprecated 2025-era-only tools", () => {
+      const mockServer = createMockServer();
+
+      registerLegacyTools(mockServer, contextFor("legacy"));
+
+      const registeredTools = vi
+        .mocked(mockServer.registerTool)
+        .mock.calls.map((call) => call[0]);
+      expect(registeredTools).toEqual([
+        "toggle-simulated-logging",
+        "toggle-subscriber-updates",
+      ]);
+    });
+
+    it("should register the capability-gated and task tools up front for 2026-07-28", () => {
+      const mockServer = createMockServer();
+
+      registerModernTools(mockServer, contextFor("modern"));
+
+      const registeredTools = vi
+        .mocked(mockServer.registerTool)
+        .mock.calls.map((call) => call[0]);
+      expect(registeredTools).toEqual([
+        "get-roots-list",
+        "trigger-elicitation-request",
+        "trigger-multi-step-elicitation",
+        "trigger-url-elicitation",
+        "trigger-sampling-request",
+        "simulate-research-query",
+        "trigger-sampling-request-async",
+        "trigger-elicitation-request-async",
+      ]);
     });
 
     it("should register conditional tools based on capabilities", () => {
-      // Server with all capabilities including experimental tasks API
+      // Server with all capabilities
       const mockServerWithCapabilities = {
         registerTool: vi.fn(),
         server: {
@@ -62,32 +119,25 @@ describe("Registration Index Files", () => {
             sampling: {},
           })),
         },
-        experimental: {
-          tasks: {
-            registerToolTask: vi.fn(),
-          },
-        },
       } as unknown as McpServer;
 
-      registerConditionalTools(mockServerWithCapabilities);
+      registerConditionalTools(
+        mockServerWithCapabilities,
+        contextFor("legacy"),
+      );
 
-      // Should register 4 conditional tools via registerTool when all capabilities
-      // are present. Task-based tools register via registerToolTask (counted separately),
-      // so they are not included in this registerTool count.
-      expect(mockServerWithCapabilities.registerTool).toHaveBeenCalledTimes(4);
+      // Should register 5 conditional tools via registerTool when all
+      // capabilities are present. The task tools are 2026-07-28 only (#4852).
+      expect(mockServerWithCapabilities.registerTool).toHaveBeenCalledTimes(5);
 
       const registeredTools = vi
         .mocked(mockServerWithCapabilities.registerTool)
         .mock.calls.map((call) => call[0]);
       expect(registeredTools).toContain("get-roots-list");
       expect(registeredTools).toContain("trigger-elicitation-request");
+      expect(registeredTools).toContain("trigger-multi-step-elicitation");
       expect(registeredTools).toContain("trigger-url-elicitation");
       expect(registeredTools).toContain("trigger-sampling-request");
-
-      // Task-based tools are registered via experimental.tasks.registerToolTask
-      expect(
-        mockServerWithCapabilities.experimental.tasks.registerToolTask,
-      ).toHaveBeenCalled();
     });
 
     it("should not register conditional tools before capabilities are known", () => {
@@ -98,14 +148,9 @@ describe("Registration Index Files", () => {
         server: {
           getClientCapabilities: vi.fn(() => undefined),
         },
-        experimental: {
-          tasks: {
-            registerToolTask: vi.fn(),
-          },
-        },
       } as unknown as McpServer; // partial mock: McpServer's private members rule out a structural literal
 
-      registerConditionalTools(mockServerBeforeInit);
+      registerConditionalTools(mockServerBeforeInit, contextFor("legacy"));
 
       expect(mockServerBeforeInit.registerTool).not.toHaveBeenCalled();
     });
@@ -116,38 +161,27 @@ describe("Registration Index Files", () => {
         server: {
           getClientCapabilities: vi.fn(() => ({})),
         },
-        experimental: {
-          tasks: {
-            registerToolTask: vi.fn(),
-          },
-        },
       } as unknown as McpServer;
 
-      registerConditionalTools(mockServerNoCapabilities);
+      registerConditionalTools(mockServerNoCapabilities, contextFor("legacy"));
 
       // Should not register any capability-gated tools when capabilities are missing
       expect(mockServerNoCapabilities.registerTool).not.toHaveBeenCalled();
     });
 
-    it("should register no form-mode elicitation tool for a URL-only client, even with task support", () => {
-      // Both elicitation tools send form-mode requests, which a client that
-      // declared only `elicitation.url` cannot answer (#4985).
+    it("should register no form-mode elicitation tool for a URL-only client", () => {
+      // The form elicitation tools send form-mode requests, which a client
+      // that declared only `elicitation.url` cannot answer (#4985).
       const mockServerUrlOnly = {
         registerTool: vi.fn(),
         server: {
           getClientCapabilities: vi.fn(() => ({
             elicitation: { url: {} },
-            tasks: { requests: { elicitation: { create: {} } } },
           })),
-        },
-        experimental: {
-          tasks: {
-            registerToolTask: vi.fn(),
-          },
         },
       } as unknown as McpServer; // partial mock: McpServer's private members rule out a structural literal
 
-      registerConditionalTools(mockServerUrlOnly);
+      registerConditionalTools(mockServerUrlOnly, contextFor("legacy"));
 
       const registeredTools = vi
         .mocked(mockServerUrlOnly.registerTool)
@@ -188,12 +222,6 @@ describe("Registration Index Files", () => {
       roots: {},
       sampling: {},
       elicitation: { form: {}, url: {} },
-      tasks: {
-        requests: {
-          sampling: { createMessage: {} },
-          elicitation: { create: {} },
-        },
-      },
     };
 
     const registeredWith = (capabilities: object): string[] => {
@@ -202,22 +230,13 @@ describe("Registration Index Files", () => {
         server: {
           getClientCapabilities: vi.fn(() => capabilities),
         },
-        experimental: {
-          tasks: {
-            registerToolTask: vi.fn(),
-          },
-        },
       } as unknown as McpServer; // partial mock: McpServer's private members rule out a structural literal
 
-      registerConditionalTools(mockServer);
+      registerConditionalTools(mockServer, contextFor("legacy"));
 
-      const viaRegisterTool = vi
+      return vi
         .mocked(mockServer.registerTool)
         .mock.calls.map((call) => call[0]);
-      const viaRegisterToolTask = vi
-        .mocked(mockServer.experimental.tasks.registerToolTask)
-        .mock.calls.map((call) => call[0]);
-      return [...viaRegisterTool, ...viaRegisterToolTask];
     };
 
     // A tool is capability-gated if declaring the capabilities makes it appear.
@@ -277,7 +296,7 @@ describe("Registration Index Files", () => {
     it("should register resource templates", () => {
       const mockServer = createMockServer();
 
-      registerResources(mockServer);
+      registerResources(mockServer, contextFor("legacy"));
 
       // Should register at least the 2 resource templates (text and blob) plus file resources
       expect(mockServer.registerResource).toHaveBeenCalled();
@@ -286,6 +305,18 @@ describe("Registration Index Files", () => {
         .mock.calls.map((call) => call[0]);
       expect(registeredResources).toContain("Dynamic Text Resource");
       expect(registeredResources).toContain("Dynamic Blob Resource");
+      expect(registeredResources).not.toContain("Minted Resource");
+    });
+
+    it("should also serve minted resources on 2026-07-28", () => {
+      const mockServer = createMockServer();
+
+      registerResources(mockServer, contextFor("modern"));
+
+      const registeredResources = vi
+        .mocked(mockServer.registerResource)
+        .mock.calls.map((call) => call[0]);
+      expect(registeredResources).toContain("Minted Resource");
     });
 
     it("should read instructions from file", () => {

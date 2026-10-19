@@ -1,6 +1,6 @@
 {
   "name": "@modelcontextprotocol/server-sequential-thinking",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "MCP server for sequential thinking and problem solving",
   "license": "SEE LICENSE IN LICENSE",
   "mcpName": "io.github.modelcontextprotocol/server-sequential-thinking",
@@ -12,6 +12,9 @@
     "url": "https://github.com/modelcontextprotocol/servers.git"
   },
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
   "bin": {
     "mcp-server-sequential-thinking": "dist/index.js"
   },
@@ -31,13 +34,14 @@
     "validate": "npm run format:check && npm run lint && npm run typecheck && npm run build && npm run test"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.31.0",
+    "@modelcontextprotocol/server": "^2.3.1",
     "chalk": "^5.3.0",
     "yargs": "^17.7.2",
-    "zod": "^4.0.0"
+    "zod": "^4.2.0"
   },
   "devDependencies": {
-    "@types/node": "^22",
+    "@modelcontextprotocol/client": "^2.3.1",
+    "@types/node": "^24",
     "@types/yargs": "^17.0.32",
     "@vitest/coverage-v8": "^4.1.11",
     "shx": "^0.4.0",

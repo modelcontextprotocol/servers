@@ -11,26 +11,29 @@ Published on npm as [`@modelcontextprotocol/server-filesystem`](https://www.npmj
 - Move files/directories
 - Search files
 - Get file metadata
-- Dynamic directory access control via [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots)
+- Directory access control from command-line arguments, with [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots) as a deprecated, 2025-era convenience
+- Serves both protocol eras on stdio: 2026-07-28 clients (`server/discover`, no handshake) and 2025-era clients (`initialize`)
 
 ## Directory Access Control
 
-The server uses a flexible directory access control system. Directories can be specified via command-line arguments or dynamically via [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots).
+The server may touch only its **allowed directories**. Pass them on the command line. A 2025-era client that supports [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots) can also replace them at runtime, but Roots is [deprecated as of protocol version 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/deprecated) and a 2026-07-28 connection cannot use it.
 
-### Method 1: Command-line Arguments
+### Method 1: Command-line Arguments (Recommended)
 Specify Allowed directories when starting the server:
 ```bash
 mcp-server-filesystem /path/to/dir1 /path/to/dir2
 ```
 
-### Method 2: MCP Roots (Recommended)
-MCP clients that support [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots) can dynamically update the Allowed directories. 
+This is the only method that works on every protocol version, so it is the one to use.
+
+### Method 2: MCP Roots (Deprecated, 2025-era clients only)
+A client that connects with a 2025-era protocol version (the `initialize` handshake) and supports [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots) can dynamically update the Allowed directories.
 
 Roots notified by Client to Server, completely replace any server-side Allowed directories when provided.
 
-**Important**: If server starts without command-line arguments AND client doesn't support roots protocol, the server fails at initialization: it logs the reason to stderr, closes the connection and exits with status 1. A client that supports roots but provides none (or none that are valid) keeps the connection, with no allowed directories until it sends `roots/list_changed` with valid roots.
+**Important**: If server starts without command-line arguments AND a 2025-era client doesn't support roots protocol, the server fails at initialization: it logs the reason to stderr, closes the connection and exits with status 1. A client that supports roots but provides none (or none that are valid) keeps the connection, with no allowed directories until it sends `roots/list_changed` with valid roots.
 
-This is the recommended method, as this enables runtime directory updates via `roots/list_changed` notifications without server restart, providing a more flexible and modern integration experience.
+The 2026-07-28 protocol has no `initialize` handshake and no server-to-client `roots/list` request, so a 2026-07-28 client's roots are never asked for: the command-line directories are the whole allow-list. A server started with none answers every tool call on such a connection with an error saying so.
 
 ### How It Works
 
@@ -40,11 +43,12 @@ The server's directory access control follows this flow:
    - Server starts with directories from command-line arguments (if provided)
    - If no arguments provided, server starts with empty allowed directories
 
-2. **Client Connection & Initialization**
-   - Client connects and sends `initialize` request with capabilities
-   - Server checks if client supports roots protocol (`capabilities.roots`)
+2. **Client Connection**
+   - The client's first message picks the protocol era of the connection
+   - A **2026-07-28** client sends `server/discover` (or any request carrying the per-request `_meta` envelope): the server uses the command-line directories, and steps 3 and 4 do not apply
+   - A **2025-era** client sends `initialize` with its capabilities, and the server checks whether it supports roots (`capabilities.roots`)
    
-3. **Roots Protocol Handling** (if client supports roots)
+3. **Roots Protocol Handling** (2025-era clients that support roots)
    - **On initialization**: Server requests roots from client via `roots/list`
    - Client responds with its configured roots
    - Server replaces ALL allowed directories with client's roots
@@ -54,7 +58,7 @@ The server's directory access control follows this flow:
    - Tool calls that arrive while an update is being fetched wait for it, so none runs against a root the client has just withdrawn
    - Once the client's roots are in force, an update with no valid roots revokes access: every path is refused ("Access denied - no allowed directories") until the client exposes a root again. Before any root has been in force, such an update keeps the command-line directories
 
-4. **Fallback Behavior** (if client doesn't support roots)
+4. **Fallback Behavior** (2025-era clients that don't support roots)
    - Server continues using command-line directories only
    - No dynamic updates possible
    - With no command-line directories either, the server logs an error, closes the connection and exits with status 1
@@ -64,7 +68,7 @@ The server's directory access control follows this flow:
    - Use `list_allowed_directories` tool to see current directories
    - Server requires at least ONE allowed directory to operate
 
-**Note**: The server will only allow operations within directories specified either via `args` or via Roots.
+**Note**: The server will only allow operations within directories specified either via `args` or, for a 2025-era client, via Roots.
 
 
 
@@ -217,6 +221,10 @@ The mapping for filesystem tools is:
 | `move_file`                 | `false`      | `false`        | `true`          | Deletes source file                             |
 
 > Note: `idempotentHint` and `destructiveHint` are meaningful only when `readOnlyHint` is `false`, as defined by the MCP spec. Every tool also sets `openWorldHint: false` — this server only accesses the local filesystem within its allowed directories, never an open or external world.
+
+## Requirements
+
+Node.js 24 or later, when the server runs through `npx` or from source.
 
 ## Usage with Claude Desktop
 Add this to your `claude_desktop_config.json`:

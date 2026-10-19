@@ -172,27 +172,27 @@ CLI) or **Server Settings → Protocol Era** (the web UI):
 | `modern` | Pins 2026-07-28 through `server/discover`, with no fallback |
 | `auto` | Probes `server/discover`, and falls back to `initialize` |
 
-⚠️ **Only the legacy era can be exercised against these servers today.** All
-seven are on a v1 SDK (`@modelcontextprotocol/sdk` 1.x, `mcp` 1.x), whose
-newest protocol version is 2025-11-25. None implements `server/discover`. So:
+**Every server serves both eras**: the Python servers since #4853, the
+TypeScript servers since #4852 (stdio through the SDK's `serveStdio`, and
+`everything`'s Streamable HTTP endpoint through `createMcpHandler` for
+2026-07-28 requests). Run every command twice, with `--protocol-era legacy`
+and `--protocol-era modern`, and expect both to succeed. A 2026-07-28 result
+carries `io.modelcontextprotocol/serverInfo` in its `_meta`, which is the
+quick way to see which era answered. Do not use `auto` for evidence: it does
+not say which era answered.
 
-- `--protocol-era modern` fails, by design, with `Version negotiation failed:
-  the server did not offer pinned protocol version 2026-07-28 via
-  server/discover (no fallback in pin mode)` and exit 1. That is the expected
-  result for an unmigrated server, not a regression in your change.
-- `--protocol-era auto` succeeds, but through the fallback, so it is a legacy
-  connection and proves nothing about 2026-07-28.
+`everything` lists some tools on one era only (the task tools on 2026-07-28,
+the two `toggle-*` tools on the 2025 era), so a `tools/list` that differs
+between the two runs is expected.
 
-The both-eras check that `/pr-flow` asks for (#4857) therefore has one half
-that can pass today. For a server that does not yet serve the modern era,
-record the legacy run, and say in the PR that the server does not yet speak
-2026-07-28 rather than leaving the modern era unmentioned. Moving a server to
-a v2 SDK (#4856 for TypeScript, #4851 for Python) does not change that by
-itself: those keep the legacy wire behavior. Modern-era support arrives with
-#4852 (TypeScript) and #4853 (Python). Once a server has it, run every command
-twice, with `--protocol-era legacy` and `--protocol-era modern`, and expect
-both to succeed. Do not use `auto` for evidence in either case: it
-does not say which era answered.
+The CLI declares no client capabilities, so a tool that asks the client for
+input (elicitation, sampling, roots) cannot run from it: on the 2025 era
+`everything` does not list it (`tool_not_found`, exit 5), and on 2026-07-28
+the SDK refuses the call because the request did not declare the capability
+(`Cannot request input 'form' (elicitation/create): the request's client
+capabilities do not declare the required capability`, exit 1). Drive those
+from the web UI. On 2026-07-28 the CLI does follow a task handle: a call to
+`simulate-research-query` polls the task and prints its final result.
 
 ## The Inspector web UI
 
@@ -259,8 +259,10 @@ Claude Code, run this way, has no era switch and does not print the protocol
 version it negotiated. `/pr-flow` asks for the LLM client in both eras as well;
 where the client gives no way to choose, record the client and its version and
 say that the era could not be selected, rather than labelling the run with an
-era it was not shown to use. Against a v1-SDK server the connection is legacy
-whatever the client prefers, for the reason given under Protocol eras.
+era it was not shown to use. `everything` shows which era a client
+negotiated through its tool list: a 2026-07-28 client sees
+`simulate-research-query` and no `toggle-*` tools, a 2025-era client the
+reverse. Claude Code 2.1.296 negotiates 2026-07-28 against these servers.
 
 ## What to write down
 

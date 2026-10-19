@@ -1,19 +1,16 @@
-# Characterization tests for mcp-server-time, driven through the MCP protocol
-# in-process (#4855).
+# Protocol-level tests for mcp-server-time, driven through the MCP protocol
+# in-process (#4855, #5174).
 #
-# Each test runs the real `serve()` coroutine with `stdio_server` swapped for
-# an in-memory stream pair, and talks to it with a real `ClientSession`. That
-# exercises what a client actually sees: the SDK's input validation, its
-# folding of handler exceptions into `isError` results, the advertised tool
-# schemas and the initialize handshake. The pure helpers in `server.py` are
-# covered directly in `test_server.py`.
+# Each test runs the real `serve()` coroutine with the SDK's `stdio_server`
+# swapped for an in-memory stream pair, and talks to it with a real
+# `ClientSession`. That exercises what a client actually sees: `MCPServer`'s
+# argument validation, the `isError` results a tool's `ToolError` becomes,
+# the JSON-RPC error for an unknown tool, the advertised tool schemas and the
+# initialize handshake. The pure helpers in `server.py` are covered directly
+# in `test_server.py`.
 #
-# These tests pin CURRENT behavior on `mcp` 1.x, including behavior open issues
-# want changed, so that the SDK v2 port (#4851) has a regression net and any
-# intended change shows up as a failing assertion. Assertions compare wire JSON
-# (`model_dump(by_alias=True, mode="json")`) rather than SDK attribute names
-# wherever practical, so the snake_case renames in SDK v2 do not force a
-# rewrite.
+# Assertions compare wire JSON (`model_dump(by_alias=True, mode="json")`)
+# rather than SDK attribute names wherever practical.
 #
 # Time is frozen with `frozen_at()`, which swaps the server module's
 # `datetime` for a subclass whose `now()` returns a fixed instant. freezegun is
@@ -32,7 +29,10 @@ from unittest.mock import patch
 import anyio
 import pytest
 from mcp import ClientSession
+from mcp.shared.exceptions import MCPError
 from mcp.shared.memory import create_client_server_memory_streams
+from mcp.shared.message import SessionMessage
+from mcp.types import INVALID_PARAMS, JSONRPCRequest
 from pydantic import BaseModel
 
 from mcp_server_time.server import serve
@@ -54,7 +54,12 @@ def frozen_at(instant: str) -> Iterator[None]:
 
 def wire(model: BaseModel) -> Any:
     """Serialize an SDK model the way it travels over the wire."""
-    return model.model_dump(by_alias=True, mode="json", exclude_none=True)
+    # exclude_unset: SDK v2 result models default fields the 2025-11-25 wire
+    # does not carry (resultType, ttlMs, cacheScope), so only what the server
+    # actually sent is compared.
+    return model.model_dump(
+        by_alias=True, mode="json", exclude_none=True, exclude_unset=True
+    )
 
 
 @asynccontextmanager
@@ -71,7 +76,7 @@ async def serving(
         async def fake_stdio_server():
             yield server_streams
 
-        with patch("mcp_server_time.server.stdio_server", fake_stdio_server):
+        with patch("mcp.server.mcpserver.server.stdio_server", fake_stdio_server):
             async with anyio.create_task_group() as tg:
                 tg.start_soon(serve, local_timezone)
                 async with ClientSession(*client_streams) as session:
@@ -109,9 +114,25 @@ def error_result(text: str) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": text}], "isError": True}
 
 
-def handler_error(message: str) -> dict[str, Any]:
-    """An exception raised in the server's handler, as the client receives it."""
-    return error_result(f"Error processing mcp-server-time query: {message}")
+def tool_error(tool: str, message: str) -> dict[str, Any]:
+    """A `ToolError` the tool raised, as the client receives it."""
+    return error_result(f"Error executing tool {tool}: {message}")
+
+
+def assert_validation_error(result: dict[str, Any], tool: str, *needles: str) -> None:
+    """An argument `MCPServer` rejected against the tool's signature.
+
+    The text is pydantic's, so only its stable parts are pinned: the tool, the
+    argument and the reason.
+    """
+    assert result["isError"] is True, result
+    assert len(result["content"]) == 1
+    text = result["content"][0]["text"]
+    assert text.startswith(
+        f"Error executing tool {tool}: 1 validation error for {tool}Arguments\n"
+    ), text
+    for needle in needles:
+        assert needle in text, (needle, text)
 
 
 # ---------------------------------------------------------------------------
@@ -130,8 +151,14 @@ async def test_initialize_reports_server_info_and_capabilities() -> None:
         "version": version("mcp-server-time"),
     }
     assert init["serverInfo"]["version"] != version("mcp")
-    # Only tools are advertised; no resources, prompts or logging.
-    assert init["capabilities"] == {"experimental": {}, "tools": {"listChanged": False}}
+    # MCPServer serves prompts/list and resources/list for every server, so
+    # both are advertised even though this one registers neither (both lists
+    # are empty). No logging. Nothing claims listChanged: the tools are fixed.
+    assert init["capabilities"] == {
+        "prompts": {"listChanged": False},
+        "resources": {"subscribe": False, "listChanged": False},
+        "tools": {"listChanged": False},
+    }
     assert "instructions" not in init
 
 
@@ -147,18 +174,35 @@ READ_ONLY_ANNOTATIONS = {
 }
 
 
+TIME_RESULT_SCHEMA = {
+    "type": "object",
+    "title": "TimeResult",
+    "properties": {
+        "timezone": {"title": "Timezone", "type": "string"},
+        "datetime": {"title": "Datetime", "type": "string"},
+        "day_of_week": {"title": "Day Of Week", "type": "string"},
+        "is_dst": {"title": "Is Dst", "type": "boolean"},
+    },
+    "required": ["timezone", "datetime", "day_of_week", "is_dst"],
+}
+
+
 def expected_tools(local_tz: str) -> list[dict[str, Any]]:
-    # Names and descriptions are pinned as they are today. #3201 and #2853
-    # request changes to them; a fix will change this fixture.
+    # Names, descriptions, argument names, required sets and annotations are
+    # the published interface and do not change with the move to MCPServer
+    # (#5174). MCPServer adds a `title` to each input schema and property, and
+    # an `outputSchema` derived from the result model.
     return [
         {
             "name": "get_current_time",
             "description": "Get current time in a specific timezone",
             "inputSchema": {
                 "type": "object",
+                "title": "get_current_timeArguments",
                 "properties": {
                     "timezone": {
                         "type": "string",
+                        "title": "Timezone",
                         "description": (
                             "IANA timezone name (e.g., 'America/New_York', "
                             f"'Europe/London'). Use '{local_tz}' as local timezone "
@@ -168,6 +212,7 @@ def expected_tools(local_tz: str) -> list[dict[str, Any]]:
                 },
                 "required": ["timezone"],
             },
+            "outputSchema": TIME_RESULT_SCHEMA,
             "annotations": READ_ONLY_ANNOTATIONS,
         },
         {
@@ -175,9 +220,11 @@ def expected_tools(local_tz: str) -> list[dict[str, Any]]:
             "description": "Convert time between timezones",
             "inputSchema": {
                 "type": "object",
+                "title": "convert_timeArguments",
                 "properties": {
                     "source_timezone": {
                         "type": "string",
+                        "title": "Source Timezone",
                         "description": (
                             "Source IANA timezone name (e.g., 'America/New_York', "
                             f"'Europe/London'). Use '{local_tz}' as local timezone "
@@ -186,10 +233,12 @@ def expected_tools(local_tz: str) -> list[dict[str, Any]]:
                     },
                     "time": {
                         "type": "string",
+                        "title": "Time",
                         "description": "Time to convert in 24-hour format (HH:MM)",
                     },
                     "target_timezone": {
                         "type": "string",
+                        "title": "Target Timezone",
                         "description": (
                             "Target IANA timezone name (e.g., 'Asia/Tokyo', "
                             f"'America/San_Francisco'). Use '{local_tz}' as local "
@@ -199,6 +248,17 @@ def expected_tools(local_tz: str) -> list[dict[str, Any]]:
                 },
                 "required": ["source_timezone", "time", "target_timezone"],
             },
+            "outputSchema": {
+                "type": "object",
+                "title": "TimeConversionResult",
+                "properties": {
+                    "source": {"$ref": "#/$defs/TimeResult"},
+                    "target": {"$ref": "#/$defs/TimeResult"},
+                    "time_difference": {"title": "Time Difference", "type": "string"},
+                },
+                "required": ["source", "target", "time_difference"],
+                "$defs": {"TimeResult": TIME_RESULT_SCHEMA},
+            },
             "annotations": READ_ONLY_ANNOTATIONS,
         },
     ]
@@ -207,7 +267,7 @@ def expected_tools(local_tz: str) -> list[dict[str, Any]]:
 async def test_list_tools_with_local_timezone_override() -> None:
     async with connected("Europe/Warsaw") as session:
         result = wire(await session.list_tools())
-    # No title, outputSchema, icons or pagination cursor.
+    # No tool title, icons or pagination cursor.
     assert result == {"tools": expected_tools("Europe/Warsaw")}
 
 
@@ -254,7 +314,7 @@ async def test_invalid_local_timezone_fails_before_the_transport_opens(
     def unexpected_stdio_server():
         raise AssertionError("stdio_server must not be reached")
 
-    with patch("mcp_server_time.server.stdio_server", unexpected_stdio_server):
+    with patch("mcp.server.mcpserver.server.stdio_server", unexpected_stdio_server):
         with pytest.raises(SystemExit) as exit_info:
             await serve(local_timezone)
     assert exit_info.value.code == (
@@ -272,22 +332,17 @@ async def test_get_current_time_wire_result() -> None:
     async with connected() as session:
         with frozen_at("2024-01-01 12:00:00+00:00"):
             result = await call(session, "get_current_time", {"timezone": "UTC"})
-    # Exactly one text block holding indented JSON; no structuredContent.
+    # The result model as structuredContent, and the same object as indented
+    # JSON in one text block for a client that does not read structured output.
+    expected = {
+        "timezone": "UTC",
+        "datetime": "2024-01-01T12:00:00+00:00",
+        "day_of_week": "Monday",
+        "is_dst": False,
+    }
     assert result == {
-        "content": [
-            {
-                "type": "text",
-                "text": json.dumps(
-                    {
-                        "timezone": "UTC",
-                        "datetime": "2024-01-01T12:00:00+00:00",
-                        "day_of_week": "Monday",
-                        "is_dst": False,
-                    },
-                    indent=2,
-                ),
-            }
-        ],
+        "content": [{"type": "text", "text": json.dumps(expected, indent=2)}],
+        "structuredContent": expected,
         "isError": False,
     }
 
@@ -462,57 +517,55 @@ async def test_get_current_time_does_not_default_to_the_local_timezone() -> None
     # never substitutes it for an empty argument.
     async with connected("Europe/Warsaw") as session:
         result = await call(session, "get_current_time", {"timezone": ""})
-    assert result == handler_error("Missing required argument: timezone")
+    assert result == tool_error(
+        "get_current_time", "Missing required argument: timezone"
+    )
 
 
 @pytest.mark.parametrize(
-    "arguments,expected",
+    "arguments,needles",
     [
-        # Rejected by the SDK's input validation against inputSchema, before
-        # the handler runs.
-        ({}, error_result("Input validation error: 'timezone' is a required property")),
-        (
-            {"timezone": 5},
-            error_result("Input validation error: 5 is not of type 'string'"),
-        ),
-        (
-            {"timezone": None},
-            error_result("Input validation error: None is not of type 'string'"),
-        ),
-        # Raised by the handler and folded into an error result by the SDK.
-        ({"timezone": ""}, handler_error("Missing required argument: timezone")),
-        (
-            {"timezone": "Invalid/Timezone"},
-            handler_error(
-                "Invalid timezone: 'No time zone found with key Invalid/Timezone'"
-            ),
-        ),
-        (
-            {"timezone": "europe/warsaw"},
-            handler_error(
-                "Invalid timezone: 'No time zone found with key europe/warsaw'"
-            ),
-        ),
-        (
-            {"timezone": "../etc/passwd"},
-            handler_error(
-                "Invalid timezone: ZoneInfo keys must refer to subdirectories of TZPATH, got: ../etc/passwd"
-            ),
-        ),
-        (
-            {"timezone": "/etc/localtime"},
-            handler_error(
-                "Invalid timezone: ZoneInfo keys may not be absolute paths, got: /etc/localtime"
-            ),
-        ),
+        # Rejected by MCPServer against the tool's signature, before it runs.
+        ({}, ["timezone\n  Field required [type=missing"]),
+        ({"timezone": 5}, ["timezone\n  Input should be a valid string"]),
+        ({"timezone": None}, ["timezone\n  Input should be a valid string"]),
     ],
 )
-async def test_get_current_time_errors(
-    arguments: dict[str, Any], expected: dict[str, Any]
+async def test_get_current_time_argument_validation(
+    arguments: dict[str, Any], needles: list[str]
 ) -> None:
     async with connected() as session:
         result = await call(session, "get_current_time", arguments)
-    assert result == expected
+    assert_validation_error(result, "get_current_time", *needles)
+
+
+@pytest.mark.parametrize(
+    "arguments,message",
+    [
+        # Raised by the tool as a ToolError.
+        ({"timezone": ""}, "Missing required argument: timezone"),
+        (
+            {"timezone": "Invalid/Timezone"},
+            "Invalid timezone: 'No time zone found with key Invalid/Timezone'",
+        ),
+        (
+            {"timezone": "europe/warsaw"},
+            "Invalid timezone: 'No time zone found with key europe/warsaw'",
+        ),
+        (
+            {"timezone": "../etc/passwd"},
+            "Invalid timezone: ZoneInfo keys must refer to subdirectories of TZPATH, got: ../etc/passwd",
+        ),
+        (
+            {"timezone": "/etc/localtime"},
+            "Invalid timezone: ZoneInfo keys may not be absolute paths, got: /etc/localtime",
+        ),
+    ],
+)
+async def test_get_current_time_errors(arguments: dict[str, Any], message: str) -> None:
+    async with connected() as session:
+        result = await call(session, "get_current_time", arguments)
+    assert result == tool_error("get_current_time", message)
 
 
 # ---------------------------------------------------------------------------
@@ -532,30 +585,24 @@ async def test_convert_time_wire_result() -> None:
                     "target_timezone": "Asia/Tokyo",
                 },
             )
+    expected = {
+        "source": {
+            "timezone": "Europe/Warsaw",
+            "datetime": "2024-01-01T12:00:00+01:00",
+            "day_of_week": "Monday",
+            "is_dst": False,
+        },
+        "target": {
+            "timezone": "Asia/Tokyo",
+            "datetime": "2024-01-01T20:00:00+09:00",
+            "day_of_week": "Monday",
+            "is_dst": False,
+        },
+        "time_difference": "+8.0h",
+    }
     assert result == {
-        "content": [
-            {
-                "type": "text",
-                "text": json.dumps(
-                    {
-                        "source": {
-                            "timezone": "Europe/Warsaw",
-                            "datetime": "2024-01-01T12:00:00+01:00",
-                            "day_of_week": "Monday",
-                            "is_dst": False,
-                        },
-                        "target": {
-                            "timezone": "Asia/Tokyo",
-                            "datetime": "2024-01-01T20:00:00+09:00",
-                            "day_of_week": "Monday",
-                            "is_dst": False,
-                        },
-                        "time_difference": "+8.0h",
-                    },
-                    indent=2,
-                ),
-            }
-        ],
+        "content": [{"type": "text", "text": json.dumps(expected, indent=2)}],
+        "structuredContent": expected,
         "isError": False,
     }
 
@@ -740,9 +787,10 @@ async def test_convert_time_into_a_nonexistent_local_time() -> None:
                     "target_timezone": "UTC",
                 },
             )
-    assert result == handler_error(
+    assert result == tool_error(
+        "convert_time",
         "Invalid time: 02:30 does not exist in America/New_York on 2024-03-10 "
-        "(skipped by a clock change)"
+        "(skipped by a clock change)",
     )
 
 
@@ -816,54 +864,61 @@ async def test_convert_time_ignores_extra_arguments() -> None:
 
 
 @pytest.mark.parametrize(
-    "arguments,expected",
+    "arguments,needles",
     [
-        # Rejected by the SDK's input validation, before the handler runs. A
-        # missing key never reaches the handler's own "Missing required
-        # arguments" check, which is why that branch is marked unreachable.
+        # Rejected by MCPServer against the tool's signature, before it runs.
         (
             {"source_timezone": "UTC", "time": "12:00"},
-            error_result(
-                "Input validation error: 'target_timezone' is a required property"
-            ),
+            ["target_timezone\n  Field required [type=missing"],
         ),
         (
             {"time": "12:00", "target_timezone": "UTC"},
-            error_result(
-                "Input validation error: 'source_timezone' is a required property"
-            ),
+            ["source_timezone\n  Field required [type=missing"],
         ),
         (
             {"source_timezone": "UTC", "time": 1200, "target_timezone": "UTC"},
-            error_result("Input validation error: 1200 is not of type 'string'"),
+            ["time\n  Input should be a valid string"],
         ),
-        # Raised by the handler.
+    ],
+)
+async def test_convert_time_argument_validation(
+    arguments: dict[str, Any], needles: list[str]
+) -> None:
+    async with connected() as session:
+        result = await call(session, "convert_time", arguments)
+    assert_validation_error(result, "convert_time", *needles)
+
+
+@pytest.mark.parametrize(
+    "arguments,message",
+    [
+        # Raised by the tool as a ToolError.
         (
             {"source_timezone": "Bad/Zone", "time": "12:00", "target_timezone": "UTC"},
-            handler_error("Invalid timezone: 'No time zone found with key Bad/Zone'"),
+            "Invalid timezone: 'No time zone found with key Bad/Zone'",
         ),
         (
             {"source_timezone": "UTC", "time": "12:00", "target_timezone": "Bad/Zone"},
-            handler_error("Invalid timezone: 'No time zone found with key Bad/Zone'"),
+            "Invalid timezone: 'No time zone found with key Bad/Zone'",
         ),
         # Like get_current_time, an empty timezone is reported as a missing
         # argument rather than as zoneinfo's own message.
         (
             {"source_timezone": "", "time": "12:00", "target_timezone": "UTC"},
-            handler_error("Missing required argument: source_timezone"),
+            "Missing required argument: source_timezone",
         ),
         (
             {"source_timezone": "UTC", "time": "12:00", "target_timezone": ""},
-            handler_error("Missing required argument: target_timezone"),
+            "Missing required argument: target_timezone",
         ),
     ],
 )
 async def test_convert_time_argument_errors(
-    arguments: dict[str, Any], expected: dict[str, Any]
+    arguments: dict[str, Any], message: str
 ) -> None:
     async with connected() as session:
         result = await call(session, "convert_time", arguments)
-    assert result == expected
+    assert result == tool_error("convert_time", message)
 
 
 @pytest.mark.parametrize(
@@ -877,8 +932,8 @@ async def test_convert_time_rejects_bad_time_strings(time: str) -> None:
             "convert_time",
             {"source_timezone": "UTC", "time": time, "target_timezone": "UTC"},
         )
-    assert result == handler_error(
-        "Invalid time format. Expected HH:MM [24-hour format]"
+    assert result == tool_error(
+        "convert_time", "Invalid time format. Expected HH:MM [24-hour format]"
     )
 
 
@@ -889,8 +944,8 @@ async def test_convert_time_checks_timezones_before_the_time_string() -> None:
             "convert_time",
             {"source_timezone": "UTC", "time": "nope", "target_timezone": "Bad/Zone"},
         )
-    assert result == handler_error(
-        "Invalid timezone: 'No time zone found with key Bad/Zone'"
+    assert result == tool_error(
+        "convert_time", "Invalid timezone: 'No time zone found with key Bad/Zone'"
     )
 
 
@@ -899,18 +954,92 @@ async def test_convert_time_checks_timezones_before_the_time_string() -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_unknown_tool_is_an_error_result_not_a_protocol_error() -> None:
-    # The SDK skips validation for an unlisted tool (and logs a warning), then
-    # the handler's fallthrough raises, which the SDK folds into `isError`.
+async def test_unknown_tool_is_a_protocol_error() -> None:
+    # Both spec revisions make an unknown tool a JSON-RPC -32602 error, not an
+    # isError result (#5174). Era by era coverage is in test_eras.py.
     async with connected() as session:
-        result = await call(session, "no_such_tool", {"timezone": "UTC"})
-    assert result == handler_error("Unknown tool: no_such_tool")
+        with pytest.raises(MCPError) as excinfo:
+            await session.call_tool("no_such_tool", {"timezone": "UTC"})
+    assert excinfo.value.error.code == INVALID_PARAMS
+    assert excinfo.value.error.message == "Unknown tool: no_such_tool"
 
 
 async def test_session_survives_errors() -> None:
     # A failed call does not take the server down.
     async with connected() as session:
-        await call(session, "no_such_tool", {})
+        with pytest.raises(MCPError):
+            await session.call_tool("no_such_tool", {})
         await call(session, "get_current_time", {"timezone": "Bad/Zone"})
         result = await call(session, "get_current_time", {"timezone": "UTC"})
     assert result["isError"] is False
+
+
+# ---------------------------------------------------------------------------
+# Protocol era
+# ---------------------------------------------------------------------------
+
+
+async def test_server_discover_answers_the_2026_07_28_era() -> None:
+    # #4853: serve() serves the 2026-07-28 era beside the 2025-11-25 handshake.
+    # A `server/discover` carrying the per-request `_meta` envelope opens it.
+    # Asserted on the raw JSON-RPC response, so the fields the 2026-07-28
+    # spec requires on a result (resultType, ttlMs, cacheScope) are pinned as
+    # the server sends them, not as a client model would default them. Era by
+    # era behavior through a real client is in test_eras.py.
+    #
+    # Replaces #4851's test_modern_era_is_not_served, which pinned this request
+    # being refused with -32601 "Method not found" until this issue landed.
+    discover = JSONRPCRequest(
+        jsonrpc="2.0",
+        id=1,
+        method="server/discover",
+        params={
+            "_meta": {
+                "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+                "io.modelcontextprotocol/clientInfo": {"name": "test", "version": "0"},
+                "io.modelcontextprotocol/clientCapabilities": {},
+            }
+        },
+    )
+    response: SessionMessage | Exception | None = None
+    async with create_client_server_memory_streams() as (
+        (client_read, client_write),
+        server_streams,
+    ):
+
+        @asynccontextmanager
+        async def fake_stdio_server() -> AsyncIterator[Any]:
+            yield server_streams
+
+        with patch("mcp.server.mcpserver.server.stdio_server", fake_stdio_server):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(serve, "UTC")
+                await client_write.send(SessionMessage(discover))
+                with anyio.fail_after(5):
+                    response = await client_read.receive()
+                tg.cancel_scope.cancel()
+
+    assert isinstance(response, SessionMessage)
+    assert response.message.model_dump(by_alias=True, exclude_none=True) == {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+            # The same capabilities as the 2025-11-25 handshake; with
+            # subscriptions/listen unserved, none claims listChanged.
+            "capabilities": {
+                "prompts": {"listChanged": False},
+                "resources": {"subscribe": False, "listChanged": False},
+                "tools": {"listChanged": False},
+            },
+            "supportedVersions": ["2026-07-28"],
+            "resultType": "complete",
+            "ttlMs": 0,
+            "cacheScope": "private",
+            "_meta": {
+                "io.modelcontextprotocol/serverInfo": {
+                    "name": "mcp-time",
+                    "version": version("mcp-server-time"),
+                }
+            },
+        },
+    }

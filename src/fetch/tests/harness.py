@@ -4,7 +4,7 @@ Two pieces:
 
 - ``connect(...)`` runs the real ``serve()`` in-process and yields an
   initialized ``ClientSession`` linked to it over in-memory streams, so tests
-  go through the SDK's validation and error mapping exactly as a client would.
+  go through the server's validation and error mapping exactly as a client would.
 - ``web`` replaces ``httpx.AsyncClient`` with one backed by an
   ``httpx.MockTransport``, so no test touches the network. It records every
   request and the keyword arguments each client was constructed with. It also
@@ -22,6 +22,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, AsyncIterator, Callable, Union
+from unittest.mock import patch
 
 import anyio
 import httpx
@@ -29,7 +30,14 @@ import pytest
 import readabilipy.simple_json
 from mcp import ClientSession
 from mcp.shared.memory import create_client_server_memory_streams
-from mcp.types import InitializeResult
+from mcp.shared.message import SessionMessage
+from mcp.types import (
+    InitializeResult,
+    JSONRPCError,
+    JSONRPCNotification,
+    JSONRPCRequest,
+    JSONRPCResponse,
+)
 
 import mcp_server_fetch.server as server_module
 
@@ -112,17 +120,14 @@ async def connect(
         async def fake_stdio_server() -> AsyncIterator[Any]:
             yield server_streams
 
-        original = server_module.stdio_server
-        server_module.stdio_server = fake_stdio_server  # type: ignore[assignment]
-        try:
+        # MCPServer.run_stdio_async() opens the SDK's stdio_server.
+        with patch("mcp.server.mcpserver.server.stdio_server", fake_stdio_server):
             async with anyio.create_task_group() as tg:
                 tg.start_soon(lambda: server_module.serve(**serve_kwargs))
                 async with ClientSession(*client_streams) as session:
                     init = await session.initialize()
                     yield session, init
                 tg.cancel_scope.cancel()
-        finally:
-            server_module.stdio_server = original
 
 
 @pytest.fixture
@@ -154,3 +159,70 @@ def private_tempdir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     each other's pages.
     """
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+
+
+async def raw_request(
+    method: str, params: dict[str, Any]
+) -> Union[JSONRPCResponse, JSONRPCError]:
+    """Send one request exactly as given, bypassing the client's own checks.
+
+    `ClientSession` validates what it sends, so a malformed request (a list as
+    a tool name, a number as the arguments) can only reach the server as raw
+    JSON-RPC: a 2025-11-25 handshake, then the request, and its response.
+    """
+    async with create_client_server_memory_streams() as (
+        (client_read, client_write),
+        server_streams,
+    ):
+
+        @asynccontextmanager
+        async def fake_stdio_server() -> AsyncIterator[Any]:
+            yield server_streams
+
+        async def receive(request_id: int) -> Union[JSONRPCResponse, JSONRPCError]:
+            async for item in client_read:
+                assert isinstance(item, SessionMessage)
+                message = item.message
+                if (
+                    isinstance(message, (JSONRPCResponse, JSONRPCError))
+                    and message.id == request_id
+                ):
+                    return message
+            raise AssertionError("the server closed the stream")  # pragma: no cover
+
+        with patch("mcp.server.mcpserver.server.stdio_server", fake_stdio_server):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(lambda: server_module.serve())
+                await client_write.send(
+                    SessionMessage(
+                        JSONRPCRequest(
+                            jsonrpc="2.0",
+                            id=1,
+                            method="initialize",
+                            params={
+                                "protocolVersion": "2025-11-25",
+                                "capabilities": {},
+                                "clientInfo": {"name": "raw", "version": "0"},
+                            },
+                        )
+                    )
+                )
+                await receive(1)
+                await client_write.send(
+                    SessionMessage(
+                        JSONRPCNotification(
+                            jsonrpc="2.0", method="notifications/initialized"
+                        )
+                    )
+                )
+                await client_write.send(
+                    SessionMessage(
+                        JSONRPCRequest(
+                            jsonrpc="2.0", id=2, method=method, params=params
+                        )
+                    )
+                )
+                response = await receive(2)
+                tg.cancel_scope.cancel()
+                return response
+    raise AssertionError("unreachable")  # pragma: no cover

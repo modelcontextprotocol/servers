@@ -4,9 +4,7 @@
 // that mutation tools send (notifyGraphUpdated). They replace the earlier
 // tests that called the register functions with a mocked McpServer.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
-import { ResourceUpdatedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
+import type { Client, JSONRPCMessage } from "@modelcontextprotocol/client";
 import { call, connect, makeTempGraph } from "./helpers.js";
 import type { Connection } from "./helpers.js";
 
@@ -31,7 +29,7 @@ describe("knowledge-graph resource over the protocol", () => {
     client = conn.client;
     updates = [];
     client.setNotificationHandler(
-      ResourceUpdatedNotificationSchema,
+      "notifications/resources/updated",
       (notification) => {
         updates.push(notification.params);
       },
@@ -102,7 +100,7 @@ describe("knowledge-graph resource over the protocol", () => {
     it("rejects a URI it does not serve", async () => {
       await expect(
         client.readResource({ uri: "memory://other" }),
-      ).rejects.toThrow("Resource memory://other not found");
+      ).rejects.toThrow("Resource not found: memory://other");
     });
   });
 

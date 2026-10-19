@@ -1,0 +1,187 @@
+// Pins the path by which a version PR opened by automation gets CI (#5110).
+//
+// The Version Packages and Prepare Python Release workflows push their PR
+// branches with the workflow token, which starts no workflow, so they
+// dispatch `typescript.yml` and `python.yml` on the branch instead. A
+// dispatched run's checks are left out of the status rollup a pull request
+// reads, so each CI workflow also mirrors a dispatched run onto the commit as
+// a status. Both version workflows run only from `v2/main`, so nothing
+// exercises this path before a release needs it; if any link here breaks,
+// version PRs silently go back to having no visible CI. Each test names the
+// link it guards.
+
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import {
+  chmodSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { parse } from "yaml";
+
+const repoRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
+const read = (rel) => readFileSync(path.join(repoRoot, rel), "utf8");
+const workflow = (name) => parse(read(`.github/workflows/${name}`));
+
+const CI = [
+  { file: "typescript.yml", context: "TypeScript (dispatched)" },
+  { file: "python.yml", context: "Python (dispatched)" },
+];
+const VERSION_WORKFLOWS = [
+  { file: "version-packages.yml", job: "version" },
+  { file: "prepare-python-release.yml", job: "prepare" },
+];
+
+for (const { file, context } of CI) {
+  const wf = workflow(file);
+  const jobs = wf.jobs;
+  const pending = jobs["dispatch-status-pending"];
+  const result = jobs["dispatch-status"];
+
+  test(`${file} runs on push and can be dispatched`, () => {
+    assert.ok("push" in wf.on, "push trigger");
+    assert.ok("workflow_dispatch" in wf.on, "workflow_dispatch trigger");
+  });
+
+  test(`${file} reports a dispatched run as pending, then its result`, () => {
+    for (const job of [pending, result]) {
+      assert.ok(job, "both status jobs exist");
+      assert.match(job.if, /github\.event_name == 'workflow_dispatch'/);
+      assert.equal(job.permissions.statuses, "write");
+      const run = job.steps.map((s) => s.run ?? "").join("\n");
+      assert.match(run, /statuses\/\$GITHUB_SHA/);
+      assert.ok(run.includes(`context="${context}"`), `context ${context}`);
+    }
+  });
+
+  test(`${file}'s result job waits on every other job, even after a cancel`, () => {
+    const others = Object.keys(jobs).filter((id) => id !== "dispatch-status");
+    assert.deepEqual([...result.needs].sort(), others.sort());
+    // `always()`: a cancelled run must not leave the status pending.
+    assert.match(result.if, /always\(\)/);
+    assert.equal(result.permissions.actions, "read");
+    const run = result.steps.map((s) => s.run ?? "").join("\n");
+    assert.ok(run.includes(`gh run list --workflow ${file}`));
+    assert.match(run, /STATE=error/);
+  });
+}
+
+// Run a `dispatch-status` script with a stub `gh` on PATH. The stub answers
+// `gh run list` with the number of newer dispatched runs and records every
+// other call, so a test sees exactly which status, if any, the run posts.
+function runResultScript(script, { needs, newer }) {
+  const dir = mkdtempSync(path.join(tmpdir(), "dispatch-status-"));
+  try {
+    const calls = path.join(dir, "calls");
+    writeFileSync(calls, "");
+    writeFileSync(
+      path.join(dir, "gh"),
+      [
+        "#!/usr/bin/env bash",
+        `if [ "$1 $2" = "run list" ]; then echo ${newer}; exit 0; fi`,
+        `printf '%s\\n' "$*" >> "${calls}"`,
+      ].join("\n"),
+    );
+    chmodSync(path.join(dir, "gh"), 0o755);
+    const result = spawnSync("bash", ["-e", "-c", script], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PATH: `${dir}${path.delimiter}${process.env.PATH}`,
+        NEEDS: JSON.stringify(needs),
+        GITHUB_SHA: "0123abcd",
+        GITHUB_RUN_ID: "100",
+        GITHUB_REPOSITORY: "owner/repo",
+        GITHUB_SERVER_URL: "https://github.com",
+      },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const posted = readFileSync(calls, "utf8").trim();
+    return posted ? posted.match(/state=(\w+)/)?.[1] : null;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+// The job's script needs bash and jq, as on the ubuntu runner. Without
+// either (Windows, or a machine with no jq), skip rather than fail the gate
+// over a missing test prerequisite.
+const hasTool = (cmd) => spawnSync(cmd, ["--version"]).status === 0;
+const SCRIPT_SKIP =
+  process.platform === "win32"
+    ? "runs the job's bash script"
+    : !hasTool("bash")
+      ? "needs bash"
+      : !hasTool("jq")
+        ? "needs jq, which the job's script calls"
+        : false;
+
+const FAILED = { a: { result: "failure" }, b: { result: "cancelled" } };
+const PASSED = { a: { result: "success" }, b: { result: "skipped" } };
+const CANCELLED = { a: { result: "success" }, b: { result: "cancelled" } };
+
+for (const { file } of CI) {
+  const script = workflow(file).jobs["dispatch-status"].steps[0].run;
+
+  // #5178: the newer-run check guarded only the cancellation branch, so a
+  // superseded run whose job had already failed posted `failure` over the
+  // newer run's status. A superseded run now posts nothing at all.
+  test(
+    `${file}: a superseded run posts no status, whatever its jobs did`,
+    {
+      skip: SCRIPT_SKIP,
+    },
+    () => {
+      for (const needs of [FAILED, PASSED, CANCELLED])
+        assert.equal(runResultScript(script, { needs, newer: 1 }), null);
+    },
+  );
+
+  test(
+    `${file}: the latest run posts success, failure or error`,
+    {
+      skip: SCRIPT_SKIP,
+    },
+    () => {
+      assert.equal(
+        runResultScript(script, { needs: PASSED, newer: 0 }),
+        "success",
+      );
+      assert.equal(
+        runResultScript(script, { needs: FAILED, newer: 0 }),
+        "failure",
+      );
+      assert.equal(
+        runResultScript(script, { needs: CANCELLED, newer: 0 }),
+        "error",
+      );
+    },
+  );
+}
+
+for (const { file, job } of VERSION_WORKFLOWS) {
+  const steps = workflow(file).jobs[job];
+
+  test(`${file} dispatches both CI workflows on its PR's branch`, () => {
+    assert.equal(steps.permissions.actions, "write");
+    const run = steps.steps.map((s) => s.run ?? "").join("\n");
+    assert.match(run, /gh workflow run "\$workflow" --ref "\$BRANCH"/);
+    assert.match(run, /for workflow in typescript\.yml python\.yml; do/);
+  });
+}
+
+test("RELEASING.md names the statuses a version PR is merged on", () => {
+  const releasing = read("RELEASING.md");
+  for (const { context } of CI)
+    assert.ok(releasing.includes(`\`${context}\``), context);
+  assert.doesNotMatch(releasing, /Close and reopen the PR to run CI/);
+});

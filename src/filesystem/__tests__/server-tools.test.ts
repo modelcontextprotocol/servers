@@ -1,7 +1,7 @@
 // Characterization suite for every filesystem tool, driven through an SDK
 // Client over an in-memory transport (#4854). It pins what the server does
-// today on SDK 1.x, quirks included, so the SDK v2 migration (#4856) can prove
-// it changed nothing on the wire. A test that pins a known bug says so, with
+// today, quirks included. It was written on SDK 1.x so the SDK v2 migration
+// (#4856) could show what changed on the wire. A test that pins a known bug says so, with
 // the issue number, so the fix has a test to change.
 
 import fs from "fs/promises";
@@ -9,7 +9,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { createRequire } from "node:module";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Client } from "@modelcontextprotocol/client";
 import {
   allowedDirectoriesOf,
   call,
@@ -149,9 +149,9 @@ describe("server identity and tool list", () => {
     });
   });
 
-  // #4841: the SDK 1.x tools/list handler stamps draft-07 on every schema it
-  // renders, which validators that accept only JSON Schema 2020-12 reject. The
-  // server declares 2020-12 instead.
+  // #4841: the SDK 1.x tools/list handler stamped draft-07 on every schema it
+  // rendered, which validators that accept only JSON Schema 2020-12 reject. The
+  // server declares 2020-12 instead, as SDK v2 now does by default.
   it("declares the 2020-12 $schema on every input and output schema (#4841)", async () => {
     const { tools } = await client.listTools();
     expect(tools).toHaveLength(TOOL_NAMES.length);
@@ -307,19 +307,18 @@ describe("server identity and tool list", () => {
     }
   });
 
-  it("reports an unknown tool as a tool error", async () => {
-    const result = await call(client, "no_such_tool");
-    expect(result.isError).toBe(true);
-    expect(textOf(result)).toBe(
-      "MCP error -32602: Tool no_such_tool not found",
-    );
+  it("rejects an unknown tool with -32602", async () => {
+    await expect(call(client, "no_such_tool")).rejects.toMatchObject({
+      code: -32602,
+      message: "Tool no_such_tool not found",
+    });
   });
 
   it("reports schema-invalid arguments as a tool error", async () => {
     const result = await call(client, "read_text_file", { path: 42 });
     expect(result.isError).toBe(true);
     expect(textOf(result)).toMatch(
-      /^MCP error -32602: Input validation error: Invalid arguments for tool read_text_file/,
+      /^Input validation error: Invalid arguments for tool read_text_file/,
     );
   });
 });

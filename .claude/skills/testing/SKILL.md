@@ -72,7 +72,7 @@ per-session setup and teardown the server needs.
 
 | Server | Factory | Harness | `connect(…)` takes |
 | --- | --- | --- | --- |
-| `everything` | `createServer()` in `server/index.ts`, returns `{ server, cleanup }` | `__tests__/harness.ts` | `{ capabilities, taskStore, setup, sessionId }`, all optional |
+| `everything` | `createServer()` in `server/index.ts`, returns `{ server, cleanup }` | `__tests__/harness.ts` | `{ capabilities, setup, sessionId }`, all optional |
 | `filesystem` | `createServer(allowedDirectories)` in `server.ts` | `__tests__/helpers.ts` | the allowed directories, then `{ capabilities, listRoots }` |
 | `memory` | `createServer(memoryFilePath)` in `index.ts` | `__tests__/helpers.ts` | the graph file's path (`makeTempGraph()` makes one) |
 | `sequentialthinking` | `createServer()` in `index.ts` | `__tests__/helpers.ts` | `{ disableThoughtLogging }`, defaulting to `"true"` |
@@ -83,7 +83,7 @@ Each `connect` returns the `client` and a `close()`; call `close()` in
 
 ```ts
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Client } from "@modelcontextprotocol/client";
 import { connect, contentOf, textOf, type Session } from "./harness.js";
 
 describe("echo, over the protocol", () => {
@@ -123,12 +123,12 @@ What `everything`'s harness does that a hand-rolled connection would miss:
   next test. `connect()` sets a fresh `sessionId` on the server transport
   (`sessionId: null` keeps it undefined, as stdio does), and `close()` runs the
   server's `cleanup(sessionId)`, which also stops the timers `createServer()`
-  starts (the roots sync, the task store).
+  starts (the roots sync).
 - **Capabilities.** A tool `everything` registers in `registerConditionalTools`
   appears only when the client declares the matching capability: pass
   `capabilities` (`ALL_CAPABILITIES` declares every one), with `setup` to
   install the client's handlers for the requests the server sends back
-  (sampling, elicitation, roots) and `taskStore` for the task-augmented ones.
+  (sampling, elicitation, roots).
 - **Notifications.** `session.notifications` collects every notification no
   specific handler consumed; `ofMethod(notifications, method)` filters it.
 

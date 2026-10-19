@@ -8,7 +8,7 @@ A Model Context Protocol server for Git repository interaction and automation. T
 
 Source: https://github.com/modelcontextprotocol/servers/tree/main/src/git
 
-Requires MCP Python SDK 1.x (`mcp>=1.29.0,<2`). SDK 2.0 renamed APIs this server uses. The port to v2 is in progress.
+Requires MCP Python SDK 2.x (`mcp>=2.3,<3`). The server is built on the SDK's high-level `MCPServer`: each tool is a typed Python function, and the SDK derives its input schema from the signature.
 
 Please note that mcp-server-git is currently in early development. The functionality and available tools are subject to change and expansion as we continue to develop and improve the server.
 
@@ -99,6 +99,17 @@ Please note that mcp-server-git is currently in early development. The functiona
      - `contains` (string, optional): The commit sha that branch should contain. Do not pass anything to this param if no commit sha is specified
      - `not_contains` (string, optional): The commit sha that branch should NOT contain. Do not pass anything to this param if no commit sha is specified
    - Returns: List of branches
+
+### Protocol versions
+
+The server speaks both eras of the Model Context Protocol over stdio, with nothing to configure: a **2026-07-28** client (discovered with `server/discover`, no session) and a **2025-11-25** client (the `initialize` handshake). The client's first request decides which. Tools behave the same in both.
+
+Roots is deprecated in 2026-07-28, and this server never asks a client for Roots in either era: repository access comes from `--repository` alone, or, with no `--repository`, from each tool call's `repo_path`. Methods the 2026-07-28 specification removes, such as `ping`, are answered only on a 2025-11-25 connection.
+
+### Errors
+
+- **A tool that fails** returns a result with `isError: true` whose text is `Error executing tool <name>: <message>`, so the model can read it and correct the call. This covers git errors (an unknown revision, a failed command), a `repo_path` that is not a repository or is outside `--repository`, the flag-injection guards, and arguments that do not match the tool's input schema.
+- **An unknown tool name** is a protocol error, JSON-RPC `-32602` (`Unknown tool: <name>`), as the specification requires in both eras. Before 2.0.0 it was an `isError` result.
 
 ## Installation
 
@@ -295,7 +306,8 @@ help you debug any issues.
 ### Tests and coverage
 
 The test suite drives `serve()` in-process through an MCP `ClientSession`
-(see `tests/conftest.py`). From `src/git`:
+(see `tests/conftest.py`), and `tests/test_eras.py` runs a `Client` against it
+as a 2026-07-28 and as a 2025-11-25 client. From `src/git`:
 
 ```bash
 uv run --frozen pytest                 # the tests
