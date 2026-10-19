@@ -224,7 +224,7 @@ The mapping for filesystem tools is:
 
 ## Requirements
 
-Node.js 20 or later, when the server runs through `npx` or from source.
+Node.js 24 or later, when the server runs through `npx` or from source.
 
 ## Usage with Claude Desktop
 Add this to your `claude_desktop_config.json`:

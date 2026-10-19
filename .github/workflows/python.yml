@@ -52,7 +52,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
 
       - name: Run node --test
         run: node --test scripts/validate-py.test.mjs scripts/coverage-py.test.mjs scripts/lib/py-coverage.test.mjs
@@ -78,7 +78,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
 
       # The same per-server chain `npm run validate:py` runs locally: locked
       # sync, ruff check, ruff format --check, pyright, pytest, uv build.
@@ -111,7 +111,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
 
       - name: Coverage
         run: npm run coverage:py -- ${{ matrix.package }}

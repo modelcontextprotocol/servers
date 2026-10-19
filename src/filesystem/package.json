@@ -13,7 +13,7 @@
   },
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "bin": {
     "mcp-server-filesystem": "dist/index.js"
@@ -44,7 +44,7 @@
     "@modelcontextprotocol/client": "^2.3.1",
     "@types/diff": "^5.0.9",
     "@types/minimatch": "^5.1.2",
-    "@types/node": "^22",
+    "@types/node": "^24",
     "@vitest/coverage-v8": "^4.1.11",
     "shx": "^0.4.0",
     "typescript": "^5.8.2",

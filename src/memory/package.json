@@ -13,7 +13,7 @@
   },
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "bin": {
     "mcp-server-memory": "dist/index.js"
@@ -39,7 +39,7 @@
   },
   "devDependencies": {
     "@modelcontextprotocol/client": "^2.3.1",
-    "@types/node": "^22",
+    "@types/node": "^24",
     "@vitest/coverage-v8": "^4.1.11",
     "shx": "^0.4.0",
     "typescript": "^5.8.2",

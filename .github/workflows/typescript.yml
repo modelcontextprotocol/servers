@@ -46,7 +46,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
@@ -80,10 +80,10 @@ jobs:
   # root-guards job above; together they are the root `npm run validate`.
   #
   # Each package is also validated on every Node line it supports (#5068):
-  # 22, the oldest supported, through 26. The `node` axis multiplies legs,
-  # not steps, so the versions run side by side and the job takes no longer
-  # than its slowest leg. The other jobs here stay on one Node, 22: the oldest
-  # supported, so an API only newer Node has cannot slip in unnoticed.
+  # 24, the oldest supported (#5168), through 26. The `node` axis multiplies
+  # legs, not steps, so the versions run side by side and the job takes no
+  # longer than its slowest leg. The other jobs here stay on one Node, 24: the
+  # oldest supported, so an API only newer Node has cannot slip in unnoticed.
   validate:
     timeout-minutes: 15
     needs: [detect-packages]
@@ -91,7 +91,7 @@ jobs:
       fail-fast: false
       matrix:
         package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
-        node: [22, 24, 26]
+        node: [24, 26]
     name: Validate ${{ matrix.package }} (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
     steps:
@@ -134,7 +134,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       # The same install as the `validate` leg: this package plus the root. Its
@@ -166,7 +166,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       # The same install as the `validate` leg; its `prepare` builds `dist/`.
@@ -193,7 +193,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Install uv

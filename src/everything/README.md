@@ -24,7 +24,7 @@ Roots, sampling and logging are deprecated as of 2026-07-28 and stay available, 
 
 ## Requirements
 
-Node.js 20 or later, when the server runs through `npx` or from source.
+Node.js 24 or later, when the server runs through `npx` or from source.
 
 ## Usage with Claude Desktop (uses [stdio Transport](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#stdio))
 

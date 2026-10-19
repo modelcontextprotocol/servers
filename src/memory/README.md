@@ -144,7 +144,7 @@ The server serves both protocol eras on stdio from the same process. The client'
 
 ## Requirements
 
-Node.js 20 or later, when the server runs through `npx` or from source.
+Node.js 24 or later, when the server runs through `npx` or from source.
 
 # Usage with Claude Desktop
 
