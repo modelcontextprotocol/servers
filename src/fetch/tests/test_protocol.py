@@ -90,6 +90,13 @@ async def call(session: ClientSession, arguments: dict[str, Any]) -> CallToolRes
     return await session.call_tool("fetch", arguments)
 
 
+# MCPServer prefixes the message of a ToolError the tool raises (#5174).
+TOOL_ERROR = "Error executing tool fetch: "
+# MCPServer answers prompts/get with the prompt's own description, the same
+# for every call, so it no longer names the URL or the failure (#5174).
+PROMPT_DESCRIPTION = "Fetch a URL and extract its contents as markdown"
+
+
 # --------------------------------------------------------------------------
 # Initialization
 # --------------------------------------------------------------------------
@@ -99,9 +106,19 @@ async def test_initialize_advertises_tools_and_prompts(web: FakeWeb) -> None:
     async with connect() as (_, init):
         data = wire(init)
     assert data["serverInfo"]["name"] == "mcp-fetch"
-    assert "tools" in data["capabilities"]
-    assert "prompts" in data["capabilities"]
-    assert "resources" not in data["capabilities"]
+    assert data["capabilities"]["tools"] == {"listChanged": False}
+    assert data["capabilities"]["prompts"] == {"listChanged": False}
+    # MCPServer always serves resources/list; fetch registers none (#5174).
+    assert data["capabilities"]["resources"] == {
+        "subscribe": False,
+        "listChanged": False,
+    }
+
+
+async def test_resources_list_is_empty(web: FakeWeb) -> None:
+    async with connect() as (session, _):
+        result = await session.list_resources()
+    assert result.resources == []
 
 
 async def test_server_version_is_the_package_version(web: FakeWeb) -> None:
@@ -136,8 +153,9 @@ async def test_list_tools_wire_shape(web: FakeWeb) -> None:
         "idempotentHint": True,
         "openWorldHint": True,
     }
+    # MCPServer derives the schema from the tool function's signature (#5174),
+    # so the model is named after the tool and carries no description.
     assert tool["inputSchema"] == {
-        "description": "Parameters for fetching a URL.",
         "properties": {
             "url": {
                 "description": "URL to fetch",
@@ -171,7 +189,7 @@ async def test_list_tools_wire_shape(web: FakeWeb) -> None:
             },
         },
         "required": ["url"],
-        "title": "Fetch",
+        "title": "fetchArguments",
         "type": "object",
     }
 
@@ -196,30 +214,36 @@ async def test_call_with_only_url_applies_defaults(web: FakeWeb) -> None:
 
 
 @pytest.mark.parametrize(
-    ("arguments", "offending"),
+    ("arguments", "field"),
     [
-        ({}, "'url'"),
-        ({"url": ""}, "''"),
-        ({"url": 5}, "5"),
+        ({}, "url"),
+        ({"url": ""}, "url"),
+        ({"url": 5}, "url"),
         # #1624: the bounds are minimum 1 and maximum 999999, so the rejected
         # values are the same as under the old exclusive 0 and 1000000.
-        ({"url": PAGE, "max_length": 0}, "0"),
-        ({"url": PAGE, "max_length": 1000000}, "1000000"),
-        ({"url": PAGE, "start_index": -1}, "-1"),
-        ({"url": PAGE, "raw": "yes"}, "'yes'"),
+        ({"url": PAGE, "max_length": 0}, "max_length"),
+        ({"url": PAGE, "max_length": 1000000}, "max_length"),
+        ({"url": PAGE, "start_index": -1}, "start_index"),
+        ({"url": PAGE, "raw": "yes"}, "raw"),
+        # Strict: a string is not coerced to the integer or boolean the
+        # schema declares.
+        ({"url": PAGE, "max_length": "10"}, "max_length"),
+        ({"url": PAGE, "raw": "true"}, "raw"),
     ],
 )
 async def test_schema_violations_are_rejected_by_call_tool(
-    web: FakeWeb, arguments: dict[str, Any], offending: str
+    web: FakeWeb, arguments: dict[str, Any], field: str
 ) -> None:
-    # call_tool validates against inputSchema before the tool runs. The rest
-    # of the message is jsonschema's wording, which varies by version.
+    # MCPServer validates the arguments against the tool's signature before
+    # the tool runs and returns pydantic's report as an isError result, naming
+    # the field. The rest is pydantic's wording, which varies by version.
     async with connect() as (session, _):
         result = await call(session, arguments)
     assert wire(result)["isError"] is True
     text = text_of(result)
-    assert text.startswith("Input validation error: ")
-    assert offending in text
+    assert text.startswith(
+        f"{TOOL_ERROR}1 validation error for fetchArguments\n{field}\n"
+    )
     assert web.requests == []
 
 
@@ -237,26 +261,29 @@ async def test_max_length_bounds_are_inclusive(web: FakeWeb, max_length: int) ->
 
 @pytest.mark.parametrize("url", ["not a url", "example.com/page", "http://"])
 async def test_invalid_url_is_rejected_by_pydantic(web: FakeWeb, url: str) -> None:
-    # jsonschema does not check `format: uri`, so these reach Fetch(**arguments)
-    # and its ValidationError (a ValueError) becomes an isError result.
+    # The `url` parameter is an AnyUrl, so pydantic rejects these before the
+    # tool runs, as an isError result.
     async with connect() as (session, _):
         result = await call(session, {"url": url})
     assert wire(result)["isError"] is True
-    text = text_of(result)
-    assert "1 validation error for Fetch" in text
-    assert "url" in text
+    assert text_of(result).startswith(
+        f"{TOOL_ERROR}1 validation error for fetchArguments\nurl\n"
+    )
     assert web.requests == []
 
 
-async def test_unknown_tool_name_is_rejected_without_fetching(web: FakeWeb) -> None:
-    # call_tool skips schema validation for a tool it has not listed, so the
-    # name check in run_tool is what stops an unknown name from fetching.
+async def test_unknown_tool_name_is_a_jsonrpc_error(web: FakeWeb) -> None:
+    # Both spec revisions make an unknown tool a protocol error, -32602
+    # (#5174); nothing is fetched.
     web.add(ROBOTS, plain("", status=404))
     web.add(PAGE, plain("fetched anyway"))
     async with connect() as (session, _):
-        result = await session.call_tool("nope", {"url": PAGE})
-    assert wire(result)["isError"] is True
-    assert text_of(result) == "Unknown tool: nope"
+        with pytest.raises(MCPError) as excinfo:
+            await session.call_tool("nope", {"url": PAGE})
+    assert wire(excinfo.value.error) == {
+        "code": INVALID_PARAMS,
+        "message": "Unknown tool: nope",
+    }
     assert web.requests == []
 
 
@@ -265,9 +292,10 @@ async def test_unknown_tool_name_is_rejected_before_argument_validation(
 ) -> None:
     # An unknown name is reported as such, not as a missing `url` argument.
     async with connect() as (session, _):
-        result = await session.call_tool("nope", {})
-    assert wire(result)["isError"] is True
-    assert text_of(result) == "Unknown tool: nope"
+        with pytest.raises(MCPError) as excinfo:
+            await session.call_tool("nope", {})
+    assert excinfo.value.error.code == INVALID_PARAMS
+    assert excinfo.value.error.message == "Unknown tool: nope"
     assert web.requests == []
 
 
@@ -297,7 +325,7 @@ async def test_robots_401_403_blocks_fetch(web: FakeWeb, status: int) -> None:
         "content": [
             {
                 "type": "text",
-                "text": f"When fetching robots.txt ({ROBOTS}), received status {status} "
+                "text": f"{TOOL_ERROR}When fetching robots.txt ({ROBOTS}), received status {status} "
                 "so assuming that autonomous fetching is not allowed, the user can "
                 "try manually fetching by using the fetch prompt",
             }
@@ -318,7 +346,7 @@ async def test_robots_connection_failure_blocks_fetch(web: FakeWeb) -> None:
         "content": [
             {
                 "type": "text",
-                "text": f"Failed to fetch robots.txt {ROBOTS} due to a connection issue",
+                "text": f"{TOOL_ERROR}Failed to fetch robots.txt {ROBOTS} due to a connection issue",
             }
         ],
         "isError": True,
@@ -333,7 +361,7 @@ async def test_robots_disallow_blocks_fetch(web: FakeWeb) -> None:
         result = await call(session, {"url": PAGE})
     assert wire(result)["isError"] is True
     assert text_of(result) == (
-        f"The sites robots.txt ({ROBOTS}), specifies that autonomous fetching of this page is not allowed, "
+        f"{TOOL_ERROR}The sites robots.txt ({ROBOTS}), specifies that autonomous fetching of this page is not allowed, "
         f"<useragent>{DEFAULT_USER_AGENT_AUTONOMOUS}</useragent>\n"
         f"<url>{PAGE}</url>"
         f"<robots>\n{robots}\n</robots>\n"
@@ -531,7 +559,10 @@ async def test_http_error_status(web: FakeWeb, status: int) -> None:
         result = await call(session, {"url": PAGE})
     assert wire(result) == {
         "content": [
-            {"type": "text", "text": f"Failed to fetch {PAGE} - status code {status}"}
+            {
+                "type": "text",
+                "text": f"{TOOL_ERROR}Failed to fetch {PAGE} - status code {status}",
+            }
         ],
         "isError": True,
     }
@@ -548,7 +579,7 @@ async def test_connection_error(web: FakeWeb) -> None:
         "content": [
             {
                 "type": "text",
-                "text": f"Failed to fetch {PAGE}: ConnectError('connection refused')",
+                "text": f"{TOOL_ERROR}Failed to fetch {PAGE}: ConnectError('connection refused')",
             }
         ],
         "isError": True,
@@ -670,7 +701,8 @@ async def test_redirect_to_private_address_is_refused(web: FakeWeb) -> None:
         "content": [
             {
                 "type": "text",
-                "text": refused(metadata, "169.254.169.254", "169.254.169.254"),
+                "text": TOOL_ERROR
+                + refused(metadata, "169.254.169.254", "169.254.169.254"),
             }
         ],
         "isError": True,
@@ -715,7 +747,7 @@ async def test_private_address_is_refused_before_any_request(
     # httpx normalizes the host (::ffff:127.0.0.1 becomes ::ffff:7f00:1), so
     # only the shape of the message is pinned here.
     text = text_of(result)
-    assert text.startswith("Refused to fetch http://")
+    assert text.startswith(f"{TOOL_ERROR}Refused to fetch http://")
     assert "/robots.txt: " in text
     assert "which is not a public address" in text
     assert web.requests == []
@@ -746,7 +778,9 @@ async def test_hostname_resolving_to_a_private_address_is_refused(
     url = "https://intranet.example.com/"
     async with connect(ignore_robots_txt=True) as (session, _):
         result = await call(session, {"url": url})
-    assert text_of(result) == refused(url, "intranet.example.com", "10.1.2.3")
+    assert text_of(result) == TOOL_ERROR + refused(
+        url, "intranet.example.com", "10.1.2.3"
+    )
     assert web.requests == []
 
 
@@ -765,7 +799,7 @@ async def test_robots_redirect_to_private_address_is_refused(web: FakeWeb) -> No
     web.add(ROBOTS, httpx.Response(302, headers={"location": internal}))
     async with connect() as (session, _):
         result = await call(session, {"url": PAGE})
-    assert text_of(result) == refused(internal, "127.0.0.1", "127.0.0.1")
+    assert text_of(result) == TOOL_ERROR + refused(internal, "127.0.0.1", "127.0.0.1")
     assert web.urls() == [ROBOTS]
 
 
@@ -793,7 +827,7 @@ async def test_allow_private_ips_follows_redirect_to_private_address(
         prompt = await session.get_prompt("fetch", {"url": metadata})
     assert wire(result)["isError"] is False
     assert text_of(result) == f"{RAW_PREFIX_PLAIN}Contents of {PAGE}:\ninstance-secret"
-    assert prompt.description == f"Contents of {metadata}"
+    assert prompt.description == PROMPT_DESCRIPTION
     # robots.txt is only consulted for the original host, never the target.
     assert web.urls() == [ROBOTS, PAGE, metadata, metadata]
     # With the guard off, nothing is resolved by the server.
@@ -807,7 +841,9 @@ async def test_guard_uses_the_real_resolver() -> None:
     async with connect(ignore_robots_txt=True) as (session, _):
         result = await call(session, {"url": url})
     assert wire(result)["isError"] is True
-    assert text_of(result).startswith(f"Refused to fetch {url}: localhost resolves to ")
+    assert text_of(result).startswith(
+        f"{TOOL_ERROR}Refused to fetch {url}: localhost resolves to "
+    )
 
 
 async def test_timeouts_are_hard_coded(web: FakeWeb) -> None:
@@ -876,7 +912,7 @@ async def test_bad_proxy_config_is_a_tool_error(ignore_robots_txt: bool) -> None
         "content": [
             {
                 "type": "text",
-                "text": "Failed to set up the HTTP client, check the proxy "
+                "text": f"{TOOL_ERROR}Failed to set up the HTTP client, check the proxy "
                 "configuration (--proxy-url or the HTTP_PROXY, HTTPS_PROXY and "
                 "ALL_PROXY environment variables): "
                 "Unknown scheme for proxy URL URL('ftp://proxy.example.com')",
@@ -915,7 +951,7 @@ async def test_get_prompt_fetches_with_manual_agent_and_no_robots(
     async with connect() as (session, _):
         result = await session.get_prompt("fetch", {"url": PAGE})
     assert wire(result) == {
-        "description": f"Contents of {PAGE}",
+        "description": PROMPT_DESCRIPTION,
         "messages": [
             {
                 "role": "user",
@@ -950,7 +986,7 @@ async def test_get_prompt_fetch_failure_is_a_prompt_message(web: FakeWeb) -> Non
     async with connect() as (session, _):
         result = await session.get_prompt("fetch", {"url": PAGE})
     assert wire(result) == {
-        "description": f"Failed to fetch {PAGE}",
+        "description": PROMPT_DESCRIPTION,
         "messages": [
             {
                 "role": "user",
@@ -1008,7 +1044,7 @@ async def test_get_prompt_does_not_validate_the_url(
     async with connect() as (session, _):
         result = await session.get_prompt("fetch", {"url": "not a url"})
     data = wire(result)
-    assert data["description"] == "Failed to fetch not a url"
+    assert data["description"] == PROMPT_DESCRIPTION
     assert data["messages"][0]["content"]["text"].startswith(
         "Failed to fetch not a url: UnsupportedProtocol("
     )
@@ -1051,7 +1087,7 @@ async def test_server_discover_answers_the_2026_07_28_era() -> None:
         async def fake_stdio_server() -> AsyncIterator[Any]:
             yield server_streams
 
-        with patch("mcp_server_fetch.server.stdio_server", fake_stdio_server):
+        with patch("mcp.server.mcpserver.server.stdio_server", fake_stdio_server):
             async with anyio.create_task_group() as tg:
                 tg.start_soon(serve)
                 await client_write.send(SessionMessage(discover))
@@ -1066,6 +1102,7 @@ async def test_server_discover_answers_the_2026_07_28_era() -> None:
         "result": {
             "capabilities": {
                 "prompts": {"listChanged": False},
+                "resources": {"listChanged": False, "subscribe": False},
                 "tools": {"listChanged": False},
             },
             "supportedVersions": ["2026-07-28"],

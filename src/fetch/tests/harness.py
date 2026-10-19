@@ -22,6 +22,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, AsyncIterator, Callable, Union
+from unittest.mock import patch
 
 import anyio
 import httpx
@@ -112,17 +113,14 @@ async def connect(
         async def fake_stdio_server() -> AsyncIterator[Any]:
             yield server_streams
 
-        original = server_module.stdio_server
-        server_module.stdio_server = fake_stdio_server  # type: ignore[assignment]
-        try:
+        # MCPServer.run_stdio_async() opens the SDK's stdio_server.
+        with patch("mcp.server.mcpserver.server.stdio_server", fake_stdio_server):
             async with anyio.create_task_group() as tg:
                 tg.start_soon(lambda: server_module.serve(**serve_kwargs))
                 async with ClientSession(*client_streams) as session:
                     init = await session.initialize()
                     yield session, init
                 tg.cancel_scope.cancel()
-        finally:
-            server_module.stdio_server = original
 
 
 @pytest.fixture

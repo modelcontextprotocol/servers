@@ -749,7 +749,6 @@ version = "2026.10.18"
 source = { editable = "." }
 dependencies = [
     { name = "httpx", extra = ["socks"] },
-    { name = "jsonschema" },
     { name = "markdownify" },
     { name = "mcp" },
     { name = "protego" },
@@ -770,7 +769,6 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", extras = ["socks"], specifier = ">=0.27" },
-    { name = "jsonschema", specifier = ">=4.20.0" },
     { name = "markdownify", specifier = ">=0.13.1" },
     { name = "mcp", specifier = ">=2.2,<3" },
     { name = "protego", specifier = ">=0.6.2" },
