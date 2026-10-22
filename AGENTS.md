@@ -386,11 +386,16 @@ holds for a maintainer's own one-line fix as much as for a feature.
     workflow takes the release issue's number, writes `Closes #N` as the
     body's first line, names the branch `v2/chore/<N>-python-calver-<date>`
     and labels it `v2`.
-  - The changesets **"Version Packages"** PR cannot carry a `Closes` line: the
+  - The changesets **"Version Packages"** PR cannot keep a `Closes` line: the
     action rewrites its body on every push to `v2/main`, and its branch is the
     action's own (`changeset-release/v2/main`). The workflow labels it `v2`.
-    Tie it to the release issue with a **comment** (`Part of #N`), which an
-    update does not overwrite.
+    It is still **linked** to the release issue like every other PR: with
+    `addCloseIssueReferences` as soon as it is found, since the link lives
+    outside the body and survives the rewrites (on `v2/main` it closes
+    nothing at merge). Its body's first line becomes **`Part of #N`
+    immediately before merging**, after the last regeneration, and is checked
+    to still be there at merge. A `Part of #N` **comment** stays as the
+    durable textual record, since an update does not overwrite it.
 
 No other PR is exempt.
 

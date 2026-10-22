@@ -192,9 +192,18 @@ ordinary PR first.
 
 Then, on the PR:
 
-1. **Tie it to the release issue with a comment**, `Part of #N`. The action
-   rewrites the PR's body on every push to `v2/main`, so a `Closes` line there
-   would not survive; this is the exception `AGENTS.md` names.
+1. **Link it to the release issue, and leave a comment.** The action rewrites
+   the PR's body on every push to `v2/main`, so a `Closes` line there would
+   not survive; this is the exception `AGENTS.md` names. The link lives
+   outside the body, so make it now, with the `addCloseIssueReferences`
+   mutation from `/pr-flow` (step 6), and read it back. On `v2/main` it closes
+   nothing at merge. Then comment `Part of #N`, the textual record that every
+   rewrite leaves alone:
+
+   ```sh
+   PR=<VERSION_PACKAGES_PR>
+   gh pr comment "$PR" --repo modelcontextprotocol/servers --body "Part of #$N"
+   ```
 2. **Wait for its CI to pass.** The workflow token's push starts no workflow,
    so the Version Packages workflow dispatches the TypeScript, Python, DCO and
    Everything diff workflows on `changeset-release/v2/main` after each update.
@@ -212,7 +221,28 @@ Then, on the PR:
    `CHANGELOG.md` entry says what a user of the server needs to know, the
    consumed changeset files are deleted, and `package-lock.json` records the
    new versions.
-4. A maintainer merges it.
+4. **Put `Part of #N` as the body's first line, immediately before the
+   merge**, once nothing else will land on `v2/main` first: any push there
+   regenerates the body and drops the line.
+
+   ```sh
+   # Read the body first, and edit only on a successful, non-empty read: a
+   # failed read must never replace the generated release notes with the
+   # prefix alone.
+   OLD=$(gh pr view "$PR" --repo modelcontextprotocol/servers --json body --jq .body) \
+     && [ -n "$OLD" ] \
+     && printf 'Part of #%s\n\n%s\n' "$N" "$OLD" \
+       | gh pr edit "$PR" --repo modelcontextprotocol/servers --body-file - \
+     || echo "body read or edit FAILED — PR body left as it was" >&2
+   ```
+
+5. A maintainer merges it, **first checking the line is still the body's
+   first**. If a push regenerated the body in between, repeat step 4:
+
+   ```sh
+   gh pr view "$PR" --repo modelcontextprotocol/servers \
+     --json body --jq '.body | split("\n")[0]'    # must print: Part of #N
+   ```
 
 ### 2c. The Python version stamps: "Prepare Python Release"
 
