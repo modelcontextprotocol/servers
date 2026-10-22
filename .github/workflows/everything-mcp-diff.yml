@@ -26,6 +26,14 @@
 # reviewer. A diff that cannot run (a base that does not build, a server that
 # cannot be probed) does.
 #
+# The Version Packages PR is pushed and opened with the workflow token, whose
+# events start no `pull_request` run here: GitHub holds each one as
+# `action_required`, or fails it with no jobs (#5173). So the Version Packages
+# workflow dispatches this one on the PR's branch, as it does the CI workflows
+# (#5110), and the `dispatch-status` jobs report the dispatched run on the PR
+# as a commit status. The Prepare Python Release PR touches none of the paths
+# below, so it is not dispatched there.
+#
 # See: https://github.com/modelcontextprotocol/inspector/issues/1034
 name: Everything Server MCP Diff
 
@@ -191,6 +199,69 @@ jobs:
           name: mcp-diff-report
           path: mcp-diff-report/
           if-no-files-found: ignore
+
+  # A dispatched run's checks are left out of the status rollup a pull request
+  # reads, so on a dispatch these two jobs mirror the run onto the commit as a
+  # status, as in typescript.yml (whose comments hold the reasoning): pending
+  # at the start, then the result. Every other event skips both.
+  dispatch-status-pending:
+    name: Report the dispatched run as pending
+    if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+    steps:
+      - name: Set the commit status to pending
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -f state=pending -f context="Everything diff (dispatched)" \
+            -f description="Dispatched run in progress" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+  # `comment` runs only on `pull_request`, so on a dispatch it is skipped,
+  # which counts as passed; the report is in the run's summary and artifact.
+  dispatch-status:
+    name: Report the dispatched run's result
+    if: github.event_name == 'workflow_dispatch' && always()
+    needs: [dispatch-status-pending, diff, comment]
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+      # To look for a newer dispatched run of this workflow on the commit.
+      actions: read
+    steps:
+      - name: Set the commit status to the run's result
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          # A run superseded by a newer dispatch on the same commit posts
+          # nothing, whatever its jobs' results: the newer run owns the status
+          # (#5178). A failed lookup counts as no newer run, so this run still
+          # reports: a stale status is better than one left pending.
+          NEWER=$(gh run list --workflow everything-mcp-diff.yml --event workflow_dispatch \
+            --commit "$GITHUB_SHA" --json databaseId \
+            --jq "[.[] | select(.databaseId > $GITHUB_RUN_ID)] | length") || NEWER=0
+          if [ "${NEWER:-0}" -gt 0 ]; then
+            echo "Superseded by a newer dispatched run, which reports instead"
+            exit 0
+          fi
+          if jq -e 'all(.[]; .result == "success" or .result == "skipped")' <<<"$NEEDS" >/dev/null; then
+            STATE=success DESCRIPTION="The diff ran; the report is in the run's summary"
+          elif jq -e 'any(.[]; .result == "failure")' <<<"$NEEDS" >/dev/null; then
+            STATE=failure DESCRIPTION="The diff could not run; open the run for details"
+          else
+            STATE=error DESCRIPTION="The run was cancelled; dispatch it again"
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -f state="$STATE" -f context="Everything diff (dispatched)" \
+            -f description="$DESCRIPTION" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
 
   # Post (or update) a sticky PR comment so reviewers can see the diff without
   # navigating to the Actions tab. One comment per PR, found again by its

@@ -19,7 +19,9 @@
 # Python CI (#5110). Closing and reopening it does not help either: that fires
 # `pull_request`, and those workflows run on `push`. So after each update this
 # workflow dispatches both on the PR's branch; `workflow_dispatch` is the one
-# event the workflow token can start.
+# event the workflow token can start. The `pull_request` workflows, DCO and the
+# Everything diff, get no run from that token's events either (GitHub holds
+# them as `action_required`, #5173), so they are dispatched the same way.
 #
 # This workflow only ever opens a PR. It gives the action no publish script, so
 # it never publishes, tags or creates a Release; that is `release.yml`, on a
@@ -41,7 +43,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      # To dispatch the TypeScript and Python workflows on the PR's branch.
+      # To dispatch the CI, DCO and Everything diff workflows on the PR's branch.
       actions: write
     steps:
       - uses: actions/checkout@v6
@@ -89,6 +91,6 @@ jobs:
           PR: ${{ steps.changesets.outputs.pr-number }}
         run: |
           BRANCH=$(gh pr view "$PR" --json headRefName --jq .headRefName)
-          for workflow in typescript.yml python.yml; do
+          for workflow in typescript.yml python.yml dco.yml everything-mcp-diff.yml; do
             gh workflow run "$workflow" --ref "$BRANCH"
           done
