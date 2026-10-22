@@ -429,7 +429,9 @@ measure it, is [`docs/skill-authoring.md`](./docs/skill-authoring.md).
    works while the skill can never auto-fire; an unquoted `#` truncates the
    description silently.
    **Quote any description containing `#` or `:`**, and keep the opening `---`
-   on the file's first line.
+   on the file's first line. **A body holds no `$0`–`$9` and no `$ARGUMENTS`**:
+   Claude Code substitutes them when a skill is invoked with arguments, so a
+   recipe's shell parameters or awk fields reach the model rewritten.
 2. **Every skill declares `disable-model-invocation` explicitly. Default it to
    `false`.** Invoking a skill has no side effects (it loads instructions), and
    work is usually asked for in prose, which a `true` skill can never answer. A

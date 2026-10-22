@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import {
   splitFrontmatter,
   parseSkill,
+  findArgumentPlaceholders,
   isChainCase,
   MIN_CHAIN_LENGTH,
   MIN_POSITIVE_CASES,
@@ -145,6 +146,37 @@ test("parseSkill rejects a skill nothing can reach", () => {
     ),
   );
   assert.match(r.errors.join(), /unreachable/);
+});
+
+test("parseSkill rejects argument placeholders in the body", () => {
+  // Claude Code substitutes these when a skill is invoked with arguments, so a
+  // recipe's shell positional parameters arrive rewritten (#5160).
+  const head =
+    "---\nname: x\ndescription: d\ndisable-model-invocation: true\n---\n";
+  const r = parseSkill(
+    "x",
+    head + '\nopt() {\n  jq --arg f "$1" --arg o "$2"\n}\nSee $ARGUMENTS.\n',
+  );
+  assert.deepEqual(
+    r.errors.map((e) => e.split(",")[0]),
+    ["line 8 has `$1`", "line 8 has `$2`", "line 10 has `$ARGUMENTS`"],
+  );
+  // jq's `$ARGS`, named variables and `${VAR}` are not placeholders.
+  assert.deepEqual(
+    parseSkill(
+      "x",
+      head + 'jq -r \'$ARGS.positional as [$f]\' --args "$@" "${FIELD}"\n',
+    ).errors,
+    [],
+  );
+});
+
+test("findArgumentPlaceholders counts lines from the top of the file", () => {
+  const text = "---\na: b\n---\nfirst\n$0 here\n";
+  const { body } = splitFrontmatter(text);
+  assert.deepEqual(findArgumentPlaceholders(text, body), [
+    { line: 5, placeholder: "$0" },
+  ]);
 });
 
 test("parseSkill validates the paths list", () => {

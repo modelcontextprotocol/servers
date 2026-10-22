@@ -53,10 +53,12 @@ every time**:
 # The board's fields, once per session. Refuses to go on from a failed call.
 FIELDS=$(gh project field-list 43 --owner modelcontextprotocol --format json) || FIELDS=
 # opt <Field> <Option name> → the option's current id, or nothing.
+# The arguments reach jq through --args, never as shell positional parameters:
+# Claude Code rewrites those in a skill invoked with arguments (#5160).
 opt() {
-  jq -r --arg f "$1" --arg o "$2" \
-    '.fields[] | select(.name == $f) | .options[] | select(.name == $o) | .id' \
-    <<<"$FIELDS"
+  jq -r '$ARGS.positional as [$f, $o]
+    | .fields[] | select(.name == $f) | .options[] | select(.name == $o) | .id' \
+    --args "$@" <<<"$FIELDS"
 }
 
 STATUS_OPT=$(opt Status "Todo")
