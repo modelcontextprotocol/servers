@@ -19,6 +19,24 @@ Release whose commit is not on `main`.
 environment deployments are a maintainer's acts. So is merging any PR. Prepare,
 verify and recommend; do not perform those.
 
+## 0. Check this session's instructions first
+
+A release is the longest-running session and the costliest to get wrong, and
+it follows this skill and `AGENTS.md` exactly as they were when the session
+started. Before step 1, run the staleness check in `AGENTS.md`
+**Issue-driven work style** (all work in a worktree freshly cut from
+`origin/v2/main`), whatever the `SessionStart` hook printed: the hook ran when
+the session began, and this check runs now.
+
+On `STALE`, or a `STALE` line from the `SessionStart` hook, **stop** and ask
+for a session started in a fresh worktree. The v2.0.0 release ran its first
+three steps on a `release` skill 447 commits out of date (#5167). Re-run the
+check after each preparation PR merges, since `v2/main` moves under the
+session, **from the session-start revision, not `HEAD`**: this flow moves
+between worktrees (step 4e moves the verification worktree onto a newer
+candidate), and a newer worktree's `HEAD` says nothing about the rules this
+session loaded. The hook prints that revision and the re-check command.
+
 ## The shape
 
 One **release issue**, up to three **preparation PRs** on `v2/main`, one

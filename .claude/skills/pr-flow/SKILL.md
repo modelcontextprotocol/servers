@@ -40,12 +40,11 @@ gh issue edit <N> --repo modelcontextprotocol/servers --add-assignee @me
 ## 2. Branch
 
 `v2/<type>/<N>-<slug>`, cut from **`origin/v2/main`** into a **new git
-worktree**, never by switching branches in the primary checkout. Several agent
-sessions work this repo on one machine at once and share the primary checkout:
-a `git switch` there moves the branch out from under every other session using
-it, and carries one task's uncommitted edits, `dist/` output and
-`node_modules` into another's. A worktree per issue gives each task its own
-tree and leaves the primary checkout alone.
+worktree**, never by switching branches in the primary checkout. The rule, and
+the check that this session's own instructions are current, is `AGENTS.md`
+**Issue-driven work style** (all work in a worktree freshly cut from
+`origin/v2/main`). If that check, or the `SessionStart` hook, said `STALE`,
+stop here: a fresh branch does not refresh the rules this session loaded.
 
 Run it from the primary checkout. The worktree is a **sibling** directory named
 for the checkout plus the issue number (`servers` → `../servers-4810`), never a
