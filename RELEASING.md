@@ -39,7 +39,7 @@ node scripts/prepare-python-release.mjs    # prints one "name: old -> new" line 
 ### PRs opened by these workflows
 
 > [!NOTE]
-> Both workflows push their PR's branch with the workflow token, and a push made with that token starts no workflow, so each one then dispatches the TypeScript and Python workflows on that branch (`workflow_dispatch` is the one event the token can start). A PR does not list dispatched checks, so each dispatched run also reports itself on the PR's head commit as a status, `TypeScript (dispatched)` and `Python (dispatched)`; wait for both to pass before merging. Closing and reopening the PR does not start them: that fires `pull_request`, and those workflows run on `push`. To run them again by hand: `gh workflow run typescript.yml --ref <branch>` (and `python.yml`). The Version Packages PR's body is rewritten on every push to `v2/main`, so it is tied to the release issue by a comment (`Part of #N`) instead of a body line. The repository setting **Settings → Actions → General → Allow GitHub Actions to create and approve pull requests** must be on, or the workflows fail at the step that opens the PR.
+> Both workflows push their PR's branch with the workflow token, and a push made with that token starts no workflow, so each one then dispatches the TypeScript and Python workflows on that branch (`workflow_dispatch` is the one event the token can start). A PR does not list dispatched checks, so each dispatched run also reports itself on the PR's head commit as a status, `TypeScript (dispatched)` and `Python (dispatched)`; wait for both to pass before merging. Closing and reopening the PR does not start them: that fires `pull_request`, and those workflows run on `push`. To run them again by hand: `gh workflow run typescript.yml --ref <branch>` (and `python.yml`). The Version Packages PR's body is rewritten on every push to `v2/main`, so it is linked to the release issue with `addCloseIssueReferences` (which lives outside the body), carries a `Part of #N` comment as its textual record, and gets `Part of #N` as its body's first line only immediately before it is merged. The repository setting **Settings → Actions → General → Allow GitHub Actions to create and approve pull requests** must be on, or the workflows fail at the step that opens the PR.
 
 ## How publishing works
 
@@ -77,7 +77,7 @@ A release ships one **milestone**. The step-by-step procedure, with its commands
 1. **A release issue**, `Release vX.Y.Z`, is filed for the milestone. Every PR below references it, and it stays open until the Release is published.
 2. **Preparation PRs land on `v2/main`**, each starting with `Closes #<release issue>`:
    - the **audit** (`npm audit`, and `pip-audit` over each Python server's locked requirements): the report goes on the release issue, and any fix it forces is its own commit in a PR;
-   - the **Version Packages** PR (TypeScript), which references the release issue in a comment instead, because the changesets action rewrites its body;
+   - the **Version Packages** PR (TypeScript), which is linked to the release issue with `addCloseIssueReferences` and a `Part of #N` comment, and gets `Part of #N` as its body's first line just before merging, because the changesets action rewrites its body on every push;
    - the **Prepare Python Release** PR (Python).
 
    A milestone that touches both languages and needs an audit fix has all three. They are merged before the next step starts.
