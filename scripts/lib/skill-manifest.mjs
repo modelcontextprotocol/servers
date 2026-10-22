@@ -73,7 +73,35 @@ export function splitFrontmatter(text) {
 }
 
 /**
- * Parse and validate one skill's frontmatter.
+ * Argument placeholders in a skill's body: `$0`–`$9` and `$ARGUMENTS`.
+ *
+ * When a skill is invoked WITH arguments, Claude Code substitutes these before
+ * the model reads the body, so a shell positional parameter or an awk field in
+ * a recipe arrives rewritten. `board-ops`'s option lookup reached the model with
+ * its field name replaced by a word of the arguments, and resolved no option id
+ * (#5160). Invoked without arguments the body is untouched, which is why a spot
+ * check passes. No skill here takes arguments on purpose, so every occurrence is
+ * the hazard; a skill that did would need an allowance here.
+ *
+ * @param {string} text Full file contents.
+ * @param {string} body The part after the frontmatter, from `splitFrontmatter`.
+ * @returns {Array<{ line: number, placeholder: string }>} 1-based file lines.
+ */
+export function findArgumentPlaceholders(text, body) {
+  const firstBodyLine = text
+    .slice(0, text.length - body.length)
+    .split("\n").length;
+  const hits = [];
+  body.split("\n").forEach((line, i) => {
+    for (const m of line.matchAll(/\$(?:ARGUMENTS|\d)/g)) {
+      hits.push({ line: firstBodyLine + i, placeholder: m[0] });
+    }
+  });
+  return hits;
+}
+
+/**
+ * Parse and validate one skill's frontmatter and body.
  *
  * @param {string} dirName Directory the SKILL.md lives in — the skill's identity.
  * @param {string} text Full file contents.
@@ -82,7 +110,7 @@ export function splitFrontmatter(text) {
  */
 export function parseSkill(dirName, text) {
   const errors = [];
-  const { frontmatter, error } = splitFrontmatter(text);
+  const { frontmatter, body, error } = splitFrontmatter(text);
   if (error) return { errors: [error] };
 
   let doc;
@@ -194,6 +222,13 @@ export function parseSkill(dirName, text) {
         "` and dropped `#" +
         dropped +
         "`; quote the value",
+    );
+  }
+
+  for (const hit of findArgumentPlaceholders(text, body)) {
+    errors.push(
+      `line ${hit.line} has \`${hit.placeholder}\`, which Claude Code replaces when the skill is invoked with arguments (#5160); ` +
+        "write the recipe without it (jq `--args`, awk `-v`, a named variable)",
     );
   }
 

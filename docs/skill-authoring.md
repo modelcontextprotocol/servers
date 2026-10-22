@@ -81,6 +81,22 @@ Three further rules, each learned the expensive way:
   rate, and a prompt-only eval can never exercise a path trigger, so shipping it
   means shipping an untestable claim.
 
+## Writing the body
+
+**No `$0`–`$9` and no `$ARGUMENTS` anywhere in a body.** When a skill is
+invoked _with_ arguments (`/board-ops add #5159 as In Progress`, or the model
+passing `args`), Claude Code substitutes those placeholders before the model
+reads the body, so a recipe that uses shell positional parameters or awk fields
+arrives rewritten. `board-ops`'s `opt()` once reached the model as
+`--arg f "issue"` in place of its field-name parameter, and so resolved no
+option id for any field (#5160). Invoked without arguments the body is
+untouched, which is why reading the skill by hand never shows it.
+
+Name the values instead: hand a shell function's arguments to jq with
+`--args "$@"` and read `$ARGS.positional`, pass awk values with `-v`, or set a
+named variable before the call. `${NAME}` and jq's `$ARGS` are not
+placeholders. `verify:skills` rejects every occurrence, by line.
+
 ## Writing an eval case
 
 ### The first-move rule
@@ -567,7 +583,8 @@ release changes the default model.
    description from that point on so it stays *non-empty* — which is why it went
    unnoticed until `board-ops` lost both its board numbers. `verify:skills` now
    rejects that truncation, so the gate catches it; quote the value rather than
-   relying on the check to tell you.
+   relying on the check to tell you. The body holds no `$<digit>` or
+   `$ARGUMENTS` (see [Writing the body](#writing-the-body)).
 2. `disable-model-invocation` is declared explicitly; default it to `false`.
 3. Description is action-first, with `Use when …; when …; when …`.
 4. **If the skill is model-invoked**, `evals/evals.json` carries **at least
