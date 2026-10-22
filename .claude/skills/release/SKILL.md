@@ -222,11 +222,14 @@ Then, on the PR:
    regenerates the body and drops the line.
 
    ```sh
-   BODY=$(mktemp)
-   { echo "Part of #$N"; echo
-     gh pr view "$PR" --repo modelcontextprotocol/servers --json body --jq .body
-   } > "$BODY"
-   gh pr edit "$PR" --repo modelcontextprotocol/servers --body-file "$BODY"
+   # Read the body first, and edit only on a successful, non-empty read: a
+   # failed read must never replace the generated release notes with the
+   # prefix alone.
+   OLD=$(gh pr view "$PR" --repo modelcontextprotocol/servers --json body --jq .body) \
+     && [ -n "$OLD" ] \
+     && printf 'Part of #%s\n\n%s\n' "$N" "$OLD" \
+       | gh pr edit "$PR" --repo modelcontextprotocol/servers --body-file - \
+     || echo "body read or edit FAILED — PR body left as it was" >&2
    ```
 
 5. A maintainer merges it, **first checking the line is still the body's
