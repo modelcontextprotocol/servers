@@ -14,7 +14,7 @@
 // `origin/v2/main` and asks whether `v2/main` has changed the instructions
 // since this checkout's HEAD branched from it:
 //
-//   git diff --quiet HEAD...origin/v2/main -- AGENTS.md .claude/
+//   git diff --quiet HEAD...origin/v2/main -- ':/AGENTS.md' ':/.claude/'
 //
 // The three dots matter. They diff the merge base against `origin/v2/main`,
 // so a branch that edits the instructions itself (a PR like the one that
@@ -34,8 +34,26 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 /** The branch whose instructions a session must be running. */
 export const BASE = "origin/v2/main";
 
-/** The paths Claude Code loads its instructions from at session start. */
-export const INSTRUCTION_PATHS = ["AGENTS.md", ".claude/"];
+/**
+ * The paths Claude Code loads its instructions from at session start, as
+ * pathspecs anchored at the repository root (`:/`), so the same check means
+ * the same thing run from `src/git` as from the root.
+ */
+export const INSTRUCTION_PATHS = [":/AGENTS.md", ":/.claude/"];
+
+/**
+ * Pure: the command that re-checks, later in the session, the instructions
+ * loaded at `startSha`. It names the session-start revision rather than
+ * `HEAD`: once the session moves into a newer worktree, that worktree's
+ * `HEAD` can match `origin/v2/main` while the rules the session holds are
+ * still the ones it started with.
+ *
+ * @param {string} startSha
+ */
+export function recheckCommand(startSha) {
+  const paths = INSTRUCTION_PATHS.map((p) => `'${p}'`).join(" ");
+  return `git fetch origin v2/main && git diff --quiet ${startSha}...${BASE} -- ${paths} || echo STALE`;
+}
 
 /** How long the fetch may take before the check falls back to the local ref. */
 export const FETCH_TIMEOUT_MS = 15_000;
@@ -49,13 +67,21 @@ export const MAX_NAMED = 5;
  * @param {{
  *   fetched: boolean,
  *   baseSha: string | null,
+ *   startSha: string | null,
  *   stale: boolean,
  *   changed: string[],
  *   primary: boolean,
  * }} state
  * @returns {string[]}
  */
-export function report({ fetched, baseSha, stale, changed, primary }) {
+export function report({
+  fetched,
+  baseSha,
+  startSha,
+  stale,
+  changed,
+  primary,
+}) {
   const lines = [];
   if (!fetched)
     lines.push(
@@ -82,6 +108,12 @@ export function report({ fetched, baseSha, stale, changed, primary }) {
       `session-instructions-check: AGENTS.md and .claude/ match ${BASE} (${baseSha.slice(0, 8)}).`,
     );
   }
+  if (!stale && startSha !== null)
+    lines.push(
+      `session-instructions-check: this session loaded its instructions at ${startSha}. ` +
+        "Re-check from that revision, not from HEAD, after v2/main moves or the session changes " +
+        `checkout: ${recheckCommand(startSha)}`,
+    );
   if (primary)
     lines.push(
       "session-instructions-check: this session started in the primary checkout, which concurrent " +
@@ -113,6 +145,8 @@ export function checkSession({ cwd, fetch = true }) {
     cwd,
   );
   const baseSha = resolved.status === 0 ? resolved.stdout.trim() : null;
+  const head = git(["rev-parse", "--verify", "--quiet", "HEAD"], cwd);
+  const startSha = head.status === 0 ? head.stdout.trim() : null;
 
   let changed = [];
   if (baseSha !== null) {
@@ -139,6 +173,7 @@ export function checkSession({ cwd, fetch = true }) {
   return report({
     fetched,
     baseSha,
+    startSha,
     stale: changed.length > 0,
     changed,
     primary,

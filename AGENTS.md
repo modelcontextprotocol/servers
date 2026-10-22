@@ -518,14 +518,15 @@ here.
 
     ```sh
     git fetch origin v2/main
-    git diff --quiet HEAD...origin/v2/main -- AGENTS.md .claude/ \
+    git diff --quiet HEAD...origin/v2/main -- ':/AGENTS.md' ':/.claude/' \
       || echo "STALE: instructions differ from origin/v2/main"
     ```
 
     The three dots compare against where `HEAD` branched from `v2/main`, so
-    a branch's own edits to the instructions do not read as stale. **If it is
-    stale, stop and ask for a session started in a fresh worktree**, rather
-    than continuing on rules you cannot trust.
+    a branch's own edits to the instructions do not read as stale; the `:/`
+    anchors the paths at the repository root, so the check means the same
+    from any directory. **If it is stale, stop and ask for a session started
+    in a fresh worktree**, rather than continuing on rules you cannot trust.
 
   - The `SessionStart` hook in `.claude/settings.json`
     (`scripts/session-instructions-check.mjs`) runs that check at every
@@ -533,7 +534,13 @@ here.
     the session started in the primary checkout. A `STALE` line from it is
     the same stop.
   - **A long session re-checks after `v2/main` moves under it**, for
-    example after its own PRs merge.
+    example after its own PRs merge, **from the revision it started at, not
+    from `HEAD`**: once the session moves into a newer worktree, that
+    worktree's `HEAD` can match `origin/v2/main` while the rules the session
+    holds are still the old ones. The hook prints the session-start revision
+    and the exact re-check command; without the hook, record
+    `git rev-parse HEAD` in the starting checkout before anything else, and
+    put it in place of `HEAD` above.
 - **When work begins**, assign the issue to yourself, set Status to
   **In Progress**, and create a branch named
   `v2/<type>/<ISSUE_NUMBER>-<slug>` (for example

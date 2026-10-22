@@ -13,6 +13,7 @@ import {
   BASE,
   MAX_NAMED,
   checkSession,
+  recheckCommand,
   report,
 } from "./session-instructions-check.mjs";
 
@@ -20,6 +21,7 @@ const SHA = "0123456789abcdef".repeat(2) + "01234567";
 const fresh = {
   fetched: true,
   baseSha: SHA,
+  startSha: null,
   stale: false,
   changed: [],
   primary: false,
@@ -29,6 +31,22 @@ test("report: fresh, in a worktree, prints one confirming line", () => {
   assert.deepEqual(report(fresh), [
     `session-instructions-check: AGENTS.md and .claude/ match ${BASE} (01234567).`,
   ]);
+});
+
+test("report: a known start revision adds the re-check, anchored at the root", () => {
+  const lines = report({ ...fresh, startSha: SHA });
+  assert.equal(lines.length, 2);
+  assert.ok(lines[1].includes(recheckCommand(SHA)), lines[1]);
+  assert.equal(
+    recheckCommand(SHA),
+    `git fetch origin v2/main && git diff --quiet ${SHA}...origin/v2/main -- ':/AGENTS.md' ':/.claude/' || echo STALE`,
+  );
+  // A stale session stops; it is not told how to re-check.
+  assert.equal(
+    report({ ...fresh, startSha: SHA, stale: true, changed: ["AGENTS.md"] })
+      .length,
+    1,
+  );
 });
 
 test("report: stale names what changed and says to stop", () => {
@@ -133,7 +151,10 @@ test("checkSession: a primary checkout at origin/v2/main is fresh, with the prim
   t.after(s.done);
   const lines = checkSession({ cwd: s.work });
   assert.match(lines[0], /match origin\/v2\/main/);
-  assert.match(lines[1], /started in the primary checkout/);
+  assert.ok(
+    lines.some((l) => /started in the primary checkout/.test(l)),
+    lines.join("\n"),
+  );
 });
 
 test("checkSession: the fetch finds an instruction change made behind the checkout's back", (t) => {
@@ -170,8 +191,45 @@ test("checkSession: a fresh worktree is fresh, with no primary note", (t) => {
   const wt = path.join(s.work, "..", "wt");
   s.git("worktree", "add", "-q", "--detach", wt, "origin/v2/main");
   const lines = checkSession({ cwd: wt });
-  assert.equal(lines.length, 1, lines.join("\n"));
+  assert.equal(lines.length, 2, lines.join("\n"));
   assert.match(lines[0], /match origin\/v2\/main/);
+  assert.match(lines[1], /loaded its instructions at [0-9a-f]{40}/);
+});
+
+test("checkSession: run from a subdirectory, it still checks the root instructions (#5219 review)", (t) => {
+  const s = setup();
+  t.after(s.done);
+  s.write("src/git/README.md", "a server\n");
+  s.git("add", "-A");
+  s.git("commit", "-q", "-m", "a server directory");
+  s.advance("AGENTS.md", "rules v2\n");
+  const lines = checkSession({ cwd: path.join(s.work, "src", "git") });
+  assert.match(lines[0], /^STALE: .*changed AGENTS\.md since/);
+});
+
+test("checkSession: the printed re-check catches stale rules after moving to a newer worktree (#5219 review)", (t) => {
+  const s = setup();
+  t.after(s.done);
+  // The session starts here, fresh, and is told its start revision.
+  const started = checkSession({ cwd: s.work });
+  const recheck = started.find((l) => l.includes("Re-check from"));
+  assert.ok(recheck, started.join("\n"));
+  const cmd = /checkout: (.*)$/.exec(recheck)[1];
+
+  // v2/main changes the rules; the session cuts a new worktree from it.
+  s.advance("AGENTS.md", "rules v2\n");
+  s.git("fetch", "-q", "origin", "v2/main");
+  const wt = path.join(s.work, "..", "newer");
+  s.git("worktree", "add", "-q", "--detach", wt, "origin/v2/main");
+
+  // A HEAD-based check in the new worktree passes; the printed one does not.
+  const sh = (command) =>
+    spawnSync("sh", ["-c", command], { cwd: wt, env, encoding: "utf8" });
+  assert.equal(
+    sh("git diff --quiet HEAD...origin/v2/main -- ':/AGENTS.md'").status,
+    0,
+  );
+  assert.equal(sh(cmd).stdout.trim(), "STALE");
 });
 
 test("checkSession: a HEAD with no history in common with v2/main is stale", (t) => {

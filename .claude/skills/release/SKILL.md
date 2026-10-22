@@ -32,7 +32,10 @@ On `STALE`, or a `STALE` line from the `SessionStart` hook, **stop** and ask
 for a session started in a fresh worktree. The v2.0.0 release ran its first
 three steps on a `release` skill 447 commits out of date (#5167). Re-run the
 check after each preparation PR merges, since `v2/main` moves under the
-session.
+session, **from the session-start revision, not `HEAD`**: this flow moves
+between worktrees (step 4e moves the verification worktree onto a newer
+candidate), and a newer worktree's `HEAD` says nothing about the rules this
+session loaded. The hook prints that revision and the re-check command.
 
 ## The shape
 
