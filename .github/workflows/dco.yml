@@ -12,18 +12,30 @@ name: DCO
 # are skipped: the only one is a milestone merge, whose commits were each
 # checked on their way into `v2/main`, and whose range reaches back past the
 # adoption of the rule.
+#
+# The version PRs that automation opens (Version Packages, Prepare Python
+# Release) are pushed and opened with the workflow token, whose events start no
+# run here: GitHub holds each one as `action_required`, or fails it with no
+# jobs (#5173). Their workflows dispatch this one on the PR's branch instead,
+# as they do the CI workflows (#5110). A dispatched run has no PR, so it checks
+# the default range, `origin/v2/main..<branch tip>`, which is what both version
+# PRs add, and the `dispatch-status` jobs below report it on the PR as a
+# commit status.
 on:
   pull_request:
     types: [opened, synchronize, reopened, edited]
     branches-ignore: [main]
+  workflow_dispatch:
 
-# Read-only, and handed no secret, so this job holds no credential and stays
-# outside the SHA-pin rule (`verify:action-pins`).
+# Read-only, and handed no secret but `GITHUB_TOKEN`, so no job here holds a
+# credential and each stays outside the SHA-pin rule (`verify:action-pins`).
 permissions:
   contents: read
 
+# A dispatched run has no PR number, so it is grouped by its branch: a shared
+# empty group would let one version PR's run cancel the other's.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -34,7 +46,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           # The whole history, so both ends of the range and their merge base
           # are present.
           fetch-depth: 0
@@ -44,9 +56,86 @@ jobs:
         with:
           node-version: 24
 
-      # Node built-ins and git only, so no `npm ci`.
+      # Node built-ins and git only, so no `npm ci`. A dispatched run checks
+      # the script's default base (see the header).
       - name: Check every commit is signed off
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || 'origin/v2/main' }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: npm run verify:dco -- --base "$BASE_SHA" --head "$HEAD_SHA"
+
+  # A dispatched run's checks are left out of the status rollup a pull request
+  # reads, so on a dispatch these two jobs mirror the run onto the commit as a
+  # status, as in typescript.yml (whose comments hold the reasoning): pending
+  # at the start, then the result. A `pull_request` run skips both. Unlike
+  # typescript.yml's (#5223), the pending job also stays silent when a newer
+  # dispatched run exists, so a late or re-run older run cannot reset the
+  # newer run's result to pending, which its own result job would then leave.
+  dispatch-status-pending:
+    name: Report the dispatched run as pending
+    if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+      # To look for a newer dispatched run of this workflow on the commit.
+      actions: read
+    steps:
+      - name: Set the commit status to pending
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # A re-run keeps its run ID, so a newer run means this one is
+          # superseded and the status is no longer its to set.
+          NEWER=$(gh run list --workflow dco.yml --event workflow_dispatch \
+            --commit "$GITHUB_SHA" --json databaseId \
+            --jq "[.[] | select(.databaseId > $GITHUB_RUN_ID)] | length") || NEWER=0
+          if [ "${NEWER:-0}" -gt 0 ]; then
+            echo "Superseded by a newer dispatched run, which reports instead"
+            exit 0
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -f state=pending -f context="DCO (dispatched)" \
+            -f description="Dispatched run in progress" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+  dispatch-status:
+    name: Report the dispatched run's result
+    if: github.event_name == 'workflow_dispatch' && always()
+    needs: [dispatch-status-pending, dco]
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+      # To look for a newer dispatched run of this workflow on the commit.
+      actions: read
+    steps:
+      - name: Set the commit status to the run's result
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          # A run superseded by a newer dispatch on the same commit posts
+          # nothing, whatever its jobs' results: the newer run owns the status
+          # (#5178). A failed lookup counts as no newer run, so this run still
+          # reports: a stale status is better than one left pending.
+          NEWER=$(gh run list --workflow dco.yml --event workflow_dispatch \
+            --commit "$GITHUB_SHA" --json databaseId \
+            --jq "[.[] | select(.databaseId > $GITHUB_RUN_ID)] | length") || NEWER=0
+          if [ "${NEWER:-0}" -gt 0 ]; then
+            echo "Superseded by a newer dispatched run, which reports instead"
+            exit 0
+          fi
+          if jq -e 'all(.[]; .result == "success" or .result == "skipped")' <<<"$NEEDS" >/dev/null; then
+            STATE=success DESCRIPTION="Every commit is signed off"
+          elif jq -e 'any(.[]; .result == "failure")' <<<"$NEEDS" >/dev/null; then
+            STATE=failure DESCRIPTION="A commit is not signed off; open the run for details"
+          else
+            STATE=error DESCRIPTION="The run was cancelled; dispatch it again"
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -f state="$STATE" -f context="DCO (dispatched)" \
+            -f description="$DESCRIPTION" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
