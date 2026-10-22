@@ -36,6 +36,9 @@ const workflow = (name) => parse(read(`.github/workflows/${name}`));
 
 // `trigger` is the event the workflow runs on when a person pushes; the
 // workflow token's version of that event starts no run, hence the dispatch.
+// `pendingChecksNewer`: the pending job, like the result job, stays silent
+// when a newer dispatched run exists (#5222); the CI workflows' pending jobs
+// do not yet (#5223).
 const CI = [
   {
     file: "typescript.yml",
@@ -43,11 +46,17 @@ const CI = [
     trigger: "push",
   },
   { file: "python.yml", context: "Python (dispatched)", trigger: "push" },
-  { file: "dco.yml", context: "DCO (dispatched)", trigger: "pull_request" },
+  {
+    file: "dco.yml",
+    context: "DCO (dispatched)",
+    trigger: "pull_request",
+    pendingChecksNewer: true,
+  },
   {
     file: "everything-mcp-diff.yml",
     context: "Everything diff (dispatched)",
     trigger: "pull_request",
+    pendingChecksNewer: true,
   },
 ];
 // The Python stamps touch none of the Everything diff's paths, so its
@@ -104,10 +113,10 @@ for (const { file, context, trigger } of CI) {
   });
 }
 
-// Run a `dispatch-status` script with a stub `gh` on PATH. The stub answers
+// Run a `dispatch-status` (or `-pending`) script with a stub `gh` on PATH. The stub answers
 // `gh run list` with the number of newer dispatched runs and records every
 // other call, so a test sees exactly which status, if any, the run posts.
-function runResultScript(script, { needs, newer }) {
+function runStatusScript(script, { needs = {}, newer }) {
   const dir = mkdtempSync(path.join(tmpdir(), "dispatch-status-"));
   try {
     const calls = path.join(dir, "calls");
@@ -171,7 +180,7 @@ for (const { file } of CI) {
     },
     () => {
       for (const needs of [FAILED, PASSED, CANCELLED])
-        assert.equal(runResultScript(script, { needs, newer: 1 }), null);
+        assert.equal(runStatusScript(script, { needs, newer: 1 }), null);
     },
   );
 
@@ -182,17 +191,35 @@ for (const { file } of CI) {
     },
     () => {
       assert.equal(
-        runResultScript(script, { needs: PASSED, newer: 0 }),
+        runStatusScript(script, { needs: PASSED, newer: 0 }),
         "success",
       );
       assert.equal(
-        runResultScript(script, { needs: FAILED, newer: 0 }),
+        runStatusScript(script, { needs: FAILED, newer: 0 }),
         "failure",
       );
       assert.equal(
-        runResultScript(script, { needs: CANCELLED, newer: 0 }),
+        runStatusScript(script, { needs: CANCELLED, newer: 0 }),
         "error",
       );
+    },
+  );
+}
+
+for (const { file } of CI.filter((c) => c.pendingChecksNewer)) {
+  const pending = workflow(file).jobs["dispatch-status-pending"];
+
+  // A superseded run's pending job (a late start, or a re-run, which keeps
+  // its run ID) must not reset the newer run's result to pending: its own
+  // result job would stay silent and leave it there.
+  test(
+    `${file}: a superseded run posts no pending status`,
+    { skip: SCRIPT_SKIP },
+    () => {
+      assert.equal(pending.permissions.actions, "read");
+      const script = pending.steps[0].run;
+      assert.equal(runStatusScript(script, { newer: 1 }), null);
+      assert.equal(runStatusScript(script, { newer: 0 }), "pending");
     },
   );
 }

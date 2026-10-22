@@ -203,7 +203,10 @@ jobs:
   # A dispatched run's checks are left out of the status rollup a pull request
   # reads, so on a dispatch these two jobs mirror the run onto the commit as a
   # status, as in typescript.yml (whose comments hold the reasoning): pending
-  # at the start, then the result. Every other event skips both.
+  # at the start, then the result. Every other event skips both. Unlike
+  # typescript.yml's (#5223), the pending job also stays silent when a newer
+  # dispatched run exists, so a late or re-run older run cannot reset the
+  # newer run's result to pending, which its own result job would then leave.
   dispatch-status-pending:
     name: Report the dispatched run as pending
     if: github.event_name == 'workflow_dispatch'
@@ -211,11 +214,23 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       statuses: write
+      # To look for a newer dispatched run of this workflow on the commit.
+      actions: read
     steps:
       - name: Set the commit status to pending
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
+          # A re-run keeps its run ID, so a newer run means this one is
+          # superseded and the status is no longer its to set.
+          NEWER=$(gh run list --workflow everything-mcp-diff.yml --event workflow_dispatch \
+            --commit "$GITHUB_SHA" --json databaseId \
+            --jq "[.[] | select(.databaseId > $GITHUB_RUN_ID)] | length") || NEWER=0
+          if [ "${NEWER:-0}" -gt 0 ]; then
+            echo "Superseded by a newer dispatched run, which reports instead"
+            exit 0
+          fi
           gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
             -f state=pending -f context="Everything diff (dispatched)" \
             -f description="Dispatched run in progress" \
