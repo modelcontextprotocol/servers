@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/session-instructions-check.mjs\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
