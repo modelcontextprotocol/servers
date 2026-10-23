@@ -22,6 +22,7 @@ import {
   getFileStats,
   readFileContent,
   writeFileContent,
+  createDirectory,
   moveFile,
   // Search & filtering functions
   searchFilesWithValidation,
@@ -30,9 +31,14 @@ import {
   tailFile,
   headFile,
 } from "../lib.js";
+import * as pinned from "../pinned-directory.js";
 
 // Mock fs module
 vi.mock("fs/promises");
+// The pinned-directory writes act on the real filesystem; their own suite
+// covers them, so here only what lib.ts hands them is checked.
+vi.mock("../pinned-directory.js");
+const mockPinned = vi.mocked(pinned);
 const mockFs = vi.mocked(fs);
 // fs.readdir is overloaded and vi.mocked types the mock against its last
 // (Buffer) overload; the code under test calls the withFileTypes overload.
@@ -81,29 +87,6 @@ function createMockFileHandle(content: Buffer) {
 // What lstat and the opened handle's stat report for the file an in-place
 // write replaces: a regular file, the same device and inode both times.
 const REGULAR_FILE = { isFile: () => true, dev: 1, ino: 42 } as Stats;
-
-interface MockWriteHandle {
-  stat: Mock;
-  truncate: Mock;
-  writeFile: Mock;
-  close: Mock;
-}
-
-function createMockWriteHandle(stats: Stats = REGULAR_FILE): MockWriteHandle {
-  return {
-    stat: vi.fn().mockResolvedValue(stats),
-    truncate: vi.fn().mockResolvedValue(undefined),
-    writeFile: vi.fn().mockResolvedValue(undefined),
-    close: vi.fn().mockResolvedValue(undefined),
-  };
-}
-
-function asWriteHandle(handle: MockWriteHandle): FileHandle {
-  // Double cast for the same reason as asFileHandle: the in-place write only
-  // calls stat(), truncate(), writeFile() and close(), which this double
-  // provides, and FileHandle's overloads cannot be matched by vi.fn() mocks.
-  return handle as unknown as FileHandle;
-}
 
 // The allow-list validatePath checks against; each server instance passes its
 // own (#4854), so the unit tests pass this one explicitly.
@@ -471,76 +454,39 @@ describe("Lib Functions", () => {
     });
 
     describe("writeFileContent", () => {
-      beforeEach(() => {
-        // An unchanged directory resolves to itself.
-        mockFs.realpath.mockImplementation(async (path: PathLike) =>
-          path.toString(),
-        );
-      });
-
-      it("writes file content", async () => {
-        const handle = createMockWriteHandle();
-        mockFs.open.mockResolvedValueOnce(asWriteHandle(handle));
-
+      it("creates a new file in its pinned directory", async () => {
         await writeFileContent("/test/file.txt", "new content");
 
-        expect(mockFs.open).toHaveBeenCalledWith("/test/file.txt", "wx");
-        expect(mockFs.realpath).toHaveBeenCalledWith("/test");
-        expect(handle.writeFile).toHaveBeenCalledWith("new content", "utf-8");
-        expect(handle.close).toHaveBeenCalled();
+        expect(mockPinned.createFileInDirectory).toHaveBeenCalledWith(
+          "/test/file.txt",
+          "new content",
+        );
+        expect(mockPinned.overwriteFileInDirectory).not.toHaveBeenCalled();
       });
 
-      it("overwrites an existing file in place, through one handle (#4512)", async () => {
-        mockFs.open.mockRejectedValueOnce(
+      it("overwrites an existing file in place, as the file lstat saw (#4512)", async () => {
+        mockPinned.createFileInDirectory.mockRejectedValueOnce(
           Object.assign(new Error("EEXIST"), { code: "EEXIST" }),
         );
         mockFs.lstat.mockResolvedValueOnce(REGULAR_FILE);
-        const handle = createMockWriteHandle();
-        mockFs.open.mockResolvedValueOnce(asWriteHandle(handle));
 
         await writeFileContent("/test/script.sh", "new content");
 
         expect(mockFs.lstat).toHaveBeenCalledWith("/test/script.sh");
-        expect(mockFs.open).toHaveBeenCalledWith(
+        expect(mockPinned.overwriteFileInDirectory).toHaveBeenCalledWith(
           "/test/script.sh",
-          fs.constants.O_RDWR | (fs.constants.O_NOFOLLOW ?? 0),
+          "new content",
+          REGULAR_FILE,
         );
-        expect(handle.truncate).toHaveBeenCalledWith(0);
-        expect(handle.writeFile).toHaveBeenCalledWith("new content", "utf-8");
-        expect(handle.close).toHaveBeenCalled();
         // No temp file, no rename over the target (#3199), no chmod to repair
         // the permission bits of a replaced inode.
-        expect(mockFs.open).toHaveBeenCalledTimes(2);
         expect(mockFs.writeFile).not.toHaveBeenCalled();
         expect(mockFs.rename).not.toHaveBeenCalled();
         expect(mockFs.chmod).not.toHaveBeenCalled();
       });
 
-      it("opens without O_NOFOLLOW where the platform has none (Windows)", async () => {
-        mockFs.open.mockRejectedValueOnce(
-          Object.assign(new Error("EEXIST"), { code: "EEXIST" }),
-        );
-        mockFs.lstat.mockResolvedValueOnce(REGULAR_FILE);
-        mockFs.open.mockResolvedValueOnce(
-          asWriteHandle(createMockWriteHandle()),
-        );
-        const constants = mockFs.constants as { O_NOFOLLOW?: number };
-        const noFollow = constants.O_NOFOLLOW;
-        constants.O_NOFOLLOW = undefined;
-        try {
-          await writeFileContent("/test/file.txt", "new content");
-        } finally {
-          constants.O_NOFOLLOW = noFollow;
-        }
-
-        expect(mockFs.open).toHaveBeenCalledWith(
-          "/test/file.txt",
-          fs.constants.O_RDWR,
-        );
-      });
-
       it("refuses to overwrite a path that is not a regular file", async () => {
-        mockFs.open.mockRejectedValueOnce(
+        mockPinned.createFileInDirectory.mockRejectedValueOnce(
           Object.assign(new Error("EEXIST"), { code: "EEXIST" }),
         );
         mockFs.lstat.mockResolvedValueOnce({
@@ -553,78 +499,28 @@ describe("Lib Functions", () => {
         ).rejects.toThrow(
           "Refusing to write: not a regular file: /test/link.txt",
         );
-        // Only the exclusive create, which failed with EEXIST.
-        expect(mockFs.open).toHaveBeenCalledTimes(1);
+        expect(mockPinned.overwriteFileInDirectory).not.toHaveBeenCalled();
       });
 
-      it("refuses to write when the opened file is not the one lstat saw", async () => {
-        mockFs.open.mockRejectedValueOnce(
-          Object.assign(new Error("EEXIST"), { code: "EEXIST" }),
+      it("reports a create failure other than EEXIST as is", async () => {
+        mockPinned.createFileInDirectory.mockRejectedValueOnce(
+          Object.assign(new Error("EIO"), { code: "EIO" }),
         );
-        mockFs.lstat.mockResolvedValueOnce(REGULAR_FILE);
-        const handle = createMockWriteHandle({
-          ...REGULAR_FILE,
-          ino: 43,
-        } as Stats);
-        mockFs.open.mockResolvedValueOnce(asWriteHandle(handle));
 
         await expect(
           writeFileContent("/test/file.txt", "new content"),
-        ).rejects.toThrow(
-          "Refusing to write: /test/file.txt was replaced while it was being opened",
-        );
-        expect(handle.truncate).not.toHaveBeenCalled();
-        expect(handle.writeFile).not.toHaveBeenCalled();
-        expect(handle.close).toHaveBeenCalled();
+        ).rejects.toThrow("EIO");
+        expect(mockPinned.overwriteFileInDirectory).not.toHaveBeenCalled();
       });
+    });
 
-      it("refuses to write when the opened file is on another device", async () => {
-        mockFs.open.mockRejectedValueOnce(
-          Object.assign(new Error("EEXIST"), { code: "EEXIST" }),
+    describe("createDirectory", () => {
+      it("creates the directory in its pinned parents", async () => {
+        await createDirectory("/test/a/b");
+
+        expect(mockPinned.createDirectoryInPlace).toHaveBeenCalledWith(
+          "/test/a/b",
         );
-        mockFs.lstat.mockResolvedValueOnce(REGULAR_FILE);
-        const handle = createMockWriteHandle({
-          ...REGULAR_FILE,
-          dev: 2,
-        } as Stats);
-        mockFs.open.mockResolvedValueOnce(asWriteHandle(handle));
-
-        await expect(
-          writeFileContent("/test/file.txt", "new content"),
-        ).rejects.toThrow("was replaced while it was being opened");
-        expect(handle.writeFile).not.toHaveBeenCalled();
-      });
-
-      it("refuses to write when the opened file is not a regular file", async () => {
-        mockFs.open.mockRejectedValueOnce(
-          Object.assign(new Error("EEXIST"), { code: "EEXIST" }),
-        );
-        mockFs.lstat.mockResolvedValueOnce(REGULAR_FILE);
-        const handle = createMockWriteHandle({
-          ...REGULAR_FILE,
-          isFile: () => false,
-        } as Stats);
-        mockFs.open.mockResolvedValueOnce(asWriteHandle(handle));
-
-        await expect(
-          writeFileContent("/test/file.txt", "new content"),
-        ).rejects.toThrow("was replaced while it was being opened");
-        expect(handle.writeFile).not.toHaveBeenCalled();
-      });
-
-      it("closes the handle when the write fails", async () => {
-        mockFs.open.mockRejectedValueOnce(
-          Object.assign(new Error("EEXIST"), { code: "EEXIST" }),
-        );
-        mockFs.lstat.mockResolvedValueOnce(REGULAR_FILE);
-        const handle = createMockWriteHandle();
-        handle.writeFile.mockRejectedValueOnce(new Error("ENOSPC"));
-        mockFs.open.mockResolvedValueOnce(asWriteHandle(handle));
-
-        await expect(
-          writeFileContent("/test/file.txt", "new content"),
-        ).rejects.toThrow("ENOSPC");
-        expect(handle.close).toHaveBeenCalled();
       });
     });
 
@@ -634,13 +530,10 @@ describe("Lib Functions", () => {
           code: "ENOENT",
         });
         mockFs.lstat.mockRejectedValueOnce(enoent);
-        mockFs.lstat.mockResolvedValueOnce(REGULAR_FILE);
-        mockFs.rename.mockResolvedValueOnce(undefined);
-        mockFs.realpath.mockResolvedValueOnce("/test");
 
         await moveFile("/test/source.txt", "/test/dest.txt");
 
-        expect(mockFs.rename).toHaveBeenCalledWith(
+        expect(mockPinned.renameIntoDirectory).toHaveBeenCalledWith(
           "/test/source.txt",
           "/test/dest.txt",
         );
@@ -654,7 +547,7 @@ describe("Lib Functions", () => {
           moveFile("/test/source.txt", "/test/dest.txt"),
         ).rejects.toThrow("Destination already exists");
 
-        expect(mockFs.rename).not.toHaveBeenCalled();
+        expect(mockPinned.renameIntoDirectory).not.toHaveBeenCalled();
       });
     });
   });
@@ -773,24 +666,14 @@ describe("Lib Functions", () => {
 
   describe("File Editing Functions", () => {
     describe("applyFileEdits", () => {
-      let handle: MockWriteHandle;
-
       beforeEach(() => {
         mockFs.readFile.mockResolvedValue("line1\nline2\nline3\n");
         mockFs.lstat.mockResolvedValue(REGULAR_FILE);
-        handle = createMockWriteHandle();
-        mockFs.open.mockResolvedValue(asWriteHandle(handle));
-        mockFs.realpath.mockImplementation(async (path: PathLike) =>
-          path.toString(),
-        );
       });
 
       afterEach(() => {
-        // Persistent implementations outlive vi.clearAllMocks(); drop them so
-        // the tailFile and headFile tests below set up fs.open themselves.
+        // Persistent implementations outlive vi.clearAllMocks(); drop them.
         mockFs.lstat.mockReset();
-        mockFs.open.mockReset();
-        mockFs.realpath.mockReset();
       });
 
       it("applies simple text replacement", async () => {
@@ -799,9 +682,10 @@ describe("Lib Functions", () => {
         const result = await applyFileEdits("/test/file.txt", edits, false);
 
         expect(result).toContain("modified line2");
-        expect(handle.writeFile).toHaveBeenCalledWith(
+        expect(mockPinned.overwriteFileInDirectory).toHaveBeenCalledWith(
+          expect.any(String),
           "line1\nmodified line2\nline3\n",
-          "utf-8",
+          REGULAR_FILE,
         );
       });
 
@@ -815,9 +699,10 @@ describe("Lib Functions", () => {
 
         await applyFileEdits("/test/file.txt", edits, false);
 
-        expect(handle.writeFile).toHaveBeenCalledWith(
+        expect(mockPinned.overwriteFileInDirectory).toHaveBeenCalledWith(
+          expect.any(String),
           "line1\nprice=$$; match=$&; before=$`; after=$'\nline3\n",
-          "utf-8",
+          REGULAR_FILE,
         );
       });
 
@@ -827,7 +712,7 @@ describe("Lib Functions", () => {
         const result = await applyFileEdits("/test/file.txt", edits, true);
 
         expect(result).toContain("modified line2");
-        expect(handle.writeFile).not.toHaveBeenCalled();
+        expect(mockPinned.overwriteFileInDirectory).not.toHaveBeenCalled();
       });
 
       it("applies multiple edits sequentially", async () => {
@@ -838,9 +723,10 @@ describe("Lib Functions", () => {
 
         await applyFileEdits("/test/file.txt", edits, false);
 
-        expect(handle.writeFile).toHaveBeenCalledWith(
+        expect(mockPinned.overwriteFileInDirectory).toHaveBeenCalledWith(
+          expect.any(String),
           "first line\nline2\nthird line\n",
-          "utf-8",
+          REGULAR_FILE,
         );
       });
 
@@ -851,9 +737,10 @@ describe("Lib Functions", () => {
 
         await applyFileEdits("/test/file.txt", edits, false);
 
-        expect(handle.writeFile).toHaveBeenCalledWith(
+        expect(mockPinned.overwriteFileInDirectory).toHaveBeenCalledWith(
+          expect.any(String),
           "  line1\n    modified line2\n  line3\n",
-          "utf-8",
+          REGULAR_FILE,
         );
       });
 
@@ -862,11 +749,11 @@ describe("Lib Functions", () => {
 
         await applyFileEdits("/test/script.sh", edits, false);
 
-        expect(mockFs.open).toHaveBeenCalledWith(
+        expect(mockPinned.overwriteFileInDirectory).toHaveBeenCalledWith(
           "/test/script.sh",
-          fs.constants.O_RDWR | (fs.constants.O_NOFOLLOW ?? 0),
+          "line1\nmodified line2\nline3\n",
+          REGULAR_FILE,
         );
-        expect(handle.truncate).toHaveBeenCalledWith(0);
         expect(mockFs.writeFile).not.toHaveBeenCalled();
         expect(mockFs.rename).not.toHaveBeenCalled();
         expect(mockFs.chmod).not.toHaveBeenCalled();
@@ -877,7 +764,7 @@ describe("Lib Functions", () => {
 
         await applyFileEdits("/test/file.txt", edits, true);
 
-        expect(mockFs.open).not.toHaveBeenCalled();
+        expect(mockPinned.overwriteFileInDirectory).not.toHaveBeenCalled();
       });
 
       it("throws error for non-matching edits", async () => {
@@ -903,9 +790,10 @@ describe("Lib Functions", () => {
 
         await applyFileEdits("/test/file.js", edits, false);
 
-        expect(handle.writeFile).toHaveBeenCalledWith(
+        expect(mockPinned.overwriteFileInDirectory).toHaveBeenCalledWith(
+          expect.any(String),
           'function test() {\n  console.log("world");\n  console.log("test");\n  return false;\n}',
-          "utf-8",
+          REGULAR_FILE,
         );
       });
 
@@ -923,9 +811,10 @@ describe("Lib Functions", () => {
 
         await applyFileEdits("/test/file.js", edits, false);
 
-        expect(handle.writeFile).toHaveBeenCalledWith(
+        expect(mockPinned.overwriteFileInDirectory).toHaveBeenCalledWith(
+          expect.any(String),
           "    if (condition) {\n        doSomethingElse();\n        doAnotherThing();\n    }",
-          "utf-8",
+          REGULAR_FILE,
         );
       });
 
@@ -936,9 +825,10 @@ describe("Lib Functions", () => {
 
         await applyFileEdits("/test/file.txt", edits, false);
 
-        expect(handle.writeFile).toHaveBeenCalledWith(
+        expect(mockPinned.overwriteFileInDirectory).toHaveBeenCalledWith(
+          expect.any(String),
           "line1\r\nmodified line2\r\nline3\r\n",
-          "utf-8",
+          REGULAR_FILE,
         );
       });
     });
