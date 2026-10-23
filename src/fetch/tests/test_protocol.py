@@ -756,6 +756,11 @@ async def test_redirect_to_private_address_is_refused(web: FakeWeb) -> None:
         "192.0.0.8",
         "64:ff9b:1::1",
         "2002:7f00:1::",
+        # The well-known NAT64 prefix (64:ff9b::/96) wraps an IPv4 in its low
+        # 32 bits, and a NAT64 gateway forwards to that IPv4.
+        "64:ff9b::a9fe:a9fe",
+        "64:ff9b::7f00:1",
+        "64:ff9b::a00:1",
         # Inside 2001::/23 but outside its global exceptions (benchmarking).
         "2001:2::1",
         # Multicast, which is_global does not exclude.
@@ -790,6 +795,17 @@ async def test_global_exceptions_in_special_ranges_are_allowed(
 ) -> None:
     web.dns["anycast.example.com"] = [address]
     url = "https://anycast.example.com/"
+    web.add(url, plain("ok"))
+    async with connect(ignore_robots_txt=True) as (session, _):
+        result = await call(session, {"url": url})
+    assert wire(result)["isError"] is False
+    assert web.urls() == [url]
+
+
+async def test_nat64_address_wrapping_a_public_ipv4_is_allowed(web: FakeWeb) -> None:
+    # Only the embedded IPv4 decides: 64:ff9b::808:808 is 8.8.8.8 through NAT64.
+    web.dns["nat64.example.com"] = ["64:ff9b::808:808"]
+    url = "https://nat64.example.com/"
     web.add(url, plain("ok"))
     async with connect(ignore_robots_txt=True) as (session, _):
         result = await call(session, {"url": url})

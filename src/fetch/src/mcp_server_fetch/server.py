@@ -110,6 +110,11 @@ _PUBLIC_EXCEPTIONS = tuple(
 )
 
 
+# The well-known NAT64 prefix (RFC 6052). A NAT64 gateway forwards an address
+# in it to the IPv4 held in its low 32 bits, so that IPv4 is the destination.
+_NAT64_WELL_KNOWN = ipaddress.IPv6Network("64:ff9b::/96")
+
+
 def _is_public_address(address: str) -> bool:
     """True when ``address`` is a globally routable unicast address.
 
@@ -117,10 +122,13 @@ def _is_public_address(address: str) -> bool:
     cloud metadata endpoints), shared address space (100.64.0.0/10, which holds
     Alibaba Cloud's 100.100.100.200), unique local IPv6 (AWS's fd00:ec2::254),
     multicast, unspecified, documentation and other special-purpose ranges.
+    An IPv4-mapped or well-known NAT64 address is judged by the IPv4 it wraps.
     """
     ip = ipaddress.ip_address(address)
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
         ip = ip.ipv4_mapped
+    elif isinstance(ip, ipaddress.IPv6Address) and ip in _NAT64_WELL_KNOWN:
+        ip = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
     if any(ip in network for network in _PUBLIC_EXCEPTIONS):
         return True
     if any(ip in network for network in _NON_PUBLIC_NETWORKS):
