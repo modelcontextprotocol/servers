@@ -89,6 +89,52 @@ describe("the allow-list boundary", () => {
     }
   });
 
+  // A trailing quote or space is a legal filename character, so a sibling
+  // named `<dir>'` is a different entry and must be checked as itself.
+  // Windows refuses or strips these characters in names, so POSIX only.
+  describe.skipIf(process.platform === "win32").each([
+    ["a single quote", "'"],
+    ["a double quote", '"'],
+    ["a space", " "],
+  ])("a sibling whose name is the allowed directory plus %s", (_, suffix) => {
+    let sibling: string;
+
+    beforeEach(() => {
+      sibling = `${dir}${suffix}`;
+    });
+
+    afterEach(async () => {
+      await fs.rm(sibling, { recursive: true, force: true });
+    });
+
+    it("refuses to read it as a file", async () => {
+      await fs.writeFile(sibling, "secret");
+      const result = await read(sibling);
+      expect(textOf(result)).toMatch(/^Access denied - path outside/);
+    });
+
+    it("refuses to list it", async () => {
+      await fs.mkdir(sibling);
+      const result = await call(client, "list_directory", { path: sibling });
+      expect(textOf(result)).toMatch(/^Access denied - path outside/);
+    });
+
+    it("refuses to create it", async () => {
+      const result = await call(client, "create_directory", { path: sibling });
+      expect(textOf(result)).toMatch(/^Access denied - path outside/);
+      await expect(fs.stat(sibling)).rejects.toThrow();
+    });
+
+    it("refuses to write it as a file", async () => {
+      const result = await call(client, "write_file", {
+        path: sibling,
+        content: "x",
+      });
+      expect(textOf(result)).toMatch(/^Access denied - path outside/);
+      await expect(fs.stat(sibling)).rejects.toThrow();
+    });
+  });
+
   it("allows the allowed directory itself", async () => {
     const result = await call(client, "list_directory", { path: dir });
     expect(result.isError).toBeFalsy();

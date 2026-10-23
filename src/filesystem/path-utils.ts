@@ -38,8 +38,18 @@ export function convertToWindowsPath(p: string): string {
  */
 export function normalizePath(p: string): string {
   // Remove any surrounding quotes and whitespace
-  p = p.trim().replace(/^["']|["']$/g, "");
+  return normalizePathFormat(p.trim().replace(/^["']|["']$/g, ""));
+}
 
+/**
+ * Normalizes a path's format exactly as normalizePath does, but without
+ * stripping surrounding quotes or whitespace. Those are legal filename
+ * characters, so stripping them names a different file: a path that a file
+ * operation will use must be checked against the allow-list in this form.
+ * @param p The path to normalize
+ * @returns Normalized path
+ */
+export function normalizePathFormat(p: string): string {
   // Check if this is a Unix path that should not be converted
   // WSL paths (/mnt/) should ALWAYS be preserved as they work correctly in WSL with Node.js fs
   // Regular Unix paths should also be preserved
