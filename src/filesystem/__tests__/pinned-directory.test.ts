@@ -4,12 +4,14 @@
 // the Windows branch (stood in for by setting process.platform) and the
 // working-directory bookkeeping a borrowed chdir needs.
 
+import { execFileSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createDirectoryInPlace,
   createFileInDirectory,
+  isChildDirectory,
   isSameDirectory,
   overwriteFileInDirectory,
   renameIntoDirectory,
@@ -55,9 +57,9 @@ describe("isSameDirectory", () => {
     ).toBe(false);
   });
 
-  it("compares in NFC on macOS, whose volumes are normalization-insensitive", () => {
-    expect(isSameDirectory(nfd, nfc, "darwin")).toBe(true);
-    expect(isSameDirectory("/tmp/other", nfc, "darwin")).toBe(false);
+  it("compares byte for byte on macOS too, where an NFS mount can hold twins", () => {
+    expect(isSameDirectory(nfd, nfc, "darwin")).toBe(false);
+    expect(isSameDirectory(nfc, nfc, "darwin")).toBe(true);
   });
 
   it("treats the macOS Data-volume spelling as the firmlinked one", () => {
@@ -86,6 +88,25 @@ describe("isSameDirectory", () => {
 
   it("reads the platform from the process by default", () => {
     expect(isSameDirectory(nfc, nfc)).toBe(true);
+  });
+});
+
+describe("isChildDirectory", () => {
+  it("compares the parent exactly and the last component in NFC", () => {
+    expect(isChildDirectory("/p/cafe\u0301", "/p", "caf\u00e9", "darwin")).toBe(
+      true,
+    );
+    expect(isChildDirectory("/q/caf\u00e9", "/p", "caf\u00e9", "darwin")).toBe(
+      false,
+    );
+    expect(isChildDirectory("/caf\u00e9/x", "/cafe\u0301", "x", "linux")).toBe(
+      false,
+    );
+    expect(isChildDirectory("/p/y", "/p", "x", "linux")).toBe(false);
+  });
+
+  it("reads the platform from the process by default", () => {
+    expect(isChildDirectory("/p/x", "/p", "x")).toBe(true);
   });
 });
 
@@ -316,6 +337,75 @@ describe("createDirectoryInPlace", () => {
     ).toThrow("Access denied");
     expect(fs.readdirSync(outside)).toEqual([]);
   });
+
+  it("steps down into a name the volume stored decomposed (HFS+)", () => {
+    // Stand in for HFS+, which stores the NFC name mkdir is given as NFD.
+    const nfc = "caf\u00e9";
+    const nfd = "cafe\u0301";
+    const realCwd = process.cwd.bind(process);
+    vi.spyOn(process, "cwd").mockImplementation(() =>
+      realCwd().split(nfc).join(nfd),
+    );
+    createDirectoryInPlace(path.join(dir, nfc, "sub"));
+    vi.restoreAllMocks();
+    expect(fs.statSync(path.join(dir, nfc, "sub")).isDirectory()).toBe(true);
+  });
+
+  it("refuses a step down that lands outside the anchor", () => {
+    const realChdir = process.chdir.bind(process);
+    vi.spyOn(process, "chdir").mockImplementation((directory) => {
+      realChdir(directory === "a" ? outside : directory);
+    });
+    expect(() => createDirectoryInPlace(path.join(dir, "a"))).toThrow(
+      "Access denied",
+    );
+  });
+
+  it("steps down without the getcwd check on Windows", () => {
+    Object.defineProperty(process, "platform", { value: "win32" });
+    createDirectoryInPlace(path.join(dir, "w", "x"));
+    expect(fs.statSync(path.join(dir, "w", "x")).isDirectory()).toBe(true);
+  });
+
+  it.skipIf(process.platform !== "darwin")(
+    "creates a directory with a precomposed name on a real HFS+ volume",
+    ({ skip }) => {
+      const image = path.join(outside, "hfs.dmg");
+      const mount = path.join(outside, "mnt");
+      fs.mkdirSync(mount);
+      try {
+        execFileSync("hdiutil", [
+          "create",
+          "-size",
+          "4m",
+          "-fs",
+          "HFS+",
+          "-volname",
+          "T",
+          "-quiet",
+          image,
+        ]);
+        execFileSync("hdiutil", [
+          "attach",
+          image,
+          "-nobrowse",
+          "-mountpoint",
+          mount,
+          "-quiet",
+        ]);
+      } catch {
+        skip();
+      }
+      try {
+        const target = path.join(fs.realpathSync(mount), "caf\u00e9", "sub");
+        createDirectoryInPlace(target);
+        expect(fs.statSync(target).isDirectory()).toBe(true);
+      } finally {
+        process.chdir(cwd);
+        execFileSync("hdiutil", ["detach", mount, "-quiet"]);
+      }
+    },
+  );
 
   it("reports a failure to enter a directory other than a missing one as is", () => {
     const target = path.join(dir, "a");

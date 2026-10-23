@@ -80,16 +80,16 @@ function withoutDataVolume(directory: string): string {
 /**
  * Whether `cwd`, as getcwd() reports it, is `directory`, the validated
  * directory in its on-disk spelling (validatePath builds it from realpath and
- * readdir results plus a tail that mkdir creates verbatim).
+ * readdir results).
  *
- * Exact, byte for byte, except on macOS. A filesystem that compares names
- * byte for byte (Linux) can hold an NFC and an NFD twin side by side, so any
- * folding there would accept the twin. macOS volumes are
- * normalization-insensitive and cannot hold twins, but may store a name
- * decomposed, so names compare in NFC there; and /System/Volumes/Data/<x>
- * and /<x> name the same directory. The root of the sealed, read-only system
- * volume cannot hold a directory of the attacker's making, so folding that
- * prefix away cannot admit one.
+ * Exact, byte for byte, on every platform: a filesystem that compares names
+ * byte for byte can hold an NFC and an NFD twin side by side (Linux, and an
+ * NFS mount of one on macOS, where mount_nfs folds only when asked to), so
+ * any normalization fold would accept the twin. The one fold is macOS's Data
+ * volume: /System/Volumes/Data/<x> and the firmlinked /<x> name the same
+ * directory, and the root of the sealed, read-only system volume cannot hold
+ * a directory of the attacker's making, so folding that prefix away cannot
+ * admit one.
  */
 export function isSameDirectory(
   cwd: string,
@@ -99,9 +99,26 @@ export function isSameDirectory(
   if (platform !== "darwin") {
     return cwd === directory;
   }
+  return withoutDataVolume(cwd) === withoutDataVolume(directory);
+}
+
+/**
+ * Whether `cwd` is the directory `name` inside `parent`, entered by a
+ * relative chdir(name) from `parent`, the anchor already verified. The parent
+ * compares exactly (isSameDirectory); the last component compares in NFC,
+ * because a volume may store the name mkdir was given decomposed (HFS+). A
+ * relative chdir resolves against the verified anchor, so the most a fold
+ * there can admit is a twin inside that same directory.
+ */
+export function isChildDirectory(
+  cwd: string,
+  parent: string,
+  name: string,
+  platform: string = process.platform,
+): boolean {
   return (
-    withoutDataVolume(cwd.normalize("NFC")) ===
-    withoutDataVolume(directory.normalize("NFC"))
+    isSameDirectory(path.dirname(cwd), parent, platform) &&
+    path.basename(cwd).normalize("NFC") === name.normalize("NFC")
   );
 }
 
@@ -281,7 +298,6 @@ export function createDirectoryInPlace(directory: string): void {
         }
         inTheWay = error;
       }
-      current = path.join(current, name);
       try {
         process.chdir(name);
       } catch (error) {
@@ -290,7 +306,16 @@ export function createDirectoryInPlace(directory: string): void {
         }
         throw error;
       }
-      verifyWorkingDirectory(current);
+      if (!onWindows()) {
+        const entered = process.cwd();
+        if (!isChildDirectory(entered, current, name)) {
+          throw directoryChangedError(path.join(current, name));
+        }
+        // The next step's parent, in the spelling the volume stored.
+        current = entered;
+      } else {
+        current = path.join(current, name);
+      }
     }
   });
 }
