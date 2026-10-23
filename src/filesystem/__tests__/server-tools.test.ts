@@ -1100,6 +1100,37 @@ describe("list_directory_with_sizes", () => {
     expect(textOf(result)).toContain("Total: 3 files, 1 directories");
   });
 
+  it("does not report the size of a symlink target outside the allowed directories", async () => {
+    const outside = await makeTempDir("mcp-fs-tools-outside-");
+    try {
+      await fs.writeFile(path.join(outside, "secret.bin"), "x".repeat(1536));
+      await fs.symlink(
+        path.join(outside, "secret.bin"),
+        path.join(dir, "link-out"),
+      );
+      const result = await call(client, "list_directory_with_sizes", {
+        path: dir,
+      });
+      expect(textOf(result)).toContain(
+        `[FILE] ${"link-out".padEnd(30)} ${"0 B".padStart(10)}`,
+      );
+      expect(textOf(result)).not.toContain("1.50 KB");
+      expect(textOf(result)).toContain("Combined size: 2.00 KB");
+    } finally {
+      await fs.rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("reports the size of a symlink target inside the allowed directories", async () => {
+    await fs.symlink(path.join(dir, "b.txt"), path.join(dir, "link-in"));
+    const result = await call(client, "list_directory_with_sizes", {
+      path: dir,
+    });
+    expect(textOf(result)).toContain(
+      `[FILE] ${"link-in".padEnd(30)} ${"2.00 KB".padStart(10)}`,
+    );
+  });
+
   it("summarizes an empty directory", async () => {
     const empty = path.join(dir, "c");
     const result = await call(client, "list_directory_with_sizes", {
