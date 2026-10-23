@@ -133,8 +133,13 @@ async def _refuse_private_destination(request: httpx.Request) -> None:
 
     httpx runs request hooks before every request it sends, redirect hops
     included, so a public URL cannot bounce the fetch to an internal one.
+
+    The name checked is ``raw_host``, the ASCII (IDNA 2008) form the transport
+    connects to. ``host`` is the decoded Unicode form, which getaddrinfo would
+    re-encode with IDNA 2003 into a different name for some labels (``ß``
+    becomes ``ss``), so checking it would vet one name and connect to another.
     """
-    host = request.url.host
+    host = request.url.raw_host.decode("ascii")
     if not host:
         return  # httpx rejects a URL with no host itself.
     try:

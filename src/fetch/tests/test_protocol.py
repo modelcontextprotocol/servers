@@ -37,7 +37,7 @@ from mcp_server_fetch.server import (
     serve,
 )
 
-from .harness import FakeWeb, connect, raw_request
+from .harness import PUBLIC_IP, FakeWeb, connect, raw_request
 
 PAGE = "https://example.com/page"
 ROBOTS = "https://example.com/robots.txt"
@@ -840,6 +840,34 @@ async def test_unresolvable_host_is_left_to_the_transport(web: FakeWeb) -> None:
         result = await call(session, {"url": url})
     assert wire(result)["isError"] is False
     assert web.lookups == ["only-the-proxy-knows.example"]
+
+
+@pytest.mark.parametrize(
+    "url, connected_host",
+    [
+        # IDNA 2003 (the codec getaddrinfo applies to a Unicode name) maps ß
+        # and final sigma to ss and σ; IDNA 2008, which httpx connects with,
+        # keeps them. The guard must resolve the name the connection uses.
+        ("http://faß.example.com/", "xn--fa-hia.example.com"),
+        ("http://xn--fa-hia.example.com/", "xn--fa-hia.example.com"),
+        ("http://σοφος.example.com/", "xn--0xaajbq.example.com"),
+    ],
+)
+async def test_guard_resolves_the_name_the_connection_uses(
+    web: FakeWeb, url: str, connected_host: str
+) -> None:
+    web.dns["fass.example.com"] = [PUBLIC_IP]
+    web.dns["σοφοσ.example.com"] = [PUBLIC_IP]
+    web.dns[connected_host] = ["127.0.0.1"]
+    web.add(f"http://{connected_host}/", plain("internal-secret"))
+    async with connect(ignore_robots_txt=True) as (session, _):
+        result = await call(session, {"url": url})
+    assert wire(result)["isError"] is True
+    assert f": {connected_host} resolves to 127.0.0.1, which is not a public" in (
+        text_of(result)
+    )
+    assert web.lookups == [connected_host]
+    assert web.requests == []
 
 
 async def test_allow_private_ips_follows_redirect_to_private_address(
