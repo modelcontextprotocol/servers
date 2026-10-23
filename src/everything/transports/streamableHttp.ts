@@ -32,6 +32,7 @@ import {
   isLegacyRequest,
 } from "@modelcontextprotocol/server";
 import {
+  localhostOriginValidation,
   NodeStreamableHTTPServerTransport,
   toNodeHandler,
   toWebRequest,
@@ -132,16 +133,25 @@ export type StreamableHttpApp = {
 };
 
 /**
- * Build the Streamable HTTP transport's Express app: CORS, the `/mcp` POST,
- * GET and DELETE routes, the map from session id to transport that they
- * share, the 2026-07-28 handler, and the shutdown handler that closes them.
+ * Build the Streamable HTTP transport's Express app: Origin validation, CORS,
+ * the `/mcp` POST, GET and DELETE routes, the map from session id to
+ * transport that they share, the 2026-07-28 handler, and the shutdown handler
+ * that closes them.
  */
 export function createApp(): StreamableHttpApp {
-  // Express app with permissive CORS for testing with Inspector direct connect mode
   const app = express();
+  // A browser page may reach this server only from a localhost origin. The
+  // SDK's guard answers any other Origin with a 403 before a route or the
+  // CORS middleware sees it, preflights included; a request with no Origin
+  // (a non-browser client) passes. CORS then grants the origin that passed,
+  // so the Inspector's direct connect mode keeps working from localhost.
+  const allowOrigin = localhostOriginValidation();
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (allowOrigin(req, res)) next();
+  });
   app.use(
     cors({
-      origin: "*", // use "*" with caution in production
+      origin: true,
       methods: "GET,POST,DELETE",
       preflightContinue: false,
       optionsSuccessStatus: 204,
