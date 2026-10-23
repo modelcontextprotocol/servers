@@ -298,6 +298,11 @@ describe("Lib Functions", () => {
         mockFs.realpath.mockImplementation(async (path: PathLike) =>
           path.toString(),
         );
+        // A name the path resolver lstats is missing unless a test says
+        // otherwise, so an unmatched component starts the missing tail.
+        const enoent = new Error("ENOENT") as NodeJS.ErrnoException;
+        enoent.code = "ENOENT";
+        mockFs.lstat.mockRejectedValue(enoent);
       });
 
       it("validates allowed paths", async () => {
