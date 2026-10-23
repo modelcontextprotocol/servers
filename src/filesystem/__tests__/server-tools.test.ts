@@ -1680,6 +1680,103 @@ describe("concurrent writes", () => {
   });
 });
 
+// Names that differ only in Unicode normalization. On a filesystem that
+// compares names byte for byte (Linux), café in NFC and in NFD are two
+// directories, so the anchor must not fold one into the other; and a
+// directory whose on-disk name is NFD must still be writable.
+describe("directories whose names differ only in normalization", () => {
+  const nfc = "caf\u00e9";
+  const nfd = "cafe\u0301";
+
+  it("write_file writes into a directory whose on-disk name is NFD", async () => {
+    const root = path.join(dir, nfd);
+    await fs.mkdir(path.join(root, "x"), { recursive: true });
+    const nfdConn = await connect([root]);
+    try {
+      const target = path.join(root, "x", "new.txt");
+      const result = await call(nfdConn.client, "write_file", {
+        path: target,
+        content: "hello",
+      });
+      expect(result.isError).toBeFalsy();
+      expect(await fs.readFile(target, "utf-8")).toBe("hello");
+    } finally {
+      await nfdConn.close();
+    }
+  });
+
+  it("write_file refuses a directory swapped for a symlink to its NFD twin", async ({
+    skip,
+  }) => {
+    if (process.platform === "win32") skip();
+    const allowed = path.join(dir, nfc, "proj");
+    const twin = path.join(dir, nfd, "proj");
+    await fs.mkdir(path.join(allowed, "x"), { recursive: true });
+    await fs.mkdir(path.join(twin, "x"), { recursive: true });
+    // Only a filesystem that keeps both names can hold the twin (Linux).
+    if ((await fs.readdir(dir)).length !== 2) skip();
+    const twinConn = await connect([allowed]);
+    try {
+      const x = path.join(allowed, "x");
+      const realRealpath = fs.realpath.bind(fs);
+      let swapped = false;
+      vi.spyOn(fs, "realpath").mockImplementation(async (p, opts) => {
+        const resolved = await realRealpath(p, opts);
+        if (!swapped && p === x) {
+          swapped = true;
+          fsSync.rmSync(x, { recursive: true });
+          fsSync.symlinkSync(path.join(twin, "x"), x);
+        }
+        return resolved;
+      });
+      const result = await call(twinConn.client, "write_file", {
+        path: path.join(x, "new.txt"),
+        content: "pwned",
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toMatch(/^Access denied/);
+      expect(await fs.readdir(path.join(twin, "x"))).toEqual([]);
+    } finally {
+      await twinConn.close();
+    }
+  });
+});
+
+// An allowed directory spelled through the macOS Data-volume firmlink
+// (/System/Volumes/Data/private/...): realpath keeps that spelling while
+// getcwd reports /private/..., and the two name the same directory.
+describe("an allowed directory spelled through the Data-volume firmlink", () => {
+  it("accepts writes, nested writes and nested directories", async ({
+    skip,
+  }) => {
+    const spelled = `/System/Volumes/Data${dir}`;
+    if (process.platform !== "darwin" || !fsSync.existsSync(spelled)) skip();
+    await fs.mkdir(path.join(dir, "Sub"));
+    const firmConn = await connect([spelled]);
+    try {
+      for (const [tool, args] of [
+        ["write_file", { path: path.join(spelled, "new.txt"), content: "a" }],
+        [
+          "write_file",
+          { path: path.join(spelled, "Sub", "x.txt"), content: "b" },
+        ],
+        ["create_directory", { path: path.join(spelled, "d1", "d2") }],
+      ] as const) {
+        const result = await call(firmConn.client, tool, args);
+        expect(result.isError, textOf(result)).toBeFalsy();
+      }
+      expect(await fs.readFile(path.join(dir, "Sub", "x.txt"), "utf-8")).toBe(
+        "b",
+      );
+      expect((await fs.stat(path.join(dir, "d1", "d2"))).isDirectory()).toBe(
+        true,
+      );
+    } finally {
+      await firmConn.close();
+    }
+  });
+});
+
 describe("search_files", () => {
   beforeEach(async () => {
     await fs.mkdir(path.join(dir, "sub", "deeper"), { recursive: true });

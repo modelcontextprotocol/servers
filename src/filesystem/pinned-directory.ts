@@ -66,17 +66,52 @@ function isSameEntry(
   return left.dev === right.dev && left.ino === right.ino;
 }
 
+// The macOS Data volume, which firmlinks /Users, /private and the rest into
+// the root: realpath keeps a /System/Volumes/Data/... spelling it is given,
+// while getcwd reports the firmlinked one.
+const DATA_VOLUME = "/System/Volumes/Data";
+
+function withoutDataVolume(directory: string): string {
+  return directory.startsWith(`${DATA_VOLUME}/`)
+    ? directory.slice(DATA_VOLUME.length)
+    : directory;
+}
+
+/**
+ * Whether `cwd`, as getcwd() reports it, is `directory`, the validated
+ * directory in its on-disk spelling (validatePath builds it from realpath and
+ * readdir results plus a tail that mkdir creates verbatim).
+ *
+ * Exact, byte for byte, except on macOS. A filesystem that compares names
+ * byte for byte (Linux) can hold an NFC and an NFD twin side by side, so any
+ * folding there would accept the twin. macOS volumes are
+ * normalization-insensitive and cannot hold twins, but may store a name
+ * decomposed, so names compare in NFC there; and /System/Volumes/Data/<x>
+ * and /<x> name the same directory. The root of the sealed, read-only system
+ * volume cannot hold a directory of the attacker's making, so folding that
+ * prefix away cannot admit one.
+ */
+export function isSameDirectory(
+  cwd: string,
+  directory: string,
+  platform: string = process.platform,
+): boolean {
+  if (platform !== "darwin") {
+    return cwd === directory;
+  }
+  return (
+    withoutDataVolume(cwd.normalize("NFC")) ===
+    withoutDataVolume(directory.normalize("NFC"))
+  );
+}
+
 /**
  * Check that the process is in `directory`. getcwd() is computed from the
  * directory actually entered, so this holds only if no directory on the path
- * was swapped before the chdir. Compared in NFC, as validatePath compares
- * names (a volume may store a name decomposed).
+ * was swapped before the chdir.
  */
 function verifyWorkingDirectory(directory: string): void {
-  if (
-    !onWindows() &&
-    process.cwd().normalize("NFC") !== directory.normalize("NFC")
-  ) {
+  if (!onWindows() && !isSameDirectory(process.cwd(), directory)) {
     throw directoryChangedError(directory);
   }
 }

@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createDirectoryInPlace,
   createFileInDirectory,
+  isSameDirectory,
   overwriteFileInDirectory,
   renameIntoDirectory,
 } from "../pinned-directory.js";
@@ -36,6 +37,56 @@ afterEach(() => {
   process.chdir(cwd);
   fs.rmSync(dir, { recursive: true, force: true });
   fs.rmSync(outside, { recursive: true, force: true });
+});
+
+describe("isSameDirectory", () => {
+  const nfc = "/tmp/caf\u00e9/proj";
+  const nfd = "/tmp/cafe\u0301/proj";
+
+  it("compares byte for byte off macOS, where an NFC and an NFD twin can coexist", () => {
+    expect(isSameDirectory(nfc, nfc, "linux")).toBe(true);
+    expect(isSameDirectory(nfd, nfc, "linux")).toBe(false);
+    expect(
+      isSameDirectory(
+        "/Users/me/p",
+        "/System/Volumes/Data/Users/me/p",
+        "linux",
+      ),
+    ).toBe(false);
+  });
+
+  it("compares in NFC on macOS, whose volumes are normalization-insensitive", () => {
+    expect(isSameDirectory(nfd, nfc, "darwin")).toBe(true);
+    expect(isSameDirectory("/tmp/other", nfc, "darwin")).toBe(false);
+  });
+
+  it("treats the macOS Data-volume spelling as the firmlinked one", () => {
+    expect(
+      isSameDirectory(
+        "/Users/me/p",
+        "/System/Volumes/Data/Users/me/p",
+        "darwin",
+      ),
+    ).toBe(true);
+    expect(
+      isSameDirectory(
+        "/System/Volumes/Data/x",
+        "/System/Volumes/Data/x",
+        "darwin",
+      ),
+    ).toBe(true);
+    expect(
+      isSameDirectory(
+        "/Users/me/q",
+        "/System/Volumes/Data/Users/me/p",
+        "darwin",
+      ),
+    ).toBe(false);
+  });
+
+  it("reads the platform from the process by default", () => {
+    expect(isSameDirectory(nfc, nfc)).toBe(true);
+  });
 });
 
 describe("createFileInDirectory", () => {
