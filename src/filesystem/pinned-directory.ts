@@ -1,20 +1,23 @@
-// Write operations whose directory cannot be swapped out from under them.
+// Write operations anchored to their directory, so a directory swapped out
+// from under them cannot redirect them.
 //
 // validatePath() checks a path and returns its canonical form, but the write
 // that follows resolves that path again. A directory on it swapped for a
 // symlink in between would redirect the write outside the allowed directories,
-// because the kernel follows the symlink at use. Closing that needs openat(),
-// which Node does not have. The substitute here: chdir() into the directory,
-// read back where the process really is (getcwd() reports the directory the
-// kernel entered, not the string it was given), and only then act on the
-// final component relative to it. The working directory holds the directory's
-// inode, so a later swap of the path cannot move the operation. Every step
-// between the chdir and the chdir back is synchronous, so no other code in the
-// process runs while the working directory is borrowed.
+// because the kernel follows the symlink at use. Checking again afterwards
+// cannot close that (the racer swaps back in time), and openat() is not in
+// Node. The substitute here: chdir() into the directory, read back where the
+// process really is (getcwd() reports the directory the kernel entered, not
+// the string it was given), refuse unless that is the validated directory,
+// and only then act on the final component relative to it. The working
+// directory holds the directory's inode, so swapping the path afterwards
+// cannot move the operation. Every check happens before a byte is written,
+// so nothing ever needs rolling back.
 //
-// On Windows the working directory is a string, so reading it back proves
-// nothing; there the opened file is compared with what the path holds after
-// the open, which narrows the race without closing it.
+// On Windows the working directory is a string and relative paths resolve
+// against it, so reading it back proves nothing; there the leaf is lstat'd
+// relative to the anchor and must be the file the descriptor opened, which
+// narrows the race without closing it.
 
 import fs from "fs";
 import path from "path";
@@ -45,6 +48,11 @@ function onWindows(): boolean {
   return process.platform === "win32";
 }
 
+// O_NOFOLLOW is undefined on Windows; the lstat checks below stand in there.
+function noFollow(): number {
+  return fs.constants.O_NOFOLLOW ?? 0;
+}
+
 function directoryChangedError(directory: string): Error {
   return new Error(
     `Access denied - a directory on the path changed during the operation: ${directory}`,
@@ -58,17 +66,37 @@ function isSameEntry(
   return left.dev === right.dev && left.ino === right.ino;
 }
 
-function enterDirectory(directory: string): void {
-  process.chdir(directory);
-  if (!onWindows() && process.cwd() !== directory) {
+/**
+ * Check that the process is in `directory`. getcwd() is computed from the
+ * directory actually entered, so this holds only if no directory on the path
+ * was swapped before the chdir. Compared in NFC, as validatePath compares
+ * names (a volume may store a name decomposed).
+ */
+function verifyWorkingDirectory(directory: string): void {
+  if (
+    !onWindows() &&
+    process.cwd().normalize("NFC") !== directory.normalize("NFC")
+  ) {
     throw directoryChangedError(directory);
   }
 }
 
+function enterDirectory(directory: string): void {
+  process.chdir(directory);
+  verifyWorkingDirectory(directory);
+}
+
 /**
- * Run `action` with the working directory set to `directory`, once the
- * directory actually entered is checked to be that one, and restore the
- * working directory afterwards. `action` must be synchronous.
+ * Run `action` with the working directory anchored at `directory`, and
+ * restore the previous working directory afterwards.
+ *
+ * ⚠️ The cwd invariant, load-bearing: `action` must be synchronous, and so is
+ * everything here between the chdir and the chdir back. The working directory
+ * is process-wide; because no await happens while it is borrowed, no other
+ * JavaScript in the process (another request, a path.resolve() of a relative
+ * path) ever runs while it is, so no lock is needed and nothing else can see
+ * it. Only what is done to an anchor-relative path inside `action` uses it;
+ * every other path the server hands to fs is absolute.
  */
 function inDirectory<T>(directory: string, action: () => T): T {
   let previous: string | undefined;
@@ -90,27 +118,33 @@ function inDirectory<T>(directory: string, action: () => T): T {
 }
 
 /**
- * Open the final component of `filePath` relative to its pinned directory,
- * and check that the path still holds the opened file (the only check that
- * means anything on Windows).
+ * Open the final component of `filePath` relative to its anchored directory.
+ * Afterwards the anchor must still hold, at that name, the file the descriptor
+ * opened (the check that matters on Windows, where `refuseLink` also refuses a
+ * symlink or reparse point there before the open).
  */
 function openInDirectory(
   filePath: string,
-  flags: number | string,
+  flags: number,
+  refuseLink: boolean,
 ): { fd: number; opened: fs.Stats } {
-  const fd = inDirectory(path.dirname(filePath), () =>
-    fs.openSync(path.basename(filePath), flags),
-  );
-  try {
-    const opened = fs.fstatSync(fd);
-    if (!isSameEntry(fs.lstatSync(filePath), opened)) {
-      throw directoryChangedError(path.dirname(filePath));
+  const name = path.basename(filePath);
+  return inDirectory(path.dirname(filePath), () => {
+    if (refuseLink && fs.lstatSync(name).isSymbolicLink()) {
+      throw new Error(`Refusing to write: not a regular file: ${filePath}`);
     }
-    return { fd, opened };
-  } catch (error) {
-    fs.closeSync(fd);
-    throw error;
-  }
+    const fd = fs.openSync(name, flags, 0o666);
+    try {
+      const opened = fs.fstatSync(fd);
+      if (!isSameEntry(fs.lstatSync(name), opened)) {
+        throw directoryChangedError(path.dirname(filePath));
+      }
+      return { fd, opened };
+    } catch (error) {
+      fs.closeSync(fd);
+      throw error;
+    }
+  });
 }
 
 /** Create `filePath`, which must not exist, and write `content` to it. */
@@ -118,8 +152,15 @@ export async function createFileInDirectory(
   filePath: string,
   content: string,
 ): Promise<void> {
-  // 'wx': exclusive creation, so an existing file or symlink fails with EEXIST.
-  const { fd } = openInDirectory(filePath, "wx");
+  // O_EXCL: an existing file or symlink fails with EEXIST, never followed.
+  const { fd } = openInDirectory(
+    filePath,
+    fs.constants.O_WRONLY |
+      fs.constants.O_CREAT |
+      fs.constants.O_EXCL |
+      noFollow(),
+    false,
+  );
   try {
     await writeAll(fd, content);
   } finally {
@@ -138,10 +179,11 @@ export async function overwriteFileInDirectory(
 ): Promise<void> {
   // O_RDWR rather than O_WRONLY: opening a FIFO swapped in for writing only
   // would block until a reader arrives. O_NOFOLLOW fails the open with ELOOP
-  // on a symlink; it does not exist on Windows.
+  // on a symlink; no O_TRUNC, so nothing changes before the checks pass.
   const { fd, opened } = openInDirectory(
     filePath,
-    fs.constants.O_RDWR | (fs.constants.O_NOFOLLOW ?? 0),
+    fs.constants.O_RDWR | noFollow(),
+    onWindows(),
   );
   try {
     if (!opened.isFile() || !isSameEntry(opened, expected)) {
@@ -156,7 +198,10 @@ export async function overwriteFileInDirectory(
   }
 }
 
-/** Rename `sourcePath` to `destinationPath`, within its pinned directory. */
+/**
+ * Rename `sourcePath` (absolute, outside this fix's scope) to the final
+ * component of `destinationPath`, relative to its anchored directory.
+ */
 export function renameIntoDirectory(
   sourcePath: string,
   destinationPath: string,
@@ -167,48 +212,50 @@ export function renameIntoDirectory(
 }
 
 /**
- * Leave the working directory in `directory`, creating it and any missing
- * parents first, each inside its pinned parent. Anything other than a
- * directory in the way fails with EEXIST, as mkdir -p reports it.
+ * Create `directory` and any missing parents, like mkdir -p: anchor at the
+ * deepest ancestor that exists, then step down one component at a time,
+ * creating it relative to the anchor, entering it relative to the anchor, and
+ * checking where the process landed. Anything other than a directory in the
+ * way fails with EEXIST, as mkdir -p reports it.
  */
-function enterOrCreateDirectory(directory: string): void {
-  try {
-    enterDirectory(directory);
-    return;
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code !== "ENOENT" && code !== "ENOTDIR") {
-      throw error;
-    }
-  }
-  const parent = path.dirname(directory);
-  /* v8 ignore next 3 -- the filesystem root always exists, and validatePath only returns paths below an existing allowed directory */
-  if (parent === directory) {
-    throw new Error(`Cannot create directory: ${directory}`);
-  }
-  enterOrCreateDirectory(parent);
-  let inTheWay: unknown;
-  try {
-    fs.mkdirSync(path.basename(directory));
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
-      throw error;
-    }
-    inTheWay = error;
-  }
-  try {
-    enterDirectory(directory);
-  } catch (error) {
-    if (inTheWay && (error as NodeJS.ErrnoException).code === "ENOTDIR") {
-      throw inTheWay;
-    }
-    throw error;
-  }
-}
-
-/** Create `directory` and any missing parents, like mkdir -p. */
 export function createDirectoryInPlace(directory: string): void {
-  inDirectory(path.parse(directory).root, () =>
-    enterOrCreateDirectory(directory),
-  );
+  const root = path.parse(directory).root;
+  inDirectory(root, () => {
+    const missing: string[] = [];
+    let current = directory;
+    for (;;) {
+      try {
+        enterDirectory(current);
+        break;
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code !== "ENOENT" && code !== "ENOTDIR") {
+          throw error;
+        }
+      }
+      missing.unshift(path.basename(current));
+      current = path.dirname(current);
+    }
+    for (const name of missing) {
+      let inTheWay: unknown;
+      try {
+        fs.mkdirSync(name);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+          throw error;
+        }
+        inTheWay = error;
+      }
+      current = path.join(current, name);
+      try {
+        process.chdir(name);
+      } catch (error) {
+        if (inTheWay && (error as NodeJS.ErrnoException).code === "ENOTDIR") {
+          throw inTheWay;
+        }
+        throw error;
+      }
+      verifyWorkingDirectory(current);
+    }
+  });
 }

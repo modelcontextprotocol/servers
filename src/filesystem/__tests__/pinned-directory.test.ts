@@ -183,6 +183,31 @@ describe("overwriteFileInDirectory", () => {
   });
 });
 
+describe("on Windows, where O_NOFOLLOW does not exist", () => {
+  it.skipIf(!symlinks)(
+    "refuses to overwrite through a symlink at the leaf",
+    async () => {
+      Object.defineProperty(process, "platform", { value: "win32" });
+      const target = path.join(outside, "t.txt");
+      fs.writeFileSync(target, "SECRET");
+      const link = path.join(dir, "l.txt");
+      fs.symlinkSync(target, link);
+      await expect(
+        overwriteFileInDirectory(link, "pwned", fs.statSync(target)),
+      ).rejects.toThrow(`Refusing to write: not a regular file: ${link}`);
+      expect(fs.readFileSync(target, "utf-8")).toBe("SECRET");
+    },
+  );
+
+  it("overwrites a regular file", async () => {
+    Object.defineProperty(process, "platform", { value: "win32" });
+    const file = path.join(dir, "f.txt");
+    fs.writeFileSync(file, "original");
+    await overwriteFileInDirectory(file, "new", fs.lstatSync(file));
+    expect(fs.readFileSync(file, "utf-8")).toBe("new");
+  });
+});
+
 describe("renameIntoDirectory", () => {
   it("moves the entry into the destination directory", () => {
     fs.mkdirSync(path.join(dir, "sub"));
@@ -252,14 +277,13 @@ describe("createDirectoryInPlace", () => {
   });
 
   it("reports a failure to enter a directory it just created as is", () => {
-    const target = path.join(dir, "a");
+    // The step down enters the new directory by its name, relative.
     const realChdir = process.chdir.bind(process);
-    let calls = 0;
     vi.spyOn(process, "chdir").mockImplementation((directory) => {
-      if (directory === target && ++calls === 2) throw errno("EACCES");
+      if (directory === "a") throw errno("EACCES");
       realChdir(directory);
     });
-    expect(() => createDirectoryInPlace(target)).toThrow("EACCES");
+    expect(() => createDirectoryInPlace(path.join(dir, "a"))).toThrow("EACCES");
   });
 
   it("reports a mkdir failure other than EEXIST as is", () => {

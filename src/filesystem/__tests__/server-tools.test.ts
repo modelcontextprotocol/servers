@@ -1466,19 +1466,21 @@ describe.skipIf(process.platform === "win32")(
       // and swapped only before the open: the open acts on the directory
       // entered, not on what the path now resolves to.
       const realOpenSync = fsSync.openSync.bind(fsSync);
-      vi.spyOn(fsSync, "openSync").mockImplementationOnce((file, flags) => {
-        swapOut();
-        return realOpenSync(file, flags);
-      });
+      vi.spyOn(fsSync, "openSync").mockImplementationOnce(
+        (file, flags, mode) => {
+          swapOut();
+          return realOpenSync(file, flags, mode);
+        },
+      );
       const result = await call(client, "write_file", {
         path: path.join(flip, "created.txt"),
         content: "data",
       });
-      // The path no longer holds the file the write opened, so it is refused,
-      // and nothing reached the outside directory.
-      expect(result.isError).toBe(true);
+      expect(result.isError).toBeFalsy();
       expect(await fs.readdir(outside)).toEqual([]);
-      expect(await fs.readdir(flipReal)).toEqual(["created.txt"]);
+      expect(
+        await fs.readFile(path.join(flipReal, "created.txt"), "utf-8"),
+      ).toBe("data");
     });
 
     // A refused operation must not act on any path again: a second swap can
@@ -1528,6 +1530,42 @@ describe.skipIf(process.platform === "win32")(
         expect(
           await fs.readFile(path.join(outside, "created.txt"), "utf-8"),
         ).toBe("USER DATA");
+      });
+
+      it("create_directory removes no directory outside", async () => {
+        // Round 1 removed what a refused mkdir -p had created with rmdir by
+        // path; a second swap pointed that at empty directories outside.
+        await fs.mkdir(path.join(outside, "a", "b"), { recursive: true });
+        const realRmdir = fs.rmdir.bind(fs);
+        const rmdir = vi
+          .spyOn(fs, "rmdir")
+          .mockImplementation(async (p, opts) => {
+            if (fsSync.lstatSync(flip).isSymbolicLink()) {
+              fsSync.unlinkSync(flip);
+              fsSync.symlinkSync(outside, flip);
+            }
+            return realRmdir(p, opts);
+          });
+        const realRealpath = fs.realpath.bind(fs);
+        let armed = false;
+        vi.spyOn(fs, "realpath").mockImplementation(async (p, opts) => {
+          const resolved = await realRealpath(p, opts);
+          if (!armed && p === flip) {
+            armed = true;
+            fsSync.rmSync(flip, { recursive: true });
+            fsSync.symlinkSync(other, flip);
+          }
+          return resolved;
+        });
+        const result = await call(client, "create_directory", {
+          path: path.join(flip, "a", "b"),
+        });
+        expect(result.isError).toBe(true);
+        expect(rmdir).not.toHaveBeenCalled();
+        expect(
+          (await fs.stat(path.join(outside, "a", "b"))).isDirectory(),
+        ).toBe(true);
+        expect(await fs.readdir(other)).toEqual([]);
       });
 
       it("move_file moves no file in from outside", async () => {
@@ -1604,6 +1642,41 @@ describe("a directory requested in another case", () => {
     expect(await fs.readFile(path.join(dir, "Docs", "g.txt"), "utf-8")).toBe(
       "f",
     );
+  });
+});
+
+// Every anchored write borrows the process's working directory; concurrent
+// requests must neither see one another's nor leave it changed.
+describe("concurrent writes", () => {
+  it("land in their own directories and leave the working directory as it was", async () => {
+    const before = process.cwd();
+    const targets = await Promise.all(
+      Array.from({ length: 8 }, async (_, i) => {
+        const sub = path.join(dir, `d${i}`);
+        await fs.mkdir(sub);
+        return path.join(sub, "f.txt");
+      }),
+    );
+    const results = await Promise.all([
+      ...targets.map((target, i) =>
+        call(client, "write_file", { path: target, content: `content ${i}` }),
+      ),
+      ...targets.map((target) =>
+        call(client, "create_directory", {
+          path: path.join(path.dirname(target), "x", "y"),
+        }),
+      ),
+    ]);
+    expect(results.every((result) => !result.isError)).toBe(true);
+    for (const [i, target] of targets.entries()) {
+      expect(await fs.readFile(target, "utf-8")).toBe(`content ${i}`);
+      expect(
+        (
+          await fs.stat(path.join(path.dirname(target), "x", "y"))
+        ).isDirectory(),
+      ).toBe(true);
+    }
+    expect(process.cwd()).toBe(before);
   });
 });
 
