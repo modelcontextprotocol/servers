@@ -689,7 +689,7 @@ describe("write_file", () => {
   });
 
   it("reports a create failure other than EEXIST as is", async () => {
-    vi.spyOn(fs, "writeFile").mockRejectedValueOnce(
+    vi.spyOn(fs, "open").mockRejectedValueOnce(
       Object.assign(new Error("EIO: i/o error"), { code: "EIO" }),
     );
     const result = await call(client, "write_file", {
@@ -1277,6 +1277,112 @@ describe("move_file", () => {
     expect(textOf(result)).toBe("EACCES lstat");
   });
 });
+
+// The TOCTOU window one level up: validation resolved every directory on the
+// path to a real one inside the allowed directory, then something replaced one
+// of them with a symlink to a directory outside it before the operation ran.
+// The kernel follows that symlink at use, so the operation would land outside.
+// The swap is staged right after validation's realpath of the given path, so
+// it lands in that window.
+describe.skipIf(process.platform === "win32")(
+  "a directory on the path swapped for a symlink after validation",
+  () => {
+    let outside: string;
+    let flip: string;
+
+    beforeEach(async () => {
+      outside = await makeTempDir("mcp-fs-outside-");
+      flip = path.join(dir, "flip");
+      await fs.mkdir(flip);
+    });
+
+    afterEach(async () => {
+      await fs.rm(outside, { recursive: true, force: true });
+    });
+
+    /** Replace `flip` with a symlink to `outside` once `target` is realpath'd. */
+    const swapAfterRealpath = (target: string) => {
+      const realRealpath = fs.realpath.bind(fs);
+      let swapped = false;
+      vi.spyOn(fs, "realpath").mockImplementation(async (p, opts) => {
+        const resolved = await realRealpath(p, opts);
+        if (!swapped && p === target) {
+          swapped = true;
+          await fs.rm(flip, { recursive: true });
+          await fs.symlink(outside, flip);
+        }
+        return resolved;
+      });
+    };
+
+    it("write_file refuses to create a file through it", async () => {
+      swapAfterRealpath(flip);
+      const result = await call(client, "write_file", {
+        path: path.join(flip, "created.txt"),
+        content: "pwned",
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toMatch(/^Access denied/);
+      expect(await fs.readdir(outside)).toEqual([]);
+    });
+
+    it("write_file refuses to overwrite a file through it", async () => {
+      const victim = path.join(flip, "victim.txt");
+      await fs.writeFile(victim, "original");
+      await fs.writeFile(path.join(outside, "victim.txt"), "SECRET");
+      swapAfterRealpath(victim);
+      const result = await call(client, "write_file", {
+        path: victim,
+        content: "pwned",
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toMatch(/^Access denied/);
+      expect(await fs.readFile(path.join(outside, "victim.txt"), "utf-8")).toBe(
+        "SECRET",
+      );
+    });
+
+    it("edit_file refuses to write a file through it", async () => {
+      const victim = path.join(flip, "victim.txt");
+      await fs.writeFile(victim, "original");
+      await fs.writeFile(path.join(outside, "victim.txt"), "original");
+      swapAfterRealpath(victim);
+      const result = await call(client, "edit_file", {
+        path: victim,
+        edits: [{ oldText: "original", newText: "pwned" }],
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toMatch(/^Access denied/);
+      expect(await fs.readFile(path.join(outside, "victim.txt"), "utf-8")).toBe(
+        "original",
+      );
+    });
+
+    it("create_directory refuses to create a directory through it", async () => {
+      swapAfterRealpath(flip);
+      const result = await call(client, "create_directory", {
+        path: path.join(flip, "a", "b"),
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toMatch(/^Access denied/);
+      expect(await fs.readdir(outside)).toEqual([]);
+    });
+
+    it("move_file refuses to move a file through it, and puts it back", async () => {
+      const source = path.join(dir, "sensitive.txt");
+      await fs.writeFile(source, "SECRET");
+      swapAfterRealpath(flip);
+      const result = await call(client, "move_file", {
+        source,
+        destination: path.join(flip, "moved.txt"),
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toMatch(/^Access denied/);
+      expect(await fs.readdir(outside)).toEqual([]);
+      expect(await fs.readFile(source, "utf-8")).toBe("SECRET");
+    });
+  },
+);
 
 describe("search_files", () => {
   beforeEach(async () => {

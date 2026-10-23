@@ -471,20 +471,27 @@ describe("Lib Functions", () => {
     });
 
     describe("writeFileContent", () => {
-      it("writes file content", async () => {
-        mockFs.writeFile.mockResolvedValueOnce(undefined);
-
-        await writeFileContent("/test/file.txt", "new content");
-
-        expect(mockFs.writeFile).toHaveBeenCalledWith(
-          "/test/file.txt",
-          "new content",
-          { encoding: "utf-8", flag: "wx" },
+      beforeEach(() => {
+        // An unchanged directory resolves to itself.
+        mockFs.realpath.mockImplementation(async (path: PathLike) =>
+          path.toString(),
         );
       });
 
+      it("writes file content", async () => {
+        const handle = createMockWriteHandle();
+        mockFs.open.mockResolvedValueOnce(asWriteHandle(handle));
+
+        await writeFileContent("/test/file.txt", "new content");
+
+        expect(mockFs.open).toHaveBeenCalledWith("/test/file.txt", "wx");
+        expect(mockFs.realpath).toHaveBeenCalledWith("/test");
+        expect(handle.writeFile).toHaveBeenCalledWith("new content", "utf-8");
+        expect(handle.close).toHaveBeenCalled();
+      });
+
       it("overwrites an existing file in place, through one handle (#4512)", async () => {
-        mockFs.writeFile.mockRejectedValueOnce(
+        mockFs.open.mockRejectedValueOnce(
           Object.assign(new Error("EEXIST"), { code: "EEXIST" }),
         );
         mockFs.lstat.mockResolvedValueOnce(REGULAR_FILE);
@@ -503,13 +510,14 @@ describe("Lib Functions", () => {
         expect(handle.close).toHaveBeenCalled();
         // No temp file, no rename over the target (#3199), no chmod to repair
         // the permission bits of a replaced inode.
-        expect(mockFs.writeFile).toHaveBeenCalledTimes(1);
+        expect(mockFs.open).toHaveBeenCalledTimes(2);
+        expect(mockFs.writeFile).not.toHaveBeenCalled();
         expect(mockFs.rename).not.toHaveBeenCalled();
         expect(mockFs.chmod).not.toHaveBeenCalled();
       });
 
       it("opens without O_NOFOLLOW where the platform has none (Windows)", async () => {
-        mockFs.writeFile.mockRejectedValueOnce(
+        mockFs.open.mockRejectedValueOnce(
           Object.assign(new Error("EEXIST"), { code: "EEXIST" }),
         );
         mockFs.lstat.mockResolvedValueOnce(REGULAR_FILE);
@@ -532,7 +540,7 @@ describe("Lib Functions", () => {
       });
 
       it("refuses to overwrite a path that is not a regular file", async () => {
-        mockFs.writeFile.mockRejectedValueOnce(
+        mockFs.open.mockRejectedValueOnce(
           Object.assign(new Error("EEXIST"), { code: "EEXIST" }),
         );
         mockFs.lstat.mockResolvedValueOnce({
@@ -545,11 +553,12 @@ describe("Lib Functions", () => {
         ).rejects.toThrow(
           "Refusing to write: not a regular file: /test/link.txt",
         );
-        expect(mockFs.open).not.toHaveBeenCalled();
+        // Only the exclusive create, which failed with EEXIST.
+        expect(mockFs.open).toHaveBeenCalledTimes(1);
       });
 
       it("refuses to write when the opened file is not the one lstat saw", async () => {
-        mockFs.writeFile.mockRejectedValueOnce(
+        mockFs.open.mockRejectedValueOnce(
           Object.assign(new Error("EEXIST"), { code: "EEXIST" }),
         );
         mockFs.lstat.mockResolvedValueOnce(REGULAR_FILE);
@@ -570,7 +579,7 @@ describe("Lib Functions", () => {
       });
 
       it("refuses to write when the opened file is on another device", async () => {
-        mockFs.writeFile.mockRejectedValueOnce(
+        mockFs.open.mockRejectedValueOnce(
           Object.assign(new Error("EEXIST"), { code: "EEXIST" }),
         );
         mockFs.lstat.mockResolvedValueOnce(REGULAR_FILE);
@@ -587,7 +596,7 @@ describe("Lib Functions", () => {
       });
 
       it("refuses to write when the opened file is not a regular file", async () => {
-        mockFs.writeFile.mockRejectedValueOnce(
+        mockFs.open.mockRejectedValueOnce(
           Object.assign(new Error("EEXIST"), { code: "EEXIST" }),
         );
         mockFs.lstat.mockResolvedValueOnce(REGULAR_FILE);
@@ -604,7 +613,7 @@ describe("Lib Functions", () => {
       });
 
       it("closes the handle when the write fails", async () => {
-        mockFs.writeFile.mockRejectedValueOnce(
+        mockFs.open.mockRejectedValueOnce(
           Object.assign(new Error("EEXIST"), { code: "EEXIST" }),
         );
         mockFs.lstat.mockResolvedValueOnce(REGULAR_FILE);
@@ -625,7 +634,9 @@ describe("Lib Functions", () => {
           code: "ENOENT",
         });
         mockFs.lstat.mockRejectedValueOnce(enoent);
+        mockFs.lstat.mockResolvedValueOnce(REGULAR_FILE);
         mockFs.rename.mockResolvedValueOnce(undefined);
+        mockFs.realpath.mockResolvedValueOnce("/test");
 
         await moveFile("/test/source.txt", "/test/dest.txt");
 
@@ -769,6 +780,9 @@ describe("Lib Functions", () => {
         mockFs.lstat.mockResolvedValue(REGULAR_FILE);
         handle = createMockWriteHandle();
         mockFs.open.mockResolvedValue(asWriteHandle(handle));
+        mockFs.realpath.mockImplementation(async (path: PathLike) =>
+          path.toString(),
+        );
       });
 
       afterEach(() => {
@@ -776,6 +790,7 @@ describe("Lib Functions", () => {
         // the tailFile and headFile tests below set up fs.open themselves.
         mockFs.lstat.mockReset();
         mockFs.open.mockReset();
+        mockFs.realpath.mockReset();
       });
 
       it("applies simple text replacement", async () => {

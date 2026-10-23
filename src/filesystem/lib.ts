@@ -291,21 +291,100 @@ export async function readFileContent(
   return await fs.readFile(filePath, encoding as BufferEncoding);
 }
 
+/**
+ * Security (TOCTOU): validatePath returns a canonical path, with every
+ * directory on it a real one inside an allowed directory. A directory on it
+ * swapped for a symlink after validation would redirect the operation that
+ * follows outside the allowed directories, because the kernel resolves the
+ * symlink when the operation runs. Node has no openat, so the swap cannot be
+ * prevented; it is detected right after the operation, before any content is
+ * written through it: the directory still resolves to itself only if nothing
+ * on its path was swapped.
+ */
+async function isDirectoryUnchanged(directory: string): Promise<boolean> {
+  return (await fs.realpath(directory)) === directory;
+}
+
+function directoryChangedError(directory: string): Error {
+  return new Error(
+    `Access denied - a directory on the path changed during the operation: ${directory}`,
+  );
+}
+
+function isSameEntry(
+  left: { dev: number; ino: number },
+  right: { dev: number; ino: number },
+): boolean {
+  return left.dev === right.dev && left.ino === right.ino;
+}
+
 export async function writeFileContent(
   filePath: string,
   content: string,
 ): Promise<void> {
+  let handle: fs.FileHandle;
   try {
     // Security: 'wx' flag ensures exclusive creation - fails if file/symlink exists,
     // preventing writes through pre-existing symlinks
-    await fs.writeFile(filePath, content, { encoding: "utf-8", flag: "wx" });
+    handle = await fs.open(filePath, "wx");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "EEXIST") {
       await overwriteInPlace(filePath, content);
-    } else {
-      throw error;
+      return;
+    }
+    throw error;
+  }
+  try {
+    const directory = path.dirname(filePath);
+    if (!(await isDirectoryUnchanged(directory))) {
+      // The file was created wherever the swapped-in symlink pointed. Remove
+      // it, best effort and only if it is still the file this call created.
+      const opened = await handle.stat();
+      const landed = path.join(
+        await fs.realpath(directory),
+        path.basename(filePath),
+      );
+      try {
+        if (isSameEntry(await fs.lstat(landed), opened)) {
+          await fs.unlink(landed);
+        }
+      } catch {
+        // Best effort: the refusal below is what matters.
+      }
+      throw directoryChangedError(directory);
+    }
+    await handle.writeFile(content, "utf-8");
+  } finally {
+    await handle.close();
+  }
+}
+
+/**
+ * Create a directory and any missing parents, refusing (and undoing what it
+ * created) when a directory on the path was swapped for a symlink after
+ * validation (see isDirectoryUnchanged).
+ */
+export async function createDirectory(directoryPath: string): Promise<void> {
+  const firstCreated = await fs.mkdir(directoryPath, { recursive: true });
+  if (await isDirectoryUnchanged(directoryPath)) {
+    return;
+  }
+  if (firstCreated !== undefined) {
+    // Remove what this call created, deepest first, best effort: rmdir only
+    // removes an empty directory, so nothing else can be lost.
+    for (
+      let current = directoryPath;
+      current.length >= firstCreated.length;
+      current = path.dirname(current)
+    ) {
+      try {
+        await fs.rmdir(current);
+      } catch {
+        break;
+      }
     }
   }
+  throw directoryChangedError(directoryPath);
 }
 
 /**
@@ -347,14 +426,16 @@ async function overwriteInPlace(
   );
   try {
     const opened = await handle.stat();
-    if (
-      !opened.isFile() ||
-      opened.dev !== expected.dev ||
-      opened.ino !== expected.ino
-    ) {
+    if (!opened.isFile() || !isSameEntry(opened, expected)) {
       throw new Error(
         `Refusing to write: ${filePath} was replaced while it was being opened`,
       );
+    }
+    // lstat and the open both follow a directory swapped on the path, so they
+    // agree on a file outside the allowed directories; check the path itself.
+    const directory = path.dirname(filePath);
+    if (!(await isDirectoryUnchanged(directory))) {
+      throw directoryChangedError(directory);
     }
     await handle.truncate(0);
     await handle.writeFile(content, "utf-8");
@@ -376,12 +457,42 @@ export async function moveFile(
     await fs.lstat(destinationPath);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      await fs.rename(sourcePath, destinationPath);
+      await renameWithinDirectories(sourcePath, destinationPath);
       return;
     }
     throw error;
   }
   throw new Error(`Destination already exists: ${destinationPath}`);
+}
+
+/**
+ * Rename, then refuse when a directory on the destination path was swapped
+ * for a symlink after validation (see isDirectoryUnchanged), moving the entry
+ * back to its source, best effort and only if it is still the one this call
+ * moved.
+ */
+async function renameWithinDirectories(
+  sourcePath: string,
+  destinationPath: string,
+): Promise<void> {
+  const moved = await fs.lstat(sourcePath);
+  await fs.rename(sourcePath, destinationPath);
+  const directory = path.dirname(destinationPath);
+  if (await isDirectoryUnchanged(directory)) {
+    return;
+  }
+  try {
+    const landed = path.join(
+      await fs.realpath(directory),
+      path.basename(destinationPath),
+    );
+    if (isSameEntry(await fs.lstat(landed), moved)) {
+      await fs.rename(landed, sourcePath);
+    }
+  } catch {
+    // Best effort: the refusal below is what matters.
+  }
+  throw directoryChangedError(directory);
 }
 
 // File Editing Functions
