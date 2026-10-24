@@ -23,7 +23,7 @@ import asyncio
 import ipaddress
 import os
 import socket
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from typing import Annotated, Any, Tuple
 from importlib.metadata import version
 from urllib.parse import urlparse, urlunparse
@@ -307,15 +307,37 @@ async def fetch_url(
     force_raw: bool = False,
     proxy_url: str | None = None,
     allow_private_ips: bool = False,
+    check_robots_txt: bool = False,
 ) -> Tuple[str, str]:
     """
     Fetch the URL and return the content in a form ready for the LLM, as well as a prefix string with status information.
+
+    With ``check_robots_txt``, every redirect hop is checked against the
+    robots.txt of its own origin before it is requested. The caller has
+    already checked the requested URL itself.
     """
     from httpx import HTTPError
 
+    seen_first_request = False
+
+    async def _check_redirect_robots_txt(request: httpx.Request) -> None:
+        # httpx runs request hooks before each request, redirect hops included.
+        nonlocal seen_first_request
+        if not seen_first_request:
+            seen_first_request = True
+            return
+        await check_may_autonomously_fetch_url(
+            str(request.url), user_agent, proxy_url, allow_private_ips
+        )
+
     async with make_client(proxy_url) as client:
+        hooks: list[Callable[[httpx.Request], Awaitable[None]]] = []
         if not allow_private_ips:
-            client.event_hooks = {"request": [_refuse_private_destination]}
+            hooks.append(_refuse_private_destination)
+        if check_robots_txt:
+            hooks.append(_check_redirect_robots_txt)
+        if hooks:
+            client.event_hooks = {"request": hooks}
         try:
             response = await client.get(
                 url,
@@ -470,6 +492,7 @@ def create_server(
             force_raw=raw,
             proxy_url=proxy_url,
             allow_private_ips=allow_private_ips,
+            check_robots_txt=not ignore_robots_txt,
         )
         original_length = len(content)
         if start_index >= original_length:

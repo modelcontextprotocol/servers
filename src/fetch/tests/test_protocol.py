@@ -460,6 +460,98 @@ async def test_ignore_robots_txt_skips_the_check(web: FakeWeb) -> None:
     assert web.urls() == [PAGE]
 
 
+OTHER_ROBOTS = "https://other.example.org/robots.txt"
+OTHER_PAGE = "https://other.example.org/secret"
+
+
+async def test_redirect_to_host_whose_robots_disallows_is_refused(
+    web: FakeWeb,
+) -> None:
+    # robots.txt belongs to one origin, so a redirect to another host is
+    # checked against that host's robots.txt before it is requested.
+    other_robots = "User-agent: *\nDisallow: /"
+    web.add(ROBOTS, plain("", status=404))
+    web.add(PAGE, httpx.Response(302, headers={"location": OTHER_PAGE}))
+    web.add(OTHER_ROBOTS, plain(other_robots))
+    web.add(OTHER_PAGE, plain("other-secret"))
+    async with connect() as (session, _):
+        result = await call(session, {"url": PAGE})
+    assert wire(result)["isError"] is True
+    text = text_of(result)
+    assert text.startswith(
+        f"{TOOL_ERROR}The sites robots.txt ({OTHER_ROBOTS}), specifies that "
+        "autonomous fetching of this page is not allowed, "
+    )
+    assert f"<url>{OTHER_PAGE}</url>" in text
+    assert "other-secret" not in text
+    # The redirect target itself is never requested.
+    assert web.urls() == [ROBOTS, PAGE, OTHER_ROBOTS]
+
+
+async def test_redirect_to_a_disallowed_path_on_the_same_host_is_refused(
+    web: FakeWeb,
+) -> None:
+    private = "https://example.com/private/report"
+    web.add(ROBOTS, plain("User-agent: *\nDisallow: /private"))
+    web.add(PAGE, httpx.Response(302, headers={"location": "/private/report"}))
+    web.add(private, plain("private-report"))
+    async with connect() as (session, _):
+        result = await call(session, {"url": PAGE})
+    assert wire(result)["isError"] is True
+    assert f"<url>{private}</url>" in text_of(result)
+    assert web.urls() == [ROBOTS, PAGE, ROBOTS]
+
+
+async def test_redirect_to_host_answering_robots_403_is_refused(
+    web: FakeWeb,
+) -> None:
+    web.add(ROBOTS, plain("", status=404))
+    web.add(PAGE, httpx.Response(302, headers={"location": OTHER_PAGE}))
+    web.add(OTHER_ROBOTS, plain("", status=403))
+    web.add(OTHER_PAGE, plain("other-secret"))
+    async with connect() as (session, _):
+        result = await call(session, {"url": PAGE})
+    assert wire(result)["isError"] is True
+    assert text_of(result).startswith(
+        f"{TOOL_ERROR}When fetching robots.txt ({OTHER_ROBOTS}), received status 403"
+    )
+    assert web.urls() == [ROBOTS, PAGE, OTHER_ROBOTS]
+
+
+async def test_redirect_to_an_allowed_target_is_followed(web: FakeWeb) -> None:
+    web.add(ROBOTS, plain("", status=404))
+    web.add(PAGE, httpx.Response(302, headers={"location": OTHER_PAGE}))
+    web.add(OTHER_ROBOTS, plain("User-agent: *\nDisallow: /private"))
+    web.add(OTHER_PAGE, plain("other-page"))
+    async with connect() as (session, _):
+        result = await call(session, {"url": PAGE})
+    assert wire(result)["isError"] is False
+    assert text_of(result) == f"{RAW_PREFIX_PLAIN}Contents of {PAGE}:\nother-page"
+    assert web.urls() == [ROBOTS, PAGE, OTHER_ROBOTS, OTHER_PAGE]
+    for request in web.requests:
+        assert request.headers["user-agent"] == DEFAULT_USER_AGENT_AUTONOMOUS
+
+
+async def test_redirects_skip_robots_with_ignore_robots_txt_and_on_the_prompt(
+    web: FakeWeb,
+) -> None:
+    # --ignore-robots-txt and the user-initiated prompt never consult
+    # robots.txt, for the requested URL or for any redirect hop.
+    web.add(ROBOTS, plain("User-agent: *\nDisallow: /"))
+    web.add(PAGE, httpx.Response(302, headers={"location": OTHER_PAGE}))
+    web.add(OTHER_ROBOTS, plain("User-agent: *\nDisallow: /"))
+    web.add(OTHER_PAGE, plain("other-page"))
+    async with connect(ignore_robots_txt=True) as (session, _):
+        result = await call(session, {"url": PAGE})
+    assert wire(result)["isError"] is False
+    assert web.urls() == [PAGE, OTHER_PAGE]
+    web.requests.clear()
+    async with connect() as (session, _):
+        prompt = await session.get_prompt("fetch", {"url": PAGE})
+    assert "other-page" in wire(prompt)["messages"][0]["content"]["text"]
+    assert web.urls() == [PAGE, OTHER_PAGE]
+
+
 # --------------------------------------------------------------------------
 # tools/call: fetching and content handling
 # --------------------------------------------------------------------------
@@ -871,8 +963,9 @@ async def test_allow_private_ips_follows_redirect_to_private_address(
     assert wire(result)["isError"] is False
     assert text_of(result) == f"{RAW_PREFIX_PLAIN}Contents of {PAGE}:\ninstance-secret"
     assert prompt.description == PROMPT_DESCRIPTION
-    # robots.txt is only consulted for the original host, never the target.
-    assert web.urls() == [ROBOTS, PAGE, metadata, metadata]
+    # The redirect target's own robots.txt (a 404 here) is checked before it.
+    metadata_robots = "http://169.254.169.254/robots.txt"
+    assert web.urls() == [ROBOTS, PAGE, metadata_robots, metadata, metadata]
     # With the guard off, nothing is resolved by the server.
     assert web.lookups == []
 
