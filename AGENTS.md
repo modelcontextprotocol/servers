@@ -476,8 +476,11 @@ here.
     that opaque until publication: board access is wider than advisory access,
     and a summary can name the server or the attack. It becomes a public
     issue by conversion **once the advisory is published**, never merely once
-    the fix ships. The `[GHSA-` prefix is load-bearing: **any other draft card
-    is still a defect to delete**. The flow is the `security-advisory` skill.
+    the fix ships. Work the fix leaves open is tracked by a second draft card,
+    `[GHSA-xxxx-yyyy-zzzz follow-up]`, under the same rules. It stays open
+    after conversion, because its work has not shipped. The `[GHSA-` prefix is
+    load-bearing: **any other draft card is still a defect to delete**. The flow
+    is the `security-advisory` skill.
     **Accepting, closing and publishing an advisory, and replying to its
     reporter, are human-only; never automate or bulk-apply any of them.**
 - **Only issues go on the board, never PRs.** A PR is tracked through its linked

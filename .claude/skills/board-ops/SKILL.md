@@ -254,6 +254,13 @@ id, `[GHSA-xxxx-yyyy-zzzz]`, because a real issue would disclose it before a fix
 exists. No summary goes in the title until the advisory is published. What goes on the card, and when it moves, is the
 `/security-advisory` flow; these are only the mechanics.
 
+An advisory can also have a **follow-up card**, titled
+`[GHSA-xxxx-yyyy-zzzz follow-up]`, for work its fix leaves open. The recipes
+below handle it with one change: put `[$GHSA follow-up]` wherever they have
+`[$GHSA]`, both in the lookup's `--arg p` and in `item-create`'s `--title`.
+The advisory card's own lookup matches up to the closing bracket, so it never
+finds the follow-up.
+
 ⚠️ **A draft card has no repository and no issue number**, so the issue-side
 lookup above cannot find one. Look it up by its **bracketed GHSA id** in the
 full listing, checked for truncation, then feed that item id to `item-edit` or
