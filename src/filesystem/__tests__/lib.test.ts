@@ -43,6 +43,11 @@ const mockReaddir = vi.mocked(
   ) => Promise<Dirent[]>,
 );
 
+// The path resolver calls the plain overload, which lists names as strings.
+const mockReaddirNames = vi.mocked(
+  fs.readdir as (path: PathLike) => Promise<string[]>,
+);
+
 interface MockFileHandle {
   read: Mock;
   close: Mock;
@@ -293,6 +298,11 @@ describe("Lib Functions", () => {
         mockFs.realpath.mockImplementation(async (path: PathLike) =>
           path.toString(),
         );
+        // A name the path resolver lstats is missing unless a test says
+        // otherwise, so an unmatched component starts the missing tail.
+        const enoent = new Error("ENOENT") as NodeJS.ErrnoException;
+        enoent.code = "ENOENT";
+        mockFs.lstat.mockRejectedValue(enoent);
       });
 
       it("validates allowed paths", async () => {
@@ -354,6 +364,44 @@ describe("Lib Functions", () => {
 
         const result = await validatePath(newFilePath, allowedDirs);
         expect(result).toBe(path.resolve(newFilePath));
+      });
+
+      it("checks a component no entry matches by spelling when the OS still finds it", async () => {
+        // On a case-insensitive file system "LINK" opens the symlink listed as
+        // "link"; it must be resolved and checked, not treated as missing.
+        const base =
+          process.platform === "win32" ? "C:\\Users\\test" : "/home/user";
+        const outsideDir =
+          process.platform === "win32" ? "C:\\outside" : "/outside";
+        const enoentError = new Error("ENOENT") as NodeJS.ErrnoException;
+        enoentError.code = "ENOENT";
+        mockFs.realpath
+          .mockRejectedValueOnce(enoentError)
+          .mockResolvedValueOnce(base)
+          .mockResolvedValueOnce(outsideDir);
+        mockReaddirNames.mockResolvedValueOnce(["link"]);
+        mockFs.lstat.mockResolvedValueOnce({} as Stats);
+
+        await expect(
+          validatePath(path.join(base, "LINK", "a"), allowedDirs),
+        ).rejects.toThrow(
+          `Access denied - symlink target outside allowed directories: ${outsideDir}`,
+        );
+        expect(mockFs.lstat).toHaveBeenCalledWith(path.join(base, "LINK"));
+      });
+
+      it("reports an lstat failure other than ENOENT on an unmatched component as is", async () => {
+        const base =
+          process.platform === "win32" ? "C:\\Users\\test" : "/home/user";
+        const enoentError = new Error("ENOENT") as NodeJS.ErrnoException;
+        enoentError.code = "ENOENT";
+        mockFs.realpath.mockRejectedValueOnce(enoentError);
+        mockReaddirNames.mockResolvedValueOnce([]);
+        mockFs.lstat.mockRejectedValueOnce(new Error("EACCES lstat"));
+
+        await expect(
+          validatePath(path.join(base, "new", "f.txt"), allowedDirs),
+        ).rejects.toThrow("EACCES lstat");
       });
 
       it("rejects when no ancestor directory exists at all", async () => {
