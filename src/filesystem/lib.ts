@@ -139,6 +139,17 @@ function respellAllowedDirectoryPrefix(
   return absolutePath;
 }
 
+// Whether a directory entry of this name exists, without following it.
+async function entryExists(entryPath: string): Promise<boolean> {
+  try {
+    await fs.lstat(entryPath);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
+}
+
 async function resolveUnicodeEquivalentPath(
   absolutePath: string,
   allowedDirectories: readonly string[],
@@ -174,32 +185,25 @@ async function resolveUnicodeEquivalentPath(
       throw new Error(`Ambiguous Unicode path component: ${requestedPart}`);
     }
 
-    let nextPath: string;
-    if (equivalentMatches.length === 0) {
-      // No entry spells the component, but a case-insensitive volume (APFS,
-      // NTFS) can still find it under another case, or Windows under its name
-      // without trailing dots and spaces. Ask realpath, so an existing
-      // directory always comes back in its on-disk spelling, which the write
-      // operations compare against where they really are.
-      try {
-        nextPath = await fs.realpath(path.join(currentPath, requestedPart));
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-          throw error;
-        }
-        // Nothing below this point exists yet, so there are no symlinks left
-        // to resolve. currentPath is already realpath'd and inside an allowed
-        // directory; append the missing tail so create_directory can mkdir -p
-        // it.
-        return path.join(currentPath, ...relativeParts.slice(index));
-      }
-    } else {
-      nextPath = await fs.realpath(
-        path.join(currentPath, equivalentMatches[0]),
-      );
+    // When no entry matches by spelling, the requested name still goes to the
+    // OS as it is: on a case-insensitive file system (macOS and Windows by
+    // default) it can name an existing entry spelled with other letter case,
+    // and that entry can be a symlink that leaves the allowed directories. So
+    // it is resolved and checked like a match, and only a name that does not
+    // exist at all (lstat, so a dangling symlink still counts as existing)
+    // starts the missing tail.
+    const candidate = path.join(
+      currentPath,
+      equivalentMatches[0] ?? requestedPart,
+    );
+    if (equivalentMatches.length === 0 && !(await entryExists(candidate))) {
+      // Nothing below this point exists yet, so there are no symlinks left to
+      // resolve. currentPath is already realpath'd and inside an allowed
+      // directory; append the missing tail so create_directory can mkdir -p it.
+      return path.join(currentPath, ...relativeParts.slice(index));
     }
 
-    currentPath = nextPath;
+    currentPath = await fs.realpath(candidate);
     if (
       !isPathWithinAllowedDirectories(
         normalizePath(currentPath),

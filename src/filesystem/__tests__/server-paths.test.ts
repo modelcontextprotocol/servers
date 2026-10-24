@@ -35,6 +35,23 @@ async function holdsBothNormalizationForms(): Promise<boolean> {
 
 const distinctForms = await holdsBothNormalizationForms();
 
+/** True when this file system finds "name" when asked for "NAME" (macOS and Windows by default). */
+async function foldsCase(): Promise<boolean> {
+  const probe = await makeTempDir("mcp-case-probe-");
+  try {
+    await fs.mkdir(path.join(probe, "name"));
+    await fs.lstat(path.join(probe, "NAME"));
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  } finally {
+    await fs.rm(probe, { recursive: true, force: true });
+  }
+}
+
+const caseInsensitive = await foldsCase();
+
 let dir: string;
 let outside: string;
 let conn: Connected;
@@ -198,6 +215,75 @@ describe("symlinks", () => {
     );
     expect(await fs.readdir(outside)).toEqual(["secret.txt"]);
   });
+
+  describe.skipIf(!caseInsensitive)(
+    "spelled with other letter case on a case-insensitive file system",
+    () => {
+      const refusal = () =>
+        `Access denied - symlink target outside allowed directories: ${outside} not in ${dir}`;
+
+      it("refuses create_directory under a symlink that leaves", async () => {
+        await fs.symlink(outside, path.join(dir, "link"), "junction");
+        const result = await call(client, "create_directory", {
+          path: path.join(dir, "LINK", "a"),
+        });
+        expect(textOf(result)).toBe(refusal());
+        expect(await fs.readdir(outside)).toEqual(["secret.txt"]);
+      });
+
+      it("refuses write_file when only an ancestor of the symlink is respelled", async () => {
+        await fs.mkdir(path.join(dir, "sub"));
+        await fs.symlink(outside, path.join(dir, "sub", "ln2"), "junction");
+        const result = await call(client, "write_file", {
+          path: path.join(dir, "SUB", "ln2", "nested.txt"),
+          content: "x",
+        });
+        expect(textOf(result)).toBe(refusal());
+        expect(await fs.readdir(outside)).toEqual(["secret.txt"]);
+      });
+
+      it("refuses a move_file destination under a symlink that leaves", async () => {
+        await fs.symlink(outside, path.join(dir, "link"), "junction");
+        await fs.writeFile(path.join(dir, "note.txt"), "note");
+        const result = await call(client, "move_file", {
+          source: path.join(dir, "note.txt"),
+          destination: path.join(dir, "lInK", "moved.txt"),
+        });
+        expect(textOf(result)).toBe(refusal());
+        expect(await fs.readdir(outside)).toEqual(["secret.txt"]);
+        expect(await fs.readFile(path.join(dir, "note.txt"), "utf8")).toBe(
+          "note",
+        );
+      });
+
+      it("still writes a new file under a respelled directory that stays inside", async () => {
+        await fs.mkdir(path.join(dir, "sub"));
+        const result = await call(client, "write_file", {
+          path: path.join(dir, "SUB", "new.txt"),
+          content: "x",
+        });
+        expect(result.isError).toBeFalsy();
+        expect(
+          await fs.readFile(path.join(dir, "sub", "new.txt"), "utf8"),
+        ).toBe("x");
+      });
+
+      it("refuses to write under a respelled dangling symlink, reporting a missing parent", async () => {
+        await fs.symlink(
+          path.join(outside, "not-yet"),
+          path.join(dir, "dangling"),
+        );
+        const result = await call(client, "write_file", {
+          path: path.join(dir, "DANGLING", "f.txt"),
+          content: "x",
+        });
+        expect(textOf(result)).toBe(
+          `Parent directory does not exist: ${path.join(dir, "DANGLING")}`,
+        );
+        await expect(fs.stat(path.join(outside, "not-yet"))).rejects.toThrow();
+      });
+    },
+  );
 
   it("refuses to write through a dangling symlink, reporting a missing parent", async () => {
     const link = path.join(dir, "dangling");
