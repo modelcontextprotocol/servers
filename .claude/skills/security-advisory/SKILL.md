@@ -292,9 +292,16 @@ Create it with `/board-ops`'s draft-card recipe, using the follow-up title in
 place of `[$GHSA]`.
 
 ⚠️ **The follow-up card is the only exception beyond the advisory's own
-card.** Any other untracked work an advisory's review turns up is either
-outside the advisory's scope, and gets a public issue **after publication**
-like any other finding, or it is part of the fix.
+card.** Any other untracked work an advisory's review turns up falls into one
+of three cases:
+
+- It is part of the fix.
+- It is a **separate vulnerability**, which goes through its own private
+  advisory: this repository's for ours, or the SDK's advisory form for an
+  SDK's (step 2). Publishing this advisory never makes another one safe to
+  disclose.
+- It is non-security work outside the advisory's scope, which gets a public
+  issue **after publication**, like any other finding.
 
 ### 5. Merge, release, publish (human only)
 
