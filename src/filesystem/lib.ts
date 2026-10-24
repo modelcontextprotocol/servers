@@ -5,6 +5,12 @@ import { createTwoFilesPatch } from "diff";
 import { minimatch } from "minimatch";
 import { normalizePath, expandHome } from "./path-utils.js";
 import { isPathWithinAllowedDirectories } from "./path-validation.js";
+import {
+  createDirectoryInPlace,
+  createFileInDirectory,
+  overwriteFileInDirectory,
+  renameIntoDirectory,
+} from "./pinned-directory.js";
 
 // Type definitions
 interface FileInfo {
@@ -316,9 +322,10 @@ export async function writeFileContent(
   content: string,
 ): Promise<void> {
   try {
-    // Security: 'wx' flag ensures exclusive creation - fails if file/symlink exists,
-    // preventing writes through pre-existing symlinks
-    await fs.writeFile(filePath, content, { encoding: "utf-8", flag: "wx" });
+    // Security: exclusive creation fails if a file or symlink exists, so a
+    // pre-existing symlink is never written through; the directory is pinned
+    // (see pinned-directory.ts), so a swapped one is never written through.
+    await createFileInDirectory(filePath, content);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "EEXIST") {
       await overwriteInPlace(filePath, content);
@@ -337,16 +344,16 @@ export async function writeFileContent(
  * also never renames over the target, which on Windows fails with EPERM when
  * another process holds the file open without FILE_SHARE_DELETE (#3199).
  *
- * Security: the path was validated before this runs, so a symlink swapped in
- * since then must not be written through (TOCTOU). Three checks hold that:
+ * Security: the path was validated before this runs, so something swapped in
+ * since then must not be written through (TOCTOU):
  * - lstat refuses anything at the path that is not a regular file, a symlink
  *   included;
- * - O_NOFOLLOW makes the open itself fail with ELOOP on a symlink. It exists
- *   only on POSIX: fs.constants.O_NOFOLLOW is undefined on Windows;
- * - the opened handle must be the very file lstat saw (same device and inode),
- *   which catches a swap between the lstat and the open on every platform,
- *   Windows included. Once the handle is verified, every write goes through
- *   it, so a later swap of the path cannot redirect it.
+ * - the open happens inside the pinned directory (pinned-directory.ts), so a
+ *   directory on the path swapped for a symlink cannot redirect it;
+ * - O_NOFOLLOW makes the open itself fail with ELOOP on a symlink (POSIX
+ *   only), and the opened handle must be the very file lstat saw (same device
+ *   and inode), which catches a swap between the lstat and the open. Once
+ *   the handle is verified, every write goes through it.
  *
  * The trade-off is crash-atomicity: a crash mid-write leaves a partly written
  * file, where the rename left either the old content or the new.
@@ -359,28 +366,12 @@ async function overwriteInPlace(
   if (!expected.isFile()) {
     throw new Error(`Refusing to write: not a regular file: ${filePath}`);
   }
-  // O_RDWR rather than O_WRONLY: opening a FIFO swapped in after the lstat for
-  // writing only would block until a reader arrives.
-  const handle = await fs.open(
-    filePath,
-    fs.constants.O_RDWR | (fs.constants.O_NOFOLLOW ?? 0),
-  );
-  try {
-    const opened = await handle.stat();
-    if (
-      !opened.isFile() ||
-      opened.dev !== expected.dev ||
-      opened.ino !== expected.ino
-    ) {
-      throw new Error(
-        `Refusing to write: ${filePath} was replaced while it was being opened`,
-      );
-    }
-    await handle.truncate(0);
-    await handle.writeFile(content, "utf-8");
-  } finally {
-    await handle.close();
-  }
+  await overwriteFileInDirectory(filePath, content, expected);
+}
+
+/** Create a directory and any missing parents (see pinned-directory.ts). */
+export async function createDirectory(directoryPath: string): Promise<void> {
+  createDirectoryInPlace(directoryPath);
 }
 
 export async function moveFile(
@@ -396,7 +387,8 @@ export async function moveFile(
     await fs.lstat(destinationPath);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      await fs.rename(sourcePath, destinationPath);
+      // The destination's directory is pinned (see pinned-directory.ts).
+      renameIntoDirectory(sourcePath, destinationPath);
       return;
     }
     throw error;
