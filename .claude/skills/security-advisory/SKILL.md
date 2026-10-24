@@ -374,8 +374,11 @@ work has not shipped:
 2. Convert it.
 3. Replace the body's triage lines with the write-up copied out of the fork
    (step 5), linking the now-public advisory.
-4. Apply `/issue-create`'s labels, plus the milestone the follow-up is planned
-   for, not the one the fix shipped in.
+4. Apply `/issue-create`'s labels. A card already past `Incoming` also takes
+   the milestone the follow-up is planned for, not the one the fix shipped in.
+   A card still in `Incoming` stays unmilestoned: once it is an issue the
+   ordinary `Incoming` ⇔ no-milestone rule applies, and a maintainer approves
+   it by assigning the milestone and moving it to `Todo`.
 5. Leave the issue open, and leave the card in the Status it had.
 
 ## API facts worth not re-deriving
