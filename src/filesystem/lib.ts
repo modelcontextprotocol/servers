@@ -3,7 +3,7 @@ import path from "path";
 import { StringDecoder } from "string_decoder";
 import { createTwoFilesPatch } from "diff";
 import { minimatch } from "minimatch";
-import { normalizePath, expandHome } from "./path-utils.js";
+import { normalizePathFormat, expandHome } from "./path-utils.js";
 import { isPathWithinAllowedDirectories } from "./path-validation.js";
 import {
   createDirectoryInPlace,
@@ -81,7 +81,7 @@ function resolveRelativePathAgainstAllowedDirectories(
   // Try to resolve relative path against each allowed directory
   for (const allowedDir of allowedDirectories) {
     const candidate = path.resolve(allowedDir, relativePath);
-    const normalizedCandidate = normalizePath(candidate);
+    const normalizedCandidate = normalizePathFormat(candidate);
 
     // Check if the resulting path lies within any allowed directory
     if (
@@ -157,7 +157,9 @@ async function resolveUnicodeEquivalentPath(
   const allowedDirectory = [...allowedDirectories]
     .sort((left, right) => right.length - left.length)
     .find((directory) =>
-      isPathWithinAllowedDirectories(normalizePath(absolutePath), [directory]),
+      isPathWithinAllowedDirectories(normalizePathFormat(absolutePath), [
+        directory,
+      ]),
     );
 
   /* v8 ignore next -- validatePath calls this only after the same allow-list check passed, so a containing directory always exists */
@@ -206,7 +208,7 @@ async function resolveUnicodeEquivalentPath(
     currentPath = await fs.realpath(candidate);
     if (
       !isPathWithinAllowedDirectories(
-        normalizePath(currentPath),
+        normalizePathFormat(currentPath),
         allowedDirectories,
       )
     ) {
@@ -245,12 +247,15 @@ export async function validatePath(
         allowedDirectories,
       );
   if (
-    !isPathWithinAllowedDirectories(normalizePath(absolute), allowedDirectories)
+    !isPathWithinAllowedDirectories(
+      normalizePathFormat(absolute),
+      allowedDirectories,
+    )
   ) {
     absolute = respellAllowedDirectoryPrefix(absolute, allowedDirectories);
   }
 
-  const normalizedRequested = normalizePath(absolute);
+  const normalizedRequested = normalizePathFormat(absolute);
 
   // Security: Check if path is within allowed directories before any file operations
   const isAllowed = isPathWithinAllowedDirectories(
@@ -269,7 +274,7 @@ export async function validatePath(
   // This prevents attackers from creating symlinks that point outside allowed directories
   try {
     const realPath = await fs.realpath(absolute);
-    const normalizedReal = normalizePath(realPath);
+    const normalizedReal = normalizePathFormat(realPath);
     if (!isPathWithinAllowedDirectories(normalizedReal, allowedDirectories)) {
       throw new Error(
         `Access denied - symlink target outside allowed directories: ${realPath} not in ${allowedDirectories.join(", ")}`,
