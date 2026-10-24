@@ -13,7 +13,13 @@
 // app has its own session map. `startSseServer()` is what the launcher runs.
 
 import { SSEServerTransport } from "@modelcontextprotocol/server-legacy/sse";
-import express, { type Express, type Response } from "express";
+import { localhostOriginValidation } from "@modelcontextprotocol/node";
+import express, {
+  type Express,
+  type NextFunction,
+  type Request,
+  type Response,
+} from "express";
 import type { Server } from "node:http";
 import { createServer } from "../server/index.js";
 import cors from "cors";
@@ -32,15 +38,24 @@ function sendError(res: Response, status: number, message: string): void {
 }
 
 /**
- * Build the SSE transport's Express app: CORS, `GET /sse` and `POST /message`,
- * and the map from session id to transport that they share.
+ * Build the SSE transport's Express app: Origin validation, CORS, `GET /sse`
+ * and `POST /message`, and the map from session id to transport that they
+ * share.
  */
 export function createApp(): Express {
-  // Express app with permissive CORS for testing with Inspector direct connect mode
   const app = express();
+  // A browser page may reach this server only from a localhost origin. The
+  // SDK's guard answers any other Origin with a 403 before a route or the
+  // CORS middleware sees it, preflights included; a request with no Origin
+  // (a non-browser client) passes. CORS then grants the origin that passed,
+  // so the Inspector's direct connect mode keeps working from localhost.
+  const allowOrigin = localhostOriginValidation();
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (allowOrigin(req, res)) next();
+  });
   app.use(
     cors({
-      origin: "*", // use "*" with caution in production
+      origin: true,
       methods: "GET,POST",
       preflightContinue: false,
       optionsSuccessStatus: 204,
