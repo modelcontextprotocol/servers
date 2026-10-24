@@ -168,15 +168,17 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 ### Customization - robots.txt
 
 By default, the server will obey a websites robots.txt file if the request came from the model (via a tool), but not if
-the request was user initiated (via a prompt). This can be disabled by adding the argument `--ignore-robots-txt` to the
-`args` list in the configuration.
+the request was user initiated (via a prompt). Every redirect hop of a tool fetch is checked against the robots.txt of
+the host it leads to, the same way as the requested URL. This can be disabled by adding the argument
+`--ignore-robots-txt` to the `args` list in the configuration.
 
 ### Customization - Private addresses
 
 By default, the server refuses any request, including a redirect hop or a robots.txt fetch, whose host resolves to an
 address that is not globally routable: loopback (`127.0.0.0/8`, `::1`), private (`10.0.0.0/8`, `172.16.0.0/12`,
 `192.168.0.0/16`, `fc00::/7`), link-local (`169.254.0.0/16`, `fe80::/10`), shared address space (`100.64.0.0/10`),
-multicast, unspecified, documentation and the other IANA special-purpose ranges. A hostname is refused if any one of its addresses is in those ranges.
+multicast, unspecified, documentation and the other IANA special-purpose ranges. An IPv4-mapped (`::ffff:0:0/96`) or
+well-known NAT64 (`64:ff9b::/96`) address is judged by the IPv4 address it carries. A hostname is refused if any one of its addresses is in those ranges.
 The client receives an error naming the refused address.
 
 To fetch from local or internal hosts (a development server, an intranet page), add the argument

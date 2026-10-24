@@ -108,6 +108,8 @@ npm run start:streamableHttp
 
 The endpoint is `http://localhost:3001/mcp` (`PORT` overrides the port). It serves 2026-07-28 clients statelessly and 2025-era clients with sessions, from the same URL.
 
+Both HTTP transports (Streamable HTTP and HTTP+SSE) accept browser requests only from a localhost origin: an `Origin` header whose host is `localhost`, `127.0.0.1` or `[::1]`, on any port, such as the MCP Inspector's. A request carrying any other `Origin` is refused with `403 Forbidden`. Clients that send no `Origin` header, which is every non-browser client, are unaffected.
+
 ## Running from source with [HTTP+SSE Transport](https://modelcontextprotocol.io/specification/2024-11-05/basic/transports#http-with-sse) (deprecated as of [2025-03-26](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports))
 
 ```shell

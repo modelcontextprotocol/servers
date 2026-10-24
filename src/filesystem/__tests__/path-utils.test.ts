@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import {
   normalizePath,
+  normalizePathFormat,
   expandHome,
   convertToWindowsPath,
 } from "../path-utils.js";
@@ -66,6 +67,20 @@ describe("Path Utilities", () => {
         // On Linux, /d/ is just a regular Unix path
         expect(convertToWindowsPath("/d/some/path")).toBe("/d/some/path");
       }
+    });
+  });
+
+  describe("normalizePathFormat", () => {
+    it("keeps surrounding quotes and whitespace, which are part of the name", () => {
+      expect(normalizePathFormat("/allowed/proj'")).toBe("/allowed/proj'");
+      expect(normalizePathFormat('/allowed/proj"')).toBe('/allowed/proj"');
+      expect(normalizePathFormat("/allowed/proj ")).toBe("/allowed/proj ");
+    });
+
+    it("normalizes the format as normalizePath does", () => {
+      expect(normalizePathFormat("/usr/local//bin/app///")).toBe(
+        "/usr/local/bin/app",
+      );
     });
   });
 

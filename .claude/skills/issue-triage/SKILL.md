@@ -676,7 +676,9 @@ What the queries account for:
 - **Advisory drafts are carved out by type, title and board together.** A
   private security advisory is tracked by a draft card titled
   `[GHSA-xxxx-yyyy-zzzz]`, the one exception to "no draft cards", added with
-  the `security-advisory` flow (#4870). Counting them would pin the non-Issue
+  the `security-advisory` flow (#4870). The same flow adds an advisory's
+  follow-up card, `[GHSA-xxxx-yyyy-zzzz follow-up]`, which the prefix check
+  exempts in the same way. Counting them would pin the non-Issue
   check permanently above zero, and a check that never prints `0` stops being
   read. The exemption is `DraftIssue` **and** the `[GHSA-` prefix, nothing
   broader: a draft titled anything else is still reported (by title, since a

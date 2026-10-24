@@ -30,5 +30,9 @@
   {
     "prompt": "Rename the local variable `tmp` to `buffer` in this snippet: `const tmp = 1; return tmp + 1;`",
     "expect": null
+  },
+  {
+    "prompt": "The fix for a private advisory only covers Linux and macOS; Windows needs a bigger change. Where do I track the Windows work before the advisory is published?",
+    "expect": "security-advisory"
   }
 ]

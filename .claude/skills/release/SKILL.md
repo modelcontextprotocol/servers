@@ -19,6 +19,24 @@ Release whose commit is not on `main`.
 environment deployments are a maintainer's acts. So is merging any PR. Prepare,
 verify and recommend; do not perform those.
 
+## 0. Check this session's instructions first
+
+A release is the longest-running session and the costliest to get wrong, and
+it follows this skill and `AGENTS.md` exactly as they were when the session
+started. Before step 1, run the staleness check in `AGENTS.md`
+**Issue-driven work style** (all work in a worktree freshly cut from
+`origin/v2/main`), whatever the `SessionStart` hook printed: the hook ran when
+the session began, and this check runs now.
+
+On `STALE`, or a `STALE` line from the `SessionStart` hook, **stop** and ask
+for a session started in a fresh worktree. The v2.0.0 release ran its first
+three steps on a `release` skill 447 commits out of date (#5167). Re-run the
+check after each preparation PR merges, since `v2/main` moves under the
+session, **from the session-start revision, not `HEAD`**: this flow moves
+between worktrees (step 4e moves the verification worktree onto a newer
+candidate), and a newer worktree's `HEAD` says nothing about the rules this
+session loaded. The hook prints that revision and the re-check command.
+
 ## The shape
 
 One **release issue**, up to three **preparation PRs** on `v2/main`, one
@@ -174,23 +192,57 @@ ordinary PR first.
 
 Then, on the PR:
 
-1. **Tie it to the release issue with a comment**, `Part of #N`. The action
-   rewrites the PR's body on every push to `v2/main`, so a `Closes` line there
-   would not survive; this is the exception `AGENTS.md` names.
+1. **Link it to the release issue, and leave a comment.** The action rewrites
+   the PR's body on every push to `v2/main`, so a `Closes` line there would
+   not survive; this is the exception `AGENTS.md` names. The link lives
+   outside the body, so make it now, with the `addCloseIssueReferences`
+   mutation from `/pr-flow` (step 6), and read it back. On `v2/main` it closes
+   nothing at merge. Then comment `Part of #N`, the textual record that every
+   rewrite leaves alone:
+
+   ```sh
+   PR=<VERSION_PACKAGES_PR>
+   gh pr comment "$PR" --repo modelcontextprotocol/servers --body "Part of #$N"
+   ```
 2. **Wait for its CI to pass.** The workflow token's push starts no workflow,
-   so the Version Packages workflow dispatches the TypeScript and Python
-   workflows on `changeset-release/v2/main` after each update. A PR does not
-   list dispatched checks, so the result shows as two commit statuses,
-   `TypeScript (dispatched)` and `Python (dispatched)`. Closing and reopening
-   the PR does not start them (that fires `pull_request`; they run on `push`).
-   If neither status appears, run them by hand:
-   `gh workflow run typescript.yml --ref changeset-release/v2/main` (and
-   `python.yml`).
+   so the Version Packages workflow dispatches the TypeScript, Python, DCO and
+   Everything diff workflows on `changeset-release/v2/main` after each update.
+   A PR does not list dispatched checks, so the result shows as four commit
+   statuses: `TypeScript (dispatched)`, `Python (dispatched)`,
+   `DCO (dispatched)` and `Everything diff (dispatched)`. The PR may also
+   list `DCO signoff` and the diff as pending or failed with no jobs: GitHub
+   holds the token's `pull_request` runs (#5173), so read the statuses
+   instead. Closing and reopening the PR does not start the CI workflows
+   (that fires `pull_request`; they run on `push`). If a status does not
+   appear, dispatch its workflow by hand:
+   `gh workflow run typescript.yml --ref changeset-release/v2/main` (or
+   `python.yml`, `dco.yml`, `everything-mcp-diff.yml`).
 3. **Read it**: each bump matches the semver policy in `RELEASING.md`, each
    `CHANGELOG.md` entry says what a user of the server needs to know, the
    consumed changeset files are deleted, and `package-lock.json` records the
    new versions.
-4. A maintainer merges it.
+4. **Put `Part of #N` as the body's first line, immediately before the
+   merge**, once nothing else will land on `v2/main` first: any push there
+   regenerates the body and drops the line.
+
+   ```sh
+   # Read the body first, and edit only on a successful, non-empty read: a
+   # failed read must never replace the generated release notes with the
+   # prefix alone.
+   OLD=$(gh pr view "$PR" --repo modelcontextprotocol/servers --json body --jq .body) \
+     && [ -n "$OLD" ] \
+     && printf 'Part of #%s\n\n%s\n' "$N" "$OLD" \
+       | gh pr edit "$PR" --repo modelcontextprotocol/servers --body-file - \
+     || echo "body read or edit FAILED — PR body left as it was" >&2
+   ```
+
+5. A maintainer merges it, **first checking the line is still the body's
+   first**. If a push regenerated the body in between, repeat step 4:
+
+   ```sh
+   gh pr view "$PR" --repo modelcontextprotocol/servers \
+     --json body --jq '.body | split("\n")[0]'    # must print: Part of #N
+   ```
 
 ### 2c. The Python version stamps: "Prepare Python Release"
 
@@ -203,8 +255,9 @@ gh workflow run prepare-python-release.yml --repo modelcontextprotocol/servers \
 
 It opens a PR that starts with `Closes #N`, on a branch named
 `v2/chore/<N>-python-calver-<date>`, labeled `v2`, and dispatches the
-TypeScript and Python workflows on that branch, as the Version Packages
-workflow does. Wait for its two `(dispatched)` statuses to pass, check that each stamped package really
+TypeScript, Python and DCO workflows on that branch, as the Version Packages
+workflow does (not the Everything diff, whose paths it never touches). Wait
+for its three `(dispatched)` statuses to pass, check that each stamped package really
 changed, and a maintainer merges it.
 No PR means no Python server has a shipped change since its last stamp.
 

@@ -53,10 +53,12 @@ every time**:
 # The board's fields, once per session. Refuses to go on from a failed call.
 FIELDS=$(gh project field-list 43 --owner modelcontextprotocol --format json) || FIELDS=
 # opt <Field> <Option name> → the option's current id, or nothing.
+# The arguments reach jq through --args, never as shell positional parameters:
+# Claude Code rewrites those in a skill invoked with arguments (#5160).
 opt() {
-  jq -r --arg f "$1" --arg o "$2" \
-    '.fields[] | select(.name == $f) | .options[] | select(.name == $o) | .id' \
-    <<<"$FIELDS"
+  jq -r '$ARGS.positional as [$f, $o]
+    | .fields[] | select(.name == $f) | .options[] | select(.name == $o) | .id' \
+    --args "$@" <<<"$FIELDS"
 }
 
 STATUS_OPT=$(opt Status "Todo")
@@ -251,6 +253,13 @@ A private security advisory is tracked by a **draft card** titled with the bare
 id, `[GHSA-xxxx-yyyy-zzzz]`, because a real issue would disclose it before a fix
 exists. No summary goes in the title until the advisory is published. What goes on the card, and when it moves, is the
 `/security-advisory` flow; these are only the mechanics.
+
+An advisory can also have a **follow-up card**, titled
+`[GHSA-xxxx-yyyy-zzzz follow-up]`, for work its fix leaves open. The recipes
+below handle it with one change: put `[$GHSA follow-up]` wherever they have
+`[$GHSA]`, both in the lookup's `--arg p` and in `item-create`'s `--title`.
+The advisory card's own lookup matches up to the closing bracket, so it never
+finds the follow-up.
 
 ⚠️ **A draft card has no repository and no issue number**, so the issue-side
 lookup above cannot find one. Look it up by its **bracketed GHSA id** in the

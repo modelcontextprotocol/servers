@@ -5,6 +5,7 @@
 // the issue number, so the fix has a test to change.
 
 import fs from "fs/promises";
+import fsSync from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createRequire } from "node:module";
@@ -689,9 +690,9 @@ describe("write_file", () => {
   });
 
   it("reports a create failure other than EEXIST as is", async () => {
-    vi.spyOn(fs, "writeFile").mockRejectedValueOnce(
-      Object.assign(new Error("EIO: i/o error"), { code: "EIO" }),
-    );
+    vi.spyOn(fsSync, "openSync").mockImplementationOnce(() => {
+      throw Object.assign(new Error("EIO: i/o error"), { code: "EIO" });
+    });
     const result = await call(client, "write_file", {
       path: path.join(dir, "new.txt"),
       content: "x",
@@ -1100,6 +1101,37 @@ describe("list_directory_with_sizes", () => {
     expect(textOf(result)).toContain("Total: 3 files, 1 directories");
   });
 
+  it("does not report the size of a symlink target outside the allowed directories", async () => {
+    const outside = await makeTempDir("mcp-fs-tools-outside-");
+    try {
+      await fs.writeFile(path.join(outside, "secret.bin"), "x".repeat(1536));
+      await fs.symlink(
+        path.join(outside, "secret.bin"),
+        path.join(dir, "link-out"),
+      );
+      const result = await call(client, "list_directory_with_sizes", {
+        path: dir,
+      });
+      expect(textOf(result)).toContain(
+        `[FILE] ${"link-out".padEnd(30)} ${"0 B".padStart(10)}`,
+      );
+      expect(textOf(result)).not.toContain("1.50 KB");
+      expect(textOf(result)).toContain("Combined size: 2.00 KB");
+    } finally {
+      await fs.rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("reports the size of a symlink target inside the allowed directories", async () => {
+    await fs.symlink(path.join(dir, "b.txt"), path.join(dir, "link-in"));
+    const result = await call(client, "list_directory_with_sizes", {
+      path: dir,
+    });
+    expect(textOf(result)).toContain(
+      `[FILE] ${"link-in".padEnd(30)} ${"2.00 KB".padStart(10)}`,
+    );
+  });
+
   it("summarizes an empty directory", async () => {
     const empty = path.join(dir, "c");
     const result = await call(client, "list_directory_with_sizes", {
@@ -1275,6 +1307,504 @@ describe("move_file", () => {
       destination: path.join(dir, "b.txt"),
     });
     expect(textOf(result)).toBe("EACCES lstat");
+  });
+});
+
+// The TOCTOU window one level up: validation resolved every directory on the
+// path to a real one inside the allowed directory, then something replaced one
+// of them with a symlink to a directory outside it before the operation ran.
+// The kernel follows that symlink at use, so the operation would land outside.
+// The swap is staged right after validation's realpath of the given path, so
+// it lands in that window.
+describe.skipIf(process.platform === "win32")(
+  "a directory on the path swapped for a symlink after validation",
+  () => {
+    let outside: string;
+    let flip: string;
+    let flipReal: string;
+
+    beforeEach(async () => {
+      outside = await makeTempDir("mcp-fs-outside-");
+      flip = path.join(dir, "flip");
+      flipReal = path.join(dir, "flip-real");
+      await fs.mkdir(flip);
+    });
+
+    afterEach(async () => {
+      await fs.rm(outside, { recursive: true, force: true });
+    });
+
+    // flip → a symlink to `outside`, keeping the real directory aside, and
+    // back again. Synchronous, so it can run inside a synchronous call.
+    const swapOut = () => {
+      fsSync.renameSync(flip, flipReal);
+      fsSync.symlinkSync(outside, flip);
+    };
+    const swapBack = () => {
+      fsSync.unlinkSync(flip);
+      fsSync.renameSync(flipReal, flip);
+    };
+
+    /** Swap `flip` out once validation has realpath'd `target`. */
+    const swapAfterRealpath = (target: string) => {
+      const realRealpath = fs.realpath.bind(fs);
+      let swapped = false;
+      vi.spyOn(fs, "realpath").mockImplementation(async (p, opts) => {
+        const resolved = await realRealpath(p, opts);
+        if (!swapped && p === target) {
+          swapped = true;
+          swapOut();
+        }
+        return resolved;
+      });
+    };
+
+    /**
+     * Swap `flip` back the moment the operation reaches for it again: after
+     * the process enters it, or before anything re-resolves it by path. A
+     * racer that toggles the swap needs only "swapped at use, restored at
+     * the check".
+     */
+    const swapBackAtUse = () => {
+      let restored = false;
+      const realChdir = process.chdir.bind(process);
+      vi.spyOn(process, "chdir").mockImplementation((directory) => {
+        realChdir(directory);
+        if (!restored && directory === flip) {
+          restored = true;
+          swapBack();
+        }
+      });
+      const realRealpath = fs.realpath;
+      const spy = vi.mocked(fs.realpath);
+      const swapAt = spy.getMockImplementation() ?? realRealpath;
+      spy.mockImplementation(async (p, opts) => {
+        if (!restored && p === flip && fsSync.existsSync(flipReal)) {
+          restored = true;
+          swapBack();
+        }
+        return swapAt(p, opts);
+      });
+    };
+
+    it("write_file refuses to create a file through it", async () => {
+      swapAfterRealpath(flip);
+      const result = await call(client, "write_file", {
+        path: path.join(flip, "created.txt"),
+        content: "pwned",
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toMatch(/^Access denied/);
+      expect(await fs.readdir(outside)).toEqual([]);
+    });
+
+    it("write_file refuses to create a file through it, swapped back before the check", async () => {
+      swapAfterRealpath(flip);
+      swapBackAtUse();
+      const result = await call(client, "write_file", {
+        path: path.join(flip, "created.txt"),
+        content: "pwned",
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toMatch(/^Access denied/);
+      expect(await fs.readdir(outside)).toEqual([]);
+    });
+
+    it("write_file refuses to overwrite a file through it", async () => {
+      const victim = path.join(flip, "victim.txt");
+      await fs.writeFile(victim, "original");
+      await fs.writeFile(path.join(outside, "victim.txt"), "SECRET");
+      swapAfterRealpath(victim);
+      const result = await call(client, "write_file", {
+        path: victim,
+        content: "pwned",
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toMatch(/^Access denied/);
+      expect(await fs.readFile(path.join(outside, "victim.txt"), "utf-8")).toBe(
+        "SECRET",
+      );
+    });
+
+    it.each(["write_file", "edit_file"])(
+      "%s refuses to overwrite a file through it, swapped back before the check",
+      async (tool) => {
+        const victim = path.join(flip, "victim.txt");
+        await fs.writeFile(victim, "original");
+        await fs.writeFile(path.join(outside, "victim.txt"), "original");
+        swapAfterRealpath(victim);
+        swapBackAtUse();
+        const result = await call(
+          client,
+          tool,
+          tool === "write_file"
+            ? { path: victim, content: "pwned" }
+            : {
+                path: victim,
+                edits: [{ oldText: "original", newText: "pwned" }],
+              },
+        );
+        expect(result.isError).toBe(true);
+        expect(textOf(result)).toMatch(/^Access denied/);
+        expect(
+          await fs.readFile(path.join(outside, "victim.txt"), "utf-8"),
+        ).toBe("original");
+      },
+    );
+
+    it("edit_file refuses to write a file through it", async () => {
+      const victim = path.join(flip, "victim.txt");
+      await fs.writeFile(victim, "original");
+      await fs.writeFile(path.join(outside, "victim.txt"), "original");
+      swapAfterRealpath(victim);
+      const result = await call(client, "edit_file", {
+        path: victim,
+        edits: [{ oldText: "original", newText: "pwned" }],
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toMatch(/^Access denied/);
+      expect(await fs.readFile(path.join(outside, "victim.txt"), "utf-8")).toBe(
+        "original",
+      );
+    });
+
+    it("create_directory refuses to create a directory through it", async () => {
+      swapAfterRealpath(flip);
+      const result = await call(client, "create_directory", {
+        path: path.join(flip, "a", "b"),
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toMatch(/^Access denied/);
+      expect(await fs.readdir(outside)).toEqual([]);
+    });
+
+    it("move_file refuses to move a file through it", async () => {
+      const source = path.join(dir, "sensitive.txt");
+      await fs.writeFile(source, "SECRET");
+      swapAfterRealpath(flip);
+      const result = await call(client, "move_file", {
+        source,
+        destination: path.join(flip, "moved.txt"),
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toMatch(/^Access denied/);
+      expect(await fs.readdir(outside)).toEqual([]);
+      expect(await fs.readFile(source, "utf-8")).toBe("SECRET");
+    });
+
+    it("a write that entered the real directory stays in it when the path is swapped afterwards", async () => {
+      // The directory is genuine when the process enters it and is checked,
+      // and swapped only before the open: the open acts on the directory
+      // entered, not on what the path now resolves to.
+      const realOpenSync = fsSync.openSync.bind(fsSync);
+      vi.spyOn(fsSync, "openSync").mockImplementationOnce(
+        (file, flags, mode) => {
+          swapOut();
+          return realOpenSync(file, flags, mode);
+        },
+      );
+      const result = await call(client, "write_file", {
+        path: path.join(flip, "created.txt"),
+        content: "data",
+      });
+      expect(result.isError).toBeFalsy();
+      expect(await fs.readdir(outside)).toEqual([]);
+      expect(
+        await fs.readFile(path.join(flipReal, "created.txt"), "utf-8"),
+      ).toBe("data");
+    });
+
+    // A refused operation must not act on any path again: a second swap can
+    // redirect anything that does. Here flip points at the in-tree `other`,
+    // and `other` is swapped for a symlink to `outside` as soon as anything
+    // looks at the entry the operation would have left in it.
+    describe("a refusal acts on nothing outside", () => {
+      let other: string;
+
+      beforeEach(async () => {
+        other = path.join(dir, "other");
+        await fs.mkdir(other);
+      });
+
+      const redirectAfterLookingAt = (entry: string) => {
+        fsSync.rmSync(flip, { recursive: true });
+        fsSync.symlinkSync(other, flip);
+        const realLstat = fs.lstat.bind(fs);
+        vi.spyOn(fs, "lstat").mockImplementation(async (p, opts) => {
+          const stats = await realLstat(p, opts);
+          if (p === entry) {
+            fsSync.renameSync(other, `${other}-moved`);
+            fsSync.symlinkSync(outside, other);
+          }
+          return stats;
+        });
+      };
+
+      it("write_file deletes no file outside", async () => {
+        await fs.writeFile(path.join(outside, "created.txt"), "USER DATA");
+        // Validated while flip is real; swapped once validation is done.
+        const realRealpath = fs.realpath.bind(fs);
+        let armed = false;
+        vi.spyOn(fs, "realpath").mockImplementation(async (p, opts) => {
+          const resolved = await realRealpath(p, opts);
+          if (!armed && p === flip) {
+            armed = true;
+            redirectAfterLookingAt(path.join(other, "created.txt"));
+          }
+          return resolved;
+        });
+        const result = await call(client, "write_file", {
+          path: path.join(flip, "created.txt"),
+          content: "x",
+        });
+        expect(result.isError).toBe(true);
+        expect(
+          await fs.readFile(path.join(outside, "created.txt"), "utf-8"),
+        ).toBe("USER DATA");
+      });
+
+      it("create_directory removes no directory outside", async () => {
+        // Round 1 removed what a refused mkdir -p had created with rmdir by
+        // path; a second swap pointed that at empty directories outside.
+        await fs.mkdir(path.join(outside, "a", "b"), { recursive: true });
+        const realRmdir = fs.rmdir.bind(fs);
+        const rmdir = vi
+          .spyOn(fs, "rmdir")
+          .mockImplementation(async (p, opts) => {
+            if (fsSync.lstatSync(flip).isSymbolicLink()) {
+              fsSync.unlinkSync(flip);
+              fsSync.symlinkSync(outside, flip);
+            }
+            return realRmdir(p, opts);
+          });
+        const realRealpath = fs.realpath.bind(fs);
+        let armed = false;
+        vi.spyOn(fs, "realpath").mockImplementation(async (p, opts) => {
+          const resolved = await realRealpath(p, opts);
+          if (!armed && p === flip) {
+            armed = true;
+            fsSync.rmSync(flip, { recursive: true });
+            fsSync.symlinkSync(other, flip);
+          }
+          return resolved;
+        });
+        const result = await call(client, "create_directory", {
+          path: path.join(flip, "a", "b"),
+        });
+        expect(result.isError).toBe(true);
+        expect(rmdir).not.toHaveBeenCalled();
+        expect(
+          (await fs.stat(path.join(outside, "a", "b"))).isDirectory(),
+        ).toBe(true);
+        expect(await fs.readdir(other)).toEqual([]);
+      });
+
+      it("move_file moves no file in from outside", async () => {
+        const source = path.join(dir, "mine.txt");
+        await fs.writeFile(source, "MINE");
+        await fs.writeFile(path.join(outside, "moved.txt"), "OUTSIDE SECRET");
+        const realRealpath = fs.realpath.bind(fs);
+        let armed = false;
+        vi.spyOn(fs, "realpath").mockImplementation(async (p, opts) => {
+          const resolved = await realRealpath(p, opts);
+          if (!armed && p === flip) {
+            armed = true;
+            redirectAfterLookingAt(path.join(other, "moved.txt"));
+          }
+          return resolved;
+        });
+        const result = await call(client, "move_file", {
+          source,
+          destination: path.join(flip, "moved.txt"),
+        });
+        expect(result.isError).toBe(true);
+        expect(
+          await fs.readFile(path.join(outside, "moved.txt"), "utf-8"),
+        ).toBe("OUTSIDE SECRET");
+        expect(await fs.readFile(source, "utf-8")).toBe("MINE");
+      });
+    });
+  },
+);
+
+// A case-insensitive volume (the macOS default, and Windows) finds `Docs` when
+// asked for `docs`. The write operations compare where they really are with
+// the path validation returned, so validation must return the directory's
+// on-disk spelling, or every such request is refused.
+describe("a directory requested in another case", () => {
+  let caseInsensitive: boolean;
+
+  beforeEach(async () => {
+    await fs.mkdir(path.join(dir, "Docs"));
+    caseInsensitive = fsSync.existsSync(path.join(dir, "docs"));
+  });
+
+  it("write_file creates a file in it", async ({ skip }) => {
+    if (!caseInsensitive) skip();
+    const result = await call(client, "write_file", {
+      path: path.join(dir, "docs", "new.txt"),
+      content: "hello",
+    });
+    expect(result.isError).toBeFalsy();
+    expect(await fs.readFile(path.join(dir, "Docs", "new.txt"), "utf-8")).toBe(
+      "hello",
+    );
+  });
+
+  it("create_directory creates a directory in it", async ({ skip }) => {
+    if (!caseInsensitive) skip();
+    const result = await call(client, "create_directory", {
+      path: path.join(dir, "docs", "sub"),
+    });
+    expect(result.isError).toBeFalsy();
+    expect((await fs.stat(path.join(dir, "Docs", "sub"))).isDirectory()).toBe(
+      true,
+    );
+  });
+
+  it("move_file moves a file into it", async ({ skip }) => {
+    if (!caseInsensitive) skip();
+    await fs.writeFile(path.join(dir, "Docs", "f.txt"), "f");
+    const result = await call(client, "move_file", {
+      source: path.join(dir, "Docs", "f.txt"),
+      destination: path.join(dir, "docs", "g.txt"),
+    });
+    expect(result.isError).toBeFalsy();
+    expect(await fs.readFile(path.join(dir, "Docs", "g.txt"), "utf-8")).toBe(
+      "f",
+    );
+  });
+});
+
+// Every anchored write borrows the process's working directory; concurrent
+// requests must neither see one another's nor leave it changed.
+describe("concurrent writes", () => {
+  it("land in their own directories and leave the working directory as it was", async () => {
+    const before = process.cwd();
+    const targets = await Promise.all(
+      Array.from({ length: 8 }, async (_, i) => {
+        const sub = path.join(dir, `d${i}`);
+        await fs.mkdir(sub);
+        return path.join(sub, "f.txt");
+      }),
+    );
+    const results = await Promise.all([
+      ...targets.map((target, i) =>
+        call(client, "write_file", { path: target, content: `content ${i}` }),
+      ),
+      ...targets.map((target) =>
+        call(client, "create_directory", {
+          path: path.join(path.dirname(target), "x", "y"),
+        }),
+      ),
+    ]);
+    expect(results.every((result) => !result.isError)).toBe(true);
+    for (const [i, target] of targets.entries()) {
+      expect(await fs.readFile(target, "utf-8")).toBe(`content ${i}`);
+      expect(
+        (
+          await fs.stat(path.join(path.dirname(target), "x", "y"))
+        ).isDirectory(),
+      ).toBe(true);
+    }
+    expect(process.cwd()).toBe(before);
+  });
+});
+
+// Names that differ only in Unicode normalization. On a filesystem that
+// compares names byte for byte (Linux), café in NFC and in NFD are two
+// directories, so the anchor must not fold one into the other; and a
+// directory whose on-disk name is NFD must still be writable.
+describe("directories whose names differ only in normalization", () => {
+  const nfc = "caf\u00e9";
+  const nfd = "cafe\u0301";
+
+  it("write_file writes into a directory whose on-disk name is NFD", async () => {
+    const root = path.join(dir, nfd);
+    await fs.mkdir(path.join(root, "x"), { recursive: true });
+    const nfdConn = await connect([root]);
+    try {
+      const target = path.join(root, "x", "new.txt");
+      const result = await call(nfdConn.client, "write_file", {
+        path: target,
+        content: "hello",
+      });
+      expect(result.isError).toBeFalsy();
+      expect(await fs.readFile(target, "utf-8")).toBe("hello");
+    } finally {
+      await nfdConn.close();
+    }
+  });
+
+  it("write_file refuses a directory swapped for a symlink to its NFD twin", async ({
+    skip,
+  }) => {
+    if (process.platform === "win32") skip();
+    const allowed = path.join(dir, nfc, "proj");
+    const twin = path.join(dir, nfd, "proj");
+    await fs.mkdir(path.join(allowed, "x"), { recursive: true });
+    await fs.mkdir(path.join(twin, "x"), { recursive: true });
+    // Only a filesystem that keeps both names can hold the twin (Linux).
+    if ((await fs.readdir(dir)).length !== 2) skip();
+    const twinConn = await connect([allowed]);
+    try {
+      const x = path.join(allowed, "x");
+      const realRealpath = fs.realpath.bind(fs);
+      let swapped = false;
+      vi.spyOn(fs, "realpath").mockImplementation(async (p, opts) => {
+        const resolved = await realRealpath(p, opts);
+        if (!swapped && p === x) {
+          swapped = true;
+          fsSync.rmSync(x, { recursive: true });
+          fsSync.symlinkSync(path.join(twin, "x"), x);
+        }
+        return resolved;
+      });
+      const result = await call(twinConn.client, "write_file", {
+        path: path.join(x, "new.txt"),
+        content: "pwned",
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toMatch(/^Access denied/);
+      expect(await fs.readdir(path.join(twin, "x"))).toEqual([]);
+    } finally {
+      await twinConn.close();
+    }
+  });
+});
+
+// An allowed directory spelled through the macOS Data-volume firmlink
+// (/System/Volumes/Data/private/...): realpath keeps that spelling while
+// getcwd reports /private/..., and the two name the same directory.
+describe("an allowed directory spelled through the Data-volume firmlink", () => {
+  it("accepts writes, nested writes and nested directories", async ({
+    skip,
+  }) => {
+    const spelled = `/System/Volumes/Data${dir}`;
+    if (process.platform !== "darwin" || !fsSync.existsSync(spelled)) skip();
+    await fs.mkdir(path.join(dir, "Sub"));
+    const firmConn = await connect([spelled]);
+    try {
+      for (const [tool, args] of [
+        ["write_file", { path: path.join(spelled, "new.txt"), content: "a" }],
+        [
+          "write_file",
+          { path: path.join(spelled, "Sub", "x.txt"), content: "b" },
+        ],
+        ["create_directory", { path: path.join(spelled, "d1", "d2") }],
+      ] as const) {
+        const result = await call(firmConn.client, tool, args);
+        expect(result.isError, textOf(result)).toBeFalsy();
+      }
+      expect(await fs.readFile(path.join(dir, "Sub", "x.txt"), "utf-8")).toBe(
+        "b",
+      );
+      expect((await fs.stat(path.join(dir, "d1", "d2"))).isDirectory()).toBe(
+        true,
+      );
+    } finally {
+      await firmConn.close();
+    }
   });
 });
 

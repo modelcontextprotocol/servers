@@ -1,11 +1,13 @@
-// Pins the path by which a version PR opened by automation gets CI (#5110).
+// Pins the path by which a version PR opened by automation gets CI (#5110),
+// DCO and the Everything diff (#5173).
 //
 // The Version Packages and Prepare Python Release workflows push their PR
-// branches with the workflow token, which starts no workflow, so they
-// dispatch `typescript.yml` and `python.yml` on the branch instead. A
-// dispatched run's checks are left out of the status rollup a pull request
-// reads, so each CI workflow also mirrors a dispatched run onto the commit as
-// a status. Both version workflows run only from `v2/main`, so nothing
+// branches with the workflow token, which starts no workflow (GitHub holds a
+// `pull_request` run as `action_required`), so they dispatch `typescript.yml`,
+// `python.yml` and `dco.yml` on the branch instead, and Version Packages
+// `everything-mcp-diff.yml` too. A dispatched run's checks are left out of the
+// status rollup a pull request reads, so each dispatched workflow also mirrors
+// its run onto the commit as a status. Both version workflows run only from `v2/main`, so nothing
 // exercises this path before a release needs it; if any link here breaks,
 // version PRs silently go back to having no visible CI. Each test names the
 // link it guards.
@@ -32,23 +34,59 @@ const repoRoot = path.resolve(
 const read = (rel) => readFileSync(path.join(repoRoot, rel), "utf8");
 const workflow = (name) => parse(read(`.github/workflows/${name}`));
 
+// `trigger` is the event the workflow runs on when a person pushes; the
+// workflow token's version of that event starts no run, hence the dispatch.
+// `pendingChecksNewer`: the pending job, like the result job, stays silent
+// when a newer dispatched run exists (#5222); the CI workflows' pending jobs
+// do not yet (#5223).
 const CI = [
-  { file: "typescript.yml", context: "TypeScript (dispatched)" },
-  { file: "python.yml", context: "Python (dispatched)" },
+  {
+    file: "typescript.yml",
+    context: "TypeScript (dispatched)",
+    trigger: "push",
+  },
+  { file: "python.yml", context: "Python (dispatched)", trigger: "push" },
+  {
+    file: "dco.yml",
+    context: "DCO (dispatched)",
+    trigger: "pull_request",
+    pendingChecksNewer: true,
+  },
+  {
+    file: "everything-mcp-diff.yml",
+    context: "Everything diff (dispatched)",
+    trigger: "pull_request",
+    pendingChecksNewer: true,
+  },
 ];
+// The Python stamps touch none of the Everything diff's paths, so its
+// `pull_request` run would never have started there.
 const VERSION_WORKFLOWS = [
-  { file: "version-packages.yml", job: "version" },
-  { file: "prepare-python-release.yml", job: "prepare" },
+  {
+    file: "version-packages.yml",
+    job: "version",
+    dispatches: [
+      "typescript.yml",
+      "python.yml",
+      "dco.yml",
+      "everything-mcp-diff.yml",
+    ],
+  },
+  {
+    file: "prepare-python-release.yml",
+    job: "prepare",
+    dispatches: ["typescript.yml", "python.yml", "dco.yml"],
+  },
 ];
 
-for (const { file, context } of CI) {
+for (const { file, context, trigger } of CI) {
   const wf = workflow(file);
   const jobs = wf.jobs;
   const pending = jobs["dispatch-status-pending"];
   const result = jobs["dispatch-status"];
 
-  test(`${file} runs on push and can be dispatched`, () => {
-    assert.ok("push" in wf.on, "push trigger");
+  test(`${file} runs on ${trigger} and can be dispatched`, () => {
+    assert.ok(trigger in wf.on, `${trigger} trigger`);
     assert.ok("workflow_dispatch" in wf.on, "workflow_dispatch trigger");
   });
 
@@ -75,10 +113,10 @@ for (const { file, context } of CI) {
   });
 }
 
-// Run a `dispatch-status` script with a stub `gh` on PATH. The stub answers
+// Run a `dispatch-status` (or `-pending`) script with a stub `gh` on PATH. The stub answers
 // `gh run list` with the number of newer dispatched runs and records every
 // other call, so a test sees exactly which status, if any, the run posts.
-function runResultScript(script, { needs, newer }) {
+function runStatusScript(script, { needs = {}, newer }) {
   const dir = mkdtempSync(path.join(tmpdir(), "dispatch-status-"));
   try {
     const calls = path.join(dir, "calls");
@@ -142,7 +180,7 @@ for (const { file } of CI) {
     },
     () => {
       for (const needs of [FAILED, PASSED, CANCELLED])
-        assert.equal(runResultScript(script, { needs, newer: 1 }), null);
+        assert.equal(runStatusScript(script, { needs, newer: 1 }), null);
     },
   );
 
@@ -153,31 +191,66 @@ for (const { file } of CI) {
     },
     () => {
       assert.equal(
-        runResultScript(script, { needs: PASSED, newer: 0 }),
+        runStatusScript(script, { needs: PASSED, newer: 0 }),
         "success",
       );
       assert.equal(
-        runResultScript(script, { needs: FAILED, newer: 0 }),
+        runStatusScript(script, { needs: FAILED, newer: 0 }),
         "failure",
       );
       assert.equal(
-        runResultScript(script, { needs: CANCELLED, newer: 0 }),
+        runStatusScript(script, { needs: CANCELLED, newer: 0 }),
         "error",
       );
     },
   );
 }
 
-for (const { file, job } of VERSION_WORKFLOWS) {
+for (const { file } of CI.filter((c) => c.pendingChecksNewer)) {
+  const pending = workflow(file).jobs["dispatch-status-pending"];
+
+  // A superseded run's pending job (a late start, or a re-run, which keeps
+  // its run ID) must not reset the newer run's result to pending: its own
+  // result job would stay silent and leave it there.
+  test(
+    `${file}: a superseded run posts no pending status`,
+    { skip: SCRIPT_SKIP },
+    () => {
+      assert.equal(pending.permissions.actions, "read");
+      const script = pending.steps[0].run;
+      assert.equal(runStatusScript(script, { newer: 1 }), null);
+      assert.equal(runStatusScript(script, { newer: 0 }), "pending");
+    },
+  );
+}
+
+for (const { file, job, dispatches } of VERSION_WORKFLOWS) {
   const steps = workflow(file).jobs[job];
 
-  test(`${file} dispatches both CI workflows on its PR's branch`, () => {
+  test(`${file} dispatches ${dispatches.join(", ")} on its PR's branch`, () => {
     assert.equal(steps.permissions.actions, "write");
     const run = steps.steps.map((s) => s.run ?? "").join("\n");
     assert.match(run, /gh workflow run "\$workflow" --ref "\$BRANCH"/);
-    assert.match(run, /for workflow in typescript\.yml python\.yml; do/);
+    const loop = run.match(/for workflow in ([^;]+); do/);
+    assert.ok(loop, "the dispatch loop");
+    assert.deepEqual(loop[1].trim().split(/\s+/), dispatches);
   });
 }
+
+// A dispatched DCO run has no pull request, so it falls back to the branch
+// tip and the script's default base, and is grouped by its branch: a shared
+// group would let one version PR's dispatch cancel the other's.
+test("dco.yml checks a dispatched run against origin/v2/main", () => {
+  const wf = workflow("dco.yml");
+  assert.match(
+    wf.concurrency.group,
+    /github\.event\.pull_request\.number \|\| github\.ref/,
+  );
+  const [checkout, , check] = wf.jobs.dco.steps;
+  assert.match(checkout.with.ref, /\|\| github\.sha/);
+  assert.match(check.env.BASE_SHA, /\|\| 'origin\/v2\/main'/);
+  assert.match(check.env.HEAD_SHA, /\|\| github\.sha/);
+});
 
 test("RELEASING.md names the statuses a version PR is merged on", () => {
   const releasing = read("RELEASING.md");

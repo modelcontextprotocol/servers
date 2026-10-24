@@ -3,8 +3,14 @@ import path from "path";
 import { StringDecoder } from "string_decoder";
 import { createTwoFilesPatch } from "diff";
 import { minimatch } from "minimatch";
-import { normalizePath, expandHome } from "./path-utils.js";
+import { normalizePathFormat, expandHome } from "./path-utils.js";
 import { isPathWithinAllowedDirectories } from "./path-validation.js";
+import {
+  createDirectoryInPlace,
+  createFileInDirectory,
+  overwriteFileInDirectory,
+  renameIntoDirectory,
+} from "./pinned-directory.js";
 
 // Type definitions
 interface FileInfo {
@@ -75,7 +81,7 @@ function resolveRelativePathAgainstAllowedDirectories(
   // Try to resolve relative path against each allowed directory
   for (const allowedDir of allowedDirectories) {
     const candidate = path.resolve(allowedDir, relativePath);
-    const normalizedCandidate = normalizePath(candidate);
+    const normalizedCandidate = normalizePathFormat(candidate);
 
     // Check if the resulting path lies within any allowed directory
     if (
@@ -133,6 +139,17 @@ function respellAllowedDirectoryPrefix(
   return absolutePath;
 }
 
+// Whether a directory entry of this name exists, without following it.
+async function entryExists(entryPath: string): Promise<boolean> {
+  try {
+    await fs.lstat(entryPath);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
+}
+
 async function resolveUnicodeEquivalentPath(
   absolutePath: string,
   allowedDirectories: readonly string[],
@@ -140,7 +157,9 @@ async function resolveUnicodeEquivalentPath(
   const allowedDirectory = [...allowedDirectories]
     .sort((left, right) => right.length - left.length)
     .find((directory) =>
-      isPathWithinAllowedDirectories(normalizePath(absolutePath), [directory]),
+      isPathWithinAllowedDirectories(normalizePathFormat(absolutePath), [
+        directory,
+      ]),
     );
 
   /* v8 ignore next -- validatePath calls this only after the same allow-list check passed, so a containing directory always exists */
@@ -168,19 +187,28 @@ async function resolveUnicodeEquivalentPath(
       throw new Error(`Ambiguous Unicode path component: ${requestedPart}`);
     }
 
-    if (equivalentMatches.length === 0) {
+    // When no entry matches by spelling, the requested name still goes to the
+    // OS as it is: on a case-insensitive file system (macOS and Windows by
+    // default) it can name an existing entry spelled with other letter case,
+    // and that entry can be a symlink that leaves the allowed directories. So
+    // it is resolved and checked like a match, and only a name that does not
+    // exist at all (lstat, so a dangling symlink still counts as existing)
+    // starts the missing tail.
+    const candidate = path.join(
+      currentPath,
+      equivalentMatches[0] ?? requestedPart,
+    );
+    if (equivalentMatches.length === 0 && !(await entryExists(candidate))) {
       // Nothing below this point exists yet, so there are no symlinks left to
       // resolve. currentPath is already realpath'd and inside an allowed
       // directory; append the missing tail so create_directory can mkdir -p it.
       return path.join(currentPath, ...relativeParts.slice(index));
     }
 
-    currentPath = await fs.realpath(
-      path.join(currentPath, equivalentMatches[0]),
-    );
+    currentPath = await fs.realpath(candidate);
     if (
       !isPathWithinAllowedDirectories(
-        normalizePath(currentPath),
+        normalizePathFormat(currentPath),
         allowedDirectories,
       )
     ) {
@@ -219,12 +247,15 @@ export async function validatePath(
         allowedDirectories,
       );
   if (
-    !isPathWithinAllowedDirectories(normalizePath(absolute), allowedDirectories)
+    !isPathWithinAllowedDirectories(
+      normalizePathFormat(absolute),
+      allowedDirectories,
+    )
   ) {
     absolute = respellAllowedDirectoryPrefix(absolute, allowedDirectories);
   }
 
-  const normalizedRequested = normalizePath(absolute);
+  const normalizedRequested = normalizePathFormat(absolute);
 
   // Security: Check if path is within allowed directories before any file operations
   const isAllowed = isPathWithinAllowedDirectories(
@@ -243,7 +274,7 @@ export async function validatePath(
   // This prevents attackers from creating symlinks that point outside allowed directories
   try {
     const realPath = await fs.realpath(absolute);
-    const normalizedReal = normalizePath(realPath);
+    const normalizedReal = normalizePathFormat(realPath);
     if (!isPathWithinAllowedDirectories(normalizedReal, allowedDirectories)) {
       throw new Error(
         `Access denied - symlink target outside allowed directories: ${realPath} not in ${allowedDirectories.join(", ")}`,
@@ -296,9 +327,10 @@ export async function writeFileContent(
   content: string,
 ): Promise<void> {
   try {
-    // Security: 'wx' flag ensures exclusive creation - fails if file/symlink exists,
-    // preventing writes through pre-existing symlinks
-    await fs.writeFile(filePath, content, { encoding: "utf-8", flag: "wx" });
+    // Security: exclusive creation fails if a file or symlink exists, so a
+    // pre-existing symlink is never written through; the directory is pinned
+    // (see pinned-directory.ts), so a swapped one is never written through.
+    await createFileInDirectory(filePath, content);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "EEXIST") {
       await overwriteInPlace(filePath, content);
@@ -317,16 +349,16 @@ export async function writeFileContent(
  * also never renames over the target, which on Windows fails with EPERM when
  * another process holds the file open without FILE_SHARE_DELETE (#3199).
  *
- * Security: the path was validated before this runs, so a symlink swapped in
- * since then must not be written through (TOCTOU). Three checks hold that:
+ * Security: the path was validated before this runs, so something swapped in
+ * since then must not be written through (TOCTOU):
  * - lstat refuses anything at the path that is not a regular file, a symlink
  *   included;
- * - O_NOFOLLOW makes the open itself fail with ELOOP on a symlink. It exists
- *   only on POSIX: fs.constants.O_NOFOLLOW is undefined on Windows;
- * - the opened handle must be the very file lstat saw (same device and inode),
- *   which catches a swap between the lstat and the open on every platform,
- *   Windows included. Once the handle is verified, every write goes through
- *   it, so a later swap of the path cannot redirect it.
+ * - the open happens inside the pinned directory (pinned-directory.ts), so a
+ *   directory on the path swapped for a symlink cannot redirect it;
+ * - O_NOFOLLOW makes the open itself fail with ELOOP on a symlink (POSIX
+ *   only), and the opened handle must be the very file lstat saw (same device
+ *   and inode), which catches a swap between the lstat and the open. Once
+ *   the handle is verified, every write goes through it.
  *
  * The trade-off is crash-atomicity: a crash mid-write leaves a partly written
  * file, where the rename left either the old content or the new.
@@ -339,28 +371,12 @@ async function overwriteInPlace(
   if (!expected.isFile()) {
     throw new Error(`Refusing to write: not a regular file: ${filePath}`);
   }
-  // O_RDWR rather than O_WRONLY: opening a FIFO swapped in after the lstat for
-  // writing only would block until a reader arrives.
-  const handle = await fs.open(
-    filePath,
-    fs.constants.O_RDWR | (fs.constants.O_NOFOLLOW ?? 0),
-  );
-  try {
-    const opened = await handle.stat();
-    if (
-      !opened.isFile() ||
-      opened.dev !== expected.dev ||
-      opened.ino !== expected.ino
-    ) {
-      throw new Error(
-        `Refusing to write: ${filePath} was replaced while it was being opened`,
-      );
-    }
-    await handle.truncate(0);
-    await handle.writeFile(content, "utf-8");
-  } finally {
-    await handle.close();
-  }
+  await overwriteFileInDirectory(filePath, content, expected);
+}
+
+/** Create a directory and any missing parents (see pinned-directory.ts). */
+export async function createDirectory(directoryPath: string): Promise<void> {
+  createDirectoryInPlace(directoryPath);
 }
 
 export async function moveFile(
@@ -376,7 +392,8 @@ export async function moveFile(
     await fs.lstat(destinationPath);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      await fs.rename(sourcePath, destinationPath);
+      // The destination's directory is pinned (see pinned-directory.ts).
+      renameIntoDirectory(sourcePath, destinationPath);
       return;
     }
     throw error;

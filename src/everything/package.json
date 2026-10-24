@@ -1,6 +1,6 @@
 {
   "name": "@modelcontextprotocol/server-everything",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "MCP server that exercises all the features of the MCP protocol",
   "license": "SEE LICENSE IN LICENSE",
   "mcpName": "io.github.modelcontextprotocol/server-everything",
@@ -50,9 +50,9 @@
     "@modelcontextprotocol/core": "^2.3.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "^4.1.12",
     "shx": "^0.4.0",
     "typescript": "^5.8.2",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   }
 }

@@ -92,7 +92,7 @@ describe("sequentialthinking: initialize and tools/list", () => {
         thought: { type: "string", description: "Your current thinking step" },
         nextThoughtNeeded: {
           description: "Whether another thought step is needed",
-          anyOf: [{ type: "boolean" }, { type: "string" }],
+          type: ["boolean", "string"],
         },
         thoughtNumber: {
           type: "integer",
@@ -109,7 +109,7 @@ describe("sequentialthinking: initialize and tools/list", () => {
         },
         isRevision: {
           description: "Whether this revises previous thinking",
-          anyOf: [{ type: "boolean" }, { type: "string" }],
+          type: ["boolean", "string"],
         },
         revisesThought: {
           description: "Which thought is being reconsidered",
@@ -126,7 +126,7 @@ describe("sequentialthinking: initialize and tools/list", () => {
         branchId: { description: "Branch identifier", type: "string" },
         needsMoreThoughts: {
           description: "If more thoughts are needed",
-          anyOf: [{ type: "boolean" }, { type: "string" }],
+          type: ["boolean", "string"],
         },
       },
       required: [

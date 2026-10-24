@@ -37,7 +37,7 @@ from mcp_server_fetch.server import (
     serve,
 )
 
-from .harness import FakeWeb, connect, raw_request
+from .harness import PUBLIC_IP, FakeWeb, connect, raw_request
 
 PAGE = "https://example.com/page"
 ROBOTS = "https://example.com/robots.txt"
@@ -460,6 +460,98 @@ async def test_ignore_robots_txt_skips_the_check(web: FakeWeb) -> None:
     assert web.urls() == [PAGE]
 
 
+OTHER_ROBOTS = "https://other.example.org/robots.txt"
+OTHER_PAGE = "https://other.example.org/secret"
+
+
+async def test_redirect_to_host_whose_robots_disallows_is_refused(
+    web: FakeWeb,
+) -> None:
+    # robots.txt belongs to one origin, so a redirect to another host is
+    # checked against that host's robots.txt before it is requested.
+    other_robots = "User-agent: *\nDisallow: /"
+    web.add(ROBOTS, plain("", status=404))
+    web.add(PAGE, httpx.Response(302, headers={"location": OTHER_PAGE}))
+    web.add(OTHER_ROBOTS, plain(other_robots))
+    web.add(OTHER_PAGE, plain("other-secret"))
+    async with connect() as (session, _):
+        result = await call(session, {"url": PAGE})
+    assert wire(result)["isError"] is True
+    text = text_of(result)
+    assert text.startswith(
+        f"{TOOL_ERROR}The sites robots.txt ({OTHER_ROBOTS}), specifies that "
+        "autonomous fetching of this page is not allowed, "
+    )
+    assert f"<url>{OTHER_PAGE}</url>" in text
+    assert "other-secret" not in text
+    # The redirect target itself is never requested.
+    assert web.urls() == [ROBOTS, PAGE, OTHER_ROBOTS]
+
+
+async def test_redirect_to_a_disallowed_path_on_the_same_host_is_refused(
+    web: FakeWeb,
+) -> None:
+    private = "https://example.com/private/report"
+    web.add(ROBOTS, plain("User-agent: *\nDisallow: /private"))
+    web.add(PAGE, httpx.Response(302, headers={"location": "/private/report"}))
+    web.add(private, plain("private-report"))
+    async with connect() as (session, _):
+        result = await call(session, {"url": PAGE})
+    assert wire(result)["isError"] is True
+    assert f"<url>{private}</url>" in text_of(result)
+    assert web.urls() == [ROBOTS, PAGE, ROBOTS]
+
+
+async def test_redirect_to_host_answering_robots_403_is_refused(
+    web: FakeWeb,
+) -> None:
+    web.add(ROBOTS, plain("", status=404))
+    web.add(PAGE, httpx.Response(302, headers={"location": OTHER_PAGE}))
+    web.add(OTHER_ROBOTS, plain("", status=403))
+    web.add(OTHER_PAGE, plain("other-secret"))
+    async with connect() as (session, _):
+        result = await call(session, {"url": PAGE})
+    assert wire(result)["isError"] is True
+    assert text_of(result).startswith(
+        f"{TOOL_ERROR}When fetching robots.txt ({OTHER_ROBOTS}), received status 403"
+    )
+    assert web.urls() == [ROBOTS, PAGE, OTHER_ROBOTS]
+
+
+async def test_redirect_to_an_allowed_target_is_followed(web: FakeWeb) -> None:
+    web.add(ROBOTS, plain("", status=404))
+    web.add(PAGE, httpx.Response(302, headers={"location": OTHER_PAGE}))
+    web.add(OTHER_ROBOTS, plain("User-agent: *\nDisallow: /private"))
+    web.add(OTHER_PAGE, plain("other-page"))
+    async with connect() as (session, _):
+        result = await call(session, {"url": PAGE})
+    assert wire(result)["isError"] is False
+    assert text_of(result) == f"{RAW_PREFIX_PLAIN}Contents of {PAGE}:\nother-page"
+    assert web.urls() == [ROBOTS, PAGE, OTHER_ROBOTS, OTHER_PAGE]
+    for request in web.requests:
+        assert request.headers["user-agent"] == DEFAULT_USER_AGENT_AUTONOMOUS
+
+
+async def test_redirects_skip_robots_with_ignore_robots_txt_and_on_the_prompt(
+    web: FakeWeb,
+) -> None:
+    # --ignore-robots-txt and the user-initiated prompt never consult
+    # robots.txt, for the requested URL or for any redirect hop.
+    web.add(ROBOTS, plain("User-agent: *\nDisallow: /"))
+    web.add(PAGE, httpx.Response(302, headers={"location": OTHER_PAGE}))
+    web.add(OTHER_ROBOTS, plain("User-agent: *\nDisallow: /"))
+    web.add(OTHER_PAGE, plain("other-page"))
+    async with connect(ignore_robots_txt=True) as (session, _):
+        result = await call(session, {"url": PAGE})
+    assert wire(result)["isError"] is False
+    assert web.urls() == [PAGE, OTHER_PAGE]
+    web.requests.clear()
+    async with connect() as (session, _):
+        prompt = await session.get_prompt("fetch", {"url": PAGE})
+    assert "other-page" in wire(prompt)["messages"][0]["content"]["text"]
+    assert web.urls() == [PAGE, OTHER_PAGE]
+
+
 # --------------------------------------------------------------------------
 # tools/call: fetching and content handling
 # --------------------------------------------------------------------------
@@ -756,6 +848,11 @@ async def test_redirect_to_private_address_is_refused(web: FakeWeb) -> None:
         "192.0.0.8",
         "64:ff9b:1::1",
         "2002:7f00:1::",
+        # The well-known NAT64 prefix (64:ff9b::/96) wraps an IPv4 in its low
+        # 32 bits, and a NAT64 gateway forwards to that IPv4.
+        "64:ff9b::a9fe:a9fe",
+        "64:ff9b::7f00:1",
+        "64:ff9b::a00:1",
         # Inside 2001::/23 but outside its global exceptions (benchmarking).
         "2001:2::1",
         # Multicast, which is_global does not exclude.
@@ -790,6 +887,17 @@ async def test_global_exceptions_in_special_ranges_are_allowed(
 ) -> None:
     web.dns["anycast.example.com"] = [address]
     url = "https://anycast.example.com/"
+    web.add(url, plain("ok"))
+    async with connect(ignore_robots_txt=True) as (session, _):
+        result = await call(session, {"url": url})
+    assert wire(result)["isError"] is False
+    assert web.urls() == [url]
+
+
+async def test_nat64_address_wrapping_a_public_ipv4_is_allowed(web: FakeWeb) -> None:
+    # Only the embedded IPv4 decides: 64:ff9b::808:808 is 8.8.8.8 through NAT64.
+    web.dns["nat64.example.com"] = ["64:ff9b::808:808"]
+    url = "https://nat64.example.com/"
     web.add(url, plain("ok"))
     async with connect(ignore_robots_txt=True) as (session, _):
         result = await call(session, {"url": url})
@@ -842,6 +950,34 @@ async def test_unresolvable_host_is_left_to_the_transport(web: FakeWeb) -> None:
     assert web.lookups == ["only-the-proxy-knows.example"]
 
 
+@pytest.mark.parametrize(
+    "url, connected_host",
+    [
+        # IDNA 2003 (the codec getaddrinfo applies to a Unicode name) maps ß
+        # and final sigma to ss and σ; IDNA 2008, which httpx connects with,
+        # keeps them. The guard must resolve the name the connection uses.
+        ("http://faß.example.com/", "xn--fa-hia.example.com"),
+        ("http://xn--fa-hia.example.com/", "xn--fa-hia.example.com"),
+        ("http://σοφος.example.com/", "xn--0xaajbq.example.com"),
+    ],
+)
+async def test_guard_resolves_the_name_the_connection_uses(
+    web: FakeWeb, url: str, connected_host: str
+) -> None:
+    web.dns["fass.example.com"] = [PUBLIC_IP]
+    web.dns["σοφοσ.example.com"] = [PUBLIC_IP]
+    web.dns[connected_host] = ["127.0.0.1"]
+    web.add(f"http://{connected_host}/", plain("internal-secret"))
+    async with connect(ignore_robots_txt=True) as (session, _):
+        result = await call(session, {"url": url})
+    assert wire(result)["isError"] is True
+    assert f": {connected_host} resolves to 127.0.0.1, which is not a public" in (
+        text_of(result)
+    )
+    assert web.lookups == [connected_host]
+    assert web.requests == []
+
+
 async def test_allow_private_ips_follows_redirect_to_private_address(
     web: FakeWeb,
 ) -> None:
@@ -855,8 +991,9 @@ async def test_allow_private_ips_follows_redirect_to_private_address(
     assert wire(result)["isError"] is False
     assert text_of(result) == f"{RAW_PREFIX_PLAIN}Contents of {PAGE}:\ninstance-secret"
     assert prompt.description == PROMPT_DESCRIPTION
-    # robots.txt is only consulted for the original host, never the target.
-    assert web.urls() == [ROBOTS, PAGE, metadata, metadata]
+    # The redirect target's own robots.txt (a 404 here) is checked before it.
+    metadata_robots = "http://169.254.169.254/robots.txt"
+    assert web.urls() == [ROBOTS, PAGE, metadata_robots, metadata, metadata]
     # With the guard off, nothing is resolved by the server.
     assert web.lookups == []
 

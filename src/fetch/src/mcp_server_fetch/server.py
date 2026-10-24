@@ -23,7 +23,7 @@ import asyncio
 import ipaddress
 import os
 import socket
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from typing import Annotated, Any, Tuple
 from importlib.metadata import version
 from urllib.parse import urlparse, urlunparse
@@ -110,6 +110,11 @@ _PUBLIC_EXCEPTIONS = tuple(
 )
 
 
+# The well-known NAT64 prefix (RFC 6052). A NAT64 gateway forwards an address
+# in it to the IPv4 held in its low 32 bits, so that IPv4 is the destination.
+_NAT64_WELL_KNOWN = ipaddress.IPv6Network("64:ff9b::/96")
+
+
 def _is_public_address(address: str) -> bool:
     """True when ``address`` is a globally routable unicast address.
 
@@ -117,10 +122,13 @@ def _is_public_address(address: str) -> bool:
     cloud metadata endpoints), shared address space (100.64.0.0/10, which holds
     Alibaba Cloud's 100.100.100.200), unique local IPv6 (AWS's fd00:ec2::254),
     multicast, unspecified, documentation and other special-purpose ranges.
+    An IPv4-mapped or well-known NAT64 address is judged by the IPv4 it wraps.
     """
     ip = ipaddress.ip_address(address)
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
         ip = ip.ipv4_mapped
+    elif isinstance(ip, ipaddress.IPv6Address) and ip in _NAT64_WELL_KNOWN:
+        ip = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
     if any(ip in network for network in _PUBLIC_EXCEPTIONS):
         return True
     if any(ip in network for network in _NON_PUBLIC_NETWORKS):
@@ -133,8 +141,13 @@ async def _refuse_private_destination(request: httpx.Request) -> None:
 
     httpx runs request hooks before every request it sends, redirect hops
     included, so a public URL cannot bounce the fetch to an internal one.
+
+    The name checked is ``raw_host``, the ASCII (IDNA 2008) form the transport
+    connects to. ``host`` is the decoded Unicode form, which getaddrinfo would
+    re-encode with IDNA 2003 into a different name for some labels (``ß``
+    becomes ``ss``), so checking it would vet one name and connect to another.
     """
-    host = request.url.host
+    host = request.url.raw_host.decode("ascii")
     if not host:
         return  # httpx rejects a URL with no host itself.
     try:
@@ -299,15 +312,37 @@ async def fetch_url(
     force_raw: bool = False,
     proxy_url: str | None = None,
     allow_private_ips: bool = False,
+    check_robots_txt: bool = False,
 ) -> Tuple[str, str]:
     """
     Fetch the URL and return the content in a form ready for the LLM, as well as a prefix string with status information.
+
+    With ``check_robots_txt``, every redirect hop is checked against the
+    robots.txt of its own origin before it is requested. The caller has
+    already checked the requested URL itself.
     """
     from httpx import HTTPError
 
+    seen_first_request = False
+
+    async def _check_redirect_robots_txt(request: httpx.Request) -> None:
+        # httpx runs request hooks before each request, redirect hops included.
+        nonlocal seen_first_request
+        if not seen_first_request:
+            seen_first_request = True
+            return
+        await check_may_autonomously_fetch_url(
+            str(request.url), user_agent, proxy_url, allow_private_ips
+        )
+
     async with make_client(proxy_url) as client:
+        hooks: list[Callable[[httpx.Request], Awaitable[None]]] = []
         if not allow_private_ips:
-            client.event_hooks = {"request": [_refuse_private_destination]}
+            hooks.append(_refuse_private_destination)
+        if check_robots_txt:
+            hooks.append(_check_redirect_robots_txt)
+        if hooks:
+            client.event_hooks = {"request": hooks}
         try:
             response = await client.get(
                 url,
@@ -462,6 +497,7 @@ def create_server(
             force_raw=raw,
             proxy_url=proxy_url,
             allow_private_ips=allow_private_ips,
+            check_robots_txt=not ignore_robots_txt,
         )
         original_length = len(content)
         if start_index >= original_length:

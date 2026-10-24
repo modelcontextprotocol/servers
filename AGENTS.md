@@ -51,11 +51,13 @@ servers/
 │   ├── git/                  Py  mcp-server-git                                   PyPI  Git repository operations
 │   └── time/                 Py  mcp-server-time                                  PyPI  Time and timezone conversion
 ├── .claude/skills/            On-demand procedures (see the Skills index above)
+├── .claude/settings.json     The SessionStart hook that checks this session's instructions are current
 ├── .changeset/               Pending changesets for the TypeScript servers, and the changesets config
 ├── scripts/                  The pre-push gate (gate-lease, smoke-servers, validate-py, coverage-py, interface-diff), its guards (verify-*),
 │                             the skills tooling, release tooling (npm-publish-guard, prepare-python-release,
 │                             pack-and-verify, release-manifest, release-notes), and the issue-filing sweeps
-│                             (dependency-refresh, dependabot-alerts, sdk-watch)
+│                             (dependency-refresh, dependabot-alerts, sdk-watch), and the session-start
+│                             instructions check (session-instructions-check)
 ├── docs/                     Design documents; quality-gate.md is the gate's reference (stages, CI vs local, the lease);
 │                             contribution-model.md holds the outside-PR backlog plan; ai-software-factory.md is the
 │                             overview of how the rules, skills, gates and sweeps fit together
@@ -384,11 +386,16 @@ holds for a maintainer's own one-line fix as much as for a feature.
     workflow takes the release issue's number, writes `Closes #N` as the
     body's first line, names the branch `v2/chore/<N>-python-calver-<date>`
     and labels it `v2`.
-  - The changesets **"Version Packages"** PR cannot carry a `Closes` line: the
+  - The changesets **"Version Packages"** PR cannot keep a `Closes` line: the
     action rewrites its body on every push to `v2/main`, and its branch is the
     action's own (`changeset-release/v2/main`). The workflow labels it `v2`.
-    Tie it to the release issue with a **comment** (`Part of #N`), which an
-    update does not overwrite.
+    It is still **linked** to the release issue like every other PR: with
+    `addCloseIssueReferences` as soon as it is found, since the link lives
+    outside the body and survives the rewrites (on `v2/main` it closes
+    nothing at merge). Its body's first line becomes **`Part of #N`
+    immediately before merging**, after the last regeneration, and is checked
+    to still be there at merge. A `Part of #N` **comment** stays as the
+    durable textual record, since an update does not overwrite it.
 
 No other PR is exempt.
 
@@ -429,7 +436,9 @@ measure it, is [`docs/skill-authoring.md`](./docs/skill-authoring.md).
    works while the skill can never auto-fire; an unquoted `#` truncates the
    description silently.
    **Quote any description containing `#` or `:`**, and keep the opening `---`
-   on the file's first line.
+   on the file's first line. **A body holds no `$0`–`$9` and no `$ARGUMENTS`**:
+   Claude Code substitutes them when a skill is invoked with arguments, so a
+   recipe's shell parameters or awk fields reach the model rewritten.
 2. **Every skill declares `disable-model-invocation` explicitly. Default it to
    `false`.** Invoking a skill has no side effects (it loads instructions), and
    work is usually asked for in prose, which a `true` skill can never answer. A
@@ -467,8 +476,11 @@ here.
     that opaque until publication: board access is wider than advisory access,
     and a summary can name the server or the attack. It becomes a public
     issue by conversion **once the advisory is published**, never merely once
-    the fix ships. The `[GHSA-` prefix is load-bearing: **any other draft card
-    is still a defect to delete**. The flow is the `security-advisory` skill.
+    the fix ships. Work the fix leaves open is tracked by a second draft card,
+    `[GHSA-xxxx-yyyy-zzzz follow-up]`, under the same rules. It stays open
+    after conversion, because its work has not shipped. The `[GHSA-` prefix is
+    load-bearing: **any other draft card is still a defect to delete**. The flow
+    is the `security-advisory` skill.
     **Accepting, closing and publishing an advisory, and replying to its
     reporter, are human-only; never automate or bulk-apply any of them.**
 - **Only issues go on the board, never PRs.** A PR is tracked through its linked
@@ -498,13 +510,53 @@ here.
 - **`Done` means the work shipped**: its PR merged, or it is a parent whose last
   sub-issue closed. A duplicate, won't-fix, not-planned or superseded issue
   shipped nothing, so its card is **deleted** rather than moved to Done.
+- **All work happens in a git worktree freshly cut from `origin/v2/main`, and
+  the agent session runs inside it.** Not only PR branches: release
+  verification, audits, triage, investigation and anything else done in a
+  checkout. `git fetch origin` first, then `git worktree add` from
+  `origin/v2/main`: a new branch for PR work, `--detach` for work that
+  commits nothing. Never work in the primary checkout, which concurrent agent
+  sessions share, and never in an existing worktree without first confirming
+  it is at the current `origin/v2/main`.
+  - **Start the session in that worktree.** Claude Code loads this file and
+    `.claude/skills/` from the directory the session starts in, once, at
+    session start; a worktree created later does not change what was loaded.
+    A session started in a stale checkout follows stale rules for its whole
+    run, however fresh the branches it cuts are (the v2.0.0 release did,
+    #5167). A session that finds itself elsewhere checks before doing
+    anything:
+
+    ```sh
+    git fetch origin v2/main
+    git diff --quiet HEAD...origin/v2/main -- ':/AGENTS.md' ':/.claude/' \
+      || echo "STALE: instructions differ from origin/v2/main"
+    ```
+
+    The three dots compare against where `HEAD` branched from `v2/main`, so
+    a branch's own edits to the instructions do not read as stale; the `:/`
+    anchors the paths at the repository root, so the check means the same
+    from any directory. **If it is stale, stop and ask for a session started
+    in a fresh worktree**, rather than continuing on rules you cannot trust.
+
+  - The `SessionStart` hook in `.claude/settings.json`
+    (`scripts/session-instructions-check.mjs`) runs that check at every
+    session start and prints its verdict into the session, with a note when
+    the session started in the primary checkout. A `STALE` line from it is
+    the same stop.
+  - **A long session re-checks after `v2/main` moves under it**, for
+    example after its own PRs merge, **from the revision it started at, not
+    from `HEAD`**: once the session moves into a newer worktree, that
+    worktree's `HEAD` can match `origin/v2/main` while the rules the session
+    holds are still the old ones. The hook prints the session-start revision
+    and the exact re-check command; without the hook, record
+    `git rev-parse HEAD` in the starting checkout before anything else, and
+    put it in place of `HEAD` above.
 - **When work begins**, assign the issue to yourself, set Status to
   **In Progress**, and create a branch named
   `v2/<type>/<ISSUE_NUMBER>-<slug>` (for example
-  `v2/fix/4810-filesystem-symlink-escape`) from `origin/v2/main`, **in a new
-  git worktree**: never by switching branches in the primary checkout, which
-  concurrent agent sessions share. Remove the worktree once the PR merges or
-  is closed. The recipe is the `pr-flow` skill (step 2, and step 10 for the
+  `v2/fix/4810-filesystem-symlink-escape`) from `origin/v2/main`, in a new
+  worktree under the rule above. Remove the worktree once the PR merges or is
+  closed. The recipe is the `pr-flow` skill (step 2, and step 10 for the
   removal).
 - **When work is complete**, run the checks under
   [Before pushing](#before-pushing), open a PR against `v2/main` labeled `v2`

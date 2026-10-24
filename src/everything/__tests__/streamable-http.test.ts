@@ -14,6 +14,10 @@
  * negotiates that era, including the `Mcp-Param-Region` header the client
  * mirrors from `get-header-params`'s `x-mcp-header` argument and the change
  * notifications published on the handler's subscription bus.
+ *
+ * A browser request is served only from a localhost origin: the tests pin
+ * that a foreign `Origin` is refused with a 403 and no CORS grant at every
+ * route, preflights included, and that a localhost one is served.
  */
 import type { Server } from "node:http";
 import { once } from "node:events";
@@ -404,19 +408,149 @@ describe("Streamable HTTP transport", () => {
     );
   });
 
-  it("answers a CORS preflight for any origin and exposes the MCP headers", async () => {
+  it("answers a CORS preflight from a localhost origin, echoing that origin, and exposes the MCP headers", async () => {
     const response = await fetch(mcp, {
       method: "OPTIONS",
       headers: {
-        origin: "http://elsewhere.example",
+        origin: "http://localhost:6274",
         "access-control-request-method": "DELETE",
       },
     });
     expect(response.status).toBe(204);
-    expect(response.headers.get("access-control-allow-origin")).toBe("*");
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "http://localhost:6274",
+    );
     expect(response.headers.get("access-control-allow-methods")).toBe(
       "GET,POST,DELETE",
     );
+  });
+
+  it.each(["legacy", "modern"] as const)(
+    "serves a %s-era client whose requests carry a localhost Origin",
+    async (era) => {
+      // Every request the transport makes carries the Origin a browser page
+      // served from localhost would send.
+      const withOrigin = (url: string | URL, init?: RequestInit) => {
+        const headers = new Headers(init?.headers);
+        headers.set("origin", "http://[::1]:6274");
+        return fetch(url, { ...init, headers });
+      };
+      const client = new Client(
+        { name: "http-origin-test", version: "0.0.0" },
+        era === "modern"
+          ? { versionNegotiation: { mode: { pin: "2026-07-28" } } }
+          : {},
+      );
+      await client.connect(
+        new StreamableHTTPClientTransport(new URL(mcp), { fetch: withOrigin }),
+      );
+      expect(client.getProtocolEra()).toBe(era);
+      const result = await client.callTool({
+        name: "echo",
+        arguments: { message: "from localhost" },
+      });
+      expect(result.content).toEqual([
+        { type: "text", text: "Echo: from localhost" },
+      ]);
+      await client.close();
+    },
+  );
+
+  describe("a request from a foreign origin", () => {
+    const FOREIGN = "http://elsewhere.example";
+    const CALL_GET_ENV = {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: { name: "get-env", arguments: {} },
+    };
+
+    /** POST `message` with a foreign Origin, and expect it refused. */
+    async function expectRefused(message: object, headers = {}) {
+      const response = await fetch(mcp, {
+        method: "POST",
+        headers: { ...JSON_HEADERS, ...headers, origin: FOREIGN },
+        body: JSON.stringify(message),
+      });
+      expect(response.status).toBe(403);
+      expect(response.headers.get("access-control-allow-origin")).toBeNull();
+      expect(await response.json()).toMatchObject({
+        jsonrpc: "2.0",
+        error: { code: -32000 },
+        id: null,
+      });
+    }
+
+    it("is refused at preflight, with no CORS grant", async () => {
+      const response = await fetch(mcp, {
+        method: "OPTIONS",
+        headers: {
+          origin: FOREIGN,
+          "access-control-request-method": "POST",
+        },
+      });
+      expect(response.status).toBe(403);
+      expect(response.headers.get("access-control-allow-origin")).toBeNull();
+    });
+
+    it("cannot start a 2025-era session", async () => {
+      await expectRefused({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-11-25",
+          capabilities: {},
+          clientInfo: { name: "raw", version: "0" },
+        },
+      });
+      expect(log).not.toHaveBeenCalledWith(
+        expect.stringMatching(/^Session initialized/),
+      );
+    });
+
+    it("cannot call a tool on an open 2025-era session", async () => {
+      const { sessionId } = await rawInitialize();
+      await expectRefused(CALL_GET_ENV, {
+        "mcp-session-id": sessionId,
+        "mcp-protocol-version": "2025-11-25",
+      });
+    });
+
+    it("cannot call a tool as a 2026-07-28 client", async () => {
+      const foreign = (url: string | URL, init?: RequestInit) => {
+        const headers = new Headers(init?.headers);
+        headers.set("origin", FOREIGN);
+        return fetch(url, { ...init, headers });
+      };
+      const client = new Client(
+        { name: "http-foreign-test", version: "0.0.0" },
+        { versionNegotiation: { mode: { pin: "2026-07-28" } } },
+      );
+      const attempt = async () => {
+        await client.connect(
+          new StreamableHTTPClientTransport(new URL(mcp), { fetch: foreign }),
+        );
+        return client.callTool({ name: "get-env", arguments: {} });
+      };
+      await expect(attempt()).rejects.toThrow(/403|Invalid Origin/);
+      await client.close();
+    });
+
+    it.each(["GET", "DELETE"])("cannot %s a session", async (method) => {
+      const { sessionId } = await rawInitialize();
+      const response = await fetch(mcp, {
+        method,
+        headers: {
+          accept: "text/event-stream",
+          "mcp-session-id": sessionId,
+          "mcp-protocol-version": "2025-11-25",
+          origin: FOREIGN,
+        },
+        signal: AbortSignal.timeout(2000),
+      });
+      expect(response.status).toBe(403);
+    });
   });
 });
 
