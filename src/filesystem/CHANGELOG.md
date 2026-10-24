@@ -1,5 +1,17 @@
 # @modelcontextprotocol/server-filesystem
 
+## 2.0.1
+
+### Patch Changes
+
+- [#5236](https://github.com/modelcontextprotocol/servers/pull/5236) [`a2fd82c`](https://github.com/modelcontextprotocol/servers/commit/a2fd82c6e995d8dc8ac10831bb0c173f7126612d) [@cliffhall](https://github.com/cliffhall) - Harden path validation for new files and directories.
+
+- [#5235](https://github.com/modelcontextprotocol/servers/pull/5235) [`c0d81fc`](https://github.com/modelcontextprotocol/servers/commit/c0d81fcb967db28c47276bc42a6c72ad576f550b) [@cliffhall](https://github.com/cliffhall) - Harden path validation.
+
+- [#5234](https://github.com/modelcontextprotocol/servers/pull/5234) [`3f9dd79`](https://github.com/modelcontextprotocol/servers/commit/3f9dd797999feeb69127632935d0d9e56ca80e5e) [@cliffhall](https://github.com/cliffhall) - Harden path validation in directory listings.
+
+- [#5237](https://github.com/modelcontextprotocol/servers/pull/5237) [`5e811d4`](https://github.com/modelcontextprotocol/servers/commit/5e811d41fa43d843164f7c7463ab580e951187b2) [@cliffhall](https://github.com/cliffhall) - Harden path handling in write operations.
+
 ## 2.0.0
 
 ### Major Changes
