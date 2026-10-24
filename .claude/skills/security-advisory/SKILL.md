@@ -257,6 +257,45 @@ before anyone merges it.
 the advisory, so this card is the only place the rest of the team can see the
 work exists at all.
 
+#### Work the fix leaves open: a follow-up card
+
+A fix can leave part of the problem open: a platform the fix cannot reach yet,
+or a residual exposure that needs a larger change. That work cannot become a
+public issue before publication either, because describing it describes the
+vulnerability. Track it with a **second draft card**, the advisory's
+**follow-up card**, rather than widening the fix or leaving the gap in a PR
+body nobody will read again.
+
+- **Title:** `[GHSA-xxxx-yyyy-zzzz follow-up]`, as opaque as the advisory's
+  own card. The `[GHSA-` prefix keeps it inside the board audit's advisory
+  exemption. The advisory card's lookup (`/board-ops`) matches
+  `[GHSA-xxxx-yyyy-zzzz]` with its closing bracket, so it never finds the
+  follow-up by mistake. A second follow-up for the same advisory is
+  `[GHSA-xxxx-yyyy-zzzz follow-up 2]`.
+- **Body:** the same link-and-triage-only rule as step 1. Its lines, in order:
+  - `**Advisory:** <html_url>` on the first line.
+  - `Follow-up to the fix for this advisory. Convert to an issue only once the advisory is published.`
+  - A link to the write-up.
+  - The `Priority <level> (provisional, <YYYY-MM-DD>)` line.
+- **The write-up lives in the private fork**, where only the advisory's
+  collaborators can read it. Draft it as the public issue it will become
+  (problem, options, acceptance criteria), and post it as a `COMMENT` review on
+  the fork's PR, since the fork refuses issue comments (see the API table).
+- **Status `Todo`** when a maintainer asked for the follow-up: the advisory is
+  already accepted, and asking for the work approves it. Otherwise it goes in
+  `Incoming`. Score its Priority with step 1's table, using the severity of the
+  residual exposure rather than the advisory's.
+- **Say in the fix PR's body what the fix leaves open**, and link the
+  follow-up. The advisory's text must say it too when it is published (step 5).
+
+Create it with `/board-ops`'s draft-card recipe, using the follow-up title in
+place of `[$GHSA]`.
+
+⚠️ **The follow-up card is the only exception beyond the advisory's own
+card.** Any other untracked work an advisory's review turns up is either
+outside the advisory's scope, and gets a public issue **after publication**
+like any other finding, or it is part of the fix.
+
 ### 5. Merge, release, publish (human only)
 
 Publish **after** the fix has shipped in a release, never before: publishing
@@ -296,6 +335,12 @@ advisory is what users and advisory tooling (Dependabot, `npm audit`,
   added, and an unadded finder is simply never credited.
 - **A CVE**, if one is wanted: optional, and the advisory is the only place to
   request one.
+- **What the fix leaves open**, if the advisory has a follow-up card. Say which
+  platforms or cases are still exposed, so a user who upgrades does not believe
+  they are fully covered.
+- **The follow-up's write-up, copied out of the fork** before publishing. Once
+  the advisory is published, don't count on the temporary fork, or on access to
+  it, surviving.
 
 ### 6. After publication, convert the card into public tracking
 
@@ -322,6 +367,17 @@ issues and two cards.
    **close** the issue: the work shipped before the issue existed.
 5. Move the card to **`Done`**, which is right here because the fix shipped.
 
+**A follow-up card converts at the same time, but stays open**, because its
+work has not shipped:
+
+1. Retitle it `[GHSA-xxxx-yyyy-zzzz follow-up] - <summary>`.
+2. Convert it.
+3. Replace the body's triage lines with the write-up copied out of the fork
+   (step 5), linking the now-public advisory.
+4. Apply `/issue-create`'s labels, plus the milestone the follow-up is planned
+   for, not the one the fix shipped in.
+5. Leave the issue open, and leave the card in the Status it had.
+
 ## API facts worth not re-deriving
 
 | Thing | Fact |
@@ -333,6 +389,7 @@ issues and two cards.
 | Fork idempotency | Read `.private_fork` first; the POST creates, it does not probe |
 | Fork deletion | Needs the `delete_repo` OAuth scope, which a default `gh` token lacks |
 | Comments | **No API at all**, REST or GraphQL; UI-only |
+| Fork PR comments | Issue comments (`gh pr comment`, `issues/N/comments`) are refused and `…/comments/{id}/replies` returns `404`; reply in a thread with `POST pulls/N/comments -F in_reply_to=<id>`, and post a PR-level summary as a `COMMENT` review |
 | Credits | `credits_detailed` on the advisory; a private report carries the reporter's credit (`type` `reporter`, `state` `pending` or `accepted`) from submission |
 | Board writes | Not automatable from Actions: `GITHUB_TOKEN` cannot hold `organization projects: write` |
 | SDK routing | Both SDK repos have private vulnerability reporting enabled; use their advisory forms |
