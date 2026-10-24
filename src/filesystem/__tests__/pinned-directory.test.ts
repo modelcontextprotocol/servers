@@ -330,6 +330,22 @@ describe("createDirectoryInPlace", () => {
     ).toThrow(expect.objectContaining({ code: "EEXIST" }));
   });
 
+  it("fails with EEXIST when chdir reports a file in the way as ENOENT (Windows)", () => {
+    fs.writeFileSync(path.join(dir, "file"), "");
+    const realChdir = process.chdir.bind(process);
+    vi.spyOn(process, "chdir").mockImplementation((directory) => {
+      if (directory === "file") {
+        throw Object.assign(new Error("ENOENT: no such file or directory"), {
+          code: "ENOENT",
+        });
+      }
+      realChdir(directory);
+    });
+    expect(() => createDirectoryInPlace(path.join(dir, "file"))).toThrow(
+      expect.objectContaining({ code: "EEXIST" }),
+    );
+  });
+
   it.skipIf(!symlinks)("refuses a parent that resolves somewhere else", () => {
     fs.symlinkSync(outside, path.join(dir, "link"));
     expect(() =>
@@ -351,15 +367,19 @@ describe("createDirectoryInPlace", () => {
     expect(fs.statSync(path.join(dir, nfc, "sub")).isDirectory()).toBe(true);
   });
 
-  it("refuses a step down that lands outside the anchor", () => {
-    const realChdir = process.chdir.bind(process);
-    vi.spyOn(process, "chdir").mockImplementation((directory) => {
-      realChdir(directory === "a" ? outside : directory);
-    });
-    expect(() => createDirectoryInPlace(path.join(dir, "a"))).toThrow(
-      "Access denied",
-    );
-  });
+  // Windows skips the getcwd check by design; the test below covers that path.
+  it.skipIf(process.platform === "win32")(
+    "refuses a step down that lands outside the anchor",
+    () => {
+      const realChdir = process.chdir.bind(process);
+      vi.spyOn(process, "chdir").mockImplementation((directory) => {
+        realChdir(directory === "a" ? outside : directory);
+      });
+      expect(() => createDirectoryInPlace(path.join(dir, "a"))).toThrow(
+        "Access denied",
+      );
+    },
+  );
 
   it("steps down without the getcwd check on Windows", () => {
     Object.defineProperty(process, "platform", { value: "win32" });

@@ -301,7 +301,9 @@ export function createDirectoryInPlace(directory: string): void {
       try {
         process.chdir(name);
       } catch (error) {
-        if (inTheWay && (error as NodeJS.ErrnoException).code === "ENOTDIR") {
+        // A file in the way: POSIX reports ENOTDIR, Windows ENOENT.
+        const code = (error as NodeJS.ErrnoException).code;
+        if (inTheWay && (code === "ENOTDIR" || code === "ENOENT")) {
           throw inTheWay;
         }
         throw error;
