@@ -1,5 +1,11 @@
 # @modelcontextprotocol/server-everything
 
+## 2.0.1
+
+### Patch Changes
+
+- [#5241](https://github.com/modelcontextprotocol/servers/pull/5241) [`64d488d`](https://github.com/modelcontextprotocol/servers/commit/64d488da642ecef61f3651a7cd565980a010ea5f) [@cliffhall](https://github.com/cliffhall) - Harden request handling in the HTTP transports.
+
 ## 2.0.0
 
 ### Major Changes
