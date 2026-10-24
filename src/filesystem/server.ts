@@ -564,7 +564,14 @@ export function createServer(
         entries.map(async (entry) => {
           const entryPath = path.join(validPath, entry.name);
           try {
-            const stats = await fs.stat(entryPath);
+            // fs.stat follows symlinks, so validate each entry first: a
+            // symlink whose target is outside the allowed directories is
+            // listed with no size rather than the target's.
+            const validEntryPath = await validatePath(
+              entryPath,
+              allowedDirectories,
+            );
+            const stats = await fs.stat(validEntryPath);
             return {
               name: entry.name,
               isDirectory: entry.isDirectory(),
