@@ -55,14 +55,14 @@ The following reference servers are now archived and can be found at [servers-ar
 ## 🚀 Getting Started
 
 ### Using MCP Servers in this Repository
-TypeScript-based servers in this repository can be used directly with `npx`.
+TypeScript-based servers in this repository can be started with `npx`.
 
 For example, this will start the [Memory](src/memory) server:
 ```sh
 npx -y @modelcontextprotocol/server-memory
 ```
 
-Python-based servers in this repository can be used directly with [`uvx`](https://docs.astral.sh/uv/concepts/tools/) or [`pip`](https://pypi.org/project/pip/). `uvx` is recommended for ease of use and setup.
+Python-based servers in this repository can be started with [`uvx`](https://docs.astral.sh/uv/concepts/tools/) or [`pip`](https://pypi.org/project/pip/). `uvx` is recommended for ease of use and setup.
 
 For example, this will start the [Git](src/git) server:
 ```sh
