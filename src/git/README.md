@@ -134,6 +134,9 @@ python -m mcp_server_git
 
 ## Configuration
 
+> [!IMPORTANT]
+> **Without `--repository`, the server reads and writes any Git repository the server process can reach.** Each tool call names its own `repo_path`, and that holds for the tools that change a repository too (`git_add`, `git_commit`, `git_reset`, `git_create_branch`, `git_checkout`). `--repository` is the only confinement the server offers: it never asks the client for Roots, in either protocol era. Set `--repository` whenever the server is used with prompts or content that are not fully trusted. It admits the whole enclosing repository, not only the directory you name, as the next paragraph describes.
+
 `--repository` (`-r`) accepts any path inside a Git working tree. At startup the server walks up to the enclosing repository root, the way `git rev-parse --show-toplevel` does, so `--repository .` works when a shared config is launched from any subdirectory of the repository. A path inside the repository therefore allows tool calls anywhere in that repository, not only under the subdirectory given. A path that does not exist, or is not inside a Git repository, is logged as a one-line error at startup.
 
 ### Usage with Claude Desktop
