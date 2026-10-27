@@ -11,8 +11,10 @@ declaration on a non-HTML body or past the first 1024 bytes is ignored, and an
 unknown or unusable declared charset falls back to the old decoding.
 
 Most cases fetch with ``raw: true`` so the decoded text reaches the client
-untouched by HTML extraction; one case goes through extraction to show the
-Markdown is right too.
+untouched by HTML extraction. The one case that goes through extraction, to
+show the Markdown is right too, forces readabilipy's pure-Python path: the
+Readability.js path writes the page to a temp file in the locale encoding,
+which cannot hold Japanese on Windows.
 """
 
 from __future__ import annotations
@@ -125,7 +127,11 @@ async def test_a_byte_order_mark_wins_over_the_html_declaration(
 async def test_a_declaration_on_a_non_html_body_is_ignored(web: FakeWeb) -> None:
     # A text/plain body is UTF-8 by default; a meta-like string in it is text.
     body = document('<meta charset="windows-1251">', JAPANESE).encode("utf-8")
-    assert JAPANESE in await fetch(web, page(body, content_type="text/plain"))
+    # raw: the body opens with "<html", so without it the server would hand it
+    # to Readability.js, whose temp-file write fails on non-cp1252 text on
+    # Windows (pre-existing, not what this test is about).
+    response = page(body, content_type="text/plain")
+    assert JAPANESE in await fetch(web, response, raw=True)
 
 
 async def test_a_declaration_past_the_first_1024_bytes_is_ignored(
