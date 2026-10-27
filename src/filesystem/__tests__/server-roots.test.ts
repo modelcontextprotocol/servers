@@ -132,6 +132,32 @@ describe("initial roots", () => {
     }
   });
 
+  // #5183: the advertised form is kept as the client spelled it. Trimming
+  // whitespace or quotes from it would name a different directory, here an
+  // unrelated sibling, and allow it. POSIX only: Windows filenames cannot end
+  // in a space.
+  it.skipIf(process.platform === "win32")(
+    "keep a root's advertised form verbatim, not trimmed to a sibling's name (#5183)",
+    async () => {
+      const link = path.join(cliDir, "alias ");
+      await fs.symlink(rootDir, link);
+      const sibling = path.join(cliDir, "alias");
+      await fs.mkdir(sibling);
+      await fs.writeFile(path.join(sibling, "secret.txt"), "not in the root");
+      const { client } = await connectTracked([], {
+        capabilities: ROOTS,
+        listRoots: () => [rootOf(link)],
+      });
+      await vi.waitFor(async () =>
+        expect(await allowedDirectoriesOf(client)).toEqual([link, rootDir]),
+      );
+      const result = await call(client, "read_text_file", {
+        path: path.join(sibling, "secret.txt"),
+      });
+      expect(textOf(result)).toMatch(/^Access denied/);
+    },
+  );
+
   // #5183 as reported: on macOS /tmp is a symlink to /private/tmp, so a Root
   // of file:///tmp/... was allowed only as /private/tmp/... and a request
   // naming /tmp/... was refused.

@@ -1,7 +1,11 @@
 import { promises as fs, type Stats } from "fs";
 import path from "path";
 import os from "os";
-import { normalizePath, realpathWithRetry } from "./path-utils.js";
+import {
+  normalizePath,
+  normalizePathFormat,
+  realpathWithRetry,
+} from "./path-utils.js";
 import type { Root } from "@modelcontextprotocol/server";
 import { fileURLToPath } from "url";
 
@@ -32,7 +36,9 @@ async function parseRootUri(rootUri: string): Promise<RootPaths | null> {
     const absolutePath = path.resolve(expandedPath);
     const resolvedPath = await realpathWithRetry(absolutePath);
     return {
-      advertised: normalizePath(absolutePath),
+      // normalizePathFormat, not normalizePath: trimming whitespace or quotes
+      // from the client's spelling would name a different directory.
+      advertised: normalizePathFormat(absolutePath),
       resolved: normalizePath(resolvedPath),
     };
   } catch {
