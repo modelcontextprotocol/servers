@@ -197,11 +197,23 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       statuses: write
+      # To look for a newer dispatched run of this workflow on the commit.
+      actions: read
     steps:
       - name: Set the commit status to pending
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
+          # A re-run keeps its run ID, so a newer run means this one is
+          # superseded and the status is no longer its to set (#5223).
+          NEWER=$(gh run list --workflow python.yml --event workflow_dispatch \
+            --commit "$GITHUB_SHA" --json databaseId \
+            --jq "[.[] | select(.databaseId > $GITHUB_RUN_ID)] | length") || NEWER=0
+          if [ "${NEWER:-0}" -gt 0 ]; then
+            echo "Superseded by a newer dispatched run, which reports instead"
+            exit 0
+          fi
           gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
             -f state=pending -f context="Python (dispatched)" \
             -f description="Dispatched run in progress" \
