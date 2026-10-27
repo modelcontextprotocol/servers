@@ -22,8 +22,10 @@
 //   ## New Contributors / Full Changelog   GitHub's own trailer, verbatim
 //   ## Known issues                  only when passed in: a maintainer's call
 //   ## Thanks for helping us improve one release-wide list of the community
-//                                    members whose issues the PRs close, laid
-//                                    out as the Inspector's release notes are
+//                                    members whose issues the PRs close and
+//                                    whose advisories it fixes, laid out as
+//                                    the Inspector's release notes are, then
+//                                    the contributors whose prototypes ship
 //
 // The PR list is GitHub's generated one (`releases/generate-notes`, what the
 // UI's button uses) from the latest PUBLISHED Release to the merge commit. A
@@ -32,6 +34,21 @@
 // (admin/maintain/write), bots and deleted accounts are never credited.
 // GitHub adds everyone `@`-mentioned in a release body to its Contributors
 // strip, so that section is what puts the reporters there.
+//
+// Two kinds of credit never come from an issue's author, and were once pasted
+// in by hand, which is how v2.0.0 published without its Thanks (#5250):
+//
+// * An advisory's fix ships from its private fork with no public issue, so
+//   each `--advisory GHSA-…` is read for its credits (a draft works: notes are
+//   drafted before advisories publish). Declined credits, bots and
+//   maintainers are dropped; a credit still pending acceptance is listed and
+//   flagged, since the reporter may yet decline it.
+// * An outside PR is closed and its author credited on an issue (Harvest), so
+//   each `--thank "@login (#ref), <what>"` is a line of the prototype
+//   paragraph. Which issues carry such a credit is a reading, not a lookup,
+//   so the preview lists every credit note a maintainer left on the
+//   milestone's closed issues that names a non-maintainer, marking those no
+//   `--thank` names yet.
 //
 // FAIL FAST. Every `gh` call and registry request is checked and a failure
 // throws before anything is created: a permission lookup that errors must
@@ -61,7 +78,21 @@ const COMMUNITY_PERMISSIONS = new Set(["triage", "read", "none"]);
 
 export const THANKS_LEAD_IN =
   "This release addresses issues reported by these community members. Thank you for taking the time to file them:";
+export const ADVISORY_LEAD_IN =
+  "This release addresses vulnerabilities reported by these community members. Thank you for taking the time to report them:";
+export const MIXED_LEAD_IN =
+  "This release addresses issues and vulnerabilities reported by these community members. Thank you for taking the time to report them:";
+const POLICY_LINK = `[issues, not pull requests](https://github.com/${REPO}/blob/v2/main/CONTRIBUTING.md)`;
 export const REPOSITORY_HEADING = "## Repository";
+
+// An advisory id as GitHub mints it, and the advisory states a fix can ship
+// from: a triage advisory has not been accepted, and a closed or withdrawn one
+// is not a vulnerability this release fixes.
+const GHSA_ID = /^GHSA(-[23456789cfghjmpqrvwx]{4}){3}$/;
+const SHIPPABLE_ADVISORY_STATES = new Set(["draft", "published"]);
+// A credit note a maintainer leaves on an issue: Harvest's "credits its
+// author", "Credit for the release notes: …", "Thanks to @x".
+const CREDIT_NOTE = /\b(?:credit(?:s|ed|ing)?|thanks to|thank you to)\b/i;
 
 /**
  * @typedef {{ dir: string, name: string, version: string, registry: "npm" | "PyPI" }} Package
@@ -83,6 +114,8 @@ export function parseNotesArgs(argv) {
       "merge-branch": { type: "string" },
       "ledger-url": { type: "string" },
       "known-issue": { type: "string", multiple: true },
+      advisory: { type: "string", multiple: true },
+      thank: { type: "string", multiple: true },
       "previous-tag": { type: "string" },
       draft: { type: "boolean" },
     },
@@ -114,12 +147,30 @@ export function parseNotesArgs(argv) {
   if (values.draft && values["previous-tag"] !== undefined) {
     throw new Error("--previous-tag is preview-only");
   }
+  const advisories = [...new Set(values.advisory ?? [])];
+  for (const id of advisories) {
+    if (!GHSA_ID.test(id)) {
+      throw new Error(`--advisory "${id}" is not a GHSA-xxxx-xxxx-xxxx id`);
+    }
+  }
+  const thanks = values.thank ?? [];
+  for (const line of thanks) {
+    // One bullet, naming whom it credits first, so the Contributors strip and
+    // the discovery check both find them.
+    if (!/^@[A-Za-z0-9-]+(?![\w/-])[^\n]*$/.test(line)) {
+      throw new Error(
+        `--thank "${line}" is not one line starting with @login, as "@login (#ref), <what>"`,
+      );
+    }
+  }
   return {
     milestone,
     mergeSha,
     mergeBranch,
     ledgerUrl,
     knownIssues: values["known-issue"] ?? [],
+    advisories,
+    thanks,
     previousTag: values["previous-tag"],
     mode: values.draft ? "draft" : "preview",
   };
@@ -493,28 +544,42 @@ export function isMaintainer(spawn, login) {
 }
 
 /**
+ * `isMaintainer`, asked once per login per run, whichever lookup asks first.
+ *
+ * @param {Spawn} spawn
+ * @param {Map<string, boolean>} cache lowercased login → maintainer
+ * @param {string} login
+ * @returns {boolean}
+ */
+function maintainerCached(spawn, cache, login) {
+  const key = login.toLowerCase();
+  let maintainer = cache.get(key);
+  if (maintainer === undefined) {
+    maintainer = isMaintainer(spawn, login);
+    cache.set(key, maintainer);
+  }
+  return maintainer;
+}
+
+/**
  * Community reporter → the issues of theirs the listed PRs close.
  *
  * @param {Spawn} spawn
  * @param {number[]} pulls
+ * @param {Map<string, boolean>} [maintainer] shared permission cache
  * @returns {Map<string, number[]>}
  */
-export function collectReporters(spawn, pulls) {
+export function collectReporters(spawn, pulls, maintainer = new Map()) {
   const issues = new Set();
   for (const pr of pulls) {
     for (const n of issuesClosedBy(spawn, pr)) issues.add(n);
   }
   /** @type {Map<string, number[]>} */
   const reporters = new Map();
-  /** @type {Map<string, boolean>} */
-  const maintainer = new Map();
   for (const n of [...issues].sort((a, b) => a - b)) {
     const login = creditableAuthor(spawn, n);
     if (login === null) continue;
-    if (!maintainer.has(login)) {
-      maintainer.set(login, isMaintainer(spawn, login));
-    }
-    if (maintainer.get(login)) continue;
+    if (maintainerCached(spawn, maintainer, login)) continue;
     const list = reporters.get(login) ?? [];
     list.push(n);
     reporters.set(login, list);
@@ -523,22 +588,199 @@ export function collectReporters(spawn, pulls) {
 }
 
 /**
- * One line per person, most issues first, then by name; "" when nobody.
+ * Community member → the advisories that credit them, in the order given,
+ * plus each credit still pending acceptance. The advisory endpoint answers
+ * for a draft too, for anyone who can read it, which is whoever drafts the
+ * notes.
  *
- * @param {Map<string, number[]>} reporters
+ * @param {Spawn} spawn
+ * @param {string[]} ids
+ * @param {Map<string, boolean>} [maintainer] shared permission cache
+ * @returns {{ credits: Map<string, string[]>, pending: string[] }}
  */
-export function formatThanks(reporters) {
-  if (reporters.size === 0) return "";
-  const lines = [...reporters]
-    .sort(
-      ([a, ia], [b, ib]) =>
-        ib.length - ia.length ||
-        a.localeCompare(b, "en", { sensitivity: "base" }),
-    )
-    .map(
-      ([login, nums]) => `* @${login} (${nums.map((n) => `#${n}`).join(", ")})`,
+export function collectAdvisoryCredits(spawn, ids, maintainer = new Map()) {
+  /** @type {Map<string, string[]>} */
+  const credits = new Map();
+  /** @type {string[]} */
+  const pending = [];
+  for (const id of ids) {
+    const advisory = JSON.parse(
+      run(spawn, "gh", ["api", `repos/${REPO}/security-advisories/${id}`]),
     );
-  return `## Thanks for helping us improve\n\n${THANKS_LEAD_IN}\n\n${lines.join("\n")}`;
+    if (advisory.ghsa_id !== id) {
+      throw new Error(`asked for ${id}, GitHub answered ${advisory.ghsa_id}`);
+    }
+    if (!SHIPPABLE_ADVISORY_STATES.has(advisory.state)) {
+      throw new Error(
+        `${id} is ${advisory.state}: only a draft or published advisory has a fix to credit`,
+      );
+    }
+    if (!Array.isArray(advisory.credits_detailed)) {
+      throw new Error(`${id} has no credits_detailed list`);
+    }
+    for (const credit of advisory.credits_detailed) {
+      if (credit.state === "declined") continue;
+      if (credit.state !== "accepted" && credit.state !== "pending") {
+        throw new Error(`unexpected credit state "${credit.state}" on ${id}`);
+      }
+      const login = credit.user?.login;
+      if (credit.user?.type !== "User" || typeof login !== "string") continue;
+      if (maintainerCached(spawn, maintainer, login)) continue;
+      if (credit.state === "pending") pending.push(`@${login} on ${id}`);
+      const list = credits.get(login) ?? [];
+      if (!list.includes(id)) list.push(id);
+      credits.set(login, list);
+    }
+  }
+  return { credits, pending };
+}
+
+/**
+ * The lead-in to the prototype paragraph, worded for one contributor or
+ * several, and as a continuation when a reporter list comes before it.
+ *
+ * @param {number} count
+ * @param {boolean} following
+ */
+export function prototypeLeadIn(count, following) {
+  return count === 1
+    ? `${following ? "And to this contributor" : "Thank you to this contributor"}, whose pull request prototyped a change that ships in this release. Under the repository's ${POLICY_LINK} policy the PR was closed and the change rebuilt by the maintainers, crediting its author on the issue:`
+    : `${following ? "And to these contributors" : "Thank you to these contributors"}, whose pull requests prototyped changes that ship in this release. Under the repository's ${POLICY_LINK} policy their PRs were closed and the changes rebuilt by the maintainers, crediting them on the issue:`;
+}
+
+/**
+ * The Thanks section: reporters of issues and advisories, one line per
+ * person with their issues then their advisories, most first, then by name;
+ * then the prototype paragraph, one line per `--thank`. "" when nobody.
+ *
+ * @param {{ reporters?: Map<string, number[]>, advisories?: Map<string, string[]>, thanks?: string[] }} credits
+ */
+export function formatThanks({
+  reporters = new Map(),
+  advisories = new Map(),
+  thanks = [],
+}) {
+  /** @type {Map<string, string[]>} */
+  const people = new Map();
+  for (const [login, nums] of reporters) {
+    people.set(
+      login,
+      nums.map((n) => `#${n}`),
+    );
+  }
+  for (const [login, ids] of advisories) {
+    people.set(login, [...(people.get(login) ?? []), ...ids]);
+  }
+  const parts = [];
+  if (people.size) {
+    const leadIn =
+      reporters.size && advisories.size
+        ? MIXED_LEAD_IN
+        : advisories.size
+          ? ADVISORY_LEAD_IN
+          : THANKS_LEAD_IN;
+    const lines = [...people]
+      .sort(
+        ([a, ra], [b, rb]) =>
+          rb.length - ra.length ||
+          a.localeCompare(b, "en", { sensitivity: "base" }),
+      )
+      .map(([login, refs]) => `* @${login} (${refs.join(", ")})`);
+    parts.push(leadIn, lines.join("\n"));
+  }
+  if (thanks.length) {
+    parts.push(
+      prototypeLeadIn(thanks.length, people.size > 0),
+      thanks.map((line) => `* ${line}`).join("\n"),
+    );
+  }
+  if (parts.length === 0) return "";
+  return ["## Thanks for helping us improve", ...parts].join("\n\n");
+}
+
+/**
+ * The `@login`s a text names in prose: not in code, a quote or an HTML
+ * comment (see `proseOf`), not an email address, and not a scoped package
+ * name such as `@modelcontextprotocol/server-memory`.
+ *
+ * @param {string} text
+ * @returns {string[]}
+ */
+export function mentionsOf(text) {
+  const pattern =
+    /(?<![\w@./-])@([A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38})(?![\w/-])/g;
+  return [...new Set([...proseOf(text).matchAll(pattern)].map((m) => m[1]))];
+}
+
+/** @param {string} out one JSON value per line, as `gh --jq` prints them */
+function jsonLines(out) {
+  return out === "" ? [] : out.split("\n").map((line) => JSON.parse(line));
+}
+
+/**
+ * Every credit note a maintainer left on the milestone's closed issues (the
+ * issue body or a comment) and the non-maintainers it names: what the person
+ * drafting the notes reads to decide each `--thank`. A mention that is not an
+ * account (a typo, a team) names nobody, so its 404 is skipped; any other
+ * failure aborts, as everywhere else.
+ *
+ * @param {Spawn} spawn
+ * @param {string} milestone
+ * @param {Map<string, boolean>} [maintainer] shared permission cache
+ * @returns {Array<{ issue: number, url: string, logins: string[] }>}
+ */
+export function discoverCredits(spawn, milestone, maintainer = new Map()) {
+  const number = run(spawn, "gh", [
+    "api",
+    "--paginate",
+    `repos/${REPO}/milestones?state=all&per_page=100`,
+    "--jq",
+    `.[] | select(.title == ${JSON.stringify(milestone)}) | .number`,
+  ]);
+  if (!/^\d+$/.test(number)) {
+    throw new Error(`no milestone titled ${milestone}`);
+  }
+  /** @type {Array<{ number: number, url: string, body: string | null, author: string, type: string }>} */
+  const issues = jsonLines(
+    run(spawn, "gh", [
+      "api",
+      "--paginate",
+      `repos/${REPO}/issues?milestone=${number}&state=closed&per_page=100`,
+      "--jq",
+      ".[] | select(.pull_request == null) | {number, url: .html_url, body, author: .user.login, type: .user.type}",
+    ]),
+  ).sort((a, b) => a.number - b.number);
+  /** @param {string} login */
+  const community = (login) => {
+    try {
+      return !maintainerCached(spawn, maintainer, login);
+    } catch (error) {
+      if (/HTTP 404/.test(/** @type {Error} */ (error).message)) return false;
+      throw error;
+    }
+  };
+  const notes = [];
+  for (const issue of issues) {
+    /** @type {Array<{ url: string, body: string | null, author: string, type: string }>} */
+    const comments = jsonLines(
+      run(spawn, "gh", [
+        "api",
+        "--paginate",
+        `repos/${REPO}/issues/${issue.number}/comments?per_page=100`,
+        "--jq",
+        ".[] | {url: .html_url, body, author: .user.login, type: .user.type}",
+      ]),
+    );
+    for (const note of [issue, ...comments]) {
+      const body = note.body ?? "";
+      if (note.type !== "User" || !CREDIT_NOTE.test(proseOf(body))) continue;
+      if (!maintainerCached(spawn, maintainer, note.author)) continue;
+      const logins = mentionsOf(body).filter(community);
+      if (logins.length)
+        notes.push({ issue: issue.number, url: note.url, logins });
+    }
+  }
+  return notes;
 }
 
 /** @param {Section} section */
@@ -690,12 +932,50 @@ export async function main(
   console.error(
     `crediting reporters of issues closed by ${entries.length} PRs`,
   );
-  const thanks = formatThanks(
-    collectReporters(
-      spawn,
-      entries.map((e) => e.pr),
-    ),
+  /** @type {Map<string, boolean>} */
+  const maintainer = new Map();
+  const reporters = collectReporters(
+    spawn,
+    entries.map((e) => e.pr),
+    maintainer,
   );
+  const { credits: advisories, pending } = collectAdvisoryCredits(
+    spawn,
+    args.advisories,
+    maintainer,
+  );
+  for (const credit of pending) {
+    console.error(
+      `PENDING advisory credit: ${credit} is not accepted yet; it may still be declined`,
+    );
+  }
+  const thanks = formatThanks({
+    reporters,
+    advisories,
+    thanks: args.thanks,
+  });
+
+  if (args.mode === "preview") {
+    // The prototype paragraph is only as complete as the --thank flags, so
+    // the preview shows every credit on record next to what covers it.
+    const thanked = new Set(
+      args.thanks.flatMap(mentionsOf).map((l) => l.toLowerCase()),
+    );
+    const credited = discoverCredits(spawn, args.milestone, maintainer);
+    console.error(
+      credited.length
+        ? `credit notes on ${args.milestone}'s closed issues (each needs a --thank, unless it credits a reporter already listed):`
+        : `no credit notes on ${args.milestone}'s closed issues`,
+    );
+    for (const { issue, url, logins } of credited) {
+      const who = logins.map(
+        (l) =>
+          `@${l} ${thanked.has(l.toLowerCase()) ? "(--thank given)" : "(NO --thank)"}`,
+      );
+      console.error(`  #${issue} ${url}: ${who.join(", ")}`);
+    }
+  }
+
   const notes = assembleNotes({
     packages: formatPackages(packages),
     sections,
