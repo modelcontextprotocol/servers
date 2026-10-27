@@ -80,8 +80,9 @@ _NON_PUBLIC_NETWORKS = tuple(
         "198.51.100.0/24",
         "203.0.113.0/24",
         "240.0.0.0/4",
-        "::/128",
-        "::1/128",
+        # IPv4-compatible IPv6 (RFC 4291 2.5.5.1), deprecated and never routed;
+        # it also holds the unspecified (::) and loopback (::1) addresses.
+        "::/96",
         "64:ff9b:1::/48",
         "100::/64",
         "2001::/23",
@@ -122,7 +123,8 @@ def _is_public_address(address: str) -> bool:
     cloud metadata endpoints), shared address space (100.64.0.0/10, which holds
     Alibaba Cloud's 100.100.100.200), unique local IPv6 (AWS's fd00:ec2::254),
     multicast, unspecified, documentation and other special-purpose ranges.
-    An IPv4-mapped or well-known NAT64 address is judged by the IPv4 it wraps.
+    An IPv4-mapped or well-known NAT64 address is judged by the IPv4 it wraps;
+    a deprecated IPv4-compatible address (``::/96``) is refused whatever it holds.
     """
     ip = ipaddress.ip_address(address)
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
