@@ -393,11 +393,10 @@ export function refreshPlan(issue, state) {
   const removeLabels = before.filter(
     (l) => !after.includes(l) && had.has(l) && owned.includes(l),
   );
+  // Ownership lapses once the rows stop calling for a scope, whether or not
+  // the label was still there to remove: a maintainer may reapply it later.
   const applied = [
-    ...new Set([
-      ...owned.filter((l) => !removeLabels.includes(l)),
-      ...addLabels,
-    ]),
+    ...new Set([...owned.filter((l) => after.includes(l)), ...addLabels]),
   ].sort();
   const body = buildIssueBody(state, applied);
   // Labels follow the rows, so an unchanged body means unchanged labels.
@@ -718,7 +717,10 @@ export function main({
     }
     const state = markRows(group, rows, latest);
     if (!state) continue;
-    (state.rows.some((r) => r.behind) ? states : settled).push(state);
+    if (state.rows.some((r) => r.behind)) states.push(state);
+    // A copy with no installed version is not known to have caught up, so
+    // its group is not settled: its issue is left as it is.
+    else if (state.rows.every((r) => r.installed !== null)) settled.push(state);
   }
 
   const emit = (filed) => {

@@ -820,6 +820,61 @@ test("a scope label someone applied first survives successive refreshes", () => 
   assert.equal(refreshPlan(apply(plan4), done), null);
 });
 
+test("ownership lapses with the rows, even when the label was already gone", () => {
+  const latest = { mcp: "1.30.0" };
+  const time = row("mcp", "src/time", ">=1.29.0,<2", "1.29.0");
+  const git = (installed) => row("mcp", "src/git", ">=1.29.0,<2", installed);
+  const both = groupState(group("python-sdk"), [time, git("1.29.0")], latest);
+  // The sweep applied both; a maintainer has since removed server-git.
+  const issue = {
+    body: buildIssueBody(both),
+    labels: [{ name: "server-time" }],
+  };
+  const caughtUp = groupState(
+    group("python-sdk"),
+    [time, git("1.30.0")],
+    latest,
+  );
+  const plan = refreshPlan(issue, caughtUp);
+  assert.deepEqual(plan.removeLabels, []);
+  assert.deepEqual(appliedScopes(plan.body), ["server-time"]);
+
+  // The maintainer reapplies server-git and git falls behind again: the
+  // label is theirs now, so git catching up a second time leaves it.
+  const again = refreshPlan(
+    {
+      body: plan.body,
+      labels: [{ name: "server-time" }, { name: "server-git" }],
+    },
+    both,
+  );
+  assert.deepEqual([again.addLabels, again.removeLabels], [[], []]);
+  assert.deepEqual(appliedScopes(again.body), ["server-time"]);
+  const last = refreshPlan(
+    {
+      body: again.body,
+      labels: [{ name: "server-time" }, { name: "server-git" }],
+    },
+    caughtUp,
+  );
+  assert.deepEqual(last.removeLabels, []);
+});
+
+test("a copy with no installed version does not settle its group", (t) => {
+  const [filed] = filedIssues({
+    files: files({ "src/time/uv.lock": UV("2.3.0") }),
+  });
+  // The lockfile no longer resolves either copy: nothing is behind, but
+  // nothing is known to have caught up either.
+  const lockless = files({
+    "src/time/uv.lock": UV("2.3.0"),
+    "package-lock.json": JSON.stringify({ packages: {} }),
+  });
+  const none = fakeWorld({ issues: [filed], files: lockless });
+  run(none, { output: outputFile(t) });
+  assert.equal(writes(none.calls).length, 0);
+});
+
 test("an open issue whose installs changed is refreshed in place, once", (t) => {
   const noPy = files({ "src/time/uv.lock": UV("2.3.0") });
   const [filed] = filedIssues({ files: noPy });
