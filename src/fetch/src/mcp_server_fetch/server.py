@@ -329,11 +329,18 @@ def decode_page(response: httpx.Response) -> str:
         # them would mangle it rather than fix it.
         if name in ("idna", "punycode", "unicode-escape", "raw-unicode-escape"):
             return response.text
+        # A declaration found in ASCII bytes is only believable for an
+        # ASCII-compatible encoding. UTF-7, HZ and the EBCDIC code pages
+        # (cp037, cp500, …) would rewrite the markup itself, so they fail this
+        # probe (by a different result or a decode error) and are ignored.
+        probe = b"\t\n\r" + bytes(range(0x20, 0x7F))
+        if probe.decode(name) != probe.decode("ascii"):
+            return response.text
         return content.decode(name, errors="replace")
     except (LookupError, ValueError):  # UnicodeError is a ValueError
         # An unknown charset, a name Python refuses outright (one holding a
-        # NUL), a non-text codec (base64, rot13, …) or one that refuses to
-        # decode at all (``undefined``).
+        # NUL), a non-text codec (base64, rot13, …), one that refuses to
+        # decode at all (``undefined``), or one the probe cannot decode.
         return response.text
 
 

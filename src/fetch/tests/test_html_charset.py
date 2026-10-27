@@ -213,16 +213,22 @@ async def test_a_page_with_no_declaration_is_decoded_as_utf8(web: FakeWeb) -> No
         "raw_unicode_escape",
         "idna",
         "punycode",
+        # #5302 review: encodings that are not ASCII-compatible, so could not
+        # have been declared in ASCII. UTF-7 would turn "+AEI-" into "B";
+        # the EBCDIC pages would rewrite the markup.
+        "utf-7",
+        "cp037",
+        "cp1140",
+        "hz",
     ],
 )
 async def test_an_unusable_declared_charset_falls_back_to_the_old_decoding(
     web: FakeWeb, declared: str
 ) -> None:
-    body = document(f'<meta charset="{declared}">', JAPANESE + " \\u0041").encode(
-        "utf-8"
-    )
+    marker = JAPANESE + " \\u0041 +AEI-"
+    body = document(f'<meta charset="{declared}">', marker).encode("utf-8")
     text = await fetch(web, page(body), raw=True)
-    assert JAPANESE + " \\u0041" in text
+    assert f"<p>{marker}</p>" in text
 
 
 @pytest.mark.parametrize("declared", ["utf-16", "UTF-16LE", "utf-32"])
