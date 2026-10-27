@@ -584,9 +584,11 @@ async def fetch_url(
     if is_page_html and not force_raw:
         return extract_content_from_html(page_raw, use_readability_js), ""
 
+    # A response with no Content-Type would otherwise leave an empty slot here.
+    declared_type = content_type or "(not declared)"
     return (
         page_raw,
-        f"Content type {content_type} cannot be simplified to markdown, but here is the raw content:\n",
+        f"Content type {declared_type} cannot be simplified to markdown, but here is the raw content:\n",
     )
 
 
