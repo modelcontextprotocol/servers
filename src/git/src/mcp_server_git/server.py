@@ -1,7 +1,8 @@
 # The git MCP server: tools that read and change a Git repository through
-# GitPython. Repository confinement (`--repository`, `validate_repo_path`) and
-# the flag-injection guards live beside the handlers because every tool call
-# must pass them before any git command runs.
+# GitPython. Repository confinement (`--repository`, `validate_repo_path` on the
+# path given, `validate_opened_repo` on the directories git then uses) and the
+# flag-injection guards live beside the handlers because every tool call must
+# pass them before any git command runs.
 #
 # Built on the MCP Python SDK's high-level `MCPServer` (#5174), the API these
 # reference servers are meant to teach: each tool is a typed function, and the
@@ -369,6 +370,64 @@ def validate_repo_path(repo_path: Path, allowed_repository: Path | None) -> None
         )
 
 
+def validate_opened_repo(
+    repo: git.Repo, repo_path: Path, allowed_repository: Path | None
+) -> None:
+    """Validate that the directories git opened are within the allowed repository.
+
+    `validate_repo_path` checks only the path the caller passed. Git can then
+    follow a `.git` file (`gitdir:`), a `commondir` file or `core.worktree` to
+    a directory anywhere else, so the working tree, git directory and common
+    directory git actually uses are checked too. The working tree must lie
+    inside the allowed repository. The two git directories must lie inside it
+    or be the allowed repository's own: a linked worktree's git directory
+    lives under the main repository's `.git`, outside the worktree it serves.
+
+    Both git's answer (`rev-parse`, which the tools' git commands follow) and
+    GitPython's (which some tools read directly) are checked: GitPython does
+    not apply `core.worktree`, so the two can differ.
+    """
+    if allowed_repository is None:
+        return
+
+    allowed = allowed_repository.resolve()
+
+    def outside(used: Path) -> ValueError:
+        return ValueError(
+            f"Repository path '{repo_path}' uses '{used}', which is outside the "
+            f"allowed repository '{allowed_repository}'"
+        )
+
+    git_dir, common_dir, bare = repo.git.rev_parse(
+        "--path-format=absolute",
+        "--git-dir",
+        "--git-common-dir",
+        "--is-bare-repository",
+    ).splitlines()
+    working_trees = [] if bare == "true" else [repo.git.rev_parse("--show-toplevel")]
+    if repo.working_tree_dir is not None:
+        working_trees.append(str(repo.working_tree_dir))
+    for working_tree in map(Path, working_trees):
+        if not working_tree.resolve().is_relative_to(allowed):
+            raise outside(working_tree)
+
+    escaped = [
+        p
+        for p in map(Path, (git_dir, common_dir, repo.git_dir, repo.common_dir))
+        if not p.resolve().is_relative_to(allowed)
+    ]
+    if not escaped:
+        return
+    with git.Repo(allowed) as allowed_repo:
+        own = {
+            Path(allowed_repo.git_dir).resolve(),
+            Path(allowed_repo.common_dir).resolve(),
+        }
+    for p in escaped:
+        if p.resolve() not in own:
+            raise outside(p)
+
+
 def git_branch(
     repo: git.Repo,
     branch_type: str,
@@ -524,7 +583,13 @@ def create_server(repository: Path | None) -> MCPServer:
     def open_repo(repo_path: str) -> git.Repo:
         path = Path(repo_path)
         validate_repo_path(path, repository)
-        return git.Repo(path)
+        repo = git.Repo(path)
+        try:
+            validate_opened_repo(repo, path, repository)
+        except Exception:
+            repo.close()
+            raise
+        return repo
 
     @server.tool(
         name=GitTools.STATUS.value,
