@@ -1,7 +1,8 @@
 // Tests for the nightly SDK watch (#4874). The pure halves are driven
 // directly; `main()` runs with `npm`, `curl` and `gh` replaced by a fake spawn
 // and the manifests by an in-memory reader, covering filing, the dry run,
-// suppression, the analysis retry, supersession and the failure paths. The
+// suppression, the analysis retry, supersession, the refresh of an open
+// issue whose rows changed (#5067) and the failure paths. The
 // last tests read `.github/workflows/sdk-watch.yml` and pin the properties its
 // security rests on, so editing the workflow cannot quietly undo them. Run
 // via `npm run test:scripts`.
@@ -17,6 +18,7 @@ import {
   ANALYSIS_MARKER,
   SDK_GROUPS,
   assertEveryPackageWatched,
+  bodyScopes,
   buildIssueBody,
   buildIssueTitle,
   buildMarker,
@@ -31,6 +33,7 @@ import {
   parseMarker,
   parseSupersededMarker,
   readInstalls,
+  refreshPlan,
   versioning,
 } from "./sdk-watch.mjs";
 
@@ -420,6 +423,7 @@ function fakeWorld(state = {}) {
       if (s.createFail?.(args)) return ok({ status: 1, stderr: "boom" });
       return ok({ stdout: `https://github.com/o/r/issues/${s.nextIssue++}\n` });
     }
+    if (a === "issue" && b === "edit") return ok();
     if (a === "issue" && b === "comment") {
       if (s.commentFail) return ok({ status: 1, stderr: "comment boom" });
       return ok();
@@ -456,7 +460,7 @@ const writes = (calls) =>
     (c) =>
       c.cmd === "gh" &&
       c.args[0] === "issue" &&
-      ["create", "comment"].includes(c.args[1]),
+      ["create", "edit", "comment"].includes(c.args[1]),
   );
 const run = (world, extra = {}) =>
   main({
@@ -542,24 +546,40 @@ const sweepIssue = (number, key, target, state = "OPEN", author = bot) => ({
   labels: sweepLabels,
 });
 
+/**
+ * The issues a run against `state` files, as the next night's listing returns
+ * them: numbered from 600, with the labels and body the sweep wrote.
+ */
+function filedIssues(state = {}) {
+  const world = fakeWorld(state);
+  run(world);
+  return writes(world.calls).map((c, i) => ({
+    number: 600 + i,
+    title: c.args[c.args.indexOf("--title") + 1],
+    body: c.input,
+    state: "OPEN",
+    author: bot,
+    labels: c.args
+      .filter((_, j) => c.args[j - 1] === "--label")
+      .map((name) => ({ name })),
+  }));
+}
+
 test("an existing analyzed issue is a no-op; an unanalyzed one is re-queued", (t) => {
   const analyzed = {
     body: `${ANALYSIS_MARKER}\n...`,
     user: { login: "github-actions[bot]", type: "Bot" },
   };
   const world = fakeWorld({
-    issues: [
-      sweepIssue(10, "typescript-sdk-v1", "1.32.1"),
-      sweepIssue(11, "python-sdk", "2.3.0"),
-    ],
-    comments: { 10: [analyzed] },
+    issues: filedIssues(),
+    comments: { 600: [analyzed] },
   });
   const output = outputFile(t);
   run(world, { output });
   assert.equal(writes(world.calls).length, 0);
   assert.deepEqual(
     filedFrom(output).map((f) => f.issue),
-    [11],
+    [601],
   );
 });
 
@@ -620,13 +640,191 @@ test("a newer release supersedes the open older issue, once", (t) => {
     body: ANALYSIS_MARKER,
     user: { login: "github-actions[bot]", type: "Bot" },
   };
+  const [filed] = filedIssues({ files: noTs });
   const next = fakeWorld({
-    issues: [older, sweepIssue(600, "python-sdk", "2.3.0")],
+    issues: [older, filed],
     comments: { 9: [note], 600: [analyzed] },
     files: noTs,
   });
   run(next, { output: outputFile(t) });
   assert.equal(writes(next.calls).length, 0);
+});
+
+test("bodyScopes reads back the scope labels a body's rows called for", () => {
+  const behind = groupState(
+    group("typescript-sdk-v1"),
+    [
+      row("@modelcontextprotocol/sdk", "root", "^1.30.0", "1.30.0"),
+      row("@modelcontextprotocol/sdk", "src/memory", "^1.29.0", "1.29.0"),
+      row("@modelcontextprotocol/sdk", "src/everything", "^1.32.1", "1.32.1"),
+    ],
+    { "@modelcontextprotocol/sdk": "1.32.1" },
+  );
+  assert.deepEqual(bodyScopes(buildIssueBody(behind)), ["server-memory"]);
+  assert.deepEqual(
+    bodyScopes(buildIssueBody(behind)),
+    issueLabels(behind).filter((l) => l.startsWith("server-")),
+  );
+  assert.deepEqual(bodyScopes("no table here"), []);
+  assert.deepEqual(bodyScopes(undefined), []);
+  const everywhere = groupState(
+    group("python-sdk"),
+    ["fetch", "git", "time", "everything", "filesystem", "memory"]
+      .concat("sequentialthinking")
+      .map((s) => row("mcp", `src/${s}`, ">=1", "1.0.0")),
+    { mcp: "2.0.0" },
+  );
+  assert.deepEqual(bodyScopes(buildIssueBody(everywhere)), []);
+});
+
+test("refreshPlan is null for an unchanged issue, ticked boxes included", () => {
+  const state = groupState(
+    group("python-sdk"),
+    [row("mcp", "src/time", ">=1.29.0,<2", "1.29.0")],
+    { mcp: "1.30.0" },
+  );
+  const body = buildIssueBody(state);
+  const labels = issueLabels(state).map((name) => ({ name }));
+  assert.equal(refreshPlan({ body, labels }, state), null);
+  const ticked = body.replace("- [ ]", "- [x]");
+  assert.notEqual(ticked, body);
+  assert.equal(refreshPlan({ body: ticked, labels }, state), null);
+});
+
+test("refreshPlan rewrites changed rows and moves only its own scope labels", () => {
+  const rows = [
+    row("mcp", "src/time", ">=1.29.0,<2", "1.29.0"),
+    row("mcp", "src/git", ">=1.29.0,<2", "1.29.0"),
+  ];
+  const latest = { mcp: "1.30.0" };
+  const was = groupState(group("python-sdk"), rows, latest);
+  const issue = {
+    body: buildIssueBody(was).replace("- [ ]", "- [x]"),
+    labels: [
+      ...issueLabels(was),
+      "server-fetch", // a maintainer's, which no row ever called for
+      "help wanted",
+    ].map((name) => ({ name })),
+  };
+  // git upgrades on its own, and fetch now declares mcp and is behind.
+  const now = groupState(
+    group("python-sdk"),
+    [
+      rows[0],
+      row("mcp", "src/git", ">=1.29.0,<2", "1.30.0"),
+      row("mcp", "src/memory", ">=1.29.0,<2", "1.28.0"),
+    ],
+    latest,
+  );
+  assert.deepEqual(refreshPlan(issue, now), {
+    body: buildIssueBody(now),
+    addLabels: ["server-memory"],
+    removeLabels: ["server-git"],
+  });
+
+  // A label the rows still call for, which someone removed, stays removed;
+  // one the rows newly call for, already present, is not added twice.
+  const trimmed = {
+    body: buildIssueBody(was),
+    labels: [{ name: "server-git" }, { name: "server-memory" }],
+  };
+  assert.deepEqual(refreshPlan(trimmed, now), {
+    body: buildIssueBody(now),
+    addLabels: [],
+    removeLabels: ["server-git"],
+  });
+});
+
+test("an open issue whose installs changed is refreshed in place, once", (t) => {
+  const noPy = files({ "src/time/uv.lock": UV("2.3.0") });
+  const [filed] = filedIssues({ files: noPy });
+  assert.deepEqual(bodyScopes(filed.body), ["server-memory"]);
+  filed.labels.push({ name: "server-filesystem" }, { name: "help wanted" });
+
+  // memory reaches the target on its own; the root copy is still behind.
+  const upgraded = files({
+    "src/time/uv.lock": UV("2.3.0"),
+    "package-lock.json": JSON.stringify({
+      packages: {
+        ...NPM_LOCK.packages,
+        "src/memory/node_modules/@modelcontextprotocol/sdk": {
+          version: "1.32.1",
+        },
+      },
+    }),
+  });
+  const analyzed = {
+    body: ANALYSIS_MARKER,
+    user: { login: "github-actions[bot]", type: "Bot" },
+  };
+  const world = fakeWorld({
+    issues: [filed],
+    comments: { 600: [analyzed] },
+    files: upgraded,
+  });
+  const output = outputFile(t);
+  run(world, { output });
+  const [edit, ...rest] = writes(world.calls);
+  assert.equal(rest.length, 0);
+  assert.deepEqual(edit.args.slice(0, 3), ["issue", "edit", "600"]);
+  assert.deepEqual(
+    edit.args.filter((_, i) => edit.args[i - 1] === "--remove-label"),
+    ["server-memory"],
+  );
+  assert.ok(!edit.args.includes("--add-label"));
+  assert.match(
+    edit.input,
+    /\| `src\/memory` \| \^1\.29\.0 \| 1\.32\.1 \| 1\.32\.1 \| no \|/,
+  );
+  assert.deepEqual(bodyScopes(edit.input), []);
+  // Already analyzed, so the refresh queues nothing.
+  assert.deepEqual(filedFrom(output), []);
+  assert.match(world.lines.join("\n"), /refreshed #600.*removed server-memory/);
+
+  // The next night finds it current.
+  const next = fakeWorld({
+    issues: [
+      {
+        ...filed,
+        body: edit.input,
+        labels: filed.labels.filter((l) => l.name !== "server-memory"),
+      },
+    ],
+    comments: { 600: [analyzed] },
+    files: upgraded,
+  });
+  run(next, { output: outputFile(t) });
+  assert.equal(writes(next.calls).length, 0);
+});
+
+test("a dry run previews the refresh; a closed issue is never refreshed", (t) => {
+  const [filed] = filedIssues({
+    files: files({ "src/time/uv.lock": UV("2.3.0") }),
+  });
+  const moved = files({
+    "src/time/uv.lock": UV("2.3.0"),
+    "package-lock.json": JSON.stringify({
+      packages: {
+        ...NPM_LOCK.packages,
+        "src/memory/node_modules/@modelcontextprotocol/sdk": {
+          version: "1.32.1",
+        },
+      },
+    }),
+  });
+  const dry = fakeWorld({ issues: [filed], files: moved });
+  run(dry, { output: outputFile(t), dryRun: true });
+  assert.equal(writes(dry.calls).length, 0);
+  const out = dry.lines.join("\n");
+  assert.match(out, /would edit #600/);
+  assert.match(out, /remove labels: server-memory/);
+
+  const closed = fakeWorld({
+    issues: [{ ...filed, state: "CLOSED" }],
+    files: moved,
+  });
+  run(closed, { output: outputFile(t) });
+  assert.equal(writes(closed.calls).length, 0);
 });
 
 test("a failure after filing still emits what was filed, then fails", (t) => {

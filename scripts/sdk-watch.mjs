@@ -47,6 +47,16 @@
 // FURTHER release files a new issue and leaves a supersession comment on the
 // older open one; it never closes it.
 //
+// An OPEN issue for the current target is kept current (#5067): while the
+// target stays put, a server can upgrade on its own, be added, or move
+// between groups (the v1 -> v2 migration), and the issue would otherwise
+// keep pointing at servers with no work left. Its body is re-rendered and
+// rewritten when it differs, as the monthly refresh does, except that a
+// ticked checklist box alone is not a difference. Its scope labels move by
+// the DELTA between what the old body's rows called for and what the new
+// rows do, so a label triage or a maintainer applied, or removed, stays as
+// they left it. A closed issue is left alone.
+//
 // "An issue exists" and "it was analyzed" are different claims. The workflow
 // stamps `ANALYSIS_MARKER` on its comment, and an OPEN issue for the current
 // target with no such comment from the automation is handed to the analysis
@@ -271,6 +281,20 @@ export function buildIssueTitle(state) {
 }
 
 /**
+ * The scope labels for the places a copy is behind, or none when that is
+ * every server (the issue is then repository-wide).
+ *
+ * @param {string[]} wheres each behind row's `where`
+ * @returns {string[]}
+ */
+function scopesFor(wheres) {
+  const scopes = [
+    ...new Set(wheres.map((w) => scopeLabel(`${w}/`)).filter(Boolean)),
+  ].sort();
+  return scopes.length === SERVERS.length ? [] : scopes;
+}
+
+/**
  * Labels: the sweep's, plus each server with a copy that is BEHIND (a server
  * already at the target has no work here), unless that is every server (then
  * the issue is repository-wide and takes none).
@@ -278,17 +302,55 @@ export function buildIssueTitle(state) {
  * @param {NonNullable<ReturnType<typeof groupState>>} state
  */
 export function issueLabels(state) {
-  const scopes = [
-    ...new Set(
-      state.rows
-        .filter((r) => r.behind)
-        .map((r) => scopeLabel(`${r.where}/`))
-        .filter(Boolean),
-    ),
-  ].sort();
-  return scopes.length === SERVERS.length
-    ? [...SWEEP_LABELS]
-    : [...SWEEP_LABELS, ...scopes];
+  return [
+    ...SWEEP_LABELS,
+    ...scopesFor(state.rows.filter((r) => r.behind).map((r) => r.where)),
+  ];
+}
+
+/** A row of the table `buildIssueBody` writes: its `where`, and `Behind`. */
+const ROW_RE = /^\| `.*?` \| `([^`]*)` \|.*\| (\*\*yes\*\*|no) \|$/gm;
+
+/**
+ * The scope labels an issue body's rows called for when the sweep wrote it,
+ * read back from its table.
+ *
+ * @param {string | undefined} body
+ * @returns {string[]}
+ */
+export function bodyScopes(body) {
+  return scopesFor(
+    [...(body ?? "").matchAll(ROW_RE)]
+      .filter((m) => m[2] === "**yes**")
+      .map((m) => m[1]),
+  );
+}
+
+/** A body with every checklist box unticked, so ticking one is not a change. */
+const unticked = (body) => (body ?? "").replace(/^- \[[xX]\]/gm, "- [ ]");
+
+/**
+ * What an OPEN issue for the current target needs to match the current
+ * state, or `null` when it already does. Labels move only by the delta
+ * between the old body's rows and the new ones, so labels the sweep did not
+ * apply (or that someone removed) are left as they are.
+ *
+ * @param {{body?: string, labels?: Array<{name?: string}>}} issue
+ * @param {NonNullable<ReturnType<typeof groupState>>} state
+ * @returns {{body: string, addLabels: string[], removeLabels: string[]} | null}
+ */
+export function refreshPlan(issue, state) {
+  const body = buildIssueBody(state);
+  // Labels follow the rows, so an unchanged body means unchanged labels.
+  if (unticked(issue.body) === unticked(body)) return null;
+  const had = new Set((issue.labels ?? []).map((l) => l?.name));
+  const before = bodyScopes(issue.body);
+  const after = bodyScopes(body);
+  return {
+    body,
+    addLabels: after.filter((l) => !before.includes(l) && !had.has(l)),
+    removeLabels: before.filter((l) => !after.includes(l) && had.has(l)),
+  };
 }
 
 /**
@@ -643,6 +705,19 @@ export function main({
         // OPEN only: a closed issue keeps suppressing its target, and must not
         // be handed a fresh analysis every night.
         if (match && match.state === "OPEN") {
+          const refresh = refreshPlan(match, state);
+          if (refresh) {
+            writer.edit(number, refresh);
+            log(
+              `${SWEEP}: refreshed #${number} for what is installed now` +
+                (refresh.addLabels.length
+                  ? `; added ${refresh.addLabels.join(", ")}`
+                  : "") +
+                (refresh.removeLabels.length
+                  ? `; removed ${refresh.removeLabels.join(", ")}`
+                  : ""),
+            );
+          }
           if (hasAnalysis(issueComments(repo, number, spawn))) {
             log(
               `${SWEEP}: ${state.group.label} ${state.target} has an issue and an analysis; no-op`,

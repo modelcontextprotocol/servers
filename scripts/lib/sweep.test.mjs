@@ -299,6 +299,42 @@ test("issueWriter writes through gh with bodies on stdin", () => {
   assert.equal(calls[3].input, "C");
 });
 
+test("issueWriter edits labels one by one, never as a set", () => {
+  const { spawn, calls } = fakeSpawn(() => ({ status: 0 }));
+  const writer = issueWriter({ repo: "o/r", spawn, sweep: "s", log: () => {} });
+  writer.edit(7, {
+    body: "B",
+    addLabels: ["server-git"],
+    removeLabels: ["server-time", "server-fetch"],
+  });
+  assert.deepEqual(calls[0].args, [
+    "issue",
+    "edit",
+    "7",
+    "--repo",
+    "o/r",
+    "--add-label",
+    "server-git",
+    "--remove-label",
+    "server-time",
+    "--remove-label",
+    "server-fetch",
+    "--body-file",
+    "-",
+  ]);
+  assert.ok(!calls[0].args.includes("--label"));
+
+  const lines = [];
+  issueWriter({
+    repo: "o/r",
+    spawn: () => assert.fail("a dry run must not spawn"),
+    dryRun: true,
+    sweep: "s",
+    log: (line) => lines.push(line),
+  }).edit(7, { body: "B", addLabels: ["a"], removeLabels: ["b"] });
+  assert.match(lines.join("\n"), /add labels: a\nremove labels: b/);
+});
+
 test("issueWriter create without a milestone omits the flag", () => {
   const { spawn, calls } = fakeSpawn(() => ({
     status: 0,
