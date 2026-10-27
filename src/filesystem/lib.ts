@@ -21,6 +21,7 @@ interface FileInfo {
   isDirectory: boolean;
   isFile: boolean;
   permissions: string;
+  hardLinks: number;
 }
 
 export interface SearchOptions {
@@ -421,6 +422,9 @@ export async function getFileStats(filePath: string): Promise<FileInfo> {
     isDirectory: stats.isDirectory(),
     isFile: stats.isFile(),
     permissions: stats.mode.toString(8).slice(-3),
+    // The link count: more than 1 means a file has other names, possibly
+    // outside the allowed directories, that a write here also changes.
+    hardLinks: stats.nlink,
   };
 }
 
