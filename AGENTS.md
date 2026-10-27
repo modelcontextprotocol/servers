@@ -184,6 +184,12 @@ build jobs and `sdk-watch.yml`'s `sweep`, whose outputs `analyze` reads.
   downloads**, since what it builds is what gets published, and for **a job
   whose outputs a credentialed job reads**, since the reader acts on them.
   `verify:action-pins` enforces both. Other jobs keep moving major tags.
+- **A credentialed job that a comment, review or issue can start runs only
+  for a trusted author**: `OWNER`, `MEMBER` or `COLLABORATOR` in the
+  `author_association` of the text that triggered it, never of the thread
+  around it. Today that is `claude.yml`, whose `if:` checks it on every event
+  it listens to; `scripts/claude-workflow.test.mjs` evaluates that condition
+  per event and fails when one loses its check.
 - **A job that holds a publish credential does not install dependencies or
   build.** `release.yml` builds, tests and verifies each package in a job
   with no `id-token`, and the publish job only downloads that artifact and
