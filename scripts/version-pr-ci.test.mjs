@@ -36,9 +36,6 @@ const workflow = (name) => parse(read(`.github/workflows/${name}`));
 
 // `trigger` is the event the workflow runs on when a person pushes; the
 // workflow token's version of that event starts no run, hence the dispatch.
-// `pendingChecksNewer`: the pending job, like the result job, stays silent
-// when a newer dispatched run exists (#5222); the CI workflows' pending jobs
-// do not yet (#5223).
 const CI = [
   {
     file: "typescript.yml",
@@ -50,13 +47,11 @@ const CI = [
     file: "dco.yml",
     context: "DCO (dispatched)",
     trigger: "pull_request",
-    pendingChecksNewer: true,
   },
   {
     file: "everything-mcp-diff.yml",
     context: "Everything diff (dispatched)",
     trigger: "pull_request",
-    pendingChecksNewer: true,
   },
 ];
 // The Python stamps touch none of the Everything diff's paths, so its
@@ -206,11 +201,11 @@ for (const { file } of CI) {
   );
 }
 
-for (const { file } of CI.filter((c) => c.pendingChecksNewer)) {
+for (const { file } of CI) {
   const pending = workflow(file).jobs["dispatch-status-pending"];
 
-  // A superseded run's pending job (a late start, or a re-run, which keeps
-  // its run ID) must not reset the newer run's result to pending: its own
+  // #5222, #5223: a superseded run's pending job (a late start, or a re-run,
+  // which keeps its run ID) must not reset the newer run's result to pending: its own
   // result job would stay silent and leave it there.
   test(
     `${file}: a superseded run posts no pending status`,
