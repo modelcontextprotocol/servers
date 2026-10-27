@@ -336,35 +336,61 @@ describe("trigger-elicitation-request", () => {
     `);
   });
 
-  it("summarizes every field of an accepted form", async () => {
-    // `color` and `petType` are not in the requested schema; the summary
-    // still reads them if a client sends them (#4854 baseline).
+  it("summarizes every field of an accepted form, in the form's order (#5209)", async () => {
     const content = {
       name: "Ada",
       check: false,
-      color: "teal",
+      firstLine: "Call me Ishmael.",
       email: "ada@example.com",
       homepage: "https://example.com",
       birthdate: "1815-12-10",
       integer: 0,
       number: 3.5,
-      petType: "pet-2",
+      untitledSingleSelectEnum: "Joey",
+      untitledMultipleSelectEnum: ["Piano", "Drums"],
+      titledSingleSelectEnum: "hero-3",
+      titledMultipleSelectEnum: ["fish-2"],
+      legacyTitledEnum: "pet-2",
     };
-    const { texts } = await trigger({ action: "accept", content });
+    const { texts, asked } = await trigger({ action: "accept", content });
     expect(texts).toEqual([
       "✅ User provided the requested information!",
       "User inputs:\n" +
         "- Name: Ada\n" +
         "- Agreed to terms: false\n" +
-        "- Favorite Color: teal\n" +
+        "- Favorite first line: Call me Ishmael.\n" +
         "- Email: ada@example.com\n" +
         "- Homepage: https://example.com\n" +
         "- Birthdate: 1815-12-10\n" +
-        "- Favorite Integer: 0\n" +
-        "- Favorite Number: 3.5\n" +
-        "- Pet Type: pet-2",
+        "- Favorite integer: 0\n" +
+        "- Favorite number: 3.5\n" +
+        "- Favorite friend: Joey\n" +
+        "- Favorite instruments: Piano, Drums\n" +
+        "- Favorite hero: hero-3\n" +
+        "- Favorite fish: fish-2\n" +
+        "- Favorite pet: pet-2",
       `\nRaw result: ${JSON.stringify({ action: "accept", content }, null, 2)}`,
     ]);
+    // One line per field the form asked for: the summary and the requested
+    // schema list the same fields.
+    const params = asked[0];
+    expect(params && "requestedSchema" in params).toBe(true);
+    if (params && "requestedSchema" in params) {
+      expect(Object.keys(content)).toEqual(
+        Object.keys(params.requestedSchema.properties),
+      );
+    }
+  });
+
+  it("leaves out fields the form does not define (#5209)", async () => {
+    const content = { name: "Ada", color: "teal", petType: "pet-2" };
+    const { texts } = await trigger({ action: "accept", content });
+    expect(texts.slice(0, 2)).toEqual([
+      "✅ User provided the requested information!",
+      "User inputs:\n- Name: Ada",
+    ]);
+    // The raw result still shows what the client sent.
+    expect(texts[2]).toContain('"color": "teal"');
   });
 
   it("summarizes an accepted form with no fields filled", async () => {
