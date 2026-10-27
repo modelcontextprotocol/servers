@@ -12,13 +12,18 @@ simplified whatever the body looks like.
 
 from __future__ import annotations
 
+import sys
+
 import httpx
 import pytest
 from mcp.types import CallToolResult
 
+from mcp_server_fetch.server import _body_looks_like_html
+
 from .harness import FakeWeb, connect
 
 PAGE = "https://example.com/page"
+BOM = "\ufeff"
 
 ARTICLE_BODY = """<head><title>Test Page</title></head><body>
 <article>
@@ -96,13 +101,23 @@ async def test_empty_body_without_content_type_is_not_simplified(
 @pytest.mark.parametrize(
     "body",
     [
-        f"<!DOCTYPE html>\n{ARTICLE_BODY}",
-        f"<!doctype html>{ARTICLE_BODY}",
-        f"﻿\n  <!DocType HTML>\n{ARTICLE_BODY}",
+        pytest.param(f"<!DOCTYPE html>\n{ARTICLE_BODY}", id="doctype-upper"),
+        pytest.param(f"<!doctype html>{ARTICLE_BODY}", id="doctype-lower"),
+        pytest.param(
+            f"{BOM}\n  <!DocType HTML>\n{ARTICLE_BODY}",
+            id="bom-and-whitespace",
+            # readabilipy 0.2.0 writes the page to a temp file in the locale
+            # encoding, which cannot hold a BOM on Windows (cp1252). The
+            # detection itself is covered on every platform by
+            # test_body_detection_skips_bom_and_whitespace below.
+            marks=pytest.mark.skipif(
+                sys.platform == "win32",
+                reason="readabilipy 0.2.0 cannot extract non-cp1252 pages on Windows (#5303)",
+            ),
+        ),
         # More leading whitespace than the 100-character "<html" window.
-        f"{' ' * 120}<HTML>{ARTICLE_BODY}</HTML>",
+        pytest.param(f"{' ' * 120}<HTML>{ARTICLE_BODY}</HTML>", id="long-indent"),
     ],
-    ids=["doctype-upper", "doctype-lower", "bom-and-whitespace", "long-indent"],
 )
 async def test_html_without_content_type_is_still_simplified(
     web: FakeWeb, body: str
@@ -136,3 +151,28 @@ async def test_doctype_alone_does_not_override_a_declared_content_type(
         200, content=body.encode(), headers={"content-type": "text/plain"}
     )
     assert_raw(await fetch(web, response), body)
+
+
+@pytest.mark.parametrize(
+    "body, expected",
+    [
+        (f"{BOM}<!doctype html><p>x</p>", True),
+        (f"{BOM}\n  <!DocType HTML>\n<p>x</p>", True),
+        (f"{BOM} \t\r\n<HTML><p>x</p></HTML>", True),
+        (f'{BOM}{{"key": "value"}}', False),
+        (f"{BOM}plain text", False),
+        ("", False),
+    ],
+    ids=[
+        "bom-doctype",
+        "bom-whitespace-doctype",
+        "bom-html",
+        "bom-json",
+        "bom-text",
+        "empty",
+    ],
+)
+def test_body_detection_skips_bom_and_whitespace(body: str, expected: bool) -> None:
+    # Runs on every platform: what #5134 decides, without readabilipy's
+    # extraction (which cannot handle a BOM on Windows, #5303).
+    assert _body_looks_like_html(body) is expected
