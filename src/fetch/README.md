@@ -46,6 +46,7 @@ The server speaks both eras of the Model Context Protocol over stdio, with nothi
 ## Installation
 
 Optionally: Install node.js, this will cause the fetch server to use a different HTML simplifier that is more robust.
+To keep the server from ever starting Node.js, see [Customization - HTML extraction](#customization---html-extraction).
 
 ### Using uv (recommended)
 
@@ -209,6 +210,17 @@ Without `--proxy-url`, the server uses the proxy in the standard `HTTP_PROXY`, `
 environment variables (honoring `NO_PROXY`). Both `http(s)://` and SOCKS5 proxies are supported (SOCKS support is
 installed with the server). A `socks://` proxy URL, as many desktop proxy settings export it, is treated as
 `socks5://`. A proxy setting the server cannot use makes each fetch fail with a tool error that says so.
+
+### Customization - HTML extraction
+
+HTML is converted to Markdown by [readabilipy](https://github.com/alan-turing-institute/ReadabiliPy). When Node.js is
+on the `PATH`, readabilipy runs Mozilla's Readability.js in a Node.js subprocess; otherwise it uses its own
+pure-Python extractor, which keeps headings and text but drops link targets. The Node.js subprocess runs with no
+timeout, so a Node.js that hangs, or fails in a way readabilipy does not detect, stalls the tool call until the client
+gives up.
+
+To always use the pure-Python extractor, add the argument `--no-readability-js` to the `args` list in the
+configuration. The server then never starts Node.js (or npm), whether or not it is installed.
 
 ## Windows Configuration
 
