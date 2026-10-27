@@ -168,7 +168,7 @@ src/everything
 - `get-annotated-message.ts`
   - Registers a `get-annotated-message` tool which demonstrates content-level annotations. Emits a primary `text` message with content `annotations` (`priority`, `audience`) that vary by `messageType` (`"error" | "success" | "debug"`), and optionally includes an annotated `image` (tiny PNG) when `includeImage` is true. All tools in this server include tool-level annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`).
 - `get-env.ts`
-  - Registers a `get-env` tool that returns the current process environment variables as formatted JSON text; useful for debugging configuration.
+  - Registers a `get-env` tool that returns the current process environment variables as formatted JSON text; useful for debugging configuration. Values of credential-like names are masked as `"<redacted>"` unless `GET_ENV_INCLUDE_SECRETS` is set to a truthy value.
 - `get-header-params.ts`
   - Registers a `get-header-params` tool with JSON Schema 2020-12 input and output schemas whose `region` argument carries `x-mcp-header`; returns the argument and the `Mcp-Param-Region` header it arrived in.
 - `get-resource-links.ts`
