@@ -208,13 +208,14 @@ function openInDirectory(
   filePath: string,
   flags: number,
   refuseLink: boolean,
+  mode: number = 0o666,
 ): { fd: number; opened: fs.BigIntStats } {
   const name = path.basename(filePath);
   return inDirectory(path.dirname(filePath), () => {
     if (refuseLink && fs.lstatSync(name).isSymbolicLink()) {
       throw new Error(`Refusing to write: not a regular file: ${filePath}`);
     }
-    const fd = fs.openSync(name, flags, 0o666);
+    const fd = fs.openSync(name, flags, mode);
     try {
       const opened = fs.fstatSync(fd, { bigint: true });
       if (!isSameEntry(fs.lstatSync(name, { bigint: true }), opened)) {
@@ -319,9 +320,9 @@ function writeChunk(fd: number, chunk: Buffer): Promise<void> {
   );
 }
 
-function keepModeAndTimes(fd: number, source: fs.Stats): Promise<void> {
+function keepModeAndTimes(fd: number, source: fs.BigIntStats): Promise<void> {
   return new Promise((resolve, reject) =>
-    fs.fchmod(fd, source.mode & 0o777, (chmodError) =>
+    fs.fchmod(fd, Number(source.mode & 0o777n), (chmodError) =>
       chmodError
         ? reject(chmodError)
         : fs.futimes(fd, source.atime, source.mtime, (timesError) =>
@@ -339,11 +340,11 @@ function keepModeAndTimes(fd: number, source: fs.Stats): Promise<void> {
  */
 function openSourceInDirectory(sourcePath: string): {
   fd: number;
-  opened: fs.Stats;
+  opened: fs.BigIntStats;
 } {
   const name = path.basename(sourcePath);
   return inDirectory(path.dirname(sourcePath), () => {
-    const found = fs.lstatSync(name);
+    const found = fs.lstatSync(name, { bigint: true });
     if (found.isDirectory()) {
       throw new Error(
         `Cannot move a directory across filesystems: ${sourcePath}. ` +
@@ -357,8 +358,8 @@ function openSourceInDirectory(sourcePath: string): {
     }
     const fd = fs.openSync(name, readFlags());
     try {
-      const opened = fs.fstatSync(fd);
-      if (!opened.isFile() || !isSameEntry(opened, found)) {
+      const opened = fs.fstatSync(fd, { bigint: true });
+      if (!opened.isFile() || !isSameEntry(found, opened)) {
         throw new Error(
           `Refusing to move: ${sourcePath} was replaced while it was being opened`,
         );
@@ -372,16 +373,38 @@ function openSourceInDirectory(sourcePath: string): {
 }
 
 /**
- * Remove `filePath`, relative to its anchored directory, only while it is
- * still the entry `expected` describes.
+ * Check that `filePath`, relative to its anchored directory, is still the
+ * entry `expected` describes, and fail with `message` if it is not.
  */
-function removeFromDirectory(
+function confirmInDirectory(
   filePath: string,
-  expected: { dev: number; ino: number },
+  expected: EntryIdentity,
+  message: string,
 ): void {
   const name = path.basename(filePath);
   inDirectory(path.dirname(filePath), () => {
-    if (!isSameEntry(fs.lstatSync(name), expected)) {
+    let found: fs.BigIntStats | undefined;
+    try {
+      found = fs.lstatSync(name, { bigint: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw error;
+      }
+    }
+    if (!found || !isSameEntry(found, expected)) {
+      throw new Error(message);
+    }
+  });
+}
+
+/**
+ * Remove `filePath`, relative to its anchored directory, only while it is
+ * still the entry `expected` describes.
+ */
+function removeFromDirectory(filePath: string, expected: EntryIdentity): void {
+  const name = path.basename(filePath);
+  inDirectory(path.dirname(filePath), () => {
+    if (!isSameEntry(fs.lstatSync(name, { bigint: true }), expected)) {
       throw new Error(
         `Refusing to remove: ${filePath} was replaced during the move`,
       );
@@ -391,10 +414,7 @@ function removeFromDirectory(
 }
 
 /** Remove a copy this move created, keeping the error that made it necessary. */
-function discardCopy(
-  destinationPath: string,
-  created: { dev: number; ino: number },
-): void {
+function discardCopy(destinationPath: string, created: EntryIdentity): void {
   try {
     removeFromDirectory(destinationPath, created);
   } catch {
@@ -408,9 +428,9 @@ function discardCopy(
  */
 async function copyIntoNewFile(
   sourceFd: number,
-  source: fs.Stats,
+  source: fs.BigIntStats,
   destinationPath: string,
-): Promise<fs.Stats> {
+): Promise<EntryIdentity> {
   // O_EXCL: an existing file or symlink fails with EEXIST, never followed.
   const { fd, opened } = openInDirectory(
     destinationPath,
@@ -419,7 +439,14 @@ async function copyIntoNewFile(
       fs.constants.O_EXCL |
       noFollow(),
     false,
+    // Owner-only until the copy is complete and takes the source's mode, so
+    // a private file is never readable at the destination in between.
+    0o600,
   );
+  // Where isSameEntry falls back to size and modification time (see there),
+  // the identity from the create goes stale as the copy is written, so it is
+  // read again from the descriptor before that closes.
+  let identity: EntryIdentity = opened;
   try {
     try {
       const buffer = Buffer.alloc(64 * 1024);
@@ -432,13 +459,18 @@ async function copyIntoNewFile(
       }
       await keepModeAndTimes(fd, source);
     } finally {
+      try {
+        identity = fs.fstatSync(fd, { bigint: true });
+      } catch {
+        // Keep the identity from the create; the close reports the fault.
+      }
       await close(fd);
     }
   } catch (error) {
-    discardCopy(destinationPath, opened);
+    discardCopy(destinationPath, identity);
     throw error;
   }
-  return opened;
+  return identity;
 }
 
 /**
@@ -452,16 +484,25 @@ export async function moveFileAcrossDevices(
   destinationPath: string,
 ): Promise<void> {
   const { fd, opened: source } = openSourceInDirectory(sourcePath);
-  let created: fs.Stats;
+  // Set once the copy is complete; until then copyIntoNewFile cleans up.
+  let created: EntryIdentity | undefined;
   try {
-    created = await copyIntoNewFile(fd, source, destinationPath);
-  } finally {
-    await close(fd);
-  }
-  try {
+    try {
+      created = await copyIntoNewFile(fd, source, destinationPath);
+    } finally {
+      await close(fd);
+    }
+    // The source goes only while the copy is still where the move put it.
+    confirmInDirectory(
+      destinationPath,
+      created,
+      `Refusing to remove the source: ${destinationPath} was removed or replaced during the move`,
+    );
     removeFromDirectory(sourcePath, source);
   } catch (error) {
-    discardCopy(destinationPath, created);
+    if (created) {
+      discardCopy(destinationPath, created);
+    }
     throw error;
   }
 }

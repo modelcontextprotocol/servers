@@ -519,7 +519,7 @@ describe("moveFileAcrossDevices", () => {
   );
 
   it.each([
-    ["another file", { ino: -1 }],
+    ["another file", { ino: -1n }],
     ["not a regular file", { isFile: () => false }],
   ])(
     "refuses, and closes the source, when it was replaced while being opened (%s)",
@@ -527,9 +527,14 @@ describe("moveFileAcrossDevices", () => {
       const source = path.join(dir, "a.txt");
       fs.writeFileSync(source, "a");
       const realFstat = fs.fstatSync;
-      vi.spyOn(fs, "fstatSync").mockImplementationOnce((fd) =>
-        Object.assign(realFstat(fd), replaced),
-      );
+      vi.spyOn(fs, "fstatSync").mockImplementationOnce(((
+        fd: number,
+        options?: fs.StatOptions,
+      ) =>
+        Object.assign(
+          realFstat(fd, options),
+          replaced,
+        )) as typeof fs.fstatSync);
       const closeSync = vi.spyOn(fs, "closeSync");
       await expect(
         moveFileAcrossDevices(source, path.join(outside, "b.txt")),
@@ -554,6 +559,146 @@ describe("moveFileAcrossDevices", () => {
       expect(fs.readFileSync(source, "utf-8")).toBe("a");
     },
   );
+
+  it.skipIf(process.platform === "win32")(
+    "creates the copy owner-only while it is being written",
+    async () => {
+      const source = path.join(dir, "a.txt");
+      const destination = path.join(outside, "b.txt");
+      fs.writeFileSync(source, "a");
+      fs.chmodSync(source, 0o644);
+      const modes: number[] = [];
+      const realWriteFile = fs.writeFile;
+      vi.spyOn(fs, "writeFile").mockImplementationOnce(((
+        ...args: unknown[]
+      ) => {
+        modes.push(fs.statSync(destination).mode & 0o777);
+        return (realWriteFile as (...a: unknown[]) => void)(...args);
+      }) as typeof fs.writeFile);
+      await moveFileAcrossDevices(source, destination);
+      expect(modes).toEqual([0o600]);
+      expect(fs.statSync(destination).mode & 0o777).toBe(0o644);
+    },
+  );
+
+  it.each([
+    ["removed", (destination: string) => fs.unlinkSync(destination)],
+    [
+      "replaced",
+      (destination: string) => {
+        fs.unlinkSync(destination);
+        fs.writeFileSync(destination, "someone else's");
+      },
+    ],
+  ])(
+    "keeps the source when the copy was %s during the move",
+    async (_, interfere) => {
+      const source = path.join(dir, "a.txt");
+      const destination = path.join(outside, "b.txt");
+      fs.writeFileSync(source, "a");
+      const realFchmod = fs.fchmod;
+      vi.spyOn(fs, "fchmod").mockImplementationOnce(((
+        fd: number,
+        mode: number,
+        callback: (error: NodeJS.ErrnoException | null) => void,
+      ) => {
+        interfere(destination);
+        realFchmod(fd, mode, callback);
+      }) as typeof fs.fchmod);
+      await expect(moveFileAcrossDevices(source, destination)).rejects.toThrow(
+        `Refusing to remove the source: ${destination} was removed or replaced during the move`,
+      );
+      expect(fs.readFileSync(source, "utf-8")).toBe("a");
+    },
+  );
+
+  it("reports a failure to check the copy, and keeps the source", async () => {
+    const source = path.join(dir, "a.txt");
+    const destination = path.join(outside, "b.txt");
+    fs.writeFileSync(source, "a");
+    const realLstat = fs.lstatSync;
+    // The first lstat of the copy is the create's own check; fail the second.
+    let checks = 0;
+    vi.spyOn(fs, "lstatSync").mockImplementation(((
+      p: fs.PathLike,
+      options?: fs.StatSyncOptions,
+    ) => {
+      if (process.cwd() === outside && p === "b.txt" && ++checks === 2) {
+        throw errno("EIO");
+      }
+      return realLstat(p, options);
+    }) as typeof fs.lstatSync);
+    await expect(moveFileAcrossDevices(source, destination)).rejects.toThrow(
+      "EIO",
+    );
+    // The third is discarding the copy, which goes ahead.
+    expect(checks).toBe(3);
+    expect(fs.readdirSync(outside)).toEqual([]);
+    expect(fs.readFileSync(source, "utf-8")).toBe("a");
+  });
+
+  it("removes the copy, and keeps the source, when closing the source fails", async () => {
+    const source = path.join(dir, "a.txt");
+    fs.writeFileSync(source, "a");
+    const realClose = fs.close;
+    let closes = 0;
+    vi.spyOn(fs, "close").mockImplementation(((
+      fd: number,
+      callback: (error: NodeJS.ErrnoException | null) => void,
+    ) => {
+      // The copy's descriptor closes first, then the source's.
+      closes += 1;
+      realClose(fd, (error) => callback(closes === 2 ? errno("EIO") : error));
+    }) as typeof fs.close);
+    await expect(
+      moveFileAcrossDevices(source, path.join(outside, "b.txt")),
+    ).rejects.toThrow("EIO");
+    expect(fs.readdirSync(outside)).toEqual([]);
+    expect(fs.readFileSync(source, "utf-8")).toBe("a");
+  });
+
+  it("checks the copy against its identity after the write, where Windows compares size and time", async () => {
+    // libuv < 1.51 on Windows reports dev 0 on a path stat, so isSameEntry
+    // compares size and mtime there: the identity from the create (empty)
+    // would no longer match the finished copy.
+    Object.defineProperty(process, "platform", { value: "win32" });
+    const realLstat = fs.lstatSync;
+    vi.spyOn(fs, "lstatSync").mockImplementation(((
+      p: fs.PathLike,
+      options?: fs.StatSyncOptions,
+    ) => {
+      const stats = realLstat(p, options);
+      return options?.bigint ? Object.assign(stats!, { dev: 0n }) : stats;
+    }) as typeof fs.lstatSync);
+    const source = path.join(dir, "a.txt");
+    const destination = path.join(outside, "b.txt");
+    fs.writeFileSync(source, "content");
+    await moveFileAcrossDevices(source, destination);
+    expect(fs.readFileSync(destination, "utf-8")).toBe("content");
+    expect(fs.existsSync(source)).toBe(false);
+  });
+
+  it("falls back to the create's identity when the copy cannot be stat'd before closing", async () => {
+    const source = path.join(dir, "a.txt");
+    const destination = path.join(outside, "b.txt");
+    fs.writeFileSync(source, "a");
+    const realFstat = fs.fstatSync;
+    // The source's open and the copy's create stat first; fail the third.
+    let calls = 0;
+    vi.spyOn(fs, "fstatSync").mockImplementation(((
+      fd: number,
+      options?: fs.StatOptions,
+    ) => {
+      if (++calls === 3) {
+        throw errno("EIO");
+      }
+      return realFstat(fd, options);
+    }) as typeof fs.fstatSync);
+    await moveFileAcrossDevices(source, destination);
+    expect(calls).toBe(3);
+    expect(fs.readFileSync(destination, "utf-8")).toBe("a");
+    expect(fs.existsSync(source)).toBe(false);
+  });
 
   it("reports the copy's failure when removing the copy fails too", async () => {
     const source = path.join(dir, "a.txt");
