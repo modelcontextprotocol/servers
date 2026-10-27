@@ -107,6 +107,14 @@ The server's directory access control follows this flow:
     time, hard links and permissions (`edit_file` writes the same way). The
     overwrite is not crash-atomic: a crash mid-write can leave the file partly
     written. A read-only file is refused rather than replaced
+  - Allowed-directory checks are path-based: they check the name you pass,
+    not every name the file has. A hard link is a real name of the same file,
+    so when a file inside an allowed directory is also hard-linked from
+    somewhere else (pnpm, for example, hard-links package files into
+    `node_modules` from its store), overwriting or editing it changes the
+    content at every name, inside the allowed directories or not.
+    `get_file_info` reports a file's `hardLinks` count; more than 1 means
+    the file has other names
 
 - **edit_file**
   - Make selective edits using advanced pattern matching and formatting
@@ -185,6 +193,9 @@ The server's directory access control follows this flow:
     - Access time
     - Type (file/directory)
     - Permissions
+    - Hard-link count (`hardLinks`): the number of names the file has. More
+      than 1 means a write through this name changes the file at its other
+      names too (see `write_file`)
 
 - **list_allowed_directories**
   - List all directories the server is allowed to access

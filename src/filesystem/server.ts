@@ -777,7 +777,7 @@ export function createServer(
       description:
         "Retrieve detailed metadata about a file or directory. Returns comprehensive " +
         "information including size, creation time, last modified time, permissions, " +
-        "and type. This tool is perfect for understanding file characteristics " +
+        "type and hard-link count. This tool is perfect for understanding file characteristics " +
         "without reading the actual content. Only works within allowed directories.",
       inputSchema: jsonSchema2020(GetFileInfoArgsSchema.shape),
       outputSchema: jsonSchema2020({ content: z.string() }),

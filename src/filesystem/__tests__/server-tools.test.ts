@@ -1888,6 +1888,7 @@ describe("get_file_info", () => {
       "isDirectory",
       "isFile",
       "permissions",
+      "hardLinks",
     ]);
     expect(lines[0]).toBe("size: 5");
     expect(lines[4]).toBe("isDirectory: false");
@@ -1898,6 +1899,16 @@ describe("get_file_info", () => {
     );
     // Dates are rendered with Date#toString, in the server's local time zone.
     expect(lines[2]).toMatch(/^modified: \w{3} \w{3} \d{2} \d{4} /);
+  });
+
+  it("reports a file's hard-link count (#5226)", async () => {
+    const file = path.join(dir, "linked.txt");
+    await fs.writeFile(file, "shared");
+    const info = async () =>
+      textOf(await call(client, "get_file_info", { path: file }));
+    expect(await info()).toContain("hardLinks: 1");
+    await fs.link(file, path.join(dir, "hardlink.txt"));
+    expect(await info()).toContain("hardLinks: 2");
   });
 
   it("reports a directory", async () => {

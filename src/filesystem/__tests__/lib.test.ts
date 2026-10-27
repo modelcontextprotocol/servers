@@ -443,6 +443,7 @@ describe("Lib Functions", () => {
           isDirectory: () => false,
           isFile: () => true,
           mode: 0o644,
+          nlink: 2,
         };
 
         mockFs.stat.mockResolvedValueOnce(mockStats as Stats);
@@ -457,6 +458,7 @@ describe("Lib Functions", () => {
           isDirectory: false,
           isFile: true,
           permissions: "644",
+          hardLinks: 2,
         });
       });
 
