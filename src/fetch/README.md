@@ -219,6 +219,12 @@ pure-Python extractor, which keeps headings and text but drops link targets. The
 timeout, so a Node.js that hangs, or fails in a way readabilipy does not detect, stalls the tool call until the client
 gives up.
 
+Readability.js discards hidden elements. Pages rendered progressively on the server often send a visible loading
+shell, then the real content in a container hidden (`display: none`, `visibility: hidden`, `hidden`) until scripts
+run in the browser. When a hidden element other than navigation or similar page furniture holds more text than
+Readability.js extracted, the server unhides it and runs Readability.js again, keeping that result only if it has more
+text. Other pages are extracted once, exactly as before.
+
 To always use the pure-Python extractor, add the argument `--no-readability-js` to the `args` list in the
 configuration. The server then never starts Node.js (or npm), whether or not it is installed.
 

@@ -31,6 +31,7 @@ from urllib.parse import urlparse, urlunparse
 import httpx
 import markdownify
 import readabilipy.simple_json
+from bs4 import BeautifulSoup, Tag
 from mcp.server import MCPServer, ServerRequestContext
 from mcp.server.context import CallNext, HandlerResult, ServerMiddleware
 from mcp.server.mcpserver.exceptions import ToolError
@@ -167,6 +168,98 @@ async def _refuse_private_destination(request: httpx.Request) -> None:
             )
 
 
+def _readability_content(html: str, use_readability_js: bool) -> str:
+    """readabilipy's simplified HTML for ``html``, or "" when it has none."""
+    try:
+        ret = readabilipy.simple_json.simple_json_from_html_string(
+            html, use_readability=use_readability_js
+        )
+    except IndexError:
+        # readabilipy's pure-Python extractor wraps its simplified tree with
+        # `Tag.append`, which beautifulsoup4 4.13 implements as
+        # `self.insert(...)[0]`. A page that simplifies to nothing (an SPA
+        # shell, an empty body) inserts nothing, so that index raises (#5158).
+        # Under beautifulsoup4 <= 4.12 the same page comes back as an empty
+        # tree, reported by the caller as this same failure.
+        return ""
+    return ret["content"] or ""
+
+
+def _hiding_declaration(declaration: str) -> bool:
+    """Whether one inline-style declaration is one Readability.js treats as hidden."""
+    prop, _, value = declaration.partition(":")
+    value = value.replace("!important", "").strip().lower()
+    return (prop.strip().lower(), value) in {
+        ("display", "none"),
+        ("visibility", "hidden"),
+    }
+
+
+def _is_hidden(tag: Tag) -> bool:
+    """Whether Readability.js drops ``tag`` as invisible (its `_isProbablyVisible`)."""
+    if tag.has_attr("hidden") or tag.get("aria-hidden") == "true":
+        return True
+    return any(_hiding_declaration(d) for d in str(tag.get("style", "")).split(";"))
+
+
+# Hidden page furniture that is expected to stay hidden (a collapsed menu, a
+# closed dialog): never a hydration container, so never unhidden.
+_PAGE_CHROME_TAGS = frozenset({"nav", "header", "footer", "aside", "menu", "dialog"})
+_PAGE_CHROME_ROLES = frozenset(
+    {"navigation", "banner", "contentinfo", "menu", "menubar", "dialog", "alertdialog"}
+)
+
+
+def _is_page_chrome(tag: Tag) -> bool:
+    return tag.name in _PAGE_CHROME_TAGS or tag.get("role") in _PAGE_CHROME_ROLES
+
+
+def _text_length(html: Tag) -> int:
+    """The length of the text in ``html``, whitespace collapsed."""
+    return len(" ".join(html.get_text(" ").split()))
+
+
+def _recover_hidden_content(html: str, content: str) -> str:
+    """Re-extract a page whose content Readability.js dropped as hidden (#3878).
+
+    Progressive server-side rendering streams a visible loading shell first,
+    then the real page in a container hidden (``visibility: hidden``,
+    ``display: none``, ``hidden``) until the client hydrates it. Readability.js
+    discards hidden nodes, so only the shell's text survived. When a hidden
+    element holds more text than the whole extraction, those elements are
+    unhidden and Readability.js runs again; the second result is kept only if
+    it has more text. A page whose hidden elements are smaller than its
+    extracted content, or are page furniture (navigation, menus, dialogs), is
+    returned exactly as before, from the one Readability.js run.
+    """
+    extracted = _text_length(BeautifulSoup(content, "html.parser"))
+    soup = BeautifulSoup(html, "html.parser")
+    larger = [
+        tag
+        for tag in soup.find_all(_is_hidden)
+        # Outermost only: unhiding a container exposes what it holds, and
+        # anything hidden inside it stays hidden.
+        if not any(_is_hidden(parent) for parent in tag.parents)
+        and not _is_page_chrome(tag)
+        and _text_length(tag) > extracted
+    ]
+    if not larger:
+        return content
+    for tag in larger:
+        del tag["hidden"]
+        del tag["aria-hidden"]
+        style = [
+            d
+            for d in str(tag.get("style", "")).split(";")
+            if not _hiding_declaration(d)
+        ]
+        tag["style"] = ";".join(style)
+    recovered = _readability_content(str(soup), use_readability_js=True)
+    if _text_length(BeautifulSoup(recovered, "html.parser")) > extracted:
+        return recovered
+    return content
+
+
 def extract_content_from_html(html: str, use_readability_js: bool = True) -> str:
     """Extract and convert HTML content to Markdown format.
 
@@ -180,22 +273,15 @@ def extract_content_from_html(html: str, use_readability_js: bool = True) -> str
         Simplified markdown version of the content
     """
     failed = "<error>Page failed to be simplified from HTML</error>"
-    try:
-        ret = readabilipy.simple_json.simple_json_from_html_string(
-            html, use_readability=use_readability_js
-        )
-    except IndexError:
-        # readabilipy's pure-Python extractor wraps its simplified tree with
-        # `Tag.append`, which beautifulsoup4 4.13 implements as
-        # `self.insert(...)[0]`. A page that simplifies to nothing (an SPA
-        # shell, an empty body) inserts nothing, so that index raises (#5158).
-        # Under beautifulsoup4 <= 4.12 the same page comes back as an empty
-        # tree, reported below as this same failure.
-        return failed
-    if not ret["content"]:
+    content_html = _readability_content(html, use_readability_js)
+    if use_readability_js:
+        # Only Readability.js drops hidden elements; the pure-Python extractor
+        # keeps them, so its result never needs recovering.
+        content_html = _recover_hidden_content(html, content_html)
+    if not content_html:
         return failed
     content = markdownify.markdownify(
-        ret["content"],
+        content_html,
         heading_style=markdownify.ATX,
     )
     # Without Node, readabilipy's pure-Python extractor never returns empty
