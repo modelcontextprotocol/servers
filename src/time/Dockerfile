@@ -35,8 +35,11 @@ COPY --from=uv --chown=app:app /app/.venv /app/.venv
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Set the LOCAL_TIMEZONE environment variable
-ENV LOCAL_TIMEZONE=${LOCAL_TIMEZONE:-"UTC"}
+# The local timezone, overridable at run time with `docker run -e LOCAL_TIMEZONE=…`
+ENV LOCAL_TIMEZONE=UTC
 
-# when running the container, add --local-timezone and a bind mount to the host's db file
-ENTRYPOINT ["mcp-server-time", "--local-timezone", "${LOCAL_TIMEZONE}"]
+# Docker expands no variables in an exec-form ENTRYPOINT, so a shell reads
+# LOCAL_TIMEZONE when the container starts (UTC when it is set but empty).
+# `exec` keeps the server as PID 1, so it receives stop signals, and "$@"
+# passes any arguments given after the image name on to the server.
+ENTRYPOINT ["sh", "-c", "exec mcp-server-time --local-timezone \"${LOCAL_TIMEZONE:-UTC}\" \"$@\"", "--"]
