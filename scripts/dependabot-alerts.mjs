@@ -834,20 +834,44 @@ export function buildIssueBody(
 }
 
 /**
+ * Does every version in `range` sit below `target`? Only then can a bump to
+ * `target` clear it: a range the target merely falls outside of can still
+ * reach above it (`>= 3.0.0`, or `< 1 || > 3`), where a raised floor can later
+ * resolve. Each `||` alternative must carry an upper-bound clause the target
+ * fails, since an alternative is the AND of its clauses and so lies wholly
+ * below that bound. Throws when a clause cannot be read.
+ *
+ * @param {string} ecosystem
+ * @param {string} target
+ * @param {string} range
+ * @returns {boolean}
+ */
+export function rangeBelow(ecosystem, target, range) {
+  return range.split("||").every((alternative) =>
+    alternative
+      .split(/,|\s+(?=[<>!=~^])/)
+      .map((clause) => clause.trim())
+      .filter((clause) => clause.startsWith("<"))
+      .some((clause) => !inRange(ecosystem, target, clause)),
+  );
+}
+
+/**
  * The advisories with no patched release that still need a decision: every
- * one when there is no target, else those whose range still covers the bump's
- * target. A range the target clears is cleared by the bump, patched or not; a
+ * one when the target is missing or unverified (a rejected target vouches for
+ * nothing), else those whose range does not sit wholly below the target. A
+ * range wholly below the target is cleared by the bump, patched or not; a
  * range that cannot be read cannot vouch for the target.
  *
- * @param {{ecosystem: string, fixedIn: string | null, advisories: Array<{fixedIn: string | null, range: string}>}} group
+ * @param {{ecosystem: string, fixedIn: string | null, targetVerified?: boolean, advisories: Array<{fixedIn: string | null, range: string}>}} group
  * @returns {Array<{fixedIn: string | null, range: string}>}
  */
 export function undecided(group) {
   return group.advisories.filter((a) => {
     if (a.fixedIn) return false;
-    if (!group.fixedIn) return true;
+    if (!group.fixedIn || group.targetVerified === false) return true;
     try {
-      return inRange(group.ecosystem, group.fixedIn, a.range);
+      return !rangeBelow(group.ecosystem, group.fixedIn, a.range);
     } catch {
       return true;
     }

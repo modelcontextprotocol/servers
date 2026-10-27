@@ -37,6 +37,7 @@ import {
   pickTarget,
   disjointCaution,
   undecided,
+  rangeBelow,
   unverifiedReason,
   scopedOverrideExample,
   splitOwner,
@@ -1347,9 +1348,65 @@ test("an unpatched advisory the bump moves past needs no decision", () => {
     undecided({
       ecosystem: "npm",
       fixedIn: "2.0.0",
-      advisories: [{ fixedIn: null, range: "not a range" }],
+      advisories: [
+        { fixedIn: null, range: "not a range" },
+        { fixedIn: null, range: "< garbage" },
+      ],
     }).length,
-    1,
+    2,
+  );
+});
+
+test("an unpatched range the target only falls outside of still needs a decision", () => {
+  const none = (range) => ({ ghsa: "GHSA-n", fixedIn: null, range });
+  const target = (advisory, extra = {}) =>
+    undecided({
+      ecosystem: "npm",
+      fixedIn: "2.0.0",
+      targetVerified: true,
+      advisories: [advisory],
+      ...extra,
+    }).length;
+  // Wholly below the target: the bump clears it.
+  assert.equal(target(none("< 1.5.0")), 0);
+  assert.equal(target(none(">= 1.0.0, <= 1.9.9")), 0);
+  assert.equal(target(none("< 1 || >= 1.2.0 < 1.5.0")), 0);
+  // Reaching above the target: a raised floor can resolve into it.
+  assert.equal(target(none(">= 3.0.0")), 1);
+  assert.equal(target(none("< 1 || > 3")), 1);
+  // A rejected target vouches for nothing, whatever the range.
+  assert.equal(target(none("< 1.5.0"), { targetVerified: false }), 1);
+  assert.equal(rangeBelow("pip", "2.0.0", ">= 1.0, < 2.0"), true);
+  assert.equal(rangeBelow("pip", "2.0.0", ">= 3.0"), false);
+
+  // Through main: copies at 1.0.0 and 3.0.0, a fix at 2.0.0 that pickTarget
+  // rejects as older than 3.0.0, and an unpatched `>= 3.0.0`.
+  const lock = {
+    packages: {
+      "": { name: "root" },
+      "node_modules/a/node_modules/left": { version: "1.0.0" },
+      "node_modules/left": { version: "3.0.0" },
+    },
+  };
+  const world = fakeWorld({
+    alerts: [
+      [
+        alert({
+          name: "left",
+          range: "< 2.0.0",
+          fixed: "2.0.0",
+          ghsa: "GHSA-p",
+        }),
+        alert({ name: "left", range: ">= 3.0.0", fixed: null, ghsa: "GHSA-u" }),
+      ],
+    ],
+    files: { "package-lock.json": JSON.stringify(lock) },
+  });
+  run(world);
+  const [create] = writes(world.calls);
+  assert.match(
+    create.input,
+    /### No patched release[\s\S]*\*\*No patched release is available\*\* for `GHSA-u`/,
   );
 });
 
