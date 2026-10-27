@@ -55,7 +55,9 @@
 // ticked checklist box alone is not a difference. Its scope labels move by
 // the DELTA between what the old body's rows called for and what the new
 // rows do, so a label triage or a maintainer applied, or removed, stays as
-// they left it. A closed issue is left alone.
+// they left it. That holds when the last outdated copy catches up or
+// leaves the group too: the issue is rewritten to say nothing is behind,
+// though the sweep still closes nothing. A closed issue is left alone.
 //
 // "An issue exists" and "it was analyzed" are different claims. The workflow
 // stamps `ANALYSIS_MARKER` on its comment, and an OPEN issue for the current
@@ -249,16 +251,16 @@ export function assertEveryPackageWatched(declaredByManifest, ownPackages) {
 }
 
 /**
- * Decide whether one group is behind.
+ * One group's rows against its target, whether or not anything is behind.
  *
  * @param {(typeof SDK_GROUPS)[number]} group
  * @param {Array<{name: string, where: string, declared: string, installed: string | null}>} rows
  *   one per package per manifest that declares it
  * @param {Record<string, string>} latest per package
  * @returns {{group: (typeof SDK_GROUPS)[number], rows: Array<object>, target: string} | null}
- *   `null` when nothing is declared, a latest is unknown, or nothing is behind
+ *   `null` when nothing is declared or a latest is unknown
  */
-export function groupState(group, rows, latest) {
+export function markRows(group, rows, latest) {
   const { compare } = versioning(group.ecosystem);
   const names = [...new Set(rows.map((r) => r.name))];
   if (names.length === 0) return null;
@@ -271,8 +273,21 @@ export function groupState(group, rows, latest) {
     latest: latest[r.name],
     behind: r.installed !== null && compare(target, r.installed) > 0,
   }));
-  if (!marked.some((r) => r.behind)) return null;
   return { group, rows: marked, target };
+}
+
+/**
+ * Decide whether one group is behind.
+ *
+ * @param {(typeof SDK_GROUPS)[number]} group
+ * @param {Parameters<typeof markRows>[1]} rows
+ * @param {Record<string, string>} latest per package
+ * @returns {ReturnType<typeof markRows>}
+ *   `null` when nothing is declared, a latest is unknown, or nothing is behind
+ */
+export function groupState(group, rows, latest) {
+  const state = markRows(group, rows, latest);
+  return state && state.rows.some((r) => r.behind) ? state : null;
 }
 
 /** @param {NonNullable<ReturnType<typeof groupState>>} state */
@@ -406,12 +421,32 @@ export function buildIssueBody(state) {
     )
     .join("\n");
 
+  const header = [
+    `| Package | Where | Declared | Installed on \`${TARGET_BRANCH}\` | Latest | Behind |`,
+    "| --- | --- | --- | --- | --- | --- |",
+  ];
+
+  // Settled: the last copy that was behind has reached the target, or left
+  // the group, since the issue was filed (#5067).
+  if (!rows.some((r) => r.behind)) {
+    return [
+      buildMarker(group, target),
+      rows.length > 0
+        ? `**Nothing here is behind ${target} any more.** Every copy of the **${group.label}** installed on \`${TARGET_BRANCH}\` has reached it, so the upgrade this issue tracked is done.`
+        : `**Nothing here is behind ${target} any more.** No manifest on \`${TARGET_BRANCH}\` declares the **${group.label}** any longer, so the upgrade this issue tracked no longer applies.`,
+      "",
+      ...(rows.length > 0 ? [...header, table, ""] : []),
+      `Release notes: https://github.com/${group.repo}/releases`,
+      "",
+      "Rewritten by the nightly SDK watch (#4874) when the last outdated copy cleared. The sweep closes nothing: close this issue by hand once a maintainer has confirmed it.",
+    ].join("\n");
+  }
+
   return [
     buildMarker(group, target),
     `A new **${group.label}** release is out. What is installed on \`${TARGET_BRANCH}\` is behind what ${registry} publishes.`,
     "",
-    `| Package | Where | Declared | Installed on \`${TARGET_BRANCH}\` | Latest | Behind |`,
-    "| --- | --- | --- | --- | --- | --- |",
+    ...header,
     table,
     "",
     ...(rows.some((r) => r.latest !== target)
@@ -618,9 +653,16 @@ export function main({
   assertEveryPackageWatched(installs.declaredByManifest, installs.ownPackages);
 
   const states = [];
+  // Groups with nothing behind. An open issue for one still gets its rows
+  // refreshed, or it keeps naming copies that have caught up (#5067). A
+  // group no manifest declares any more has no target of its own (null).
+  const settled = [];
   for (const group of SDK_GROUPS) {
     const rows = installs.rowsFor(group);
-    if (rows.length === 0) continue;
+    if (rows.length === 0) {
+      settled.push({ group, rows: [], target: null });
+      continue;
+    }
     const latest = {};
     for (const name of new Set(rows.map((r) => r.name))) {
       latest[name] =
@@ -628,8 +670,9 @@ export function main({
           ? latestPypi(name, spawn)
           : latestNpm(name, spawn);
     }
-    const state = groupState(group, rows, latest);
-    if (state) states.push(state);
+    const state = markRows(group, rows, latest);
+    if (!state) continue;
+    (state.rows.some((r) => r.behind) ? states : settled).push(state);
   }
 
   const emit = (filed) => {
@@ -638,9 +681,7 @@ export function main({
   };
 
   if (states.length === 0) {
-    log(`${SWEEP}: every MCP SDK package is current; no-op`);
-    emit([]);
-    return;
+    log(`${SWEEP}: every MCP SDK package is current`);
   }
 
   const existing = sweepIssues(repo, spawn, {
@@ -758,6 +799,41 @@ export function main({
         }
       } catch (error) {
         // One group's failure must not cost another group its issue.
+        failures.push(`${state.group.label}: ${error.message}`);
+        warn(`${SWEEP}: ${state.group.label} failed: ${error.message}`);
+      }
+    }
+
+    // A settled group files nothing and queues nothing; it only rewrites an
+    // OPEN issue for its target (any target, once no manifest declares it)
+    // to say that nothing is behind, and drops the scope labels it applied.
+    for (const state of settled) {
+      const { compare } = versioning(state.group.ecosystem);
+      const open = validTargets(
+        existing.filter(
+          (i) => i.marker.key === state.group.key && i.state === "OPEN",
+        ),
+        state.group,
+      ).filter(
+        (i) =>
+          state.target === null || compare(i.marker.target, state.target) === 0,
+      );
+      try {
+        for (const issue of open) {
+          const refresh = refreshPlan(issue, {
+            ...state,
+            target: state.target ?? issue.marker.target,
+          });
+          if (!refresh) continue;
+          writer.edit(issue.number, refresh);
+          log(
+            `${SWEEP}: #${issue.number} has nothing behind any more; refreshed it` +
+              (refresh.removeLabels.length
+                ? ` and removed ${refresh.removeLabels.join(", ")}`
+                : ""),
+          );
+        }
+      } catch (error) {
         failures.push(`${state.group.label}: ${error.message}`);
         warn(`${SWEEP}: ${state.group.label} failed: ${error.message}`);
       }

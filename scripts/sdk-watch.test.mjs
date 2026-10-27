@@ -423,7 +423,10 @@ function fakeWorld(state = {}) {
       if (s.createFail?.(args)) return ok({ status: 1, stderr: "boom" });
       return ok({ stdout: `https://github.com/o/r/issues/${s.nextIssue++}\n` });
     }
-    if (a === "issue" && b === "edit") return ok();
+    if (a === "issue" && b === "edit") {
+      if (s.editFail) return ok({ status: 1, stderr: "edit boom" });
+      return ok();
+    }
     if (a === "issue" && b === "comment") {
       if (s.commentFail) return ok({ status: 1, stderr: "comment boom" });
       return ok();
@@ -534,7 +537,9 @@ test("a quiet night is a no-op that emits []", (t) => {
   run(world, { output });
   assert.equal(writes(world.calls).length, 0);
   assert.deepEqual(filedFrom(output), []);
-  assert.ok(!world.calls.some((c) => c.args[1] === "list"));
+  // Still listed: an open issue for a settled group may need refreshing.
+  assert.ok(world.calls.some((c) => c.args[1] === "list"));
+  assert.ok(!world.calls.some((c) => /milestones/.test(c.args[1] ?? "")));
 });
 
 const sweepIssue = (number, key, target, state = "OPEN", author = bot) => ({
@@ -825,6 +830,102 @@ test("a dry run previews the refresh; a closed issue is never refreshed", (t) =>
   });
   run(closed, { output: outputFile(t) });
   assert.equal(writes(closed.calls).length, 0);
+});
+
+test("the last outdated copy catching up rewrites the open issue to say so", (t) => {
+  const noPy = files({ "src/time/uv.lock": UV("2.3.0") });
+  const [filed] = filedIssues({ files: noPy });
+  filed.labels.push({ name: "help wanted" });
+  // Both copies reach the target: the group files nothing and is settled.
+  const caughtUp = files({
+    "src/time/uv.lock": UV("2.3.0"),
+    "package-lock.json": JSON.stringify({
+      packages: {
+        "": { name: "@modelcontextprotocol/servers" },
+        "node_modules/@modelcontextprotocol/sdk": { version: "1.32.1" },
+        "src/memory/node_modules/@modelcontextprotocol/sdk": {
+          version: "1.32.1",
+        },
+      },
+    }),
+  });
+  const world = fakeWorld({ issues: [filed], files: caughtUp });
+  const output = outputFile(t);
+  run(world, { output });
+  const [edit, ...rest] = writes(world.calls);
+  assert.equal(rest.length, 0);
+  assert.deepEqual(edit.args.slice(0, 3), ["issue", "edit", "600"]);
+  assert.deepEqual(
+    edit.args.filter((_, i) => edit.args[i - 1] === "--remove-label"),
+    ["server-memory"],
+  );
+  assert.ok(!edit.args.includes("--add-label"));
+  assert.equal(parseMarker(edit.input).target, "1.32.1");
+  assert.match(edit.input, /Nothing here is behind 1\.32\.1 any more/);
+  assert.doesNotMatch(edit.input, /\*\*yes\*\*/);
+  assert.doesNotMatch(edit.input, /- \[ \]/);
+  // Nothing to analyze, and nothing filed.
+  assert.deepEqual(filedFrom(output), []);
+  assert.match(world.lines.join("\n"), /#600 has nothing behind any more/);
+
+  // The next night finds it current; a closed one is never touched.
+  const next = fakeWorld({
+    issues: [{ ...filed, body: edit.input, labels: [] }],
+    files: caughtUp,
+  });
+  run(next, { output: outputFile(t) });
+  assert.equal(writes(next.calls).length, 0);
+  const closed = fakeWorld({
+    issues: [{ ...filed, state: "CLOSED" }],
+    files: caughtUp,
+  });
+  run(closed, { output: outputFile(t) });
+  assert.equal(writes(closed.calls).length, 0);
+});
+
+test("a group no manifest declares any more rewrites its open issues", (t) => {
+  const [filed] = filedIssues({
+    files: files({ "src/time/uv.lock": UV("2.3.0") }),
+  });
+  // Every server moves off the v1 SDK, leaving no row in its group.
+  const migrated = files({
+    "src/time/uv.lock": UV("2.3.0"),
+    "package.json": JSON.stringify({ name: "@modelcontextprotocol/servers" }),
+    "src/memory/package.json": JSON.stringify({
+      name: "@modelcontextprotocol/server-memory",
+    }),
+  });
+  const world = fakeWorld({ issues: [filed], files: migrated });
+  run(world, { output: outputFile(t) });
+  const [edit, ...rest] = writes(world.calls);
+  assert.equal(rest.length, 0);
+  assert.deepEqual(
+    edit.args.filter((_, i) => edit.args[i - 1] === "--remove-label"),
+    ["server-memory"],
+  );
+  assert.equal(parseMarker(edit.input).target, "1.32.1");
+  assert.match(edit.input, /No manifest on `v2\/main` declares/);
+  assert.doesNotMatch(edit.input, /\| Package \|/);
+  assert.ok(!world.calls.some((c) => c.cmd === "npm"));
+});
+
+test("a settled group's edit failure fails the run after the rest", (t) => {
+  const [filed] = filedIssues({
+    files: files({ "src/time/uv.lock": UV("2.3.0") }),
+  });
+  const world = fakeWorld({
+    issues: [filed],
+    files: files({
+      "src/time/uv.lock": UV("2.3.0"),
+      "package.json": "{}",
+      "src/memory/package.json": "{}",
+    }),
+    editFail: true,
+  });
+  assert.throws(
+    () => run(world, { output: outputFile(t) }),
+    /1 group\(s\) failed: MCP TypeScript SDK \(v1\): gh issue edit failed/,
+  );
 });
 
 test("a failure after filing still emits what was filed, then fails", (t) => {
