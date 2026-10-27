@@ -5,6 +5,7 @@
  * to the client (sampling, elicitation, roots), the task tools, logging,
  * subscriptions and gzip each have their own file.
  */
+import { crc32 } from "node:zlib";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { INCLUDE_SECRETS_VAR, REDACTED } from "../tools/get-env.js";
 import { MCP_TINY_IMAGE } from "../tools/get-tiny-image.js";
@@ -170,6 +171,34 @@ describe("get-tiny-image", () => {
     expect(
       Buffer.from(MCP_TINY_IMAGE, "base64").subarray(1, 4).toString(),
     ).toBe("PNG");
+  });
+
+  // #5208: the embedded PNG once carried an iCCP chunk whose CRC did not
+  // match, which strict decoders reject. Walk every chunk of the image the
+  // client receives and check its stored CRC-32 against its type and data.
+  it("returns a PNG whose every chunk has a valid CRC", async () => {
+    const result = await call("get-tiny-image");
+    const image = contentOfType(contentOf(result)[1], "image");
+    const png = Buffer.from(image.data, "base64");
+    expect(png.subarray(0, 8)).toEqual(
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    );
+    const chunks: string[] = [];
+    let offset = 8;
+    while (offset < png.length) {
+      const length = png.readUInt32BE(offset);
+      const type = png.subarray(offset + 4, offset + 8).toString("latin1");
+      const stored = png.readUInt32BE(offset + 8 + length);
+      expect(crc32(png.subarray(offset + 4, offset + 8 + length)), type).toBe(
+        stored,
+      );
+      chunks.push(type);
+      offset += 12 + length;
+    }
+    expect(offset).toBe(png.length);
+    expect(chunks[0]).toBe("IHDR");
+    expect(chunks.at(-1)).toBe("IEND");
+    expect(chunks).toContain("IDAT");
   });
 });
 
