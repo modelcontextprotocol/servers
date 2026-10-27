@@ -457,12 +457,16 @@ describe("moveFileAcrossDevices", () => {
     expect(process.cwd()).toBe(cwd);
   });
 
-  it("keeps the modification time below a millisecond", async () => {
+  it.each([
+    // 0.5 ms past a whole millisecond: a Date would drop it.
+    ["below a millisecond", 1_000_000_000.1235],
+    // Before 1970: futimes takes a negative number to mean "now".
+    ["before 1970", new Date(-157_766_400_250)],
+  ])("keeps the modification time %s", async (_, time) => {
     const source = path.join(dir, "a.txt");
     const destination = path.join(outside, "b.txt");
     fs.writeFileSync(source, "a");
-    // 0.5 ms past a whole millisecond: a Date would drop it.
-    fs.utimesSync(source, 1_000_000_000.1235, 1_000_000_000.1235);
+    fs.utimesSync(source, time, time);
     const before = fs.statSync(source, { bigint: true }).mtimeNs;
     await moveFileAcrossDevices(source, destination);
     const after = fs.statSync(destination, { bigint: true }).mtimeNs;

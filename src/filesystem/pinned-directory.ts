@@ -320,8 +320,10 @@ function writeChunk(fd: number, chunk: Buffer): Promise<void> {
   );
 }
 
-function seconds(nanoseconds: bigint): number {
-  return Number(nanoseconds) / 1e9;
+// A numeric string, since fs.futimes takes a negative number to mean "now",
+// which would lose a time before 1970; a string it parses as given.
+function seconds(nanoseconds: bigint): string {
+  return String(Number(nanoseconds) / 1e9);
 }
 
 function keepModeAndTimes(fd: number, source: fs.BigIntStats): Promise<void> {
