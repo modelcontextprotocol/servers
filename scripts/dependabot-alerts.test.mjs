@@ -36,6 +36,8 @@ import {
   parseMarker,
   pickTarget,
   disjointCaution,
+  undecided,
+  rangeBelow,
   unverifiedReason,
   scopedOverrideExample,
   splitOwner,
@@ -236,7 +238,14 @@ test("groupAlerts makes one group per package and manifest, at the highest patch
       g.severity,
     ]),
     [
-      ["pyjwt", "src/git/uv.lock", "2.15.0", ["GHSA-1", "GHSA-2"], "critical"],
+      // GHSA-3 has no patched release: kept, so it can ask for a decision.
+      [
+        "pyjwt",
+        "src/git/uv.lock",
+        "2.15.0",
+        ["GHSA-1", "GHSA-2", "GHSA-3"],
+        "critical",
+      ],
       ["pyjwt", "src/time/uv.lock", "2.14.0", ["GHSA-1"], "high"],
     ],
   );
@@ -1163,7 +1172,8 @@ test("reconciliation clears an issue whose alerts all closed, and keeps one stil
   );
   assert.match(closed.lines.join("\n"), /no open alerts/);
 
-  // Still open, but with no patched version now: no group, so no evidence.
+  // Still open, but with no patched version now: the issue is kept and
+  // rewritten to ask for a decision, never stood down.
   const lostPatch = pipAlerts.map((a) => ({
     ...a,
     security_vulnerability: {
@@ -1173,8 +1183,304 @@ test("reconciliation clears an issue whose alerts all closed, and keeps one stil
   }));
   const kept = fakeWorld({ alerts: [lostPatch], issues: [issue] });
   run(kept);
-  assert.equal(writes(kept.calls).length, 0);
-  assert.match(kept.lines.join("\n"), /left as is/);
+  const [edit] = writes(kept.calls);
+  assert.deepEqual(edit.args.slice(0, 3), ["issue", "edit", "41"]);
+  assert.doesNotMatch(edit.input, /No longer applicable/);
+  assert.match(edit.input, /fixed=none; ghsas=GHSA-1,GHSA-2/);
+  assert.match(edit.input, /\*\*No patched release is available\*\*/);
+});
+
+/** A pip advisory against `src/git/uv.lock` with no patched release. */
+const unpatchedAlert = (ghsa = "GHSA-u", fixed = null) =>
+  alert({
+    name: "gitpython",
+    ecosystem: "pip",
+    manifest: "src/git/uv.lock",
+    range: "<= 3.1.45",
+    fixed,
+    ghsa,
+  });
+
+test("an advisory with no patched release files an issue asking for a decision", () => {
+  const world = fakeWorld({ alerts: [[unpatchedAlert()]] });
+  run(world);
+  const [create] = writes(world.calls);
+  assert.equal(create.args[1], "create");
+  assert.ok(
+    create.args.includes(
+      "chore(deps): decide how to handle `gitpython` in `src/git/uv.lock` (1 advisory, no patched release)",
+    ),
+  );
+  assert.deepEqual(
+    create.args.filter((_, i) => create.args[i - 1] === "--label"),
+    ["v2", "chore", "dependencies", "server-git"],
+  );
+  assert.match(
+    create.input,
+    /^<!-- dependabot-alerts: pkg=gitpython; manifest=src\/git\/uv.lock; fixed=none; ghsas=GHSA-u -->/,
+  );
+  assert.match(create.input, /\| Bump to \| ⚠️ none: no advisory below/);
+  assert.match(create.input, /\| ⚠️ none released \|/);
+  assert.match(
+    create.input,
+    /\*\*No patched release is available\*\* for `GHSA-u`/,
+  );
+  assert.match(create.input, /\*\*Accept the risk\*\*/);
+  assert.match(create.input, /\| `gitpython` \| `3\.1\.45` \|/);
+  // Nothing to bump to, so no bump instructions.
+  assert.doesNotMatch(create.input, /Raise the declared bound|Then verify/);
+
+  // The marker's `none` reads back as no target, and a re-run is a no-op.
+  assert.equal(parseMarker(create.input).fixedIn, null);
+  const issue = filedIssue([unpatchedAlert()]);
+  const again = fakeWorld({ alerts: [[unpatchedAlert()]], issues: [issue] });
+  run(again);
+  assert.equal(writes(again.calls).length, 0);
+});
+
+test("an advisory with no patched release, already out of range, files nothing", () => {
+  const world = fakeWorld({
+    alerts: [
+      [
+        {
+          ...unpatchedAlert(),
+          security_vulnerability: {
+            vulnerable_version_range: "< 3.0.0",
+            first_patched_version: null,
+          },
+        },
+      ],
+    ],
+  });
+  run(world);
+  assert.equal(writes(world.calls).length, 0);
+  assert.match(world.lines.join("\n"), /already out of range/);
+});
+
+test("a patched release published later rewrites the same issue into a bump", () => {
+  const issue = filedIssue([unpatchedAlert()]);
+  const world = fakeWorld({
+    alerts: [[unpatchedAlert("GHSA-u", "3.1.46")]],
+    issues: [issue],
+  });
+  run(world);
+  const edits = writes(world.calls);
+  // Same advisory, so no announcement and no second issue: one edit in place.
+  assert.deepEqual(
+    edits.map((c) => c.args.slice(0, 3)),
+    [["issue", "edit", "41"]],
+  );
+  const [edit] = edits;
+  assert.ok(
+    edit.args.includes(
+      "chore(deps): bump `gitpython` to `3.1.46` in `src/git/uv.lock` (1 advisory)",
+    ),
+  );
+  assert.match(edit.input, /fixed=3\.1\.46; ghsas=GHSA-u/);
+  assert.match(edit.input, /Raise the declared bound/);
+  assert.doesNotMatch(edit.input, /No patched release/);
+});
+
+test("a bump issue carries a decision section for advisories it cannot clear", () => {
+  const patched = alert({
+    name: "gitpython",
+    ecosystem: "pip",
+    manifest: "src/git/uv.lock",
+    range: "< 3.1.46",
+    fixed: "3.1.46",
+    ghsa: "GHSA-p",
+  });
+  // Its range reaches past the patched release, so the bump cannot clear it.
+  const stuck = {
+    ...unpatchedAlert(),
+    security_vulnerability: {
+      vulnerable_version_range: "<= 4",
+      first_patched_version: null,
+    },
+  };
+  const world = fakeWorld({ alerts: [[patched, stuck]] });
+  run(world);
+  const [create] = writes(world.calls);
+  assert.ok(
+    create.args.includes(
+      "chore(deps): bump `gitpython` to `3.1.46` in `src/git/uv.lock` (2 advisories)",
+    ),
+  );
+  assert.match(create.input, /fixed=3\.1\.46; ghsas=GHSA-p,GHSA-u/);
+  assert.match(create.input, /Raise the declared bound/);
+  assert.match(
+    create.input,
+    /### No patched release\n\nThe bump above does not clear every advisory\.\n\n\*\*No patched release is available\*\* for `GHSA-u`/,
+  );
+  assert.match(create.input, /that has a patched release\. `node scripts/);
+  assert.match(
+    create.input,
+    /should then refresh this issue to the advisories under \*\*No patched release\*\* alone/,
+  );
+
+  // An unpatched advisory arriving on an open bump issue is announced as one.
+  const issue = filedIssue([patched]);
+  const later = fakeWorld({
+    alerts: [[patched, stuck]],
+    issues: [issue],
+  });
+  run(later);
+  const [comment, edit] = writes(later.calls);
+  assert.equal(comment.args[1], "comment");
+  assert.match(
+    comment.input,
+    /No patched release is listed for it, so the bump to `3\.1\.46` does not clear it/,
+  );
+  assert.match(edit.input, /### No patched release/);
+});
+
+test("an unpatched advisory the bump moves past needs no decision", () => {
+  const patched = alert({
+    name: "gitpython",
+    ecosystem: "pip",
+    manifest: "src/git/uv.lock",
+    range: "< 3.1.46",
+    fixed: "3.1.46",
+    ghsa: "GHSA-p",
+  });
+  const world = fakeWorld({ alerts: [[patched, unpatchedAlert()]] });
+  run(world);
+  const [create] = writes(world.calls);
+  assert.match(create.input, /fixed=3\.1\.46; ghsas=GHSA-p,GHSA-u/);
+  assert.doesNotMatch(create.input, /### No patched release/);
+  assert.equal(
+    undecided({
+      ecosystem: "npm",
+      fixedIn: "2.0.0",
+      advisories: [
+        { fixedIn: null, range: "not a range" },
+        { fixedIn: null, range: "< garbage" },
+      ],
+    }).length,
+    2,
+  );
+});
+
+test("an unpatched range the target only falls outside of still needs a decision", () => {
+  const none = (range) => ({ ghsa: "GHSA-n", fixedIn: null, range });
+  const target = (advisory, extra = {}) =>
+    undecided({
+      ecosystem: "npm",
+      fixedIn: "2.0.0",
+      targetVerified: true,
+      advisories: [advisory],
+      ...extra,
+    }).length;
+  // Wholly below the target: the bump clears it.
+  assert.equal(target(none("< 1.5.0")), 0);
+  assert.equal(target(none(">= 1.0.0, <= 1.9.9")), 0);
+  assert.equal(target(none("< 1.0.0 || >= 1.2.0 < 1.5.0")), 0);
+  // Reaching above the target: a raised floor can resolve into it.
+  assert.equal(target(none(">= 3.0.0")), 1);
+  assert.equal(target(none("< 1.0.0 || > 3.0.0")), 1);
+  // A rejected target vouches for nothing, whatever the range.
+  assert.equal(target(none("< 1.5.0"), { targetVerified: false }), 1);
+  // A prerelease target fails `< 3.0.0` while sitting below it.
+  assert.equal(rangeBelow("npm", "2.0.0-rc.1", "< 3.0.0"), false);
+  assert.equal(rangeBelow("npm", "3.0.0-rc.1", "< 3.0.0"), false);
+  assert.equal(rangeBelow("npm", "3.0.0", "<= 3.0.0"), false);
+  assert.equal(rangeBelow("npm", "3.0.1", "<= 3.0.0"), true);
+  assert.equal(rangeBelow("pip", "2.0rc1", "< 2.0.post1"), false);
+  assert.throws(() => rangeBelow("npm", "2.0.0", "< 3"), /cannot order/);
+  assert.equal(rangeBelow("pip", "2.0.0", ">= 1.0, < 2.0"), true);
+  assert.equal(rangeBelow("pip", "2.0.0", ">= 3.0"), false);
+
+  // Through main: copies at 1.0.0 and 3.0.0, a fix at 2.0.0 that pickTarget
+  // rejects as older than 3.0.0, and an unpatched `>= 3.0.0`.
+  const lock = {
+    packages: {
+      "": { name: "root" },
+      "node_modules/a/node_modules/left": { version: "1.0.0" },
+      "node_modules/left": { version: "3.0.0" },
+    },
+  };
+  const world = fakeWorld({
+    alerts: [
+      [
+        alert({
+          name: "left",
+          range: "< 2.0.0",
+          fixed: "2.0.0",
+          ghsa: "GHSA-p",
+        }),
+        alert({ name: "left", range: ">= 3.0.0", fixed: null, ghsa: "GHSA-u" }),
+      ],
+    ],
+    files: { "package-lock.json": JSON.stringify(lock) },
+  });
+  run(world);
+  const [create] = writes(world.calls);
+  assert.match(
+    create.input,
+    /### No patched release[\s\S]*\*\*No patched release is available\*\* for `GHSA-u`/,
+  );
+});
+
+test("pickTarget and the comment handle advisories with no patched release", () => {
+  const none = { ghsa: "GHSA-n", fixedIn: null, range: "< 99" };
+  const some = { ghsa: "GHSA-s", fixedIn: "2.0.0", range: "< 2.0.0" };
+  assert.deepEqual(pickTarget("npm", [none], ["1.0.0"]), {
+    fixedIn: null,
+    verified: false,
+    reason: "unpatched",
+    checked: null,
+    stillOpen: ["GHSA-n"],
+  });
+  // The unpatched advisory takes no part in choosing the bump.
+  assert.equal(pickTarget("npm", [none, some], ["1.0.0"]).fixedIn, "2.0.0");
+  assert.equal(pickTarget("npm", [none, some], ["1.0.0"]).verified, true);
+  assert.equal(highestVersion("npm", [null, undefined]), null);
+  assert.deepEqual(
+    disjointCaution({
+      ecosystem: "npm",
+      fixedIn: "2.0.0",
+      advisories: [{ ...none, range: "< 1 || > 3" }, some],
+    }),
+    [],
+  );
+
+  const group = {
+    package: "x",
+    fixedIn: "2.0.0",
+    targetVerified: true,
+    ecosystem: "npm",
+    advisories: [
+      { ...none, url: "u", severity: "high", summary: "s" },
+      { ...some, url: "u", severity: "low", summary: "s" },
+    ],
+  };
+  assert.match(
+    buildNewAdvisoryComment(group, ["GHSA-n", "GHSA-s"]),
+    /now to `2\.0\.0`, which clears `GHSA-s`\. It does not clear `GHSA-n`, for which no patched release is listed/,
+  );
+  // An unpatched advisory the issue already tracked is still named.
+  assert.match(
+    buildNewAdvisoryComment(group, ["GHSA-s"]),
+    /which clears `GHSA-s`\. It does not clear `GHSA-n`/,
+  );
+  assert.match(
+    buildNewAdvisoryComment({ ...group, advisories: [group.advisories[1]] }, [
+      "GHSA-s",
+    ]),
+    /which clears it along with the rest\./,
+  );
+  assert.match(
+    buildNewAdvisoryComment(
+      {
+        ...group,
+        fixedIn: null,
+        targetVerified: false,
+        targetReason: "unpatched",
+      },
+      ["GHSA-n"],
+    ),
+    /asks for a decision rather than a bump/,
+  );
 });
 
 test("main needs a repo", () => {
