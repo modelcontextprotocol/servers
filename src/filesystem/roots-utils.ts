@@ -1,7 +1,7 @@
 import { promises as fs, type Stats } from "fs";
 import path from "path";
 import os from "os";
-import { normalizePath } from "./path-utils.js";
+import { normalizePath, realpathWithRetry } from "./path-utils.js";
 import type { Root } from "@modelcontextprotocol/server";
 import { fileURLToPath } from "url";
 
@@ -20,7 +20,7 @@ async function parseRootUri(rootUri: string): Promise<string | null> {
         ? path.join(os.homedir(), rawPath.slice(1))
         : rawPath;
     const absolutePath = path.resolve(expandedPath);
-    const resolvedPath = await fs.realpath(absolutePath);
+    const resolvedPath = await realpathWithRetry(absolutePath);
     return normalizePath(resolvedPath);
   } catch {
     return null; // Path doesn't exist or other error
