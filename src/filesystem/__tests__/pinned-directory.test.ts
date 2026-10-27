@@ -301,15 +301,14 @@ describe("the identity check (#5154)", () => {
     const expected = { ...lstatBig(file), ino: high };
     const realFstat = fs.fstatSync;
     const realLstat = fs.lstatSync;
-    vi.spyOn(fs, "fstatSync").mockImplementationOnce((fd) => ({
-      ...realFstat(fd, { bigint: true }),
-      isFile: () => true,
-      ino: high + 1n,
-    }));
-    vi.spyOn(fs, "lstatSync").mockImplementationOnce((p) => ({
-      ...realLstat(p, { bigint: true }),
-      ino: high + 1n,
-    }));
+    // Persistent and prototype-preserving: on Windows openInDirectory lstats
+    // the name once for its symlink check before the identity check.
+    vi.spyOn(fs, "fstatSync").mockImplementation((fd) =>
+      Object.assign(realFstat(fd, { bigint: true }), { ino: high + 1n }),
+    );
+    vi.spyOn(fs, "lstatSync").mockImplementation((p) =>
+      Object.assign(realLstat(p, { bigint: true }), { ino: high + 1n }),
+    );
     await expect(
       overwriteFileInDirectory(file, "new", expected),
     ).rejects.toThrow("was replaced while it was being opened");
