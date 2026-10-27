@@ -217,6 +217,19 @@ async function fetchSafely(
   try {
     // Fetch the data
     const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) {
+      // An error page is not the requested file (#5207). Release the
+      // connection without reading the body; as with the size check below,
+      // the cancel is not awaited and its rejection is swallowed, since the
+      // thrown status error is the failure this path reports.
+      response.body?.cancel().catch(
+        /* v8 ignore next -- only runs if cancelling the source fails, which nothing here can provoke */
+        () => {},
+      );
+      throw new Error(
+        `Fetching ${url} failed with HTTP ${response.status} ${response.statusText}`,
+      );
+    }
     if (!response.body) {
       throw new Error("No response body");
     }
