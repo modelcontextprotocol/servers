@@ -702,23 +702,34 @@ export async function tailFile(
     let position = fileSize;
     const chunk = Buffer.alloc(CHUNK_SIZE);
     let newlinesFound = 0;
+    // A final newline ends the last line rather than starting an empty one,
+    // so it is not one of the N line breaks the loop needs to see. Set from
+    // the file's last byte on the first read (CRLF ends in 0x0a too).
+    let newlinesNeeded = numLines;
 
-    // Read chunks from the end of the file until we have enough lines
-    while (position > 0 && newlinesFound < numLines) {
+    // Read chunks from the end of the file until the start of the first of
+    // the last N lines is in hand
+    while (position > 0 && newlinesFound < newlinesNeeded) {
       const size = Math.min(CHUNK_SIZE, position);
+      const atEnd = position === fileSize;
       position -= size;
 
       const { bytesRead } = await fileHandle.read(chunk, 0, size, position);
       if (!bytesRead) break;
 
       const readData = Buffer.from(chunk.subarray(0, bytesRead));
+      if (atEnd && readData[bytesRead - 1] === 0x0a) newlinesNeeded++;
       chunks.unshift(readData);
       for (const byte of readData) {
         if (byte === 0x0a) newlinesFound++;
       }
     }
 
-    const text = normalizeLineEndings(Buffer.concat(chunks).toString("utf-8"));
+    // Drop one trailing newline so it does not count as an empty last line,
+    // and so the result ends the way headFile's does: without one.
+    const text = normalizeLineEndings(
+      Buffer.concat(chunks).toString("utf-8"),
+    ).replace(/\n$/, "");
     return text.split("\n").slice(-numLines).join("\n");
   } finally {
     await fileHandle.close();
