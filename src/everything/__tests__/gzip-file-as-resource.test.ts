@@ -250,18 +250,23 @@ describe("gzip-file-as-resource with an HTTP error response (#5207)", () => {
     await new Promise((resolve) => errors.close(resolve));
   });
 
+  // Both output types: "resource" is the embedded path the issue reproduced,
+  // and "resourceLink" is the one that would register a session resource, so
+  // it is what the listResources assertion guards.
   it.each([
-    ["/missing", "404 Not Found"],
-    ["/server-error", "500 Internal Server Error"],
+    ["/missing", "404 Not Found", "resource"],
+    ["/server-error", "500 Internal Server Error", "resource"],
+    ["/missing", "404 Not Found", "resourceLink"],
+    ["/server-error", "500 Internal Server Error", "resourceLink"],
   ])(
-    "fails on %s with HTTP %s and registers no resource",
-    async (path, status) => {
+    "fails on %s with HTTP %s (outputType %s) and registers no resource",
+    async (path, status, outputType) => {
       const s = await open();
       const url = `${errorBase}${path}`;
       const result = await gzip(s, {
         name: "error.gz",
         data: url,
-        outputType: "resource",
+        outputType,
       });
       expect(result).toEqual({
         isError: true,
