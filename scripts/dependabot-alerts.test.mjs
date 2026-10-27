@@ -1370,12 +1370,19 @@ test("an unpatched range the target only falls outside of still needs a decision
   // Wholly below the target: the bump clears it.
   assert.equal(target(none("< 1.5.0")), 0);
   assert.equal(target(none(">= 1.0.0, <= 1.9.9")), 0);
-  assert.equal(target(none("< 1 || >= 1.2.0 < 1.5.0")), 0);
+  assert.equal(target(none("< 1.0.0 || >= 1.2.0 < 1.5.0")), 0);
   // Reaching above the target: a raised floor can resolve into it.
   assert.equal(target(none(">= 3.0.0")), 1);
-  assert.equal(target(none("< 1 || > 3")), 1);
+  assert.equal(target(none("< 1.0.0 || > 3.0.0")), 1);
   // A rejected target vouches for nothing, whatever the range.
   assert.equal(target(none("< 1.5.0"), { targetVerified: false }), 1);
+  // A prerelease target fails `< 3.0.0` while sitting below it.
+  assert.equal(rangeBelow("npm", "2.0.0-rc.1", "< 3.0.0"), false);
+  assert.equal(rangeBelow("npm", "3.0.0-rc.1", "< 3.0.0"), false);
+  assert.equal(rangeBelow("npm", "3.0.0", "<= 3.0.0"), false);
+  assert.equal(rangeBelow("npm", "3.0.1", "<= 3.0.0"), true);
+  assert.equal(rangeBelow("pip", "2.0rc1", "< 2.0.post1"), false);
+  assert.throws(() => rangeBelow("npm", "2.0.0", "< 3"), /cannot order/);
   assert.equal(rangeBelow("pip", "2.0.0", ">= 1.0, < 2.0"), true);
   assert.equal(rangeBelow("pip", "2.0.0", ">= 3.0"), false);
 
@@ -1445,7 +1452,18 @@ test("pickTarget and the comment handle advisories with no patched release", () 
   };
   assert.match(
     buildNewAdvisoryComment(group, ["GHSA-n", "GHSA-s"]),
-    /now to `2\.0\.0`, which clears them along with the rest, except `GHSA-n`, which no patched release covers/,
+    /now to `2\.0\.0`, which clears `GHSA-s`\. It does not clear `GHSA-n`, for which no patched release is listed/,
+  );
+  // An unpatched advisory the issue already tracked is still named.
+  assert.match(
+    buildNewAdvisoryComment(group, ["GHSA-s"]),
+    /which clears `GHSA-s`\. It does not clear `GHSA-n`/,
+  );
+  assert.match(
+    buildNewAdvisoryComment({ ...group, advisories: [group.advisories[1]] }, [
+      "GHSA-s",
+    ]),
+    /which clears it along with the rest\./,
   );
   assert.match(
     buildNewAdvisoryComment(

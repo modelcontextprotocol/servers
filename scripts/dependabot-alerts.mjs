@@ -837,9 +837,12 @@ export function buildIssueBody(
  * Does every version in `range` sit below `target`? Only then can a bump to
  * `target` clear it: a range the target merely falls outside of can still
  * reach above it (`>= 3.0.0`, or `< 1 || > 3`), where a raised floor can later
- * resolve. Each `||` alternative must carry an upper-bound clause the target
- * fails, since an alternative is the AND of its clauses and so lies wholly
- * below that bound. Throws when a clause cannot be read.
+ * resolve. Each `||` alternative must carry an upper-bound clause whose bound
+ * the target is at or above, since an alternative is the AND of its clauses
+ * and so lies wholly below that bound. The bound is compared by ORDERING, not
+ * by asking whether the target satisfies the clause: both ecosystems leave
+ * prereleases out of a range, so `2.0.0-rc.1` fails `< 3.0.0` while sitting
+ * below it. Throws when a bound cannot be read.
  *
  * @param {string} ecosystem
  * @param {string} target
@@ -852,8 +855,25 @@ export function rangeBelow(ecosystem, target, range) {
       .split(/,|\s+(?=[<>!=~^])/)
       .map((clause) => clause.trim())
       .filter((clause) => clause.startsWith("<"))
-      .some((clause) => !inRange(ecosystem, target, clause)),
+      .some((clause) => {
+        const [, op, bound] = /^(<=?)\s*(.*)$/.exec(clause);
+        const order = compareStrict(ecosystem, target, bound);
+        return op === "<=" ? order > 0 : order >= 0;
+      }),
   );
+}
+
+/**
+ * `target` against `bound` in the ecosystem's ordering, prereleases included.
+ * Unlike `versionCompare`, it throws on an unreadable version rather than
+ * falling back to string order.
+ */
+function compareStrict(ecosystem, target, bound) {
+  if (ecosystem === "pip") return pep440Compare(target, bound);
+  if (semver.valid(target) === null || semver.valid(bound) === null) {
+    throw new Error(`cannot order ${target} against ${bound}`);
+  }
+  return semver.compare(target, bound);
 }
 
 /**
@@ -997,13 +1017,19 @@ function newAdvisoryVerdict(group, added) {
   if (group.targetVerified === false) {
     return "No listed patched version clears every advisory now, so this issue asks for a safe release to be found first; see the body.";
   }
-  const unpatched = group.advisories
-    .filter((a) => added.includes(a.ghsa) && undecided(group).includes(a))
-    .map((a) => `\`${a.ghsa}\``);
-  if (unpatched.length === added.length) {
-    return `No patched release is listed for ${unpatched.length === 1 ? "it" : "them"}, so the bump to \`${group.fixedIn}\` does not clear ${unpatched.length === 1 ? "it" : "them"}; the body asks for a decision.`;
+  // Every advisory the bump leaves open, not only the new ones: an unpatched
+  // advisory the issue already tracked is still not cleared.
+  const open = undecided(group);
+  const openAdded = open.filter((a) => added.includes(a.ghsa));
+  if (openAdded.length === added.length) {
+    return `No patched release is listed for ${added.length === 1 ? "it" : "them"}, so the bump to \`${group.fixedIn}\` does not clear ${added.length === 1 ? "it" : "them"}; the body asks for a decision.`;
   }
-  return `The bump this issue asks for is now to \`${group.fixedIn}\`, which clears ${added.length === 1 ? "it" : "them"} along with the rest${unpatched.length > 0 ? `, except ${unpatched.join(", ")}, which no patched release covers; the body asks for a decision on those` : ""}.`;
+  const cleared = added.filter((g) => !openAdded.some((a) => a.ghsa === g));
+  const named = (list) => list.map((g) => `\`${g}\``).join(", ");
+  if (open.length === 0) {
+    return `The bump this issue asks for is now to \`${group.fixedIn}\`, which clears ${added.length === 1 ? "it" : "them"} along with the rest.`;
+  }
+  return `The bump this issue asks for is now to \`${group.fixedIn}\`, which clears ${named(cleared)}. It does not clear ${named(open.map((a) => a.ghsa))}, for which no patched release is listed; the body asks for a decision on ${open.length === 1 ? "it" : "those"}.`;
 }
 
 /** A rate limit, reported as 403 or 429 with this wording. */
