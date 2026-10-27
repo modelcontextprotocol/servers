@@ -8,7 +8,7 @@ import {
   type Mock,
 } from "vitest";
 import fs, { type FileHandle } from "fs/promises";
-import type { Dirent, PathLike, Stats } from "fs";
+import type { BigIntStats, Dirent, PathLike, Stats } from "fs";
 import path from "path";
 import {
   // Pure utility functions
@@ -52,6 +52,15 @@ const mockReaddir = vi.mocked(
 // The path resolver calls the plain overload, which lists names as strings.
 const mockReaddirNames = vi.mocked(
   fs.readdir as (path: PathLike) => Promise<string[]>,
+);
+
+// The case respelling (#470) lstats with { bigint: true }, to compare inodes
+// Windows reports as 64-bit file IDs without losing precision.
+const mockLstatBigInt = vi.mocked(
+  fs.lstat as (
+    path: PathLike,
+    options: { bigint: true },
+  ) => Promise<BigIntStats>,
 );
 
 interface MockFileHandle {
@@ -428,6 +437,93 @@ describe("Lib Functions", () => {
           // Restore original process.cwd
           process.cwd = originalCwd;
         }
+      });
+
+      // #470: the allowed directory's own name spelled in a letter case that
+      // matches neither the configured nor the on-disk spelling. It is
+      // respelled only where the file system confirms, component by
+      // component, that both spellings name one entry.
+      describe("letter case of an allowed directory's own name (#470)", () => {
+        const win = process.platform === "win32";
+        const configured = win ? "C:\\Users\\test" : "/home/user";
+        const requestedFile = win
+          ? "C:\\USERS\\Test\\file.txt"
+          : "/HOME/User/file.txt";
+        const respelled = path.join(configured, "file.txt");
+        // Each directory the walk lists, as the configured spelling names it.
+        const listings: Record<string, string[]> = win
+          ? { "C:\\": ["Users"], "C:\\Users": ["test"] }
+          : { "/": ["home"], "/home": ["user"] };
+
+        // lstat on a case-insensitive file system: any spelling of a listed
+        // entry is that entry, one inode per lowercased path.
+        function foldingLstat() {
+          mockLstatBigInt.mockImplementation(
+            async (p: PathLike) =>
+              ({
+                dev: 1n,
+                ino: BigInt(p.toString().toLowerCase().length),
+              }) as BigIntStats,
+          );
+        }
+
+        beforeEach(() => {
+          mockReaddirNames.mockImplementation(
+            async (p: PathLike) => listings[p.toString()] ?? [],
+          );
+        });
+
+        it("respells the request onto the allowed directory when the file system folds case", async () => {
+          foldingLstat();
+          await expect(validatePath(requestedFile, allowedDirs)).resolves.toBe(
+            respelled,
+          );
+        });
+
+        it("refuses when a directory holds two entries differing only in case", async () => {
+          foldingLstat();
+          const [first, second] = win ? ["Users", "test"] : ["home", "user"];
+          const parent = win ? "C:\\" : "/";
+          mockReaddirNames.mockImplementation(async (p: PathLike) =>
+            p.toString() === parent ? [first, first.toUpperCase()] : [second],
+          );
+          await expect(
+            validatePath(requestedFile, allowedDirs),
+          ).rejects.toThrow("Access denied - path outside allowed directories");
+        });
+
+        it("refuses when the requested spelling does not exist (a case-sensitive directory)", async () => {
+          // beforeEach makes every lstat ENOENT.
+          await expect(
+            validatePath(requestedFile, allowedDirs),
+          ).rejects.toThrow("Access denied - path outside allowed directories");
+        });
+
+        it("refuses when the two spellings are different entries", async () => {
+          let ino = 0n;
+          mockLstatBigInt.mockImplementation(
+            async () => ({ dev: 1n, ino: ++ino }) as BigIntStats,
+          );
+          await expect(
+            validatePath(requestedFile, allowedDirs),
+          ).rejects.toThrow("Access denied - path outside allowed directories");
+        });
+
+        it("refuses when a directory cannot be listed", async () => {
+          foldingLstat();
+          mockReaddirNames.mockRejectedValue(new Error("EACCES readdir"));
+          await expect(
+            validatePath(requestedFile, allowedDirs),
+          ).rejects.toThrow("Access denied - path outside allowed directories");
+        });
+
+        it("still refuses a name that only folds onto part of an allowed directory", async () => {
+          foldingLstat();
+          const parentOnly = win ? "C:\\USERS\\x.txt" : "/HOME/x.txt";
+          await expect(validatePath(parentOnly, allowedDirs)).rejects.toThrow(
+            "Access denied - path outside allowed directories",
+          );
+        });
       });
     });
   });
