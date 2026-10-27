@@ -62,27 +62,48 @@ export async function ensureMemoryFilePath(
   const oldMemoryPath = path.join(baseDir, "memory.json");
   const newMemoryPath = path.join(baseDir, "memory.jsonl");
 
-  try {
-    // Check if old file exists and new file doesn't
-    await fs.access(oldMemoryPath);
-    try {
-      await fs.access(newMemoryPath);
-      // Both files exist, use new one (no migration needed)
-      return newMemoryPath;
-    } catch {
-      // Old file exists, new file doesn't - migrate
-      console.error(
-        "DETECTED: Found legacy memory.json file, migrating to memory.jsonl for JSONL format compatibility",
-      );
-      await fs.rename(oldMemoryPath, newMemoryPath);
-      console.error(
-        "COMPLETED: Successfully migrated memory.json to memory.jsonl",
-      );
-      return newMemoryPath;
-    }
-  } catch {
-    // Old file doesn't exist, use new path
+  // Only a missing legacy file means there is nothing to migrate. Any other
+  // failure, from the existence checks or the rename itself, propagates and
+  // stops startup: carrying on would serve an empty memory.jsonl while the
+  // user's graph sat unread in memory.json (#5203).
+  if (!(await pathExists(oldMemoryPath))) {
     return newMemoryPath;
+  }
+  if (await pathExists(newMemoryPath)) {
+    // Both files exist, use new one (no migration needed)
+    return newMemoryPath;
+  }
+
+  // Old file exists, new file doesn't - migrate
+  console.error(
+    "DETECTED: Found legacy memory.json file, migrating to memory.jsonl for JSONL format compatibility",
+  );
+  try {
+    await fs.rename(oldMemoryPath, newMemoryPath);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Failed to migrate legacy memory file ${oldMemoryPath} to ${newMemoryPath}: ${reason}. ` +
+        "The server will not start on an empty graph; fix the cause and restart, " +
+        "or set MEMORY_FILE_PATH to choose a file explicitly.",
+      { cause: error },
+    );
+  }
+  console.error("COMPLETED: Successfully migrated memory.json to memory.jsonl");
+  return newMemoryPath;
+}
+
+// True when filePath exists, false when it does not (ENOENT). Any other error,
+// such as a permission failure, is rethrown rather than read as "missing".
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return false;
+    }
+    throw error;
   }
 }
 

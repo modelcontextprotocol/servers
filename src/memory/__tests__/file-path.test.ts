@@ -183,6 +183,77 @@ describe("ensureMemoryFilePath", () => {
       const migratedContent = await fs.readFile(newMemoryPath, "utf-8");
       expect(migratedContent).toBe(testContent);
     });
+
+    // #5203: a failed rename used to be read as "no legacy file", so the
+    // server started on an empty memory.jsonl and the graph vanished from view.
+    it("throws, naming both paths and the cause, when the migration rename fails", async () => {
+      const testContent = '{"type":"entity","name":"kept"}';
+      await fs.writeFile(oldMemoryPath, testContent);
+
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+      const cause = Object.assign(new Error("EACCES: permission denied"), {
+        code: "EACCES",
+      });
+      const renameSpy = vi.spyOn(fs, "rename").mockRejectedValueOnce(cause);
+
+      try {
+        const failure = await ensureMemoryFilePath(testDir).then(
+          () => null,
+          (error: unknown) => error,
+        );
+
+        expect(failure).toBeInstanceOf(Error);
+        const message = (failure as Error).message;
+        expect(message).toContain(oldMemoryPath);
+        expect(message).toContain(newMemoryPath);
+        expect(message).toContain("EACCES: permission denied");
+        expect((failure as Error).cause).toBe(cause);
+
+        // The legacy graph is untouched and no empty replacement was created.
+        expect(await fs.readFile(oldMemoryPath, "utf-8")).toBe(testContent);
+        await expect(fs.access(newMemoryPath)).rejects.toThrow();
+        expect(consoleErrorSpy).not.toHaveBeenCalledWith(
+          expect.stringContaining("COMPLETED"),
+        );
+      } finally {
+        renameSpy.mockRestore();
+        consoleErrorSpy.mockRestore();
+      }
+    });
+
+    it("reports a non-Error rename rejection by its string form", async () => {
+      await fs.writeFile(oldMemoryPath, "{}");
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+      const renameSpy = vi
+        .spyOn(fs, "rename")
+        .mockRejectedValueOnce("rename refused");
+
+      try {
+        await expect(ensureMemoryFilePath(testDir)).rejects.toThrow(
+          /memory\.json to .*memory\.jsonl: rename refused/,
+        );
+      } finally {
+        renameSpy.mockRestore();
+        consoleErrorSpy.mockRestore();
+      }
+    });
+
+    it("propagates an existence-check failure other than ENOENT", async () => {
+      const denied = Object.assign(new Error("EACCES: permission denied"), {
+        code: "EACCES",
+      });
+      const accessSpy = vi.spyOn(fs, "access").mockRejectedValueOnce(denied);
+
+      try {
+        await expect(ensureMemoryFilePath(testDir)).rejects.toBe(denied);
+      } finally {
+        accessSpy.mockRestore();
+      }
+    });
   });
 
   describe("defaultMemoryPath", () => {
