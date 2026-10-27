@@ -271,6 +271,93 @@ def make_client(proxy_url: str | None) -> httpx.AsyncClient:
         )
 
 
+def decode_page(response: httpx.Response) -> str:
+    """Decode a fetched body, honoring a charset the HTML declares (#5199).
+
+    httpx's ``response.text`` uses the Content-Type header's charset, and
+    UTF-8 without one, so a page that declares a legacy encoding only in a
+    ``<meta charset>`` or ``<meta http-equiv="Content-Type">`` tag came back
+    garbled. Following the HTML encoding-sniffing order, kept simple: a byte
+    order mark or a header charset wins (httpx already honors the header), and
+    otherwise the first 1024 bytes of a ``text/html`` or
+    ``application/xhtml+xml`` (or untyped) body are parsed for the first
+    ``<meta>`` that declares one: a ``charset`` attribute, or a ``content``
+    attribute's ``charset=`` when ``http-equiv`` is ``Content-Type``. The
+    stdlib HTML parser does the tokenizing, so a commented-out tag or an
+    unrelated attribute (``data-charset``) is not mistaken for a declaration.
+    A declaration Python does not know, or one that names a codec that is not
+    a web text encoding, is ignored, and the body is decoded as before.
+    """
+    # Imported here so the helper stays one self-contained block of this file.
+    import codecs
+    import re
+    from html.parser import HTMLParser
+
+    content = response.content
+    media_type = (
+        response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    )
+    if (
+        response.charset_encoding is not None
+        or media_type not in ("", "text/html", "application/xhtml+xml")
+        or content.startswith(
+            (codecs.BOM_UTF8, codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)
+        )
+    ):
+        return response.text
+
+    class MetaCharset(HTMLParser):
+        declared: str | None = None
+
+        def handle_starttag(
+            self, tag: str, attrs: list[tuple[str, str | None]]
+        ) -> None:
+            if tag != "meta" or self.declared is not None:
+                return
+            values = {name: (value or "").strip() for name, value in attrs}
+            if values.get("charset"):
+                self.declared = values["charset"]
+            elif values.get("http-equiv", "").lower() == "content-type":
+                found = re.search(
+                    r"""charset\s*=\s*["']?\s*([^\s"';]+)""",
+                    values.get("content", ""),
+                    re.IGNORECASE,
+                )
+                if found:
+                    self.declared = found.group(1)
+
+    # Latin-1 maps every byte to one character, so an ASCII declaration reads
+    # the same whatever the page's real encoding. A tag cut off at byte 1024
+    # is left unparsed, since the parser is never closed.
+    scan = MetaCharset()
+    scan.feed(content[:1024].decode("latin-1"))
+    if scan.declared is None:
+        return response.text
+    try:
+        name = codecs.lookup(scan.declared).name
+        # A UTF-16/32 declaration in an ASCII-compatible document cannot be
+        # true, so the HTML standard reads it as UTF-8.
+        if name.startswith(("utf-16", "utf-32")):
+            name = "utf-8"
+        # Python codecs that are not web text encodings: decoding a page with
+        # them would mangle it rather than fix it.
+        if name in ("idna", "punycode", "unicode-escape", "raw-unicode-escape"):
+            return response.text
+        # A declaration found in ASCII bytes is only believable for an
+        # ASCII-compatible encoding. UTF-7, HZ and the EBCDIC code pages
+        # (cp037, cp500, …) would rewrite the markup itself, so they fail this
+        # probe (by a different result or a decode error) and are ignored.
+        probe = b"\t\n\r" + bytes(range(0x20, 0x7F))
+        if probe.decode(name) != probe.decode("ascii"):
+            return response.text
+        return content.decode(name, errors="replace")
+    except (LookupError, ValueError):  # UnicodeError is a ValueError
+        # An unknown charset, a name Python refuses outright (one holding a
+        # NUL), a non-text codec (base64, rot13, …), one that refuses to
+        # decode at all (``undefined``), or one the probe cannot decode.
+        return response.text
+
+
 async def check_may_autonomously_fetch_url(
     url: str,
     user_agent: str,
@@ -386,7 +473,7 @@ async def fetch_url(
                 f"Failed to fetch {url} - status code {response.status_code}"
             )
 
-        page_raw = response.text
+        page_raw = decode_page(response)
 
     content_type = response.headers.get("content-type", "")
     is_page_html = (
