@@ -169,8 +169,10 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 
 By default, the server will obey a websites robots.txt file if the request came from the model (via a tool), but not if
 the request was user initiated (via a prompt). Every redirect hop of a tool fetch is checked against the robots.txt of
-the host it leads to, the same way as the requested URL. This can be disabled by adding the argument
-`--ignore-robots-txt` to the `args` list in the configuration.
+the host it leads to, the same way as the requested URL. If the robots.txt request fails to connect, or is answered
+with 401, 403 or a server error (5xx), the tool refuses the fetch rather than reading the response as rules (RFC 9309
+treats a 5xx robots.txt as complete disallow); any other 4xx is treated as no rules. This can be disabled by adding the
+argument `--ignore-robots-txt` to the `args` list in the configuration.
 
 ### Customization - Private addresses
 

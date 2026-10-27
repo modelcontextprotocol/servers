@@ -419,17 +419,6 @@ async def test_robots_comment_lines_are_ignored(web: FakeWeb) -> None:
     assert wire(result)["isError"] is False
 
 
-async def test_robots_5xx_body_is_parsed_as_rules(web: FakeWeb) -> None:
-    # Only 4xx short-circuits; a 5xx response body is still parsed as rules.
-    web.add(ROBOTS, plain("User-agent: *\nDisallow: /", status=503))
-    async with connect() as (session, _):
-        result = await call(session, {"url": PAGE})
-    assert wire(result)["isError"] is True
-    assert "specifies that autonomous fetching of this page is not allowed" in (
-        text_of(result)
-    )
-
-
 async def test_robots_redirect_is_followed(web: FakeWeb) -> None:
     web.add(
         ROBOTS,

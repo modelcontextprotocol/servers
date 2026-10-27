@@ -284,7 +284,9 @@ async def check_may_autonomously_fetch_url(
             raise ToolError(
                 f"Failed to fetch robots.txt {robot_txt_url} due to a connection issue"
             )
-        if response.status_code in (401, 403):
+        # A 5xx robots.txt is "unreachable" (RFC 9309 section 2.3.1.4), which
+        # means complete disallow: the error page is never parsed as rules.
+        if response.status_code in (401, 403) or response.status_code >= 500:
             raise ToolError(
                 f"When fetching robots.txt ({robot_txt_url}), received status {response.status_code} so assuming that autonomous fetching is not allowed, the user can try manually fetching by using the fetch prompt"
             )
