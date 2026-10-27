@@ -207,7 +207,16 @@ def _is_hidden(tag: Tag) -> bool:
 # closed dialog): never a hydration container, so never unhidden.
 _PAGE_CHROME_TAGS = frozenset({"nav", "header", "footer", "aside", "menu", "dialog"})
 _PAGE_CHROME_ROLES = frozenset(
-    {"navigation", "banner", "contentinfo", "menu", "menubar", "dialog", "alertdialog"}
+    {
+        "navigation",
+        "banner",
+        "contentinfo",
+        "complementary",
+        "menu",
+        "menubar",
+        "dialog",
+        "alertdialog",
+    }
 )
 
 

@@ -135,6 +135,7 @@ async def test_page_with_small_hidden_element_is_extracted_once(
         ('<div role="navigation" hidden>', "</div>"),
         ("<nav><div hidden>", "</div></nav>"),
         ('<header><div style="display:none">', "</div></header>"),
+        ('<div role="complementary"><div hidden>', "</div></div>"),
     ],
 )
 async def test_hidden_navigation_is_left_hidden(
