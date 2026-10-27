@@ -1383,6 +1383,72 @@ describe("move_file", () => {
     expect(textOf(result)).toMatch(/^ENOENT/);
   });
 
+  // #5188: rename cannot cross a device boundary. A second mount cannot be
+  // staged in a test, so the rename is made to fail as it would across one.
+  describe("across filesystems (rename fails with EXDEV)", () => {
+    const crossDevice = () =>
+      vi.spyOn(fsSync, "renameSync").mockImplementation(() => {
+        throw Object.assign(
+          new Error("EXDEV: cross-device link not permitted"),
+          {
+            code: "EXDEV",
+          },
+        );
+      });
+
+    it("moves a file by copying it and removing the source", async () => {
+      const source = path.join(dir, "a.txt");
+      const destination = path.join(dir, "sub", "b.txt");
+      await fs.mkdir(path.join(dir, "sub"));
+      await fs.writeFile(source, "across");
+      const rename = crossDevice();
+      const result = await call(client, "move_file", { source, destination });
+      expect(rename).toHaveBeenCalled();
+      expect(result.isError).toBeFalsy();
+      expect(textOf(result)).toBe(
+        `Successfully moved ${source} to ${destination}`,
+      );
+      expect(await fs.readFile(destination, "utf-8")).toBe("across");
+      await expect(fs.stat(source)).rejects.toThrow();
+    });
+
+    it("refuses a directory with a clear error, and leaves it in place", async () => {
+      const source = path.join(dir, "d1");
+      await fs.mkdir(source);
+      await fs.writeFile(path.join(source, "f"), "x");
+      crossDevice();
+      const result = await call(client, "move_file", {
+        source,
+        destination: path.join(dir, "d2"),
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toBe(
+        `Cannot move a directory across filesystems: ${source}. ` +
+          "Create the directory at the destination and move its files one at a time.",
+      );
+      expect(await fs.readFile(path.join(source, "f"), "utf-8")).toBe("x");
+      await expect(fs.stat(path.join(dir, "d2"))).rejects.toThrow();
+    });
+
+    it("leaves no partial destination when the copy fails", async () => {
+      const source = path.join(dir, "a.txt");
+      await fs.writeFile(source, "keep");
+      crossDevice();
+      vi.spyOn(fsSync, "read").mockImplementationOnce(((...args: unknown[]) => {
+        (args[args.length - 1] as (error: Error) => void)(
+          Object.assign(new Error("EIO: i/o error, read"), { code: "EIO" }),
+        );
+      }) as typeof fsSync.read);
+      const result = await call(client, "move_file", {
+        source,
+        destination: path.join(dir, "b.txt"),
+      });
+      expect(textOf(result)).toBe("EIO: i/o error, read");
+      expect(await fs.readdir(dir)).toEqual(["a.txt"]);
+      expect(await fs.readFile(source, "utf-8")).toBe("keep");
+    });
+  });
+
   it("reports a destination lstat failure other than ENOENT as is", async () => {
     await fs.writeFile(path.join(dir, "a.txt"), "a");
     vi.spyOn(fs, "lstat").mockRejectedValueOnce(new Error("EACCES lstat"));

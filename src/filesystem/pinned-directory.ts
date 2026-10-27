@@ -12,7 +12,8 @@
 // and only then act on the final component relative to it. The working
 // directory holds the directory's inode, so swapping the path afterwards
 // cannot move the operation. Every check happens before a byte is written,
-// so nothing ever needs rolling back.
+// so nothing ever needs rolling back, except in the cross-device move, which
+// copies and so removes its copy if a later step fails.
 //
 // On Windows the working directory is a string and relative paths resolve
 // against it, so reading it back proves nothing; there the leaf is lstat'd
@@ -207,13 +208,14 @@ function openInDirectory(
   filePath: string,
   flags: number,
   refuseLink: boolean,
+  mode: number = 0o666,
 ): { fd: number; opened: fs.BigIntStats } {
   const name = path.basename(filePath);
   return inDirectory(path.dirname(filePath), () => {
     if (refuseLink && fs.lstatSync(name).isSymbolicLink()) {
       throw new Error(`Refusing to write: not a regular file: ${filePath}`);
     }
-    const fd = fs.openSync(name, flags, 0o666);
+    const fd = fs.openSync(name, flags, mode);
     try {
       const opened = fs.fstatSync(fd, { bigint: true });
       if (!isSameEntry(fs.lstatSync(name, { bigint: true }), opened)) {
@@ -289,6 +291,248 @@ export function renameIntoDirectory(
   inDirectory(path.dirname(destinationPath), () =>
     fs.renameSync(sourcePath, path.basename(destinationPath)),
   );
+}
+
+// The cross-device move below (#5188). rename() cannot cross a device
+// boundary, so a move between allowed directories on different mounts copies
+// the file and then removes the source. Every name it touches is opened,
+// created or removed relative to its anchored directory, like the writes
+// above, and checked to be the entry it expects.
+
+// Read without following a symlink, and without blocking on a FIFO swapped
+// in after the lstat (a regular file ignores O_NONBLOCK). Both are undefined
+// on Windows, where the lstat identity checks stand in.
+function readFlags(): number {
+  return fs.constants.O_RDONLY | noFollow() | (fs.constants.O_NONBLOCK ?? 0);
+}
+
+function readChunk(fd: number, buffer: Buffer): Promise<number> {
+  return new Promise((resolve, reject) =>
+    fs.read(fd, buffer, 0, buffer.length, null, (error, bytesRead) =>
+      error ? reject(error) : resolve(bytesRead),
+    ),
+  );
+}
+
+function writeChunk(fd: number, chunk: Buffer): Promise<void> {
+  return new Promise((resolve, reject) =>
+    fs.writeFile(fd, chunk, (error) => (error ? reject(error) : resolve())),
+  );
+}
+
+// A numeric string, since fs.futimes takes a negative number to mean "now",
+// which would lose a time before 1970; a string it parses as given.
+function seconds(nanoseconds: bigint): string {
+  return String(Number(nanoseconds) / 1e9);
+}
+
+function keepModeAndTimes(fd: number, source: fs.BigIntStats): Promise<void> {
+  return new Promise((resolve, reject) =>
+    fs.fchmod(fd, Number(source.mode & 0o777n), (chmodError) =>
+      chmodError
+        ? reject(chmodError)
+        : // In seconds from the nanosecond fields: a Date keeps only
+          // milliseconds.
+          fs.futimes(
+            fd,
+            seconds(source.atimeNs),
+            seconds(source.mtimeNs),
+            (timesError) => (timesError ? reject(timesError) : resolve()),
+          ),
+    ),
+  );
+}
+
+/**
+ * Open the regular file at `sourcePath` for reading, relative to its anchored
+ * directory. A directory, a symlink or anything else that is not a regular
+ * file is refused: a symlink is not followed or recreated, since its target
+ * could name anything, and a directory is not copied recursively.
+ */
+function openSourceInDirectory(sourcePath: string): {
+  fd: number;
+  opened: fs.BigIntStats;
+} {
+  const name = path.basename(sourcePath);
+  return inDirectory(path.dirname(sourcePath), () => {
+    const found = fs.lstatSync(name, { bigint: true });
+    if (found.isDirectory()) {
+      throw new Error(
+        `Cannot move a directory across filesystems: ${sourcePath}. ` +
+          "Create the directory at the destination and move its files one at a time.",
+      );
+    }
+    if (!found.isFile()) {
+      throw new Error(
+        `Cannot move across filesystems: not a regular file: ${sourcePath}`,
+      );
+    }
+    const fd = fs.openSync(name, readFlags());
+    try {
+      const opened = fs.fstatSync(fd, { bigint: true });
+      if (!opened.isFile() || !isSameEntry(found, opened)) {
+        throw new Error(
+          `Refusing to move: ${sourcePath} was replaced while it was being opened`,
+        );
+      }
+      return { fd, opened };
+    } catch (error) {
+      fs.closeSync(fd);
+      throw error;
+    }
+  });
+}
+
+/**
+ * Check that `filePath`, relative to its anchored directory, is still the
+ * entry `expected` describes, and fail with `message` if it is not.
+ */
+function confirmInDirectory(
+  filePath: string,
+  expected: EntryIdentity,
+  message: string,
+): void {
+  const name = path.basename(filePath);
+  inDirectory(path.dirname(filePath), () => {
+    let found: fs.BigIntStats | undefined;
+    try {
+      found = fs.lstatSync(name, { bigint: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw error;
+      }
+    }
+    if (!found || !isSameEntry(found, expected)) {
+      throw new Error(message);
+    }
+  });
+}
+
+/**
+ * Remove `filePath`, relative to its anchored directory, only while it is
+ * still the entry `expected` describes.
+ */
+function removeFromDirectory(
+  filePath: string,
+  expected: EntryIdentity,
+  snapshot?: Pick<fs.BigIntStats, "size" | "mtimeNs" | "ctimeNs">,
+): void {
+  const name = path.basename(filePath);
+  inDirectory(path.dirname(filePath), () => {
+    const found = fs.lstatSync(name, { bigint: true });
+    if (!isSameEntry(found, expected)) {
+      throw new Error(
+        `Refusing to remove: ${filePath} was replaced during the move`,
+      );
+    }
+    // The same file, written to in place after it was copied: removing it
+    // would lose what was written, so the copy is the one that goes.
+    if (
+      snapshot &&
+      (found.size !== snapshot.size ||
+        found.mtimeNs !== snapshot.mtimeNs ||
+        found.ctimeNs !== snapshot.ctimeNs)
+    ) {
+      throw new Error(
+        `Refusing to remove: ${filePath} changed during the move`,
+      );
+    }
+    fs.unlinkSync(name);
+  });
+}
+
+/** Remove a copy this move created, keeping the error that made it necessary. */
+function discardCopy(destinationPath: string, created: EntryIdentity): void {
+  try {
+    removeFromDirectory(destinationPath, created);
+  } catch {
+    // Left in place; the error that made the move fail is the one to report.
+  }
+}
+
+/**
+ * Create `destinationPath`, which must not exist, as a copy of the file open
+ * at `sourceFd`, with its mode and times. A copy that fails is removed.
+ */
+async function copyIntoNewFile(
+  sourceFd: number,
+  source: fs.BigIntStats,
+  destinationPath: string,
+): Promise<EntryIdentity> {
+  // O_EXCL: an existing file or symlink fails with EEXIST, never followed.
+  const { fd, opened } = openInDirectory(
+    destinationPath,
+    fs.constants.O_WRONLY |
+      fs.constants.O_CREAT |
+      fs.constants.O_EXCL |
+      noFollow(),
+    false,
+    // Owner-only until the copy is complete and takes the source's mode, so
+    // a private file is never readable at the destination in between.
+    0o600,
+  );
+  // Where isSameEntry falls back to size and modification time (see there),
+  // the identity from the create goes stale as the copy is written, so it is
+  // read again from the descriptor before that closes.
+  let identity: EntryIdentity = opened;
+  try {
+    try {
+      const buffer = Buffer.alloc(64 * 1024);
+      for (;;) {
+        const bytesRead = await readChunk(sourceFd, buffer);
+        if (bytesRead === 0) {
+          break;
+        }
+        await writeChunk(fd, buffer.subarray(0, bytesRead));
+      }
+      await keepModeAndTimes(fd, source);
+    } finally {
+      try {
+        identity = fs.fstatSync(fd, { bigint: true });
+      } catch {
+        // Keep the identity from the create; the close reports the fault.
+      }
+      await close(fd);
+    }
+  } catch (error) {
+    discardCopy(destinationPath, identity);
+    throw error;
+  }
+  return identity;
+}
+
+/**
+ * Move the regular file at `sourcePath` to `destinationPath`, which must not
+ * exist, where the two are on different devices: copy it into a newly created
+ * file, then remove the source. If any step fails, the copy is removed and the
+ * source is left where it was.
+ */
+export async function moveFileAcrossDevices(
+  sourcePath: string,
+  destinationPath: string,
+): Promise<void> {
+  const { fd, opened: source } = openSourceInDirectory(sourcePath);
+  // Set once the copy is complete; until then copyIntoNewFile cleans up.
+  let created: EntryIdentity | undefined;
+  try {
+    try {
+      created = await copyIntoNewFile(fd, source, destinationPath);
+    } finally {
+      await close(fd);
+    }
+    // The source goes only while the copy is still where the move put it.
+    confirmInDirectory(
+      destinationPath,
+      created,
+      `Refusing to remove the source: ${destinationPath} was removed or replaced during the move`,
+    );
+    removeFromDirectory(sourcePath, source, source);
+  } catch (error) {
+    if (created) {
+      discardCopy(destinationPath, created);
+    }
+    throw error;
+  }
 }
 
 /**
