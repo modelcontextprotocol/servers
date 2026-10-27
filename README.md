@@ -116,15 +116,15 @@ Additional examples of using the Claude Desktop as an MCP client might look like
       "command": "uvx",
       "args": ["mcp-server-git", "--repository", "path/to/git/repo"]
     },
-    "postgres": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/mydb"]
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"]
     }
   }
 }
 ```
 
-On Windows, apply the same wrapper to each `npx`-based entry above by changing `"command"` to `"cmd"` and prepending `"/c", "npx"` to the existing `args`. Leave `uvx` entries unchanged.
+On Windows, apply the same wrapper to the `npx`-based `filesystem` entry above by changing its `"command"` to `"cmd"` and prepending `"/c", "npx"` to its existing `args`. Leave the `uvx` entries unchanged.
 
 ### Transports: stdio and Streamable HTTP
 
