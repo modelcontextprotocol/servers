@@ -14,11 +14,11 @@ record is in `/pr-flow` (client evidence); building and starting the server is
 
 Three clients, in the order to reach for them:
 
-| Client | Driven by | Use it for |
-| --- | --- | --- |
-| Inspector **CLI** | A command. This is the **scripted path**, and the one an agent runs | One request, one JSON result: the evidence that goes in a PR |
+| Client               | Driven by                                                                | Use it for                                                                                                                                   |
+| -------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Inspector **CLI**    | A command. This is the **scripted path**, and the one an agent runs      | One request, one JSON result: the evidence that goes in a PR                                                                                 |
 | Inspector **web** UI | A Playwright script in headless Chromium, which an agent writes and runs | What the CLI cannot do: elicitation and sampling round-trips, URL elicitation, tasks, notifications arriving, a long-running tool's progress |
-| An **LLM client** | A prompt | Whether a model picks the tool and uses its result, which the PR checklist asks for |
+| An **LLM client**    | A prompt                                                                 | Whether a model picks the tool and uses its result, which the PR checklist asks for                                                          |
 
 Build first (`npm run build -w src/<server>`). Every command below runs the
 last build of a TypeScript server, not your edit.
@@ -85,7 +85,7 @@ That rule produces the three failures people actually hit:
   `--cli -e KEY=VALUE node …` leaves no server command at all, and the CLI
   falls back to your personal catalog (`~/.mcp-inspector/mcp.json`). With
   several servers in it that fails with `Multiple servers found in config
-  file. Please specify one with --server`. Either way it is no longer talking
+file. Please specify one with --server`. Either way it is no longer talking
   to your build, so move the option after the command.
 - **`Method is required`** means the options ended up on the wrong side of a
   `--`.
@@ -106,13 +106,13 @@ $INSPECT node src/memory/dist/index.js \
 
 The exit code is the verdict, so check it rather than reading the text:
 
-| Outcome | stdout | stderr | Exit |
-| --- | --- | --- | --- |
-| The request succeeded | `{"result": …}` | | 0 |
-| The tool ran and returned `isError: true` | `{"result":{"content": …, "isError": true}}` | `{"error":{"code":"tool_is_error", …}}` | 5 |
-| No such tool | | `{"error":{"code":"tool_not_found", …}}` | 5 |
-| An HTTP server could not be reached (refused, DNS, timeout) | | `{"error":{"code":"unreachable", …}}` | 4 |
-| Bad arguments, a failed version negotiation, or a stdio server that exited | | `{"error":{"code":"error", …}}` | 1 |
+| Outcome                                                                    | stdout                                       | stderr                                   | Exit |
+| -------------------------------------------------------------------------- | -------------------------------------------- | ---------------------------------------- | ---- |
+| The request succeeded                                                      | `{"result": …}`                              |                                          | 0    |
+| The tool ran and returned `isError: true`                                  | `{"result":{"content": …, "isError": true}}` | `{"error":{"code":"tool_is_error", …}}`  | 5    |
+| No such tool                                                               |                                              | `{"error":{"code":"tool_not_found", …}}` | 5    |
+| An HTTP server could not be reached (refused, DNS, timeout)                |                                              | `{"error":{"code":"unreachable", …}}`    | 4    |
+| Bad arguments, a failed version negotiation, or a stdio server that exited |                                              | `{"error":{"code":"error", …}}`          | 1    |
 
 These are the codes observed on 2.9.0 for the cases this repo's servers
 produce; the CLI defines others (schema and skill checks, authentication)
@@ -166,11 +166,11 @@ or session code; it is deprecated but must keep working.
 The Inspector connects in one of three eras, chosen with `--protocol-era` (the
 CLI) or **Server Settings → Protocol Era** (the web UI):
 
-| Era | What the Inspector does |
-| --- | --- |
-| `legacy` (the default) | A plain `initialize`. Negotiates 2025-11-25 or older |
-| `modern` | Pins 2026-07-28 through `server/discover`, with no fallback |
-| `auto` | Probes `server/discover`, and falls back to `initialize` |
+| Era                    | What the Inspector does                                     |
+| ---------------------- | ----------------------------------------------------------- |
+| `legacy` (the default) | A plain `initialize`. Negotiates 2025-11-25 or older        |
+| `modern`               | Pins 2026-07-28 through `server/discover`, with no fallback |
+| `auto`                 | Probes `server/discover`, and falls back to `initialize`    |
 
 **Every server serves both eras**: the Python servers since #4853, the
 TypeScript servers since #4852 (stdio through the SDK's `serveStdio`, and
@@ -219,7 +219,10 @@ server's environment with `-e KEY=VALUE` before the `--`.
 
 Install Playwright in a scratch directory **outside the worktree**, never as a
 dependency of this repo (`npm i playwright@1.64.1`, then
-`npx playwright install chromium`), and run the script from there.
+`npx playwright install chromium`), and run the script from there. The
+launcher inherits the script's working directory, so spawn it with `cwd` set
+to the worktree root: the server commands above use paths relative to it, and
+from the scratch directory no server would start.
 
 ### The recipe
 
@@ -271,25 +274,31 @@ dependency of this repo (`npm i playwright@1.64.1`, then
 Era differences that change what to expect, beyond the tool list (see
 [Protocol eras](#protocol-eras)):
 
-| Scenario | 2025-11-25 (`legacy`) | 2026-07-28 (`modern`) |
-| --- | --- | --- |
-| `trigger-url-elicitation` with `errorPath` on | **Two** dialogs: the -32042 error path, then the retry's | **One**: there is no -32042 on 2026-07-28 |
-| `trigger-sampling-request`, rejected | **Results** with a **Tool Error** alert | **Tool Call Failed** |
-| Each prompt for input | Plain dialog | The dialog also shows `input_required` (the answer is sent as a retry) |
+| Scenario                                      | 2025-11-25 (`legacy`)                                    | 2026-07-28 (`modern`)                                                  |
+| --------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `trigger-url-elicitation` with `errorPath` on | **Two** dialogs: the -32042 error path, then the retry's | **One**: there is no -32042 on 2026-07-28                              |
+| `trigger-sampling-request`, rejected          | **Results** with a **Tool Error** alert                  | **Tool Call Failed**                                                   |
+| Each prompt for input                         | Plain dialog                                             | The dialog also shows `input_required` (the answer is sent as a retry) |
 
 A sketch of one scenario, with the launch and teardown above:
 
 ```js
 const page = await browser.newPage();
 await page.goto(url);
-await page.getByRole("switch", { name: /Connect or disconnect/ }).check({ force: true });
+await page
+  .getByRole("switch", { name: /Connect or disconnect/ })
+  .check({ force: true });
 await page.locator('label[for$="-Tools"]').click();
-await page.getByRole("button", { name: / trigger-elicitation-request$/ }).click();
+await page
+  .getByRole("button", { name: / trigger-elicitation-request$/ })
+  .click();
 await page.getByRole("button", { name: "Execute Tool" }).click();
 const dialog = page.getByRole("dialog", { name: "Elicitation Request" });
 await dialog.getByRole("textbox", { name: "String", exact: true }).fill("Ada");
 await dialog.getByRole("button", { name: "Submit" }).click();
-await page.getByRole("heading", { name: /^(Results|Tool Call Failed)$/ }).waitFor();
+await page
+  .getByRole("heading", { name: /^(Results|Tool Call Failed)$/ })
+  .waitFor();
 // → Results: "✅ User provided the requested information! … Name: Ada"
 await page.close();
 ```
