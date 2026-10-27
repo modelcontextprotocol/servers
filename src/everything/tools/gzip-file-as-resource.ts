@@ -9,6 +9,15 @@
 // each request gets a fresh instance, so for a 2026-07-28 client the resource
 // is stored under a URI with a server-minted id that every instance can serve
 // (resources/minted.ts), and expires after ten minutes.
+//
+// The tool fetches whatever URL a model hands it, so it refuses non-public
+// destinations by default (#5130), as the fetch server does: before every
+// request, the caller's URL and each redirect hop alike, the host is checked
+// against GZIP_ALLOWED_DOMAINS (a name filter, when set) and then resolved,
+// and the request is refused if any address it resolves to is loopback,
+// private, link-local (cloud metadata) or otherwise not public, unless
+// GZIP_ALLOW_PRIVATE_IPS opts in. Redirects are followed by hand, so that each
+// hop passes the same check, up to MAX_REDIRECTS of them.
 
 import { z } from "zod";
 import {
@@ -16,6 +25,8 @@ import {
   CallToolResult,
   Resource,
 } from "@modelcontextprotocol/server";
+import { lookup } from "node:dns/promises";
+import { BlockList } from "node:net";
 import { gzipSync } from "node:zlib";
 import { mintBlobResource } from "../resources/minted.js";
 import {
@@ -34,11 +45,111 @@ const GZIP_MAX_FETCH_TIME_MILLIS = Number(
   process.env.GZIP_MAX_FETCH_TIME_MILLIS ?? String(30 * 1000),
 );
 
-// Comma-separated list of allowed domains. Empty means all domains are allowed.
+// Comma-separated list of allowed domains, matched by name on every request
+// (redirect hops included). Empty means any name is allowed. It filters names,
+// not addresses: a listed name that resolves to a private address is still
+// refused unless GZIP_ALLOW_PRIVATE_IPS is set.
 const GZIP_ALLOWED_DOMAINS = (process.env.GZIP_ALLOWED_DOMAINS ?? "")
   .split(",")
   .map((d) => d.trim().toLowerCase())
   .filter((d) => d.length > 0);
+
+// Opt in to fetching from loopback, private, link-local and other non-public
+// addresses (1, true, yes or on). Off by default.
+const GZIP_ALLOW_PRIVATE_IPS = /^(1|true|yes|on)$/i.test(
+  (process.env.GZIP_ALLOW_PRIVATE_IPS ?? "").trim(),
+);
+
+// Redirects followed before a fetch is abandoned.
+const MAX_REDIRECTS = 5;
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+
+// Addresses that are not public destinations: the IANA special-purpose ranges
+// the fetch server refuses (src/fetch's _NON_PUBLIC_NETWORKS), plus
+// multicast. BlockList judges an IPv4-mapped IPv6 address (::ffff:a.b.c.d) by
+// the IPv4 rules, so those need no ranges of their own. The well-known NAT64
+// prefix (64:ff9b::/96) is not unwrapped and so passes as public.
+const NON_PUBLIC_ADDRESSES = new BlockList();
+for (const [network, prefix] of [
+  ["0.0.0.0", 8], // "this network", including the unspecified address
+  ["10.0.0.0", 8], // RFC 1918
+  ["100.64.0.0", 10], // CGNAT shared space (Alibaba Cloud metadata)
+  ["127.0.0.0", 8], // loopback
+  ["169.254.0.0", 16], // link-local (most cloud metadata endpoints)
+  ["172.16.0.0", 12], // RFC 1918
+  ["192.0.0.0", 24], // IETF protocol assignments
+  ["192.0.2.0", 24], // documentation
+  ["192.88.99.0", 24], // 6to4 relay anycast
+  ["192.168.0.0", 16], // RFC 1918
+  ["198.18.0.0", 15], // benchmarking
+  ["198.51.100.0", 24], // documentation
+  ["203.0.113.0", 24], // documentation
+  ["224.0.0.0", 4], // multicast
+  ["240.0.0.0", 4], // reserved, and broadcast
+] as const) {
+  NON_PUBLIC_ADDRESSES.addSubnet(network, prefix, "ipv4");
+}
+for (const [network, prefix] of [
+  ["::", 128], // unspecified
+  ["::1", 128], // loopback
+  ["64:ff9b:1::", 48], // local-use NAT64
+  ["100::", 64], // discard-only
+  ["2001::", 23], // IETF protocol assignments (Teredo among them)
+  ["2001:db8::", 32], // documentation
+  ["2002::", 16], // 6to4
+  ["fc00::", 7], // unique local (AWS's fd00:ec2::254)
+  ["fe80::", 10], // link-local
+  ["ff00::", 8], // multicast
+] as const) {
+  NON_PUBLIC_ADDRESSES.addSubnet(network, prefix, "ipv6");
+}
+
+// Globally reachable assignments inside those ranges (anycast services and
+// the like), allowed as the fetch server allows its _PUBLIC_EXCEPTIONS.
+const PUBLIC_EXCEPTIONS = new BlockList();
+PUBLIC_EXCEPTIONS.addAddress("192.0.0.9", "ipv4");
+PUBLIC_EXCEPTIONS.addAddress("192.0.0.10", "ipv4");
+for (const [network, prefix] of [
+  ["2001:1::1", 128],
+  ["2001:1::2", 128],
+  ["2001:3::", 32],
+  ["2001:4:112::", 48],
+  ["2001:20::", 28],
+  ["2001:30::", 28],
+] as const) {
+  PUBLIC_EXCEPTIONS.addSubnet(network, prefix, "ipv6");
+}
+
+/** True when `address` is not a public destination. */
+function isNonPublic(address: string, family: number): boolean {
+  const type = family === 6 ? "ipv6" : "ipv4";
+  return (
+    !PUBLIC_EXCEPTIONS.check(address, type) &&
+    NON_PUBLIC_ADDRESSES.check(address, type)
+  );
+}
+
+/**
+ * Settles as `promise` does, or rejects with the signal's reason as soon as it
+ * aborts, so that the fetch deadline also bounds work that takes no signal
+ * (the DNS lookup).
+ */
+async function raceAbort<T>(
+  promise: Promise<T>,
+  signal: AbortSignal,
+): Promise<T> {
+  signal.throwIfAborted();
+  let onAbort = () => {};
+  const aborted = new Promise<never>((_, reject) => {
+    onAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([promise, aborted]);
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
+}
 
 // Tool input schema
 const GZipFileAsResourceSchema = z.object({
@@ -103,11 +214,8 @@ export const registerGZipFileAsResourceTool = (
       outputType,
     } = GZipFileAsResourceSchema.parse(args);
 
-    // Validate data uri
-    const url = validateDataURI(dataUri);
-
-    // Fetch the data
-    const response = await fetchSafely(url, {
+    // Fetch the data; each request it makes is checked first
+    const response = await fetchSafely(new URL(dataUri), {
       maxBytes: GZIP_MAX_FETCH_SIZE,
       timeoutMillis: GZIP_MAX_FETCH_TIME_MILLIS,
     });
@@ -149,46 +257,89 @@ export const registerGZipFileAsResourceTool = (
 };
 
 /**
- * Validates a given data URI to ensure it follows the appropriate protocols and rules.
+ * Refuses a request the server should not make: a protocol other than http,
+ * https or data; a host not in GZIP_ALLOWED_DOMAINS, when that is set; or,
+ * unless GZIP_ALLOW_PRIVATE_IPS is set, a host that resolves to any address
+ * that is not public. Called before every request, redirect hops included.
  *
- * @param {string} dataUri - The data URI to validate. Must be an HTTP, HTTPS, or data protocol URL. If a domain is provided, it must match the allowed domains list if applicable.
- * @return {URL} The validated and parsed URL object.
- * @throws {Error} If the data URI does not use a supported protocol or does not meet allowed domains criteria.
+ * This is a check, then a fetch: `fetch` resolves the name again to connect,
+ * so a name whose DNS answer changes between the two (DNS rebinding) can
+ * still reach a private address. Closing that window means pinning the
+ * checked address for the connection, which this demo server does not do.
+ *
+ * @param {URL} url The URL about to be requested.
+ * @param {AbortSignal} signal The fetch's deadline, which bounds the lookup too.
+ * @throws {Error} If the request is refused, or the host cannot be resolved.
  */
-function validateDataURI(dataUri: string): URL {
-  // Validate Inputs
-  const url = new URL(dataUri);
-  try {
-    if (
-      url.protocol !== "http:" &&
-      url.protocol !== "https:" &&
-      url.protocol !== "data:"
-    ) {
-      throw new Error(
-        `Unsupported URL protocol for ${dataUri}. Only http, https, and data URLs are supported.`,
-      );
-    }
-    if (
-      GZIP_ALLOWED_DOMAINS.length > 0 &&
-      (url.protocol === "http:" || url.protocol === "https:")
-    ) {
-      const domain = url.hostname;
-      const domainAllowed = GZIP_ALLOWED_DOMAINS.some((allowedDomain) => {
-        return domain === allowedDomain || domain.endsWith(`.${allowedDomain}`);
-      });
-      if (!domainAllowed) {
-        throw new Error(`Domain ${domain} is not in the allowed domains list.`);
-      }
-    }
-  } catch (error) {
-    throw new Error(
-      `Error processing file ${dataUri}: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-      { cause: error },
+async function assertPermittedTarget(
+  url: URL,
+  signal: AbortSignal,
+): Promise<void> {
+  const refuse = (reason: string) =>
+    new Error(`Error processing file ${url}: ${reason}`);
+  if (url.protocol === "data:") return; // carries its own bytes
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw refuse(
+      `Unsupported URL protocol for ${url}. Only http, https, and data URLs are supported.`,
     );
   }
-  return url;
+  // Names are matched as the URL spells them, an IPv6 literal with its
+  // brackets ([::1]), as they always have been
+  const domain = url.hostname;
+  if (
+    GZIP_ALLOWED_DOMAINS.length > 0 &&
+    !GZIP_ALLOWED_DOMAINS.some((d) => domain === d || domain.endsWith(`.${d}`))
+  ) {
+    throw refuse(`Domain ${domain} is not in the allowed domains list.`);
+  }
+  if (GZIP_ALLOW_PRIVATE_IPS) return;
+  // The resolver takes an IPv6 literal without its brackets
+  const host = domain.replace(/^\[(.*)\]$/, "$1");
+  const addresses = await raceAbort(lookup(host, { all: true }), signal);
+  for (const { address, family } of addresses) {
+    if (isNonPublic(address, family)) {
+      throw refuse(
+        `${host} resolves to ${address}, which is not a public address. Set GZIP_ALLOW_PRIVATE_IPS=1 to allow private, loopback and link-local addresses.`,
+      );
+    }
+  }
+}
+
+/**
+ * Requests `url`, following redirects by hand so that every hop passes
+ * `assertPermittedTarget` first, and returns the first response that is not a
+ * redirect.
+ *
+ * @param {URL} url The URL the caller asked for.
+ * @param {AbortSignal} signal Aborts the request in flight.
+ * @return {Promise<Response>} The final response.
+ * @throws {Error} If a hop is refused, or there are more than MAX_REDIRECTS.
+ */
+async function fetchPermitted(
+  url: URL,
+  signal: AbortSignal,
+): Promise<Response> {
+  let target = url;
+  for (let redirects = 0; ; redirects++) {
+    await assertPermittedTarget(target, signal);
+    const response = await fetch(target, { signal, redirect: "manual" });
+    const location = response.headers.get("location");
+    if (!REDIRECT_STATUSES.has(response.status) || location === null) {
+      return response;
+    }
+    // Discard the redirect's own body before moving on. Not awaited, as in
+    // fetchSafely: cancel() may never settle, and only the next hop matters.
+    response.body?.cancel().catch(
+      /* v8 ignore next -- only runs if cancelling the source fails, which nothing here can provoke */
+      () => {},
+    );
+    if (redirects === MAX_REDIRECTS) {
+      throw new Error(
+        `Fetching ${url} followed more than ${MAX_REDIRECTS} redirects and was abandoned.`,
+      );
+    }
+    target = new URL(location, target);
+  }
 }
 
 /**
@@ -215,8 +366,10 @@ async function fetchSafely(
   );
 
   try {
-    // Fetch the data
-    const response = await fetch(url, { signal: controller.signal });
+    // Fetch the data, following only redirects that pass the same checks.
+    // The response is the final, non-redirect one, so a redirect is never
+    // mistaken for an error status here.
+    const response = await fetchPermitted(url, controller.signal);
     if (!response.ok) {
       // An error page is not the requested file (#5207). Release the
       // connection without reading the body; as with the size check below,

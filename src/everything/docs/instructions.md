@@ -19,7 +19,7 @@ The server serves two protocol eras. A client on protocol version 2026-07-28 con
 
 ## Constraints & Limitations
 
-- `gzip-file-as-resource`: Max fetch size controlled by `GZIP_MAX_FETCH_SIZE` (default 10MB), timeout by `GZIP_MAX_FETCH_TIME_MILLIS` (default 30s), allowed domains by `GZIP_ALLOWED_DOMAINS`
+- `gzip-file-as-resource`: Max fetch size controlled by `GZIP_MAX_FETCH_SIZE` (default 10MB), timeout by `GZIP_MAX_FETCH_TIME_MILLIS` (default 30s), allowed domains by `GZIP_ALLOWED_DOMAINS` (checked on every redirect hop). It refuses URLs whose host resolves to a loopback, private or link-local address, unless the server was started with `GZIP_ALLOW_PRIVATE_IPS=1`
 - `get-env`: Values of credential-like variable names (`*_KEY`, `*_TOKEN`, `*_SECRET`, `*_PASSWORD` and the like) come back as `"<redacted>"`; the server operator can set `GET_ENV_INCLUDE_SECRETS=1` to return them unmasked
 - Session resources are ephemeral and lost when the session ends; minted resources expire after ten minutes
 - Roots, sampling and logging are deprecated as of protocol version 2026-07-28, as is the HTTP+SSE transport

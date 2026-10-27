@@ -1,9 +1,11 @@
 /**
  * Characterizes the environment variables that configure
  * `gzip-file-as-resource` (#4854): `GZIP_MAX_FETCH_SIZE`,
- * `GZIP_MAX_FETCH_TIME_MILLIS` and `GZIP_ALLOWED_DOMAINS`. The tool reads them
- * once, when its module loads, so this file sets them before it imports the
- * server (vitest gives each test file its own module graph).
+ * `GZIP_MAX_FETCH_TIME_MILLIS` and `GZIP_ALLOWED_DOMAINS`, which is applied to
+ * every redirect hop (#5130). The tool reads them once, when its module loads,
+ * so this file sets them before it imports the server (vitest gives each test
+ * file its own module graph). Its fixture is on loopback, so it also sets
+ * `GZIP_ALLOW_PRIVATE_IPS`.
  */
 import { createServer as createHttpServer, type Server } from "node:http";
 import { once } from "node:events";
@@ -25,11 +27,32 @@ let port: number;
 beforeAll(async () => {
   vi.stubEnv("GZIP_MAX_FETCH_SIZE", "16");
   vi.stubEnv("GZIP_MAX_FETCH_TIME_MILLIS", "150");
-  vi.stubEnv("GZIP_ALLOWED_DOMAINS", " Example.COM, localhost ,,");
+  vi.stubEnv("GZIP_ALLOWED_DOMAINS", " Example.COM, localhost ,,[::1]");
+  vi.stubEnv("GZIP_ALLOW_PRIVATE_IPS", "1");
   harness = await import("./harness.js");
 
   http = createHttpServer((req, res) => {
     if (req.url === "/hang") return; // never answers
+    if (req.url === "/redirect") {
+      res.writeHead(302, { location: "/file" }).end("moved");
+      return;
+    }
+    if (req.url === "/off-list") {
+      res.writeHead(307, { location: `http://127.0.0.1:${port}/file` }).end();
+      return;
+    }
+    if (req.url === "/to-missing") {
+      res.writeHead(302, { location: "/missing" }).end();
+      return;
+    }
+    if (req.url === "/missing") {
+      res.writeHead(404).end("not here");
+      return;
+    }
+    if (req.url === "/loop") {
+      res.writeHead(301, { location: "/loop" }).end();
+      return;
+    }
     res.end("small");
   });
   http.listen(0); // every interface, so both localhost and 127.0.0.1 reach it
@@ -81,6 +104,12 @@ describe("gzip-file-as-resource limits", () => {
     });
   });
 
+  it("matches a listed IPv6 literal with its brackets", async () => {
+    expect(await gzip(`http://[::1]:${port}/file`)).toMatchObject({
+      type: "resource_link",
+    });
+  });
+
   it("refuses a host that only ends with a listed domain's name", async () => {
     const lookalike = "https://notexample.com/x";
     expect(await gzipText(lookalike)).toBe(
@@ -97,6 +126,33 @@ describe("gzip-file-as-resource limits", () => {
     const url = `http://localhost:${port}/hang`;
     expect(await gzipText(url)).toBe(
       `Fetching ${url} took more than 150 ms and was aborted.`,
+    );
+  });
+
+  it("follows a redirect to a listed host", async () => {
+    expect(await gzip(`http://localhost:${port}/redirect`)).toMatchObject({
+      type: "resource_link",
+      uri: "demo://resource/session/limited.gz",
+    });
+  });
+
+  it("reports the status of a redirect's final response, not the redirect's", async () => {
+    const url = `http://localhost:${port}/to-missing`;
+    expect(await gzipText(url)).toBe(
+      `Fetching ${url} failed with HTTP 404 Not Found`,
+    );
+  });
+
+  it("applies GZIP_ALLOWED_DOMAINS to a redirect hop (#5130)", async () => {
+    expect(await gzipText(`http://localhost:${port}/off-list`)).toBe(
+      `Error processing file http://127.0.0.1:${port}/file: Domain 127.0.0.1 is not in the allowed domains list.`,
+    );
+  });
+
+  it("abandons a fetch after five redirects", async () => {
+    const url = `http://localhost:${port}/loop`;
+    expect(await gzipText(url)).toBe(
+      `Fetching ${url} followed more than 5 redirects and was abandoned.`,
     );
   });
 });

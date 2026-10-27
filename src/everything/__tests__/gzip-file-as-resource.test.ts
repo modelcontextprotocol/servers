@@ -5,8 +5,11 @@
  * registering it for later reads, and the errors for bad protocols, oversized
  * or empty responses and failed fetches. It also guards #4808: two sessions
  * that use the same file name each keep their own resource. The configurable
- * limits are in `gzip-limits.test.ts`.
+ * limits are in `gzip-limits.test.ts`. Its fixture listens on 127.0.0.1, so it
+ * opts in to private addresses (#5130) before the server loads; the default
+ * refusal is in `gzip-private-addresses.test.ts`.
  */
+import "./private-ips-opted-in.js";
 import { createServer as createHttpServer, type Server } from "node:http";
 import { once } from "node:events";
 import { gunzipSync } from "node:zlib";

@@ -185,7 +185,8 @@ src/everything
   - Environment controls:
     - `GZIP_MAX_FETCH_SIZE` (bytes, default 10 MiB)
     - `GZIP_MAX_FETCH_TIME_MILLIS` (ms, default 30000)
-    - `GZIP_ALLOWED_DOMAINS` (comma-separated allowlist; empty means all domains allowed)
+    - `GZIP_ALLOWED_DOMAINS` (comma-separated name allowlist, checked on the caller's URL and on every redirect hop; empty means any name is allowed)
+    - `GZIP_ALLOW_PRIVATE_IPS` (`1`/`true` to allow loopback, private, link-local and other non-public addresses; by default a host that resolves to one is refused, on every hop)
 - `simulate-research-query.ts`
   - 2026-07-28: registers a `simulate-research-query` tool that runs as a task on the tasks extension, through four timed stages, pausing at `input_required` for a clarification on an ambiguous topic.
 - `trigger-elicitation-request.ts`
