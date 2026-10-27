@@ -1313,6 +1313,10 @@ test("a bump issue carries a decision section for advisories it cannot clear", (
     /### No patched release\n\nThe bump above does not clear every advisory\.\n\n\*\*No patched release is available\*\* for `GHSA-u`/,
   );
   assert.match(create.input, /that has a patched release\. `node scripts/);
+  assert.match(
+    create.input,
+    /should then refresh this issue to the advisories under \*\*No patched release\*\* alone/,
+  );
 
   // An unpatched advisory arriving on an open bump issue is announced as one.
   const issue = filedIssue([patched]);

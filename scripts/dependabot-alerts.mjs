@@ -786,7 +786,7 @@ export function buildIssueBody(
         ),
         "",
         ...disjointCaution(group),
-        `**Then verify** before opening the PR: every locked copy must be outside every range in the Advisories table${unpatched.length > 0 ? " that has a patched release" : ""}. \`node scripts/dependabot-alerts.mjs --dry-run\` against the branch should report this exposure cleared.`,
+        `**Then verify** before opening the PR: every locked copy must be outside every range in the Advisories table${unpatched.length > 0 ? " that has a patched release" : ""}. \`node scripts/dependabot-alerts.mjs --dry-run\` against the branch should ${unpatched.length > 0 ? `then refresh this issue to the advisories under **No patched release** alone, which stay tracked until they are decided` : "report this exposure cleared"}.`,
         "",
         ...copies,
         ...(unpatched.length > 0
