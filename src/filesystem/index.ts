@@ -19,7 +19,7 @@ import {
   StdioServerTransport,
   type StdioServerHandle,
 } from "@modelcontextprotocol/server/stdio";
-import { normalizePath, expandHome } from "./path-utils.js";
+import { normalizePath, expandHome, realpathWithRetry } from "./path-utils.js";
 import { createServer } from "./server.js";
 
 /**
@@ -43,7 +43,7 @@ export async function resolveAllowedDirectories(
         try {
           // Security: Resolve symlinks in allowed directories during startup
           // This ensures we know the real paths and can validate against them later
-          const resolved = await fs.realpath(absolute);
+          const resolved = await realpathWithRetry(absolute);
           const normalizedResolved = normalizePath(resolved);
           // Return both original and resolved paths if they differ
           // This allows matching against either /tmp or /private/tmp on macOS

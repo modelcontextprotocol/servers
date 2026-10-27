@@ -94,6 +94,33 @@ describe("getValidRootDirectories", () => {
       );
     });
 
+    // #5185: on Windows the first native realpath right after `subst` can
+    // throw before the mapping is visible. A root is resolved once per roots
+    // update, so one failure must not drop it.
+    it("keeps a root whose realpath fails once and then succeeds (#5185)", async () => {
+      const realpath = vi
+        .spyOn(fsp, "realpath")
+        .mockRejectedValueOnce(
+          Object.assign(new Error("ENOENT"), { code: "ENOENT" }),
+        );
+      const result = await getValidRootDirectories([{ uri: testDir1 }]);
+      expect(result).toEqual([testDir1]);
+      expect(realpath).toHaveBeenCalledTimes(2);
+    });
+
+    it("drops a root whose realpath fails twice, logging it (#5185)", async () => {
+      const realpath = vi
+        .spyOn(fsp, "realpath")
+        .mockRejectedValueOnce(new Error("EIO"))
+        .mockRejectedValueOnce(new Error("EIO"));
+      const result = await getValidRootDirectories([{ uri: testDir1 }]);
+      expect(result).toEqual([]);
+      expect(realpath).toHaveBeenCalledTimes(2);
+      expect(console.error).toHaveBeenCalledWith(
+        `Skipping invalid path or inaccessible: ${testDir1}`,
+      );
+    });
+
     it("drops a root whose stat fails after realpath succeeded, logging the error", async () => {
       vi.spyOn(fsp, "stat")
         .mockRejectedValueOnce(new Error("EACCES"))

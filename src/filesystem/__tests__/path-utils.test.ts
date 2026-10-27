@@ -1,9 +1,11 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { promises as fsp } from "fs";
 import {
   normalizePath,
   normalizePathFormat,
   expandHome,
   convertToWindowsPath,
+  realpathWithRetry,
 } from "../path-utils.js";
 
 describe("Path Utilities", () => {
@@ -419,5 +421,36 @@ describe("Path Utilities", () => {
         expect(result).toBe("some/relative/path");
       }
     });
+  });
+});
+
+// #5185: the directories resolved once and kept get one retry.
+describe("realpathWithRetry", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("returns the first call's result without retrying", async () => {
+    const realpath = vi.spyOn(fsp, "realpath").mockResolvedValue("/real");
+    expect(await realpathWithRetry("/given", 0)).toBe("/real");
+    expect(realpath).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries once after a failure and returns the retry's result", async () => {
+    const realpath = vi
+      .spyOn(fsp, "realpath")
+      .mockRejectedValueOnce(new Error("ENOENT"))
+      .mockResolvedValueOnce("/real");
+    expect(await realpathWithRetry("/given", 0)).toBe("/real");
+    expect(realpath).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects with the retry's error when both calls fail", async () => {
+    const realpath = vi
+      .spyOn(fsp, "realpath")
+      .mockRejectedValueOnce(new Error("first"))
+      .mockRejectedValueOnce(new Error("second"));
+    await expect(realpathWithRetry("/given", 0)).rejects.toThrow("second");
+    expect(realpath).toHaveBeenCalledTimes(2);
   });
 });

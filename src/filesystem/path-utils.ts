@@ -1,5 +1,7 @@
+import { promises as fs } from "fs";
 import path from "path";
 import os from "os";
+import { setTimeout as delay } from "timers/promises";
 
 /**
  * Converts WSL or Unix-style Windows paths to Windows format
@@ -131,4 +133,34 @@ export function expandHome(filepath: string): string {
     return path.join(os.homedir(), filepath.slice(1));
   }
   return filepath;
+}
+
+/** How long realpathWithRetry waits before its one retry. */
+export const REALPATH_RETRY_DELAY_MS = 100;
+
+/**
+ * Resolves a path with fs.promises.realpath, retrying once after a short
+ * delay if the first call fails.
+ *
+ * For the directories resolved once and kept (the command-line directories
+ * at startup, and each client Root on a roots update), where a failure lasts
+ * for the life of the process or the roots list. On Windows the first native
+ * realpath right after `subst` maps a drive can throw before the mapping is
+ * visible, and succeed a moment later (#5185). The retry goes through the
+ * same fs.promises.realpath (the native implementation) that validatePath
+ * resolves requests with, so both sides still agree on the spelling.
+ * @param p The path to resolve
+ * @param retryDelayMs How long to wait before the retry
+ * @returns The resolved path; rejects with the second call's error
+ */
+export async function realpathWithRetry(
+  p: string,
+  retryDelayMs: number = REALPATH_RETRY_DELAY_MS,
+): Promise<string> {
+  try {
+    return await fs.realpath(p);
+  } catch {
+    await delay(retryDelayMs);
+    return await fs.realpath(p);
+  }
 }
