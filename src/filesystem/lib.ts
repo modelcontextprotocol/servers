@@ -765,7 +765,11 @@ export async function headFile(
         const completeLines = buffer.slice(0, newLineIndex).split("\n");
         buffer = buffer.slice(newLineIndex + 1);
         for (const line of completeLines) {
-          lines.push(line);
+          // Each of these lines ended in "\n"; drop the "\r" of a CRLF ending
+          // so head normalizes line endings the way tailFile does. A "\r"
+          // whose "\n" is still in the next chunk stays in the buffer until
+          // that "\n" arrives, so a pair split across chunks is handled too.
+          lines.push(line.endsWith("\r") ? line.slice(0, -1) : line);
           if (lines.length >= numLines) break;
         }
       }

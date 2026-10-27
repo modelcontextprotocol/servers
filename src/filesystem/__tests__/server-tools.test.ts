@@ -365,6 +365,35 @@ describe("read_text_file and read_file", () => {
     expect(textOf(result)).toBe("three\nfour");
   });
 
+  describe("head line endings (#5187)", () => {
+    async function head(content: string, n: number): Promise<string> {
+      const target = path.join(dir, "head.txt");
+      await fs.writeFile(target, content);
+      return textOf(
+        await call(client, "read_text_file", { path: target, head: n }),
+      );
+    }
+
+    it("returns the first lines of an LF file unchanged", async () => {
+      expect(await head("a\nb\nc\n", 2)).toBe("a\nb");
+    });
+
+    it("returns the first lines of a CRLF file without their \\r", async () => {
+      expect(await head("a\r\nb\r\nc\r\n", 2)).toBe("a\nb");
+    });
+
+    it("returns a CRLF file with no final newline normalized to LF", async () => {
+      expect(await head("a\r\nb\r\nc", 5)).toBe("a\nb\nc");
+    });
+
+    // headFile reads 1 KB chunks from the start. Here the first chunk ends
+    // on the "\r" of a "\r\n" pair whose "\n" opens the second chunk.
+    it("joins a CRLF pair split across a chunk boundary", async () => {
+      const content = "C".repeat(1023) + "\r\nnext\r\n";
+      expect(await head(content, 2)).toBe("C".repeat(1023) + "\nnext");
+    });
+  });
+
   describe("tail at the end of the file (#5187)", () => {
     async function tail(content: string, n: number): Promise<string> {
       const target = path.join(dir, "tail.txt");
