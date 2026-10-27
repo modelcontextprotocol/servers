@@ -157,7 +157,7 @@ export function parseNotesArgs(argv) {
   for (const line of thanks) {
     // One bullet, naming whom it credits first, so the Contributors strip and
     // the discovery check both find them.
-    if (!/^@[A-Za-z0-9-]+(?![\w/])[^\n]*$/.test(line)) {
+    if (!/^@[A-Za-z0-9-]+(?![\w/-])[^\n]*$/.test(line)) {
       throw new Error(
         `--thank "${line}" is not one line starting with @login, as "@login (#ref), <what>"`,
       );

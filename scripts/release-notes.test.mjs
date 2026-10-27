@@ -127,6 +127,7 @@ test("parseNotesArgs takes advisories and hand credits, and validates both", () 
     "thanks @amy",
     "@amy (#1)\n* @eve, injected",
     "@scope/pkg, a package",
+    "@my-scope/pkg, a hyphenated scope",
   ]) {
     assert.throws(
       () => parseNotesArgs([...BASE, "--thank", line]),
