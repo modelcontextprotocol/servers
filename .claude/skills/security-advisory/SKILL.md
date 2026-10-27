@@ -381,8 +381,9 @@ fork, so check each of these first:
 - **Nothing that matters lives only in the fork.** Publishing deletes it.
   Review findings worth keeping, a residual-exposure note, a follow-up's
   write-up: copy each onto the advisory (if it belongs in what is published) or
-  onto the advisory's draft card (if it is tracking), before the button is
-  pressed.
+  onto the draft card that tracks it (a follow-up's write-up goes in **its
+  follow-up card's** `## Write-up` section, where step 6 reads it), within step
+  4's confidentiality limits, before the button is pressed.
 
 - **The affected product**: ecosystem (`npm` or `pip`) and package name, as
   published (`@modelcontextprotocol/server-filesystem`, `mcp-server-git`).
