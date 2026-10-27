@@ -272,7 +272,9 @@ body nobody will read again.
   `[GHSA-xxxx-yyyy-zzzz]` with its closing bracket, so it never finds the
   follow-up by mistake. A second follow-up for the same advisory is
   `[GHSA-xxxx-yyyy-zzzz follow-up 2]`.
-- **Body:** the same link-and-triage-only rule as step 1. Its lines, in order:
+- **Body:** step 1's link-and-triage rule, with **one exception: the
+  write-up**, held to the confidentiality limits in the next bullet. Its
+  lines, in order:
   - `**Advisory:** <html_url>` on the first line.
   - `Follow-up to the fix for this advisory. Convert to an issue only once the advisory is published.`
   - The `Priority <level> (provisional, <YYYY-MM-DD>)` line.
