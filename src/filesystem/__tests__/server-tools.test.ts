@@ -357,12 +357,67 @@ describe("read_text_file and read_file", () => {
     expect(textOf(result)).toBe("one\ntwo");
   });
 
-  it("returns the last N lines with tail, counting the trailing newline as a line", async () => {
+  it("returns the last N lines with tail, not counting the trailing newline as a line (#5187)", async () => {
     const result = await call(client, "read_text_file", {
       path: file,
       tail: 2,
     });
-    expect(textOf(result)).toBe("four\n");
+    expect(textOf(result)).toBe("three\nfour");
+  });
+
+  describe("tail at the end of the file (#5187)", () => {
+    async function tail(content: string, n: number): Promise<string> {
+      const target = path.join(dir, "tail.txt");
+      await fs.writeFile(target, content);
+      return textOf(
+        await call(client, "read_text_file", { path: target, tail: n }),
+      );
+    }
+
+    it("returns the last line of an LF file that ends with a newline", async () => {
+      expect(await tail("a\nb\nc\n", 1)).toBe("c");
+    });
+
+    it("returns the last lines of a CRLF file that ends with a newline", async () => {
+      expect(await tail("a\r\nb\r\nc\r\n", 2)).toBe("b\nc");
+    });
+
+    it("returns the last lines of a file with no final newline unchanged", async () => {
+      expect(await tail("a\nb\nc", 2)).toBe("b\nc");
+    });
+
+    it("counts a blank last line as a line", async () => {
+      expect(await tail("a\nb\n\n", 2)).toBe("b\n");
+    });
+
+    it("returns the whole file when tail exceeds its line count", async () => {
+      expect(await tail("a\nb\n", 5)).toBe("a\nb");
+    });
+
+    // tailFile reads 1 KB chunks from the end. Here the last chunk holds both
+    // remaining newlines but starts partway through the first wanted line, so
+    // the read loop must not count the final newline as a line break it needs.
+    it("reads back past a chunk boundary for the first wanted line (LF)", async () => {
+      const content =
+        "head\n" + "A".repeat(611) + "\n" + "B".repeat(511) + "\n";
+      expect(await tail(content, 2)).toBe(
+        "A".repeat(611) + "\n" + "B".repeat(511),
+      );
+    });
+
+    it("reads back past a chunk boundary for the first wanted line (CRLF)", async () => {
+      const content =
+        "head\r\n" + "A".repeat(611) + "\r\n" + "B".repeat(510) + "\r\n";
+      expect(await tail(content, 2)).toBe(
+        "A".repeat(611) + "\n" + "B".repeat(510),
+      );
+    });
+
+    it("joins a CRLF pair split across a chunk boundary", async () => {
+      // The last 1024 bytes start with the "\n" of the "\r\n" after "x".
+      const content = "x\r\n" + "C".repeat(1021) + "\r\n";
+      expect(await tail(content, 2)).toBe("x\n" + "C".repeat(1021));
+    });
   });
 
   it("treats head: 0 as absent and returns the whole file", async () => {
