@@ -188,7 +188,8 @@ def _readability_content(html: str, use_readability_js: bool) -> str:
 def _hiding_declaration(declaration: str) -> bool:
     """Whether one inline-style declaration is one Readability.js treats as hidden."""
     prop, _, value = declaration.partition(":")
-    value = value.replace("!important", "").strip().lower()
+    # Lowercased first: CSS keywords, `!important` included, ignore case.
+    value = value.lower().replace("!important", "").strip()
     return (prop.strip().lower(), value) in {
         ("display", "none"),
         ("visibility", "hidden"),
@@ -240,7 +241,9 @@ def _recover_hidden_content(html: str, content: str) -> str:
         # Outermost only: unhiding a container exposes what it holds, and
         # anything hidden inside it stays hidden.
         if not any(_is_hidden(parent) for parent in tag.parents)
+        # Furniture, or anything inside it (`<nav><div hidden>`), stays hidden.
         and not _is_page_chrome(tag)
+        and not any(_is_page_chrome(parent) for parent in tag.parents)
         and _text_length(tag) > extracted
     ]
     if not larger:

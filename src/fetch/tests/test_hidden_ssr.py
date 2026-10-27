@@ -90,6 +90,7 @@ async def fetch(web: FakeWeb, page: str, **serve_kwargs: Any) -> str:
         'style="position:absolute;top:-9999px;display:none"',
         "hidden",
         'style="display: NONE !important"',
+        'style="display:none !IMPORTANT"',
     ],
 )
 async def test_hidden_ssr_content_is_recovered(
@@ -129,7 +130,12 @@ async def test_page_with_small_hidden_element_is_extracted_once(
 @pytest.mark.usefixtures("node_readability")
 @pytest.mark.parametrize(
     ("opening", "closing"),
-    [("<nav hidden>", "</nav>"), ('<div role="navigation" hidden>', "</div>")],
+    [
+        ("<nav hidden>", "</nav>"),
+        ('<div role="navigation" hidden>', "</div>"),
+        ("<nav><div hidden>", "</div></nav>"),
+        ('<header><div style="display:none">', "</div></header>"),
+    ],
 )
 async def test_hidden_navigation_is_left_hidden(
     web: FakeWeb, calls: list[str], opening: str, closing: str
@@ -195,6 +201,7 @@ async def test_no_readability_js_is_never_rerun(web: FakeWeb, calls: list[str]) 
         ('<div style="display:none">', True),
         ('<div style="color: red; Display : None ;">', True),
         ('<div style="visibility:hidden !important">', True),
+        ('<div style="visibility:hidden !Important">', True),
         ("<div hidden>", True),
         ('<div aria-hidden="true">', True),
         ("<div>", False),
