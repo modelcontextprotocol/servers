@@ -27,7 +27,7 @@ let port: number;
 beforeAll(async () => {
   vi.stubEnv("GZIP_MAX_FETCH_SIZE", "16");
   vi.stubEnv("GZIP_MAX_FETCH_TIME_MILLIS", "150");
-  vi.stubEnv("GZIP_ALLOWED_DOMAINS", " Example.COM, localhost ,,");
+  vi.stubEnv("GZIP_ALLOWED_DOMAINS", " Example.COM, localhost ,,[::1]");
   vi.stubEnv("GZIP_ALLOW_PRIVATE_IPS", "1");
   harness = await import("./harness.js");
 
@@ -101,6 +101,12 @@ describe("gzip-file-as-resource limits", () => {
     expect(await gzip(`http://localhost:${port}/file`)).toMatchObject({
       type: "resource_link",
       uri: "demo://resource/session/limited.gz",
+    });
+  });
+
+  it("matches a listed IPv6 literal with its brackets", async () => {
+    expect(await gzip(`http://[::1]:${port}/file`)).toMatchObject({
+      type: "resource_link",
     });
   });
 

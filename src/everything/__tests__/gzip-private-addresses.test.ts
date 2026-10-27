@@ -7,7 +7,8 @@
  * and `fetch` are stubbed for one name, `public.example`; every other name
  * and URL goes to the real resolver and the real `fetch`. The opt-in
  * (`GZIP_ALLOW_PRIVATE_IPS`) is exercised by the other gzip suites, whose
- * fixtures are on loopback.
+ * fixtures are on loopback. The fetch deadline is shortened, before the
+ * server loads, to show that it bounds a lookup that never answers.
  */
 import { createServer as createHttpServer, type Server } from "node:http";
 import { once } from "node:events";
@@ -22,14 +23,26 @@ import {
 } from "vitest";
 import { connect, contentOf, textOf, type Session } from "./harness.js";
 
+vi.hoisted(() => {
+  vi.stubEnv("GZIP_MAX_FETCH_TIME_MILLIS", "500");
+});
+
 vi.mock("node:dns/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:dns/promises")>();
+  const stubbed: Record<string, { address: string; family: number }> = {
+    "public.example": { address: "93.184.215.14", family: 4 },
+    "anycast.example": { address: "192.0.0.9", family: 4 }, // inside 192.0.0.0/24
+    "anycast6.example": { address: "2001:3::1", family: 6 }, // inside 2001::/23
+  };
   return {
     ...actual,
-    lookup: (hostname: string, options: { all: true }) =>
-      hostname === "public.example"
-        ? Promise.resolve([{ address: "93.184.215.14", family: 4 }])
-        : actual.lookup(hostname, options),
+    lookup: (hostname: string, options: { all: true }) => {
+      if (hostname === "stalled.example") return new Promise(() => {});
+      const answer = stubbed[hostname];
+      return answer
+        ? Promise.resolve([answer])
+        : actual.lookup(hostname, options);
+    },
   };
 });
 
@@ -51,7 +64,7 @@ beforeAll(async () => {
 
   const realFetch = globalThis.fetch;
   vi.stubGlobal("fetch", (input: URL, init?: RequestInit) => {
-    if (input.hostname !== "public.example") return realFetch(input, init);
+    if (!input.hostname.endsWith(".example")) return realFetch(input, init);
     if (input.pathname === "/to-loopback") {
       return Promise.resolve(
         new Response(null, {
@@ -66,6 +79,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   http.closeAllConnections();
   await new Promise((resolve) => http.close(resolve));
 });
@@ -141,6 +155,25 @@ describe("gzip-file-as-resource private addresses (#5130)", () => {
       type: "resource_link",
       uri: "demo://resource/session/private.gz",
     });
+  });
+
+  it.each([
+    ["IPv4", "anycast.example"],
+    ["IPv6", "anycast6.example"],
+  ])(
+    "fetches from a globally reachable %s exception inside a refused range",
+    async (_family, host) => {
+      expect(await gzip(`http://${host}/file`)).toMatchObject({
+        type: "resource_link",
+      });
+    },
+  );
+
+  it("bounds the address lookup by GZIP_MAX_FETCH_TIME_MILLIS", async () => {
+    const url = "http://stalled.example/file";
+    expect(textOf(await gzip(url))).toBe(
+      `Fetching ${url} took more than 500 ms and was aborted.`,
+    );
   });
 
   it("refuses a redirect from a public origin to a loopback address", async () => {

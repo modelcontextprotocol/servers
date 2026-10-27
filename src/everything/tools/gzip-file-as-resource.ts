@@ -104,6 +104,53 @@ for (const [network, prefix] of [
   NON_PUBLIC_ADDRESSES.addSubnet(network, prefix, "ipv6");
 }
 
+// Globally reachable assignments inside those ranges (anycast services and
+// the like), allowed as the fetch server allows its _PUBLIC_EXCEPTIONS.
+const PUBLIC_EXCEPTIONS = new BlockList();
+PUBLIC_EXCEPTIONS.addAddress("192.0.0.9", "ipv4");
+PUBLIC_EXCEPTIONS.addAddress("192.0.0.10", "ipv4");
+for (const [network, prefix] of [
+  ["2001:1::1", 128],
+  ["2001:1::2", 128],
+  ["2001:3::", 32],
+  ["2001:4:112::", 48],
+  ["2001:20::", 28],
+  ["2001:30::", 28],
+] as const) {
+  PUBLIC_EXCEPTIONS.addSubnet(network, prefix, "ipv6");
+}
+
+/** True when `address` is not a public destination. */
+function isNonPublic(address: string, family: number): boolean {
+  const type = family === 6 ? "ipv6" : "ipv4";
+  return (
+    !PUBLIC_EXCEPTIONS.check(address, type) &&
+    NON_PUBLIC_ADDRESSES.check(address, type)
+  );
+}
+
+/**
+ * Settles as `promise` does, or rejects with the signal's reason as soon as it
+ * aborts, so that the fetch deadline also bounds work that takes no signal
+ * (the DNS lookup).
+ */
+async function raceAbort<T>(
+  promise: Promise<T>,
+  signal: AbortSignal,
+): Promise<T> {
+  signal.throwIfAborted();
+  let onAbort = () => {};
+  const aborted = new Promise<never>((_, reject) => {
+    onAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([promise, aborted]);
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
+}
+
 // Tool input schema
 const GZipFileAsResourceSchema = z.object({
   name: z
@@ -221,9 +268,13 @@ export const registerGZipFileAsResourceTool = (
  * checked address for the connection, which this demo server does not do.
  *
  * @param {URL} url The URL about to be requested.
+ * @param {AbortSignal} signal The fetch's deadline, which bounds the lookup too.
  * @throws {Error} If the request is refused, or the host cannot be resolved.
  */
-async function assertPermittedTarget(url: URL): Promise<void> {
+async function assertPermittedTarget(
+  url: URL,
+  signal: AbortSignal,
+): Promise<void> {
   const refuse = (reason: string) =>
     new Error(`Error processing file ${url}: ${reason}`);
   if (url.protocol === "data:") return; // carries its own bytes
@@ -232,17 +283,21 @@ async function assertPermittedTarget(url: URL): Promise<void> {
       `Unsupported URL protocol for ${url}. Only http, https, and data URLs are supported.`,
     );
   }
-  // An IPv6 literal's hostname keeps its brackets: [::1]
-  const host = url.hostname.replace(/^\[(.*)\]$/, "$1");
+  // Names are matched as the URL spells them, an IPv6 literal with its
+  // brackets ([::1]), as they always have been
+  const domain = url.hostname;
   if (
     GZIP_ALLOWED_DOMAINS.length > 0 &&
-    !GZIP_ALLOWED_DOMAINS.some((d) => host === d || host.endsWith(`.${d}`))
+    !GZIP_ALLOWED_DOMAINS.some((d) => domain === d || domain.endsWith(`.${d}`))
   ) {
-    throw refuse(`Domain ${host} is not in the allowed domains list.`);
+    throw refuse(`Domain ${domain} is not in the allowed domains list.`);
   }
   if (GZIP_ALLOW_PRIVATE_IPS) return;
-  for (const { address, family } of await lookup(host, { all: true })) {
-    if (NON_PUBLIC_ADDRESSES.check(address, family === 6 ? "ipv6" : "ipv4")) {
+  // The resolver takes an IPv6 literal without its brackets
+  const host = domain.replace(/^\[(.*)\]$/, "$1");
+  const addresses = await raceAbort(lookup(host, { all: true }), signal);
+  for (const { address, family } of addresses) {
+    if (isNonPublic(address, family)) {
       throw refuse(
         `${host} resolves to ${address}, which is not a public address. Set GZIP_ALLOW_PRIVATE_IPS=1 to allow private, loopback and link-local addresses.`,
       );
@@ -266,7 +321,7 @@ async function fetchPermitted(
 ): Promise<Response> {
   let target = url;
   for (let redirects = 0; ; redirects++) {
-    await assertPermittedTarget(target);
+    await assertPermittedTarget(target, signal);
     const response = await fetch(target, { signal, redirect: "manual" });
     const location = response.headers.get("location");
     if (!REDIRECT_STATUSES.has(response.status) || location === null) {
