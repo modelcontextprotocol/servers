@@ -496,3 +496,85 @@ describe("Unicode space separators (#1970)", () => {
     expect(textOf(result)).toBe("Ambiguous Unicode path component: a b");
   });
 });
+
+// #470: an allowed directory spelled in a letter case that matches neither
+// the configured nor the on-disk spelling failed the allow-list prefix check,
+// a string comparison, before the path was resolved. A case-folded compare
+// would admit a sibling on a case-sensitive directory, so the request is
+// respelled only where the file system says both spellings name one entry.
+describe("letter case of the allowed directory's own name (#470)", () => {
+  let root: string;
+  let scoped: Connected;
+
+  beforeEach(async () => {
+    root = path.join(dir, "CaseTest");
+    await fs.mkdir(path.join(root, "Sub"), { recursive: true });
+    await fs.writeFile(path.join(root, "Sub", "File.txt"), "inside");
+    scoped = await connect([root]);
+  });
+
+  afterEach(async () => {
+    await scoped.close();
+  });
+
+  const requested = () => path.join(dir, "CASETEST", "SUB", "FILE.TXT");
+
+  it.skipIf(!caseInsensitive)(
+    "reads through a respelled allowed directory on a case-insensitive file system",
+    async () => {
+      const result = await call(scoped.client, "read_text_file", {
+        path: requested(),
+      });
+      expect(textOf(result)).toBe("inside");
+    },
+  );
+
+  it.skipIf(!caseInsensitive)(
+    "creates a new file under a respelled allowed directory, inside it",
+    async () => {
+      const result = await call(scoped.client, "write_file", {
+        path: path.join(dir, "casetest", "sub", "New.txt"),
+        content: "new",
+      });
+      expect(result.isError).toBeFalsy();
+      expect(await fs.readdir(path.join(root, "Sub"))).toContain("New.txt");
+    },
+  );
+
+  it.skipIf(caseInsensitive)(
+    "refuses the respelling on a case-sensitive file system",
+    async () => {
+      const result = await call(scoped.client, "read_text_file", {
+        path: requested(),
+      });
+      expect(textOf(result)).toMatch(/^Access denied - path outside/);
+    },
+  );
+
+  it.skipIf(caseInsensitive)(
+    "never admits a sibling that differs from the allowed directory only in case",
+    async () => {
+      const sibling = path.join(dir, "casetest");
+      await fs.mkdir(sibling);
+      await fs.writeFile(path.join(sibling, "secret.txt"), "secret");
+      const result = await call(scoped.client, "read_text_file", {
+        path: path.join(sibling, "secret.txt"),
+      });
+      expect(textOf(result)).toMatch(/^Access denied - path outside/);
+    },
+  );
+
+  it("refuses a .. escape through a respelled allowed directory", async () => {
+    const result = await call(scoped.client, "read_text_file", {
+      path: path.join(
+        dir,
+        "CASETEST",
+        "..",
+        "..",
+        path.basename(outside),
+        "secret.txt",
+      ),
+    });
+    expect(textOf(result)).toMatch(/^Access denied - path outside/);
+  });
+});

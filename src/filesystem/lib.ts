@@ -139,6 +139,104 @@ function respellAllowedDirectoryPrefix(
   return absolutePath;
 }
 
+// The form two components are compared in when only their letter case may
+// differ (#470). Folding alone proves nothing: whether two spellings name one
+// entry is the file system's call, and namesOneEntry asks it.
+function caseMatchKey(component: string): string {
+  return unicodeMatchKey(component).toLowerCase();
+}
+
+// Whether `requested` names the same entry of `parent` as `configured`, an
+// allowed directory's own component. Asked of the file system rather than
+// folded, because NTFS and APFS directories can be case-sensitive, and there a
+// name differing only in case is another entry, or none (#470). Both
+// conditions must hold: `parent` holds exactly one entry matching the request
+// case-insensitively, and the two spellings lstat to the same device and
+// inode. Any error, a missing name included, answers no, so the request is
+// refused as before.
+async function namesOneEntry(
+  parent: string,
+  requested: string,
+  configured: string,
+): Promise<boolean> {
+  try {
+    const key = caseMatchKey(requested);
+    const entries = (await fs.readdir(parent)) ?? [];
+    if (entries.filter((entry) => caseMatchKey(entry) === key).length !== 1) {
+      return false;
+    }
+    const requestedStats = await fs.lstat(path.join(parent, requested), {
+      bigint: true,
+    });
+    const configuredStats = await fs.lstat(path.join(parent, configured), {
+      bigint: true,
+    });
+    return (
+      requestedStats.dev === configuredStats.dev &&
+      requestedStats.ino === configuredStats.ino
+    );
+  } catch {
+    return false;
+  }
+}
+
+// An allowed directory whose own name the request spells in another letter
+// case, matching neither the configured nor the on-disk spelling, fails the
+// allow-list check, which compares strings (#470). Like the Unicode respelling
+// above, map such a request onto the allowed directory's own spelling, but
+// only where every component that differs in case is confirmed, segment by
+// segment, by namesOneEntry. The result is inside that directory by
+// construction, and every later check still runs against the real allow-list.
+async function respellAllowedDirectoryCase(
+  absolutePath: string,
+  allowedDirectories: readonly string[],
+): Promise<string> {
+  const requestedRoot = path.parse(absolutePath).root;
+  const requestedParts = absolutePath
+    .slice(requestedRoot.length)
+    .split(path.sep)
+    .filter(Boolean);
+  const candidates = allowedDirectories
+    .map((directory) => path.resolve(directory))
+    .sort((left, right) => right.length - left.length);
+  for (const directory of candidates) {
+    const root = path.parse(directory).root;
+    const directoryParts = directory
+      .slice(root.length)
+      .split(path.sep)
+      .filter(Boolean);
+    // A root is "/" off Windows; on Windows its drive letter or UNC server
+    // and share are case-insensitive by definition, so folding it is safe.
+    if (
+      caseMatchKey(root) !== caseMatchKey(requestedRoot) ||
+      directoryParts.length > requestedParts.length ||
+      !directoryParts.every(
+        (part, index) =>
+          caseMatchKey(part) === caseMatchKey(requestedParts[index]),
+      )
+    ) {
+      continue;
+    }
+    let parent = root;
+    let confirmed = true;
+    for (let index = 0; index < directoryParts.length && confirmed; index++) {
+      const part = directoryParts[index];
+      const requestedPart = requestedParts[index];
+      confirmed =
+        unicodeMatchKey(part) === unicodeMatchKey(requestedPart) ||
+        (await namesOneEntry(parent, requestedPart, part));
+      parent = path.join(parent, part);
+    }
+    if (confirmed) {
+      return path.join(
+        directory,
+        ...requestedParts.slice(directoryParts.length),
+      );
+    }
+  }
+  return absolutePath;
+}
+
 // Whether a directory entry of this name exists, without following it.
 async function entryExists(entryPath: string): Promise<boolean> {
   try {
@@ -253,6 +351,17 @@ export async function validatePath(
     )
   ) {
     absolute = respellAllowedDirectoryPrefix(absolute, allowedDirectories);
+    if (
+      !isPathWithinAllowedDirectories(
+        normalizePathFormat(absolute),
+        allowedDirectories,
+      )
+    ) {
+      absolute = await respellAllowedDirectoryCase(
+        absolute,
+        allowedDirectories,
+      );
+    }
   }
 
   const normalizedRequested = normalizePathFormat(absolute);
