@@ -1,6 +1,6 @@
 ---
 name: client-smoke
-description: "Drive a locally built server with a real client: the Inspector CLI (scripted), the Inspector web UI (by hand) and an LLM client. Use when smoke-testing a server change; when calling a tool, reading a resource or getting a prompt from the command line; when choosing a protocol era; or when the Inspector CLI will not connect to, or misreads, a server command."
+description: "Drive a locally built server with a real client: the Inspector CLI (scripted), the Inspector web UI (through Playwright) and an LLM client. Use when smoke-testing a server change; when calling a tool, reading a resource or getting a prompt from the command line; when choosing a protocol era; or when the Inspector CLI will not connect to, or misreads, a server command."
 disable-model-invocation: false
 ---
 
@@ -17,7 +17,7 @@ Three clients, in the order to reach for them:
 | Client | Driven by | Use it for |
 | --- | --- | --- |
 | Inspector **CLI** | A command. This is the **scripted path**, and the one an agent runs | One request, one JSON result: the evidence that goes in a PR |
-| Inspector **web** UI | A person, by hand. Nothing in this repo automates a browser | What only a UI shows: notifications arriving, elicitation and sampling prompts, a long-running tool's progress |
+| Inspector **web** UI | A Playwright script in headless Chromium, which an agent writes and runs | What the CLI cannot do: elicitation and sampling round-trips, URL elicitation, tasks, notifications arriving, a long-running tool's progress |
 | An **LLM client** | A prompt | Whether a model picks the tool and uses its result, which the PR checklist asks for |
 
 Build first (`npm run build -w src/<server>`). Every command below runs the
@@ -196,14 +196,19 @@ from the web UI. On 2026-07-28 the CLI does follow a task handle: a call to
 
 ## The Inspector web UI
 
-The web client is the hand-driven path. It needs a person at a browser; this
-repo configures no browser automation, so an agent prepares the command and
-the steps and asks for what was observed.
+The web client is driven with **Playwright** in headless Chromium: an agent
+writes the script, runs it, and records what came back. It is not a step to
+hand to a maintainer. Everything below was run on **Inspector 2.12.0** and
+**Playwright 1.64.1**, against `everything` in both eras; pin both in any
+script you keep, since the selectors are the UI's, not an API.
 
 ```sh
-npx -y @modelcontextprotocol/inspector node src/everything/dist/index.js stdio
-npx -y @modelcontextprotocol/inspector -- uv --directory src/time run mcp-server-time
-npx -y @modelcontextprotocol/inspector --transport http --server-url http://localhost:3001/mcp
+npx -y @modelcontextprotocol/inspector@2.12.0 --web --protocol-era modern -- \
+  node src/everything/dist/index.js stdio
+npx -y @modelcontextprotocol/inspector@2.12.0 --web --protocol-era legacy -- \
+  uv --directory src/time run mcp-server-time
+npx -y @modelcontextprotocol/inspector@2.12.0 --web \
+  --transport http --server-url http://localhost:3001/mcp
 ```
 
 ⚠️ **The web launcher reads `--` the other way round from the CLI.** Here the
@@ -212,14 +217,94 @@ it; in `--cli` mode the server command is before `--` and the options after.
 A line copied from one mode to the other starts the wrong thing. Pass a
 server's environment with `-e KEY=VALUE` before the `--`.
 
-Use the web UI for what a single request cannot show: `toggle-simulated-logging` and
-`toggle-subscriber-updates` (notifications over time),
-`trigger-elicitation-request` and `trigger-sampling-request` (the client is
-asked something), `trigger-long-running-operation` (progress), and a
-filesystem server's response to a Roots change.
+Install Playwright in a scratch directory **outside the worktree**, never as a
+dependency of this repo (`npm i playwright@1.64.1`, then
+`npx playwright install chromium`), and run the script from there.
 
-Evidence from the web UI is what was clicked and what appeared, in words. This
-repo does not attach screenshots.
+### The recipe
+
+- **Launch.** Spawn the launcher above with `MCP_AUTO_OPEN_ENABLED=false` in
+  its environment, or it opens a tab in your own browser as well. It prints a
+  tokenized URL (`http://127.0.0.1:6274?MCP_INSPECTOR_API_TOKEN=…`) on stdout;
+  read it from there and navigate to it. Start the launcher in its own process
+  group (`detached: true`) and kill the group when the script ends, so the
+  server it spawned goes with it.
+- **Connect.** The connect control is a Mantine switch whose input is hidden:
+  `getByRole("switch", { name: /Connect or disconnect/ }).check({ force: true })`.
+- **Pick a screen.** The Servers, Tools, Prompts and Resources tabs are radios
+  that cannot be clicked; click their label, `locator('label[for$="-Tools"]')`.
+  A tool is then a button named for its title and name:
+  `getByRole("button", { name: / echo$/ })`.
+- **Fill and run.** A field is a textbox named for its property
+  (`getByRole("textbox", { name: /message/ })`). Run with the **Execute Tool**
+  button; it stays disabled until every required field is filled.
+- **Selects.** A Mantine Select (an `enum` field, in a tool form or in an
+  elicitation) is a **read-only** textbox: `fill` does nothing. Click it, then
+  press `ArrowDown` and `Enter`, which picks the first option.
+- **Read the result.** The panel's heading is **Results**, or **Tool Call
+  Failed**. A result with `isError: true` keeps the **Results** heading and
+  adds an alert named **Tool Error** holding the message, so check for that
+  alert rather than the heading. Which heading a failure gets varies by era:
+  rejecting a sampling request shows **Tool Call Failed** on 2026-07-28 and
+  **Results** plus **Tool Error** on 2025-11-25.
+- **Elicitation.** A dialog named **Elicitation Request**, with **Cancel**,
+  **Decline** and **Submit**. Its question is the paragraph that opens with
+  `“`; the dialog's first `<p>` is its title.
+- **Multi-step elicitation.** After **Submit**, wait for the question to change
+  or for the result heading, **never for the dialog to close**. Both eras
+  reuse the open dialog for the next step, so it never closes between steps,
+  and on the 2025 era it can read as hidden for a moment while the next
+  question renders, so a wait for it to close either hangs or returns early.
+  The URL error path's retry reuses the dialog the same way: tell its two
+  prompts apart by their **Request ID** line.
+- **URL elicitation.** The dialog shows **Open in Browser**, and **I've
+  completed it** only after that has been clicked. The click opens a popup
+  page: catch it with `page.waitForEvent("popup")` around the click, close it,
+  then click **I've completed it**.
+- **Sampling.** A dialog named **Sampling Request**: fill the **Response**
+  textbox and click **Send Response**, or click **Reject**.
+- **Tasks.** On 2026-07-28 the Inspector follows the task handle itself: run
+  `simulate-research-query` and wait for **Results** like any other call.
+- **Isolation.** Open a fresh page, and connect again, for each scenario. One
+  scenario's open dialog or dropped connection then cannot fail the next.
+
+Era differences that change what to expect, beyond the tool list (see
+[Protocol eras](#protocol-eras)):
+
+| Scenario | 2025-11-25 (`legacy`) | 2026-07-28 (`modern`) |
+| --- | --- | --- |
+| `trigger-url-elicitation` with `errorPath` on | **Two** dialogs: the -32042 error path, then the retry's | **One**: there is no -32042 on 2026-07-28 |
+| `trigger-sampling-request`, rejected | **Results** with a **Tool Error** alert | **Tool Call Failed** |
+| Each prompt for input | Plain dialog | The dialog also shows `input_required` (the answer is sent as a retry) |
+
+A sketch of one scenario, with the launch and teardown above:
+
+```js
+const page = await browser.newPage();
+await page.goto(url);
+await page.getByRole("switch", { name: /Connect or disconnect/ }).check({ force: true });
+await page.locator('label[for$="-Tools"]').click();
+await page.getByRole("button", { name: / trigger-elicitation-request$/ }).click();
+await page.getByRole("button", { name: "Execute Tool" }).click();
+const dialog = page.getByRole("dialog", { name: "Elicitation Request" });
+await dialog.getByRole("textbox", { name: "String", exact: true }).fill("Ada");
+await dialog.getByRole("button", { name: "Submit" }).click();
+await page.getByRole("heading", { name: /^(Results|Tool Call Failed)$/ }).waitFor();
+// → Results: "✅ User provided the requested information! … Name: Ada"
+await page.close();
+```
+
+Use the web UI for what a single CLI request cannot show:
+`trigger-elicitation-request`, `trigger-multi-step-elicitation`,
+`trigger-url-elicitation` and `trigger-sampling-request` (the client is asked
+something), the task tools on 2026-07-28, `toggle-simulated-logging` and
+`toggle-subscriber-updates` (notifications over time),
+`trigger-long-running-operation` (progress), and a filesystem server's
+response to a Roots change.
+
+Evidence from the web UI is the scenario, era and what came back, in words: the
+result heading and its text, or the dialogs that appeared. This repo does not
+attach screenshots.
 
 ## An LLM client
 
