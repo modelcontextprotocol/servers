@@ -226,7 +226,7 @@ export function packagesAt(spawn, sha) {
  */
 export function registryUrl(pkg) {
   return pkg.registry === "npm"
-    ? `https://registry.npmjs.org/${pkg.name.replace("/", "%2F")}/${pkg.version}`
+    ? `https://registry.npmjs.org/${pkg.name.replaceAll("/", "%2F")}/${pkg.version}`
     : `https://pypi.org/pypi/${pkg.name}/${pkg.version}/json`;
 }
 
@@ -296,7 +296,8 @@ export function parseGenerated(body) {
       inContributors = line === "## New Contributors";
       continue;
     }
-    if (line === "" || /^<!--.*-->$/.test(line)) continue;
+    if (line === "" || (line.startsWith("<!--") && line.endsWith("-->")))
+      continue;
     if (line.startsWith("**Full Changelog**")) {
       changelog = line;
       continue;

@@ -462,7 +462,7 @@ function world({
   const fetch = async (url) => {
     fetched.push(url);
     const name = Object.values(packages).find((p) =>
-      url.includes(p.name.replace("/", "%2F")),
+      url.includes(p.name.replaceAll("/", "%2F")),
     )?.name;
     return { status: name && onRegistry.includes(name) ? 200 : 404 };
   };
