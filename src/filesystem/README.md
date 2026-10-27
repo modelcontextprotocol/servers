@@ -165,9 +165,12 @@ The server's directory access control follows this flow:
   - Inputs:
     - `path` (string): Starting directory
     - `pattern` (string): Search pattern
-    - `excludePatterns` (string[]): Exclude any patterns.
+    - `excludePatterns` (string[]): Exclude any patterns. An excluded entry is
+      skipped before it is resolved or read, so excluding a slow folder keeps
+      the search out of it entirely.
   - Glob-style pattern matching
   - Returns full paths to matches
+  - Bounded: see [Slow and very large trees](#slow-and-very-large-trees)
 
 - **directory_tree**
   - Get recursive JSON tree structure of directory contents
@@ -182,6 +185,7 @@ The server's directory access control follows this flow:
         - Empty array for empty directories
         - Omitted for files
   - Output is formatted with 2-space indentation for readability
+  - Bounded: see [Slow and very large trees](#slow-and-very-large-trees)
     
 - **get_file_info**
   - Get detailed file/directory metadata
@@ -202,6 +206,27 @@ The server's directory access control follows this flow:
   - No input required
   - Returns:
     - Directories that this server can read/write from
+
+### Slow and very large trees
+
+A folder backed by a cloud-storage provider (macOS `~/Library/CloudStorage`,
+iCloud Drive) or a slow network mount can make a single filesystem call block
+for minutes while the provider fetches metadata. Two fixed limits keep one
+request from stalling the server:
+
+- **Resolving a path (in any tool), and each directory read in `search_files`
+  and `directory_tree`, waits at most 15 seconds.** A call that takes longer ends
+  the request with an error naming the path (`Filesystem call timed out after
+  15000 ms: ...`). A path whose real location cannot be read in time is
+  refused, never admitted.
+- **`search_files` and `directory_tree` visit at most 100,000 entries.** A walk
+  that reaches the cap ends with an error (`... stopped after visiting 100000
+  entries ...`) rather than a partial result. Excluded entries do not count.
+
+Either error means: narrow `path`, or name the slow or large folder in
+`excludePatterns`. A timed-out call cannot be cancelled and finishes in the
+background, so a provider that stalls repeatedly can still slow the server's
+other file operations until it answers.
 
 ### Tool annotations (MCP hints)
 

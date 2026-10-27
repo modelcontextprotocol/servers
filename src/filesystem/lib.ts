@@ -1,4 +1,5 @@
 import fs from "fs/promises";
+import type { Dirent } from "fs";
 import path from "path";
 import { StringDecoder } from "string_decoder";
 import { createTwoFilesPatch } from "diff";
@@ -31,6 +32,105 @@ export interface SearchOptions {
 export interface SearchResult {
   path: string;
   isDirectory: boolean;
+}
+
+// Bounds on the filesystem calls a request can wait on, and on the recursive
+// walks (#4162). A path on a lazily materialized provider (a macOS
+// CloudStorage or iCloud Drive folder, a slow network mount) can make
+// realpath or readdir block for minutes while the provider fetches metadata,
+// and a recursive walk over a large tree had no upper bound, so one request
+// could stall the server past the client's own timeout.
+//
+// They are constants, not options: 15 s is far beyond a local call (which
+// takes milliseconds), is the bound the issue's reporter ran for months against
+// Google Drive and iCloud Drive trees without a misfire, and still answers
+// before the 60 s default request timeout of the MCP SDK clients. 100,000 entries is far more than a
+// result a model can use, and a walk that reaches it is told to narrow the path
+// or add excludePatterns.
+//
+// A timeout only stops waiting. Node cannot cancel an fs call already in
+// flight, so the stalled call keeps one of libuv's threadpool threads (4 by
+// default) until the provider answers, and four stalled calls at once delay
+// every other fs call in the process until one returns. The timeout still
+// answers the request that hit it with an error instead of hanging.
+export const FS_CALL_TIMEOUT_MS = 15_000;
+export const MAX_WALK_ENTRIES = 100_000;
+
+/** A filesystem call that did not settle within FS_CALL_TIMEOUT_MS. */
+export class FsTimeoutError extends Error {
+  constructor(operation: string, target: string) {
+    super(
+      `Filesystem call timed out after ${FS_CALL_TIMEOUT_MS} ms: ${operation} ${target}. ` +
+        "The path may be on a cloud-storage or network provider that fetches it on demand; " +
+        "try a narrower path, or exclude it with excludePatterns.",
+    );
+    this.name = "FsTimeoutError";
+  }
+}
+
+/** A recursive walk that reached MAX_WALK_ENTRIES before it finished. */
+export class WalkLimitError extends Error {
+  constructor(operation: string, root: string, limit: number) {
+    super(
+      `${operation} stopped after visiting ${limit} entries under ${root}, without finishing. ` +
+        "Narrow the path, or add excludePatterns for large subtrees.",
+    );
+    this.name = "WalkLimitError";
+  }
+}
+
+// Races an fs call against FS_CALL_TIMEOUT_MS. The losing call is not
+// cancelled (see above); Promise.race keeps a handler on it, so a late
+// rejection is still handled.
+async function withFsTimeout<T>(
+  call: Promise<T>,
+  operation: string,
+  target: string,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new FsTimeoutError(operation, target)),
+      FS_CALL_TIMEOUT_MS,
+    );
+  });
+  try {
+    return await Promise.race([call, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * fs.realpath, bounded by FS_CALL_TIMEOUT_MS. A timeout rejects with
+ * FsTimeoutError, which path validation treats as a refusal: a path whose real
+ * location could not be read in time is never admitted.
+ */
+export function realpathWithTimeout(target: string): Promise<string> {
+  return withFsTimeout(fs.realpath(target), "realpath", target);
+}
+
+/** fs.readdir with file types, bounded by FS_CALL_TIMEOUT_MS. */
+export function readdirWithTimeout(target: string): Promise<Dirent[]> {
+  return withFsTimeout(
+    fs.readdir(target, { withFileTypes: true }),
+    "readdir",
+    target,
+  );
+}
+
+/**
+ * A counter for a recursive walk: each call records one visited entry and
+ * throws WalkLimitError once the walk has visited more than MAX_WALK_ENTRIES.
+ */
+export function createEntryBudget(operation: string, root: string): () => void {
+  let visited = 0;
+  return () => {
+    visited++;
+    if (visited > MAX_WALK_ENTRIES) {
+      throw new WalkLimitError(operation, root, MAX_WALK_ENTRIES);
+    }
+  };
 }
 
 // Pure Utility Functions
@@ -162,16 +262,25 @@ async function namesOneEntry(
 ): Promise<boolean> {
   try {
     const key = caseMatchKey(requested);
-    const entries = (await fs.readdir(parent)) ?? [];
+    const entries =
+      (await withFsTimeout(fs.readdir(parent), "readdir", parent)) ?? [];
     if (entries.filter((entry) => caseMatchKey(entry) === key).length !== 1) {
       return false;
     }
-    const requestedStats = await fs.lstat(path.join(parent, requested), {
-      bigint: true,
-    });
-    const configuredStats = await fs.lstat(path.join(parent, configured), {
-      bigint: true,
-    });
+    // Bounded like every request-path fs call (#4162); a timeout lands in the
+    // catch below and answers no, so the request is refused.
+    const requestedPath = path.join(parent, requested);
+    const configuredPath = path.join(parent, configured);
+    const requestedStats = await withFsTimeout(
+      fs.lstat(requestedPath, { bigint: true }),
+      "lstat",
+      requestedPath,
+    );
+    const configuredStats = await withFsTimeout(
+      fs.lstat(configuredPath, { bigint: true }),
+      "lstat",
+      configuredPath,
+    );
     return (
       requestedStats.dev === configuredStats.dev &&
       requestedStats.ino === configuredStats.ino
@@ -266,7 +375,7 @@ async function resolveUnicodeEquivalentPath(
     return absolutePath;
   }
 
-  let currentPath = await fs.realpath(allowedDirectory);
+  let currentPath = await realpathWithTimeout(allowedDirectory);
   const relativeParts = path
     .relative(allowedDirectory, absolutePath)
     .split(path.sep)
@@ -274,7 +383,9 @@ async function resolveUnicodeEquivalentPath(
 
   for (let index = 0; index < relativeParts.length; index++) {
     const requestedPart = relativeParts[index];
-    const entries = (await fs.readdir(currentPath)) ?? [];
+    const entries =
+      (await withFsTimeout(fs.readdir(currentPath), "readdir", currentPath)) ??
+      [];
     const exactMatch = entries.find((entry) => entry === requestedPart);
     const equivalentMatches = exactMatch
       ? [exactMatch]
@@ -304,7 +415,7 @@ async function resolveUnicodeEquivalentPath(
       return path.join(currentPath, ...relativeParts.slice(index));
     }
 
-    currentPath = await fs.realpath(candidate);
+    currentPath = await realpathWithTimeout(candidate);
     if (
       !isPathWithinAllowedDirectories(
         normalizePathFormat(currentPath),
@@ -383,7 +494,7 @@ export async function validatePath(
   // Security: Handle symlinks by checking their real path to prevent symlink attacks
   // This prevents attackers from creating symlinks that point outside allowed directories
   try {
-    const realPath = await fs.realpath(absolute);
+    const realPath = await realpathWithTimeout(absolute);
     const normalizedReal = normalizePathFormat(realPath);
     if (!isPathWithinAllowedDirectories(normalizedReal, allowedDirectories)) {
       throw new Error(
@@ -792,22 +903,27 @@ export async function searchFilesWithValidation(
 ): Promise<string[]> {
   const { excludePatterns = [] } = options;
   const results: string[] = [];
+  const visit = createEntryBudget("search_files", rootPath);
 
   async function search(currentPath: string) {
-    const entries = await fs.readdir(currentPath, { withFileTypes: true });
+    const entries = await readdirWithTimeout(currentPath);
 
     for (const entry of entries) {
       const fullPath = path.join(currentPath, entry.name);
 
+      // Excludes are matched on the name before the entry is validated, so an
+      // excluded subtree is never realpath'd or read (#4162): excluding a slow
+      // provider folder keeps the walk from touching it at all.
+      const relativePath = path.relative(rootPath, fullPath);
+      const shouldExclude = excludePatterns.some((excludePattern) =>
+        minimatch(relativePath, excludePattern, { dot: true }),
+      );
+      if (shouldExclude) continue;
+
+      visit();
+
       try {
         await validatePath(fullPath, allowedDirectories);
-
-        const relativePath = path.relative(rootPath, fullPath);
-        const shouldExclude = excludePatterns.some((excludePattern) =>
-          minimatch(relativePath, excludePattern, { dot: true }),
-        );
-
-        if (shouldExclude) continue;
 
         // Use glob matching for the search pattern
         if (minimatch(relativePath, pattern, { dot: true })) {
@@ -817,7 +933,16 @@ export async function searchFilesWithValidation(
         if (entry.isDirectory()) {
           await search(fullPath);
         }
-      } catch {
+      } catch (error) {
+        // A timeout or the entry cap ends the whole search with its error
+        // rather than returning partial results as if they were complete; any
+        // other failure (an entry refused or unreadable) skips that entry.
+        if (
+          error instanceof FsTimeoutError ||
+          error instanceof WalkLimitError
+        ) {
+          throw error;
+        }
         continue;
       }
     }

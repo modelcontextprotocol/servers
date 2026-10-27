@@ -25,6 +25,8 @@ import {
   applyFileEdits,
   tailFile,
   headFile,
+  readdirWithTimeout,
+  createEntryBudget,
 } from "./lib.js";
 import { SERVER_VERSION } from "./version.js";
 
@@ -649,13 +651,14 @@ export function createServer(
         children?: TreeEntry[];
       }
       const rootPath = args.path;
+      const visit = createEntryBudget("directory_tree", rootPath);
 
       async function buildTree(
         currentPath: string,
         excludePatterns: string[] = [],
       ): Promise<TreeEntry[]> {
         const validPath = await validatePath(currentPath, allowedDirectories);
-        const entries = await fs.readdir(validPath, { withFileTypes: true });
+        const entries = await readdirWithTimeout(validPath);
         const result: TreeEntry[] = [];
 
         for (const entry of entries) {
@@ -676,6 +679,10 @@ export function createServer(
             );
           });
           if (shouldExclude) continue;
+          // Counted after the exclude check, so excluded subtrees cost
+          // nothing; the cap and the readdir timeout keep one call from
+          // walking an unbounded or stalled tree (#4162).
+          visit();
 
           const entryData: TreeEntry = {
             name: entry.name,
