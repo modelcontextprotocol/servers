@@ -31,6 +31,8 @@ A client that connects with a 2025-era protocol version (the `initialize` handsh
 
 Roots notified by Client to Server, completely replace any server-side Allowed directories when provided.
 
+A Root reached through a symlink is allowed in both its advertised form and its resolved form, as a command-line directory is: a Root of `file:///tmp/project` on macOS allows `/tmp/project` and `/private/tmp/project`. Every requested path is still resolved and checked against the resolved directories, so a symlink inside a Root that points outside it is refused.
+
 **Important**: If server starts without command-line arguments AND a 2025-era client doesn't support roots protocol, the server fails at initialization: it logs the reason to stderr, closes the connection and exits with status 1. A client that supports roots but provides none (or none that are valid) keeps the connection, with no allowed directories until it sends `roots/list_changed` with valid roots.
 
 The 2026-07-28 protocol has no `initialize` handshake and no server-to-client `roots/list` request, so a 2026-07-28 client's roots are never asked for: the command-line directories are the whole allow-list. A server started with none answers every tool call on such a connection with an error saying so.
@@ -205,7 +207,7 @@ The server's directory access control follows this flow:
   - List all directories the server is allowed to access
   - No input required
   - Returns:
-    - Directories that this server can read/write from
+    - Directories that this server can read/write from. A directory reached through a symlink is listed twice, in the form it was given and in its resolved form
 
 ### Slow and very large trees
 
