@@ -581,8 +581,11 @@ export async function writeFileContent(
  *   directory on the path swapped for a symlink cannot redirect it;
  * - O_NOFOLLOW makes the open itself fail with ELOOP on a symlink (POSIX
  *   only), and the opened handle must be the very file lstat saw (same device
- *   and inode), which catches a swap between the lstat and the open. Once
- *   the handle is verified, every write goes through it.
+ *   and inode, compared as BigInts so a 64-bit file id cannot round; where
+ *   Windows reports no device for the path, same inode, size and mtime: see
+ *   isSameEntry in pinned-directory.ts, #5154), which catches a swap between
+ *   the lstat and the open. Once the handle is verified, every write goes
+ *   through it.
  *
  * The trade-off is crash-atomicity: a crash mid-write leaves a partly written
  * file, where the rename left either the old content or the new.
@@ -591,7 +594,7 @@ async function overwriteInPlace(
   filePath: string,
   content: string,
 ): Promise<void> {
-  const expected = await fs.lstat(filePath);
+  const expected = await fs.lstat(filePath, { bigint: true });
   if (!expected.isFile()) {
     throw new Error(`Refusing to write: not a regular file: ${filePath}`);
   }
