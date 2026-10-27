@@ -401,12 +401,29 @@ function confirmInDirectory(
  * Remove `filePath`, relative to its anchored directory, only while it is
  * still the entry `expected` describes.
  */
-function removeFromDirectory(filePath: string, expected: EntryIdentity): void {
+function removeFromDirectory(
+  filePath: string,
+  expected: EntryIdentity,
+  snapshot?: Pick<fs.BigIntStats, "size" | "mtimeNs" | "ctimeNs">,
+): void {
   const name = path.basename(filePath);
   inDirectory(path.dirname(filePath), () => {
-    if (!isSameEntry(fs.lstatSync(name, { bigint: true }), expected)) {
+    const found = fs.lstatSync(name, { bigint: true });
+    if (!isSameEntry(found, expected)) {
       throw new Error(
         `Refusing to remove: ${filePath} was replaced during the move`,
+      );
+    }
+    // The same file, written to in place after it was copied: removing it
+    // would lose what was written, so the copy is the one that goes.
+    if (
+      snapshot &&
+      (found.size !== snapshot.size ||
+        found.mtimeNs !== snapshot.mtimeNs ||
+        found.ctimeNs !== snapshot.ctimeNs)
+    ) {
+      throw new Error(
+        `Refusing to remove: ${filePath} changed during the move`,
       );
     }
     fs.unlinkSync(name);
@@ -498,7 +515,7 @@ export async function moveFileAcrossDevices(
       created,
       `Refusing to remove the source: ${destinationPath} was removed or replaced during the move`,
     );
-    removeFromDirectory(sourcePath, source);
+    removeFromDirectory(sourcePath, source, source);
   } catch (error) {
     if (created) {
       discardCopy(destinationPath, created);

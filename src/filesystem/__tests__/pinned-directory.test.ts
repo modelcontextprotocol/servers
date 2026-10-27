@@ -700,6 +700,29 @@ describe("moveFileAcrossDevices", () => {
     expect(fs.existsSync(source)).toBe(false);
   });
 
+  it("removes the copy, and keeps the source, when the source was written to in place during the move", async () => {
+    const source = path.join(dir, "a.txt");
+    const destination = path.join(outside, "b.txt");
+    fs.writeFileSync(source, "a");
+    const before = fs.lstatSync(source).ino;
+    const realFchmod = fs.fchmod;
+    // fchmod runs once the copy has read to the end of the source.
+    vi.spyOn(fs, "fchmod").mockImplementationOnce(((
+      fd: number,
+      mode: number,
+      callback: (error: NodeJS.ErrnoException | null) => void,
+    ) => {
+      fs.appendFileSync(source, " and more");
+      realFchmod(fd, mode, callback);
+    }) as typeof fs.fchmod);
+    await expect(moveFileAcrossDevices(source, destination)).rejects.toThrow(
+      `Refusing to remove: ${source} changed during the move`,
+    );
+    expect(fs.lstatSync(source).ino).toBe(before);
+    expect(fs.readFileSync(source, "utf-8")).toBe("a and more");
+    expect(fs.readdirSync(outside)).toEqual([]);
+  });
+
   it("reports the copy's failure when removing the copy fails too", async () => {
     const source = path.join(dir, "a.txt");
     fs.writeFileSync(source, "a");
