@@ -59,11 +59,39 @@ function directoryChangedError(directory: string): Error {
   );
 }
 
+/** What the identity check reads from a stat (always a BigInt stat). */
+type EntryIdentity = Pick<fs.BigIntStats, "dev" | "ino" | "size" | "mtimeNs">;
+
+/**
+ * Whether `pathStat` (an lstat of the path) and `handleStat` (an fstat of the
+ * opened descriptor) describe the same file (#5154).
+ *
+ * Both are BigInt stats, so `ino` compares exactly: a number stat's `ino` is
+ * a double, and NTFS file ids above 2^53 round in it, so two different files
+ * could compare equal.
+ *
+ * Normally the file is the same when device and inode both match. On Windows
+ * with libuv < 1.51.0 (the Node 23 line), a path-based stat reports `dev` 0
+ * while the handle reports the volume serial, so comparing devices would
+ * refuse every overwrite. There a 0n device on the path stat is treated as
+ * unknown rather than as a match: the file must then agree on inode, size and
+ * modification time (in nanoseconds), and any difference refuses. It never
+ * skips the check; a stale or changed size or time fails closed.
+ */
 function isSameEntry(
-  left: { dev: number; ino: number },
-  right: { dev: number; ino: number },
+  pathStat: EntryIdentity,
+  handleStat: EntryIdentity,
 ): boolean {
-  return left.dev === right.dev && left.ino === right.ino;
+  if (pathStat.ino !== handleStat.ino) {
+    return false;
+  }
+  if (onWindows() && pathStat.dev === 0n) {
+    return (
+      pathStat.size === handleStat.size &&
+      pathStat.mtimeNs === handleStat.mtimeNs
+    );
+  }
+  return pathStat.dev === handleStat.dev;
 }
 
 // The macOS Data volume, which firmlinks /Users, /private and the rest into
@@ -179,7 +207,7 @@ function openInDirectory(
   filePath: string,
   flags: number,
   refuseLink: boolean,
-): { fd: number; opened: fs.Stats } {
+): { fd: number; opened: fs.BigIntStats } {
   const name = path.basename(filePath);
   return inDirectory(path.dirname(filePath), () => {
     if (refuseLink && fs.lstatSync(name).isSymbolicLink()) {
@@ -187,8 +215,8 @@ function openInDirectory(
     }
     const fd = fs.openSync(name, flags, 0o666);
     try {
-      const opened = fs.fstatSync(fd);
-      if (!isSameEntry(fs.lstatSync(name), opened)) {
+      const opened = fs.fstatSync(fd, { bigint: true });
+      if (!isSameEntry(fs.lstatSync(name, { bigint: true }), opened)) {
         throw directoryChangedError(path.dirname(filePath));
       }
       return { fd, opened };
@@ -222,12 +250,12 @@ export async function createFileInDirectory(
 
 /**
  * Replace the content of the regular file at `filePath`, which must be the
- * file `expected` describes, through a single descriptor.
+ * file `expected` (its BigInt lstat) describes, through a single descriptor.
  */
 export async function overwriteFileInDirectory(
   filePath: string,
   content: string,
-  expected: { dev: number; ino: number },
+  expected: EntryIdentity,
 ): Promise<void> {
   // O_RDWR rather than O_WRONLY: opening a FIFO swapped in for writing only
   // would block until a reader arrives. O_NOFOLLOW fails the open with ELOOP
@@ -238,7 +266,7 @@ export async function overwriteFileInDirectory(
     onWindows(),
   );
   try {
-    if (!opened.isFile() || !isSameEntry(opened, expected)) {
+    if (!opened.isFile() || !isSameEntry(expected, opened)) {
       throw new Error(
         `Refusing to write: ${filePath} was replaced while it was being opened`,
       );

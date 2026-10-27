@@ -5,7 +5,7 @@
 // working-directory bookkeeping a borrowed chdir needs.
 
 import { execFileSync } from "child_process";
-import fs from "fs";
+import fs, { type BigIntStats } from "fs";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -20,6 +20,9 @@ import { makeTempDir } from "./helpers.js";
 
 const symlinks = process.platform !== "win32";
 const realPlatform = process.platform;
+// The identity check compares BigInt stats (#5154), so every expected stat a
+// test hands it is one.
+const lstatBig = (p: string) => fs.lstatSync(p, { bigint: true });
 const errno = (code: string) =>
   Object.assign(new Error(`${code}: stand-in`), { code });
 
@@ -144,8 +147,8 @@ describe("createFileInDirectory", () => {
   it("refuses, and closes the file, when the path no longer holds what was opened", async () => {
     const realLstat = fs.lstatSync;
     vi.spyOn(fs, "lstatSync").mockImplementationOnce((p) => ({
-      ...realLstat(p),
-      ino: -1,
+      ...realLstat(p, { bigint: true }),
+      ino: -1n,
     }));
     const closeSync = vi.spyOn(fs, "closeSync");
     await expect(
@@ -183,8 +186,8 @@ describe("createFileInDirectory", () => {
       fs.symlinkSync(outside, path.join(dir, "link"));
       const realLstat = fs.lstatSync;
       vi.spyOn(fs, "lstatSync").mockImplementationOnce((p) => ({
-        ...realLstat(p),
-        ino: -1,
+        ...realLstat(p, { bigint: true }),
+        ino: -1n,
       }));
       await expect(
         createFileInDirectory(path.join(dir, "link", "x.txt"), "x"),
@@ -197,16 +200,16 @@ describe("overwriteFileInDirectory", () => {
   it("replaces the content in place, keeping the inode", async () => {
     const file = path.join(dir, "f.txt");
     fs.writeFileSync(file, "a much longer original");
-    const expected = fs.lstatSync(file);
+    const expected = lstatBig(file);
     await overwriteFileInDirectory(file, "short", expected);
     expect(fs.readFileSync(file, "utf-8")).toBe("short");
-    expect(fs.lstatSync(file).ino).toBe(expected.ino);
+    expect(lstatBig(file).ino).toBe(expected.ino);
   });
 
   it("refuses a file other than the one expected", async () => {
     const file = path.join(dir, "f.txt");
     fs.writeFileSync(file, "original");
-    const expected = { ...fs.lstatSync(file), ino: -1 };
+    const expected = { ...lstatBig(file), ino: -1n };
     await expect(
       overwriteFileInDirectory(file, "new", expected),
     ).rejects.toThrow(
@@ -218,10 +221,10 @@ describe("overwriteFileInDirectory", () => {
   it("refuses something that is not a regular file", async () => {
     const file = path.join(dir, "f.txt");
     fs.writeFileSync(file, "original");
-    const expected = fs.lstatSync(file);
+    const expected = lstatBig(file);
     const realFstat = fs.fstatSync;
     vi.spyOn(fs, "fstatSync").mockImplementationOnce((fd) => {
-      const stats = realFstat(fd);
+      const stats = realFstat(fd, { bigint: true });
       return Object.assign(stats, { isFile: () => false });
     });
     await expect(
@@ -237,7 +240,7 @@ describe("overwriteFileInDirectory", () => {
     }) as typeof fs.ftruncate);
     const close = vi.spyOn(fs, "close");
     await expect(
-      overwriteFileInDirectory(file, "new", fs.lstatSync(file)),
+      overwriteFileInDirectory(file, "new", lstatBig(file)),
     ).rejects.toThrow("EIO");
     expect(close).toHaveBeenCalled();
     expect(fs.readFileSync(file, "utf-8")).toBe("original");
@@ -249,7 +252,11 @@ describe("overwriteFileInDirectory", () => {
     const link = path.join(dir, "l.txt");
     fs.symlinkSync(target, link);
     await expect(
-      overwriteFileInDirectory(link, "pwned", fs.statSync(target)),
+      overwriteFileInDirectory(
+        link,
+        "pwned",
+        fs.statSync(target, { bigint: true }),
+      ),
     ).rejects.toMatchObject({ code: "ELOOP" });
     expect(fs.readFileSync(target, "utf-8")).toBe("SECRET");
   });
@@ -265,7 +272,11 @@ describe("on Windows, where O_NOFOLLOW does not exist", () => {
       const link = path.join(dir, "l.txt");
       fs.symlinkSync(target, link);
       await expect(
-        overwriteFileInDirectory(link, "pwned", fs.statSync(target)),
+        overwriteFileInDirectory(
+          link,
+          "pwned",
+          fs.statSync(target, { bigint: true }),
+        ),
       ).rejects.toThrow(`Refusing to write: not a regular file: ${link}`);
       expect(fs.readFileSync(target, "utf-8")).toBe("SECRET");
     },
@@ -275,9 +286,119 @@ describe("on Windows, where O_NOFOLLOW does not exist", () => {
     Object.defineProperty(process, "platform", { value: "win32" });
     const file = path.join(dir, "f.txt");
     fs.writeFileSync(file, "original");
-    await overwriteFileInDirectory(file, "new", fs.lstatSync(file));
+    await overwriteFileInDirectory(file, "new", lstatBig(file));
     expect(fs.readFileSync(file, "utf-8")).toBe("new");
   });
+});
+
+describe("the identity check (#5154)", () => {
+  it("compares inodes exactly, where a number stat would round a 64-bit file id", async () => {
+    const file = path.join(dir, "f.txt");
+    fs.writeFileSync(file, "original");
+    const high = 2n ** 53n;
+    // The premise: as doubles, these two file ids are one number.
+    expect(Number(high + 1n)).toBe(Number(high));
+    const expected = { ...lstatBig(file), ino: high };
+    const realFstat = fs.fstatSync;
+    const realLstat = fs.lstatSync;
+    vi.spyOn(fs, "fstatSync").mockImplementationOnce((fd) => ({
+      ...realFstat(fd, { bigint: true }),
+      isFile: () => true,
+      ino: high + 1n,
+    }));
+    vi.spyOn(fs, "lstatSync").mockImplementationOnce((p) => ({
+      ...realLstat(p, { bigint: true }),
+      ino: high + 1n,
+    }));
+    await expect(
+      overwriteFileInDirectory(file, "new", expected),
+    ).rejects.toThrow("was replaced while it was being opened");
+    expect(fs.readFileSync(file, "utf-8")).toBe("original");
+  });
+
+  describe("on Windows, where a path stat can report no device (libuv < 1.51.0)", () => {
+    beforeEach(() => {
+      Object.defineProperty(process, "platform", { value: "win32" });
+    });
+
+    it("overwrites when inode, size and mtime all match", async () => {
+      const file = path.join(dir, "f.txt");
+      fs.writeFileSync(file, "original");
+      const expected = { ...lstatBig(file), dev: 0n };
+      await overwriteFileInDirectory(file, "new", expected);
+      expect(fs.readFileSync(file, "utf-8")).toBe("new");
+    });
+
+    it("creates a file whose path stat reports no device", async () => {
+      const realLstat = fs.lstatSync;
+      vi.spyOn(fs, "lstatSync").mockImplementationOnce((p) => ({
+        ...realLstat(p, { bigint: true }),
+        dev: 0n,
+      }));
+      const file = path.join(dir, "new.txt");
+      await createFileInDirectory(file, "hello");
+      expect(fs.readFileSync(file, "utf-8")).toBe("hello");
+    });
+
+    it.each([
+      ["inode", (s: BigIntStats) => ({ ino: s.ino + 1n })],
+      ["size", (s: BigIntStats) => ({ size: s.size + 1n })],
+      ["mtime", (s: BigIntStats) => ({ mtimeNs: s.mtimeNs - 1n })],
+    ])("refuses when the %s differs", async (_field, change) => {
+      const file = path.join(dir, "f.txt");
+      fs.writeFileSync(file, "original");
+      const stats = lstatBig(file);
+      const expected = { ...stats, dev: 0n, ...change(stats) };
+      await expect(
+        overwriteFileInDirectory(file, "new", expected),
+      ).rejects.toThrow("was replaced while it was being opened");
+      expect(fs.readFileSync(file, "utf-8")).toBe("original");
+    });
+
+    it("refuses a known device that differs", async () => {
+      const file = path.join(dir, "f.txt");
+      fs.writeFileSync(file, "original");
+      const stats = lstatBig(file);
+      const expected = { ...stats, dev: stats.dev + 1n };
+      await expect(
+        overwriteFileInDirectory(file, "new", expected),
+      ).rejects.toThrow("was replaced while it was being opened");
+    });
+  });
+
+  it.skipIf(realPlatform === "win32")(
+    "off Windows, refuses a path stat that reports no device",
+    async () => {
+      const file = path.join(dir, "f.txt");
+      fs.writeFileSync(file, "original");
+      const expected = { ...lstatBig(file), dev: 0n };
+      await expect(
+        overwriteFileInDirectory(file, "new", expected),
+      ).rejects.toThrow("was replaced while it was being opened");
+    },
+  );
+
+  // Checked on the windows-latest leg: the device fallback above exists for
+  // a Node line this package does not support. If a supported line ever
+  // reports no device for a path, the fallback becomes the normal path, and
+  // this fails to say so.
+  it.skipIf(realPlatform !== "win32")(
+    "on a real Windows volume, the path stat and the handle agree on a nonzero device and the inode",
+    () => {
+      const file = path.join(dir, "f.txt");
+      fs.writeFileSync(file, "original");
+      const fd = fs.openSync(file, "r");
+      try {
+        const handle = fs.fstatSync(fd, { bigint: true });
+        const byPath = lstatBig(file);
+        expect(byPath.dev).not.toBe(0n);
+        expect(byPath.dev).toBe(handle.dev);
+        expect(byPath.ino).toBe(handle.ino);
+      } finally {
+        fs.closeSync(fd);
+      }
+    },
+  );
 });
 
 describe("renameIntoDirectory", () => {

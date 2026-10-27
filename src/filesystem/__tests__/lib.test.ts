@@ -98,9 +98,15 @@ function createMockFileHandle(content: Buffer) {
   };
 }
 
-// What lstat and the opened handle's stat report for the file an in-place
-// write replaces: a regular file, the same device and inode both times.
-const REGULAR_FILE = { isFile: () => true, dev: 1, ino: 42 } as Stats;
+// What lstat reports for the file an in-place write replaces: a regular file,
+// as a BigInt stat, the form the identity check compares exactly (#5154).
+const REGULAR_FILE = {
+  isFile: () => true,
+  dev: 1n,
+  ino: 42n,
+  size: 8n,
+  mtimeNs: 1_700_000_000_000_000_000n,
+} as BigIntStats;
 
 // The allow-list validatePath checks against; each server instance passes its
 // own (#4854), so the unit tests pass this one explicitly.
@@ -618,7 +624,9 @@ describe("Lib Functions", () => {
 
         await writeFileContent("/test/script.sh", "new content");
 
-        expect(mockFs.lstat).toHaveBeenCalledWith("/test/script.sh");
+        expect(mockFs.lstat).toHaveBeenCalledWith("/test/script.sh", {
+          bigint: true,
+        });
         expect(mockPinned.overwriteFileInDirectory).toHaveBeenCalledWith(
           "/test/script.sh",
           "new content",
@@ -638,7 +646,7 @@ describe("Lib Functions", () => {
         mockFs.lstat.mockResolvedValueOnce({
           ...REGULAR_FILE,
           isFile: () => false,
-        } as Stats);
+        } as BigIntStats);
 
         await expect(
           writeFileContent("/test/link.txt", "new content"),
