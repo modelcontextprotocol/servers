@@ -134,6 +134,54 @@ async def test_a_declaration_on_a_non_html_body_is_ignored(web: FakeWeb) -> None
     assert JAPANESE in await fetch(web, response, raw=True)
 
 
+async def test_a_text_plain_type_with_an_html_parameter_is_not_scanned(
+    web: FakeWeb,
+) -> None:
+    # #5302 review: only the media type counts, not "html" in a parameter.
+    body = document('<meta charset="windows-1251">', JAPANESE).encode("utf-8")
+    response = page(body, content_type='text/plain; name="page.html"')
+    assert JAPANESE in await fetch(web, response, raw=True)
+
+
+@pytest.mark.parametrize(
+    "head",
+    [
+        # #5302 review: a commented-out tag declares nothing.
+        '<!-- <meta charset="windows-1251"> --><meta charset="utf-8">',
+        "<!-- <meta charset=windows-1251> -->",
+        # Nor does an attribute that only contains the word.
+        '<meta data-charset="windows-1251" charset="utf-8">',
+        '<meta data-charset="windows-1251">',
+        # A content attribute counts only under http-equiv="Content-Type".
+        '<meta name="description" content="text/html; charset=windows-1251">',
+        '<meta http-equiv="refresh" content="5; charset=windows-1251">',
+        # An empty declaration, and one with no charset in it.
+        '<meta charset="">',
+        '<meta http-equiv="Content-Type" content="text/html">',
+        # A declaration Python refuses outright.
+        '<meta charset="utf\x008">',
+        # The first declaration wins.
+        '<meta charset="utf-8"><meta charset="windows-1251">',
+    ],
+)
+async def test_text_that_is_not_a_declaration_leaves_utf8_alone(
+    web: FakeWeb, head: str
+) -> None:
+    body = document(head, JAPANESE).encode("utf-8")
+    assert JAPANESE in await fetch(web, page(body), raw=True)
+
+
+async def test_a_declaration_after_other_tags_and_comments_is_found(
+    web: FakeWeb,
+) -> None:
+    head = (
+        '<!-- <meta charset="utf-8"> --><link rel="icon" href="/i.png">'
+        '<meta name="viewport" content="width=device-width"><meta charset=Shift_JIS>'
+    )
+    body = document(head, JAPANESE).encode("shift_jis")
+    assert JAPANESE in await fetch(web, page(body), raw=True)
+
+
 async def test_a_declaration_past_the_first_1024_bytes_is_ignored(
     web: FakeWeb,
 ) -> None:
