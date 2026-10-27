@@ -43,10 +43,19 @@
 //     check reports UNVERIFIED rather than failing every day.
 //  6. **No board write.** See `scripts/lib/sweep.mjs`: the issue is filed
 //     labeled and milestoned, and `issue-triage` boards it in `Todo`.
+//  7. **An advisory with no patched release is tracked, not skipped (#5066).**
+//     A newly disclosed vulnerability with no fix yet is the case that most
+//     needs a decision (mitigate, pin away, drop the dependency, accept the
+//     risk), so it stays in its group. When no applying advisory has a fix,
+//     the issue asks for that decision instead of a bump (`fixed=none` in the
+//     marker); when others do, the bump issue carries a section for the ones
+//     it cannot clear. The marker is keyed on package and manifest, so a
+//     patched release published later rewrites the same issue into a bump.
 //
 // The idempotency key is the marker on the first line of each issue body,
-// naming the package, manifest, patched version and every GHSA the issue
-// covers; it counts only on an issue the automation wrote. A second run the
+// naming the package, manifest, patched version (`none` when no applying
+// advisory has one) and every GHSA the issue covers; it counts only on an
+// issue the automation wrote. A second run the
 // same day is a no-op. A NEW advisory for a bump that already has an open
 // issue lands as a comment on it and rewrites the marker. An issue whose
 // exposure is gone (fixed on `v2/main`, alert dismissed, manifest removed) is
@@ -121,21 +130,25 @@ export function packageKey(ecosystem, name) {
   return ecosystem === "pip" ? normalizeName(name) : name;
 }
 
+/** The marker's `fixed` value when no applying advisory has a patched release. */
+const NO_FIX = "none";
+
 /**
  * The issue body's first line. `(pkg, manifest)` is the key an issue is found
  * by; `fixed` records the target the body names, which moves up when a newer
- * advisory raises it, and `ghsas` every advisory the issue has announced.
+ * advisory raises it (`none` while there is none), and `ghsas` every advisory
+ * the issue has announced.
  *
- * @param {{package: string, manifestPath: string, fixedIn: string, ghsas: string[]}} group
+ * @param {{package: string, manifestPath: string, fixedIn: string | null, ghsas: string[]}} group
  * @returns {string}
  */
 export function buildMarker({ package: pkg, manifestPath, fixedIn, ghsas }) {
-  return `<!-- dependabot-alerts: pkg=${pkg}; manifest=${manifestPath}; fixed=${fixedIn}; ghsas=${[...ghsas].sort().join(",")} -->`;
+  return `<!-- dependabot-alerts: pkg=${pkg}; manifest=${manifestPath}; fixed=${fixedIn ?? NO_FIX}; ghsas=${[...ghsas].sort().join(",")} -->`;
 }
 
 /**
  * @param {string | undefined} body
- * @returns {{package: string, manifestPath: string, fixedIn: string, ghsas: string[]} | null}
+ * @returns {{package: string, manifestPath: string, fixedIn: string | null, ghsas: string[]} | null}
  */
 export function parseMarker(body) {
   const match = MARKER_RE.exec(body ?? "");
@@ -143,7 +156,7 @@ export function parseMarker(body) {
   return {
     package: match[1],
     manifestPath: match[2],
-    fixedIn: match[3],
+    fixedIn: match[3] === NO_FIX ? null : match[3],
     ghsas: match[4].split(",").filter(Boolean),
   };
 }
@@ -361,14 +374,18 @@ export function groupKey(pkg, manifestPath) {
 }
 
 /**
- * The highest of these versions, in the ecosystem's own ordering.
+ * The highest of these versions, in the ecosystem's own ordering. A missing
+ * version (an advisory with no patched release) is ignored; with none left,
+ * the answer is `null`.
  *
  * @param {string} ecosystem
- * @param {string[]} versions
- * @returns {string}
+ * @param {Array<string | null | undefined>} versions
+ * @returns {string | null}
  */
 export function highestVersion(ecosystem, versions) {
-  return [...versions].sort(versionCompare(ecosystem)).at(-1);
+  return (
+    versions.filter(Boolean).sort(versionCompare(ecosystem)).at(-1) ?? null
+  );
 }
 
 /** The ecosystem's own ordering. */
@@ -390,14 +407,29 @@ function versionCompare(ecosystem) {
  * clears them all, the highest is named and `verified` is false, and the body
  * says so rather than claiming one bump clears everything.
  *
+ * Only advisories with a patched release take part: one with none has no fix
+ * a bump could reach, and the body gives it a section of its own. When no
+ * advisory has one, there is no target at all (`fixedIn: null`, reason
+ * `unpatched`).
+ *
  * @param {string} ecosystem
- * @param {Array<{fixedIn: string, range: string}>} advisories
+ * @param {Array<{fixedIn: string | null, range: string}>} allAdvisories
  * @param {string[]} [installed] the affected copies' versions; the target is
  *   never below the newest of them
- * @returns {{fixedIn: string, verified: boolean, stillOpen: string[]}}
+ * @returns {{fixedIn: string | null, verified: boolean, stillOpen: string[]}}
  *   `stillOpen` names the advisories whose range still covers the target
  */
-export function pickTarget(ecosystem, advisories, installed = []) {
+export function pickTarget(ecosystem, allAdvisories, installed = []) {
+  const advisories = allAdvisories.filter((a) => a.fixedIn);
+  if (advisories.length === 0) {
+    return {
+      fixedIn: null,
+      verified: false,
+      reason: "unpatched",
+      checked: null,
+      stillOpen: allAdvisories.map((a) => a.ghsa),
+    };
+  }
   const covers = (version) =>
     advisories.filter((a) => {
       try {
@@ -473,8 +505,9 @@ export function advisoryKey(pkg, manifestPath, ghsa) {
 
 /**
  * Collapse per-advisory alerts into one entry per `(package, manifest)`. An
- * alert with no patched version is skipped: there is nothing to bump to.
- * `fixedIn` here is the highest patched version across every advisory;
+ * alert with no patched version is kept, with `fixedIn: null`: a vulnerability
+ * with no fix released still needs a decision (#5066). `fixedIn` here is the
+ * highest patched version across every advisory (`null` when none has one);
  * `narrowToApplicable` replaces it with `pickTarget`'s choice over the ones
  * that apply.
  *
@@ -488,8 +521,8 @@ export function groupAlerts(alerts) {
     const rawName = alert.dependency?.package?.name;
     const manifestPath = alert.dependency?.manifest_path;
     const fixedIn =
-      alert.security_vulnerability?.first_patched_version?.identifier;
-    if (!rawName || !manifestPath || !fixedIn) continue;
+      alert.security_vulnerability?.first_patched_version?.identifier ?? null;
+    if (!rawName || !manifestPath) continue;
     const pkg = packageKey(ecosystem, rawName);
 
     const key = groupKey(pkg, manifestPath);
@@ -597,6 +630,9 @@ export function narrowToApplicable(group, entries) {
 /** @param {ReturnType<typeof groupAlerts>[number]} group */
 export function buildIssueTitle(group) {
   const n = group.advisories.length;
+  if (group.targetReason === "unpatched") {
+    return `chore(deps): decide how to handle \`${group.package}\` in \`${group.manifestPath}\` (${n} ${n === 1 ? "advisory" : "advisories"}, no patched release)`;
+  }
   // An unverified target is not advertised as the version to move to: a title
   // is often all a notification shows.
   if (group.targetVerified === false) {
@@ -713,37 +749,57 @@ export function buildIssueBody(
   const rows = group.advisories
     .map(
       (a) =>
-        `| [${cell(a.ghsa)}](${a.url}) | ${cell(a.cve ?? "—")} | ${cell(a.severity)} | ${cell(a.range)} | ${cell(a.fixedIn)} | ${cell(a.summary)} |`,
+        `| [${cell(a.ghsa)}](${a.url}) | ${cell(a.cve ?? "—")} | ${cell(a.severity)} | ${cell(a.range)} | ${a.fixedIn ? cell(a.fixedIn) : "⚠️ none released"} | ${cell(a.summary)} |`,
     )
     .join("\n");
+  const unpatched = undecided(group);
+  const noFixYet = group.targetReason === "unpatched";
+  const copies = [
+    "| Vulnerable copy | Version |",
+    "| --- | --- |",
+    ...affected.map((e) => `| \`${cell(e.path)}\` | \`${cell(e.version)}\` |`),
+  ];
 
   // With no listed patched version outside every range, any concrete pin
   // would name a version known to stay vulnerable, so the fix asks for a
   // target first and pins nothing.
-  const steps =
-    group.targetVerified === false
+  const steps = noFixYet
+    ? []
+    : group.targetVerified === false
       ? [
           `**Choose a target first.** No patched version these advisories list is a safe target: ${unverifiedReason(group)}. Find a release of \`${group.package}\` that no listed range covers, then make the edit this repo uses for it: raise the declared range, or pin it with ${group.ecosystem === "pip" ? "`uv lock --upgrade-package` or `constraint-dependencies`" : "an `overrides` entry"}.`,
         ]
       : group.ecosystem === "pip"
         ? pipFix(group, { declaredSpec })
         : npmFix(group, { affected, declarers });
-  const fix = [
-    ...(steps.length === 2
-      ? [
-          "Both edits are needed; neither alone clears every vulnerable copy.",
-          "",
-        ]
-      : []),
-    ...steps.map((step, i) => (steps.length > 1 ? `${i + 1}. ${step}` : step)),
-    "",
-    ...disjointCaution(group),
-    `**Then verify** before opening the PR: every locked copy must be outside every range in the Advisories table. \`node scripts/dependabot-alerts.mjs --dry-run\` against the branch should report this exposure cleared.`,
-    "",
-    "| Vulnerable copy | Version |",
-    "| --- | --- |",
-    ...affected.map((e) => `| \`${cell(e.path)}\` | \`${cell(e.version)}\` |`),
-  ].join("\n");
+  const fix = noFixYet
+    ? [...decisionRequest(group, unpatched), "", ...copies].join("\n")
+    : [
+        ...(steps.length === 2
+          ? [
+              "Both edits are needed; neither alone clears every vulnerable copy.",
+              "",
+            ]
+          : []),
+        ...steps.map((step, i) =>
+          steps.length > 1 ? `${i + 1}. ${step}` : step,
+        ),
+        "",
+        ...disjointCaution(group),
+        `**Then verify** before opening the PR: every locked copy must be outside every range in the Advisories table${unpatched.length > 0 ? " that has a patched release" : ""}. \`node scripts/dependabot-alerts.mjs --dry-run\` against the branch should report this exposure cleared.`,
+        "",
+        ...copies,
+        ...(unpatched.length > 0
+          ? [
+              "",
+              "### No patched release",
+              "",
+              "The bump above does not clear every advisory.",
+              "",
+              ...decisionRequest(group, unpatched),
+            ]
+          : []),
+      ].join("\n");
 
   return [
     buildMarker({ ...group, ghsas: covered }),
@@ -754,9 +810,11 @@ export function buildIssueBody(
     `| Package | \`${cell(group.package)}\` (${group.ecosystem}) |`,
     `| Manifest | \`${cell(group.manifestPath)}\` |`,
     `| Vulnerable on \`${TARGET_BRANCH}\` | ${[...new Set(affected.map((e) => e.version))].map((v) => `\`${cell(v)}\``).join(", ") || "—"} |`,
-    group.targetVerified === false
-      ? `| Bump to | ⚠️ none found: ${cell(unverifiedReason(group))}. Pick a release outside every range listed |`
-      : `| Bump to | \`${cell(group.fixedIn)}\`: the lowest listed patched version that no range below covers |`,
+    noFixYet
+      ? "| Bump to | ⚠️ none: no advisory below lists a patched release. A decision is needed; see Fix |"
+      : group.targetVerified === false
+        ? `| Bump to | ⚠️ none found: ${cell(unverifiedReason(group))}. Pick a release outside every range listed |`
+        : `| Bump to | \`${cell(group.fixedIn)}\`: the lowest listed patched version that no range below ${unpatched.length > 0 ? "with a patched release " : ""}covers |`,
     `| Scope | ${cell(group.scope)} |`,
     `| Highest severity | ${cell(group.severity)} |`,
     "",
@@ -776,6 +834,50 @@ export function buildIssueBody(
 }
 
 /**
+ * The advisories with no patched release that still need a decision: every
+ * one when there is no target, else those whose range still covers the bump's
+ * target. A range the target clears is cleared by the bump, patched or not; a
+ * range that cannot be read cannot vouch for the target.
+ *
+ * @param {{ecosystem: string, fixedIn: string | null, advisories: Array<{fixedIn: string | null, range: string}>}} group
+ * @returns {Array<{fixedIn: string | null, range: string}>}
+ */
+export function undecided(group) {
+  return group.advisories.filter((a) => {
+    if (a.fixedIn) return false;
+    if (!group.fixedIn) return true;
+    try {
+      return inRange(group.ecosystem, group.fixedIn, a.range);
+    } catch {
+      return true;
+    }
+  });
+}
+
+/**
+ * The Fix text for advisories with no patched release: there is nothing to
+ * bump to, so it asks for a decision, and says the issue turns into a bump in
+ * place once a fix is published.
+ *
+ * @param {{package: string}} group
+ * @param {Array<{ghsa: string}>} unpatched
+ * @returns {string[]}
+ */
+export function decisionRequest(group, unpatched) {
+  const named = unpatched.map((a) => `\`${a.ghsa}\``).join(", ");
+  return [
+    `**No patched release is available** for ${named}, so there is nothing to bump to yet. **Decide** what to do about ${unpatched.length === 1 ? "it" : "them"}, and record the decision on this issue:`,
+    "",
+    `- **Mitigate**: check whether this repo reaches the vulnerable code, and guard or avoid that path.`,
+    `- **Pin away**: move \`${group.package}\` to a release no listed range covers, if one exists.`,
+    `- **Drop or replace** \`${group.package}\`.`,
+    `- **Accept the risk**: dismiss the alert in the Security tab, giving the reason.`,
+    "",
+    "When a patched release is published, the next sweep rewrites this issue in place to ask for the bump; no second issue is filed.",
+  ];
+}
+
+/**
  * A warning when a vulnerable interval sits ABOVE the target: an advisory
  * patched later than the target, or a disjoint (`||`) range. A floor raised
  * to the target alone would let a later resolve land in that interval, so the
@@ -787,8 +889,11 @@ export function buildIssueBody(
 export function disjointCaution(group) {
   if (group.targetVerified === false) return [];
   const compare = versionCompare(group.ecosystem);
+  // An advisory with no patched release has a section of its own.
   const above = group.advisories.filter(
-    (a) => a.range.includes("||") || compare(a.fixedIn, group.fixedIn) > 0,
+    (a) =>
+      a.fixedIn &&
+      (a.range.includes("||") || compare(a.fixedIn, group.fixedIn) > 0),
   );
   if (above.length === 0) return [];
   return [
@@ -852,12 +957,29 @@ export function buildNewAdvisoryComment(group, added) {
     .join("\n");
   return [
     buildCommentMarker(added),
-    `${added.length} new Dependabot ${added.length === 1 ? "advisory" : "advisories"} for \`${group.package}\`. ${group.targetVerified === false ? "No listed patched version clears every advisory now, so this issue asks for a safe release to be found first; see the body." : `The bump this issue asks for is now to \`${group.fixedIn}\`, which clears ${added.length === 1 ? "it" : "them"} along with the rest.`}`,
+    `${added.length} new Dependabot ${added.length === 1 ? "advisory" : "advisories"} for \`${group.package}\`. ${newAdvisoryVerdict(group, added)}`,
     "",
     "| GHSA | Severity | Summary |",
     "| --- | --- | --- |",
     rows,
   ].join("\n");
+}
+
+/** What the new-advisory comment says the issue now asks for. */
+function newAdvisoryVerdict(group, added) {
+  if (group.targetReason === "unpatched") {
+    return "No advisory lists a patched release, so this issue asks for a decision rather than a bump; see the body.";
+  }
+  if (group.targetVerified === false) {
+    return "No listed patched version clears every advisory now, so this issue asks for a safe release to be found first; see the body.";
+  }
+  const unpatched = group.advisories
+    .filter((a) => added.includes(a.ghsa) && undecided(group).includes(a))
+    .map((a) => `\`${a.ghsa}\``);
+  if (unpatched.length === added.length) {
+    return `No patched release is listed for ${unpatched.length === 1 ? "it" : "them"}, so the bump to \`${group.fixedIn}\` does not clear ${unpatched.length === 1 ? "it" : "them"}; the body asks for a decision.`;
+  }
+  return `The bump this issue asks for is now to \`${group.fixedIn}\`, which clears ${added.length === 1 ? "it" : "them"} along with the rest${unpatched.length > 0 ? `, except ${unpatched.join(", ")}, which no patched release covers; the body asks for a decision on those` : ""}.`;
 }
 
 /** A rate limit, reported as 403 or 429 with this wording. */
@@ -1074,8 +1196,8 @@ export function main({
       );
     }
   };
-  // From the RAW feed, so an advisory that is still open but lost its patched
-  // version (and so formed no group) still counts as open.
+  // From the RAW feed, so an open advisory that formed no group (an alert
+  // missing its package or manifest) still counts as open.
   const openAdvisories = new Set(
     alerts
       .filter((a) => a.state === "open")
@@ -1250,8 +1372,9 @@ export function main({
     if (seenKeys.has(key)) continue;
 
     // A vanished KEY is not a closed ADVISORY: an advisory that is still open
-    // but lost its patched version forms no group, and must not stand its
-    // issue down.
+    // but formed no group must not stand its issue down. (One that lost its
+    // patched version still groups, and rewrites its issue to ask for a
+    // decision.)
     const key3 = (ghsa) =>
       advisoryKey(issue.marker.package, issue.marker.manifestPath, ghsa);
     const stillOpen = issue.marker.ghsas.filter((g) =>
@@ -1282,8 +1405,7 @@ export function main({
     );
   }
 
-  if (groups.length === 0)
-    log(`${SWEEP}: no open alerts with a patched version`);
+  if (groups.length === 0) log(`${SWEEP}: no open alerts`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
