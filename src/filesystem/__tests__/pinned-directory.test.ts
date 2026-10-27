@@ -13,6 +13,7 @@ import {
   createFileInDirectory,
   isChildDirectory,
   isSameDirectory,
+  moveFileAcrossDevices,
   overwriteFileInDirectory,
   renameIntoDirectory,
 } from "../pinned-directory.js";
@@ -427,6 +428,183 @@ describe("renameIntoDirectory", () => {
       expect(fs.existsSync(path.join(dir, "a.txt"))).toBe(true);
     },
   );
+});
+
+// Each test here runs on one device: the helper is what moveFile falls back
+// to on EXDEV, and it never calls rename, so one device exercises it fully.
+describe("moveFileAcrossDevices", () => {
+  const fail = (code: string) =>
+    ((...args: unknown[]) => {
+      (args[args.length - 1] as (error: Error) => void)(errno(code));
+    }) as never;
+
+  it("copies the content, mode and times, then removes the source", async () => {
+    const source = path.join(dir, "a.bin");
+    const destination = path.join(outside, "b.bin");
+    // More than one 64 KiB chunk.
+    const content = Buffer.alloc(200 * 1024, 7);
+    fs.writeFileSync(source, content);
+    fs.chmodSync(source, 0o640);
+    fs.utimesSync(source, new Date(1_000_000_000), new Date(1_000_000_000));
+    await moveFileAcrossDevices(source, destination);
+    expect(fs.readFileSync(destination).equals(content)).toBe(true);
+    expect(fs.existsSync(source)).toBe(false);
+    const moved = fs.statSync(destination);
+    if (process.platform !== "win32") {
+      expect(moved.mode & 0o777).toBe(0o640);
+    }
+    expect(moved.mtimeMs).toBe(1_000_000_000);
+    expect(process.cwd()).toBe(cwd);
+  });
+
+  it("moves an empty file", async () => {
+    const source = path.join(dir, "empty");
+    fs.writeFileSync(source, "");
+    await moveFileAcrossDevices(source, path.join(outside, "empty"));
+    expect(fs.readFileSync(path.join(outside, "empty"), "utf-8")).toBe("");
+    expect(fs.existsSync(source)).toBe(false);
+  });
+
+  it("refuses a directory, and leaves it in place", async () => {
+    const source = path.join(dir, "d");
+    fs.mkdirSync(source);
+    await expect(
+      moveFileAcrossDevices(source, path.join(outside, "d")),
+    ).rejects.toThrow(`Cannot move a directory across filesystems: ${source}.`);
+    expect(fs.statSync(source).isDirectory()).toBe(true);
+    expect(fs.readdirSync(outside)).toEqual([]);
+  });
+
+  it.skipIf(!symlinks)(
+    "refuses a symlink rather than following or recreating it",
+    async () => {
+      const target = path.join(dir, "t.txt");
+      fs.writeFileSync(target, "t");
+      const source = path.join(dir, "l.txt");
+      fs.symlinkSync(target, source);
+      await expect(
+        moveFileAcrossDevices(source, path.join(outside, "l.txt")),
+      ).rejects.toThrow(
+        `Cannot move across filesystems: not a regular file: ${source}`,
+      );
+      expect(fs.lstatSync(source).isSymbolicLink()).toBe(true);
+      expect(fs.readdirSync(outside)).toEqual([]);
+    },
+  );
+
+  it("refuses an existing destination with EEXIST, and keeps both", async () => {
+    const source = path.join(dir, "a.txt");
+    const destination = path.join(outside, "b.txt");
+    fs.writeFileSync(source, "a");
+    fs.writeFileSync(destination, "b");
+    await expect(moveFileAcrossDevices(source, destination)).rejects.toThrow(
+      expect.objectContaining({ code: "EEXIST" }),
+    );
+    expect(fs.readFileSync(source, "utf-8")).toBe("a");
+    expect(fs.readFileSync(destination, "utf-8")).toBe("b");
+  });
+
+  it.skipIf(!symlinks)(
+    "refuses a destination directory that resolves somewhere else",
+    async () => {
+      fs.symlinkSync(outside, path.join(dir, "link"));
+      const source = path.join(dir, "a.txt");
+      fs.writeFileSync(source, "a");
+      await expect(
+        moveFileAcrossDevices(source, path.join(dir, "link", "b.txt")),
+      ).rejects.toThrow("Access denied");
+      expect(fs.readdirSync(outside)).toEqual([]);
+      expect(fs.readFileSync(source, "utf-8")).toBe("a");
+    },
+  );
+
+  it.each([
+    ["another file", { ino: -1 }],
+    ["not a regular file", { isFile: () => false }],
+  ])(
+    "refuses, and closes the source, when it was replaced while being opened (%s)",
+    async (_, replaced) => {
+      const source = path.join(dir, "a.txt");
+      fs.writeFileSync(source, "a");
+      const realFstat = fs.fstatSync;
+      vi.spyOn(fs, "fstatSync").mockImplementationOnce((fd) =>
+        Object.assign(realFstat(fd), replaced),
+      );
+      const closeSync = vi.spyOn(fs, "closeSync");
+      await expect(
+        moveFileAcrossDevices(source, path.join(outside, "b.txt")),
+      ).rejects.toThrow(
+        `Refusing to move: ${source} was replaced while it was being opened`,
+      );
+      expect(closeSync).toHaveBeenCalled();
+      expect(fs.readdirSync(outside)).toEqual([]);
+    },
+  );
+
+  it.each(["read", "writeFile", "fchmod", "futimes"] as const)(
+    "removes the partial copy, and keeps the source, when %s fails",
+    async (step) => {
+      const source = path.join(dir, "a.txt");
+      fs.writeFileSync(source, "a");
+      vi.spyOn(fs, step).mockImplementationOnce(fail("EIO"));
+      await expect(
+        moveFileAcrossDevices(source, path.join(outside, "b.txt")),
+      ).rejects.toThrow("EIO");
+      expect(fs.readdirSync(outside)).toEqual([]);
+      expect(fs.readFileSync(source, "utf-8")).toBe("a");
+    },
+  );
+
+  it("reports the copy's failure when removing the copy fails too", async () => {
+    const source = path.join(dir, "a.txt");
+    fs.writeFileSync(source, "a");
+    vi.spyOn(fs, "read").mockImplementationOnce(fail("EIO"));
+    vi.spyOn(fs, "unlinkSync").mockImplementationOnce(() => {
+      throw errno("EBUSY");
+    });
+    await expect(
+      moveFileAcrossDevices(source, path.join(outside, "b.txt")),
+    ).rejects.toThrow("EIO");
+    expect(fs.readFileSync(source, "utf-8")).toBe("a");
+  });
+
+  it("removes the copy, and keeps the source, when the source cannot be removed", async () => {
+    const source = path.join(dir, "a.txt");
+    fs.writeFileSync(source, "a");
+    const realUnlink = fs.unlinkSync;
+    vi.spyOn(fs, "unlinkSync")
+      .mockImplementationOnce(() => {
+        throw errno("EACCES");
+      })
+      .mockImplementation(realUnlink);
+    await expect(
+      moveFileAcrossDevices(source, path.join(outside, "b.txt")),
+    ).rejects.toThrow("EACCES");
+    expect(fs.readdirSync(outside)).toEqual([]);
+    expect(fs.readFileSync(source, "utf-8")).toBe("a");
+  });
+
+  it("removes the copy, and leaves the new file, when the source was replaced during the copy", async () => {
+    const source = path.join(dir, "a.txt");
+    fs.writeFileSync(source, "a");
+    const realFchmod = fs.fchmod;
+    vi.spyOn(fs, "fchmod").mockImplementationOnce(((
+      fd: number,
+      mode: number,
+      callback: (error: NodeJS.ErrnoException | null) => void,
+    ) => {
+      fs.unlinkSync(source);
+      fs.writeFileSync(source, "replacement");
+      realFchmod(fd, mode, callback);
+    }) as typeof fs.fchmod);
+    await expect(
+      moveFileAcrossDevices(source, path.join(outside, "b.txt")),
+    ).rejects.toThrow(
+      `Refusing to remove: ${source} was replaced during the move`,
+    );
+    expect(fs.readdirSync(outside)).toEqual([]);
+    expect(fs.readFileSync(source, "utf-8")).toBe("replacement");
+  });
 });
 
 describe("createDirectoryInPlace", () => {

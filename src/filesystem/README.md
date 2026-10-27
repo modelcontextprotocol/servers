@@ -161,6 +161,13 @@ The server's directory access control follows this flow:
     - `source` (string)
     - `destination` (string)
   - Fails if destination exists
+  - Across filesystems (the source and destination on different mounts or
+    disks), a regular file is moved by copying it to a newly created
+    destination, with its permissions and modification time, and then removing
+    the source. If the copy fails, the partial destination is removed and the
+    source is left in place. A directory or a symbolic link cannot be moved
+    across filesystems and fails with an error; move a directory's files one
+    at a time instead
 
 - **search_files**
   - Recursively search for files/directories that match or do not match patterns

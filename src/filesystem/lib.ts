@@ -9,6 +9,7 @@ import { isPathWithinAllowedDirectories } from "./path-validation.js";
 import {
   createDirectoryInPlace,
   createFileInDirectory,
+  moveFileAcrossDevices,
   overwriteFileInDirectory,
   renameIntoDirectory,
 } from "./pinned-directory.js";
@@ -633,7 +634,15 @@ export async function moveFile(
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       // The destination's directory is pinned (see pinned-directory.ts).
-      renameIntoDirectory(sourcePath, destinationPath);
+      try {
+        renameIntoDirectory(sourcePath, destinationPath);
+      } catch (renameError) {
+        // rename cannot cross a device boundary: copy, then remove (#5188).
+        if ((renameError as NodeJS.ErrnoException).code !== "EXDEV") {
+          throw renameError;
+        }
+        await moveFileAcrossDevices(sourcePath, destinationPath);
+      }
       return;
     }
     throw error;

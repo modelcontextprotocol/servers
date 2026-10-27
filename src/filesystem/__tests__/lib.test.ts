@@ -703,6 +703,40 @@ describe("Lib Functions", () => {
 
         expect(mockPinned.renameIntoDirectory).not.toHaveBeenCalled();
       });
+
+      it("copies and removes instead when the rename crosses a device (EXDEV)", async () => {
+        mockFs.lstat.mockRejectedValueOnce(
+          Object.assign(new Error("not found"), { code: "ENOENT" }),
+        );
+        mockPinned.renameIntoDirectory.mockImplementationOnce(() => {
+          throw Object.assign(new Error("EXDEV: cross-device link"), {
+            code: "EXDEV",
+          });
+        });
+
+        await moveFile("/test/source.txt", "/mnt/other/dest.txt");
+
+        expect(mockPinned.moveFileAcrossDevices).toHaveBeenCalledWith(
+          "/test/source.txt",
+          "/mnt/other/dest.txt",
+        );
+      });
+
+      it("reports a rename failure other than EXDEV as is, without copying", async () => {
+        mockFs.lstat.mockRejectedValueOnce(
+          Object.assign(new Error("not found"), { code: "ENOENT" }),
+        );
+        mockPinned.renameIntoDirectory.mockImplementationOnce(() => {
+          throw Object.assign(new Error("EACCES: permission denied"), {
+            code: "EACCES",
+          });
+        });
+
+        await expect(
+          moveFile("/test/source.txt", "/test/dest.txt"),
+        ).rejects.toThrow("EACCES: permission denied");
+        expect(mockPinned.moveFileAcrossDevices).not.toHaveBeenCalled();
+      });
     });
   });
 

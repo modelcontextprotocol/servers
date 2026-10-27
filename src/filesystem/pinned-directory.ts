@@ -12,7 +12,8 @@
 // and only then act on the final component relative to it. The working
 // directory holds the directory's inode, so swapping the path afterwards
 // cannot move the operation. Every check happens before a byte is written,
-// so nothing ever needs rolling back.
+// so nothing ever needs rolling back, except in the cross-device move, which
+// copies and so removes its copy if a later step fails.
 //
 // On Windows the working directory is a string and relative paths resolve
 // against it, so reading it back proves nothing; there the leaf is lstat'd
@@ -289,6 +290,180 @@ export function renameIntoDirectory(
   inDirectory(path.dirname(destinationPath), () =>
     fs.renameSync(sourcePath, path.basename(destinationPath)),
   );
+}
+
+// The cross-device move below (#5188). rename() cannot cross a device
+// boundary, so a move between allowed directories on different mounts copies
+// the file and then removes the source. Every name it touches is opened,
+// created or removed relative to its anchored directory, like the writes
+// above, and checked to be the entry it expects.
+
+// Read without following a symlink, and without blocking on a FIFO swapped
+// in after the lstat (a regular file ignores O_NONBLOCK). Both are undefined
+// on Windows, where the lstat identity checks stand in.
+function readFlags(): number {
+  return fs.constants.O_RDONLY | noFollow() | (fs.constants.O_NONBLOCK ?? 0);
+}
+
+function readChunk(fd: number, buffer: Buffer): Promise<number> {
+  return new Promise((resolve, reject) =>
+    fs.read(fd, buffer, 0, buffer.length, null, (error, bytesRead) =>
+      error ? reject(error) : resolve(bytesRead),
+    ),
+  );
+}
+
+function writeChunk(fd: number, chunk: Buffer): Promise<void> {
+  return new Promise((resolve, reject) =>
+    fs.writeFile(fd, chunk, (error) => (error ? reject(error) : resolve())),
+  );
+}
+
+function keepModeAndTimes(fd: number, source: fs.Stats): Promise<void> {
+  return new Promise((resolve, reject) =>
+    fs.fchmod(fd, source.mode & 0o777, (chmodError) =>
+      chmodError
+        ? reject(chmodError)
+        : fs.futimes(fd, source.atime, source.mtime, (timesError) =>
+            timesError ? reject(timesError) : resolve(),
+          ),
+    ),
+  );
+}
+
+/**
+ * Open the regular file at `sourcePath` for reading, relative to its anchored
+ * directory. A directory, a symlink or anything else that is not a regular
+ * file is refused: a symlink is not followed or recreated, since its target
+ * could name anything, and a directory is not copied recursively.
+ */
+function openSourceInDirectory(sourcePath: string): {
+  fd: number;
+  opened: fs.Stats;
+} {
+  const name = path.basename(sourcePath);
+  return inDirectory(path.dirname(sourcePath), () => {
+    const found = fs.lstatSync(name);
+    if (found.isDirectory()) {
+      throw new Error(
+        `Cannot move a directory across filesystems: ${sourcePath}. ` +
+          "Create the directory at the destination and move its files one at a time.",
+      );
+    }
+    if (!found.isFile()) {
+      throw new Error(
+        `Cannot move across filesystems: not a regular file: ${sourcePath}`,
+      );
+    }
+    const fd = fs.openSync(name, readFlags());
+    try {
+      const opened = fs.fstatSync(fd);
+      if (!opened.isFile() || !isSameEntry(opened, found)) {
+        throw new Error(
+          `Refusing to move: ${sourcePath} was replaced while it was being opened`,
+        );
+      }
+      return { fd, opened };
+    } catch (error) {
+      fs.closeSync(fd);
+      throw error;
+    }
+  });
+}
+
+/**
+ * Remove `filePath`, relative to its anchored directory, only while it is
+ * still the entry `expected` describes.
+ */
+function removeFromDirectory(
+  filePath: string,
+  expected: { dev: number; ino: number },
+): void {
+  const name = path.basename(filePath);
+  inDirectory(path.dirname(filePath), () => {
+    if (!isSameEntry(fs.lstatSync(name), expected)) {
+      throw new Error(
+        `Refusing to remove: ${filePath} was replaced during the move`,
+      );
+    }
+    fs.unlinkSync(name);
+  });
+}
+
+/** Remove a copy this move created, keeping the error that made it necessary. */
+function discardCopy(
+  destinationPath: string,
+  created: { dev: number; ino: number },
+): void {
+  try {
+    removeFromDirectory(destinationPath, created);
+  } catch {
+    // Left in place; the error that made the move fail is the one to report.
+  }
+}
+
+/**
+ * Create `destinationPath`, which must not exist, as a copy of the file open
+ * at `sourceFd`, with its mode and times. A copy that fails is removed.
+ */
+async function copyIntoNewFile(
+  sourceFd: number,
+  source: fs.Stats,
+  destinationPath: string,
+): Promise<fs.Stats> {
+  // O_EXCL: an existing file or symlink fails with EEXIST, never followed.
+  const { fd, opened } = openInDirectory(
+    destinationPath,
+    fs.constants.O_WRONLY |
+      fs.constants.O_CREAT |
+      fs.constants.O_EXCL |
+      noFollow(),
+    false,
+  );
+  try {
+    try {
+      const buffer = Buffer.alloc(64 * 1024);
+      for (;;) {
+        const bytesRead = await readChunk(sourceFd, buffer);
+        if (bytesRead === 0) {
+          break;
+        }
+        await writeChunk(fd, buffer.subarray(0, bytesRead));
+      }
+      await keepModeAndTimes(fd, source);
+    } finally {
+      await close(fd);
+    }
+  } catch (error) {
+    discardCopy(destinationPath, opened);
+    throw error;
+  }
+  return opened;
+}
+
+/**
+ * Move the regular file at `sourcePath` to `destinationPath`, which must not
+ * exist, where the two are on different devices: copy it into a newly created
+ * file, then remove the source. If any step fails, the copy is removed and the
+ * source is left where it was.
+ */
+export async function moveFileAcrossDevices(
+  sourcePath: string,
+  destinationPath: string,
+): Promise<void> {
+  const { fd, opened: source } = openSourceInDirectory(sourcePath);
+  let created: fs.Stats;
+  try {
+    created = await copyIntoNewFile(fd, source, destinationPath);
+  } finally {
+    await close(fd);
+  }
+  try {
+    removeFromDirectory(sourcePath, source);
+  } catch (error) {
+    discardCopy(destinationPath, created);
+    throw error;
+  }
 }
 
 /**
