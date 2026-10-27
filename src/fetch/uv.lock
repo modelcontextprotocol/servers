@@ -748,6 +748,7 @@ name = "mcp-server-fetch"
 version = "2026.10.24"
 source = { editable = "." }
 dependencies = [
+    { name = "beautifulsoup4" },
     { name = "httpx", extra = ["socks"] },
     { name = "markdownify" },
     { name = "mcp" },
@@ -768,6 +769,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "beautifulsoup4", specifier = ">=4.7.1" },
     { name = "httpx", extras = ["socks"], specifier = ">=0.27" },
     { name = "markdownify", specifier = ">=0.13.1" },
     { name = "mcp", specifier = ">=2.3,<3" },
