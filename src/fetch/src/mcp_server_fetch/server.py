@@ -306,6 +306,18 @@ async def check_may_autonomously_fetch_url(
         )
 
 
+def _body_looks_like_html(page_raw: str) -> bool:
+    """Whether a body served with no Content-Type is an HTML document.
+
+    A missing header says nothing about the payload, so only a body that opens
+    (after any byte-order mark and whitespace) with an HTML doctype or an
+    ``<html`` tag is simplified; JSON, plain text and the like come back raw
+    rather than being forced through readability (#5134).
+    """
+    start = page_raw.lstrip("\ufeff").lstrip()[:20].lower()
+    return start.startswith(("<!doctype html", "<html"))
+
+
 async def fetch_url(
     url: str,
     user_agent: str,
@@ -361,7 +373,10 @@ async def fetch_url(
 
     content_type = response.headers.get("content-type", "")
     is_page_html = (
-        "<html" in page_raw[:100] or "text/html" in content_type or not content_type
+        "<html" in page_raw[:100]
+        or "text/html" in content_type.lower()
+        or "application/xhtml+xml" in content_type.lower()
+        or (not content_type and _body_looks_like_html(page_raw))
     )
 
     if is_page_html and not force_raw:
