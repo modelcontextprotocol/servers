@@ -227,3 +227,24 @@ describe("path validation", () => {
     );
   });
 });
+
+describe("allowed-directory case respelling (#470)", () => {
+  it("refuses the respelling when the parent's readdir never settles", async () => {
+    const root = path.join(dir, "CaseTest");
+    await fs.mkdir(root);
+    await fs.writeFile(path.join(root, "f.txt"), "inside");
+    const scoped = await connect([root]);
+    try {
+      client = scoped.client;
+      const called = stall("readdir", dir);
+      const result = await callPastTimeout(called, "read_text_file", {
+        path: path.join(dir, "CASETEST", "f.txt"),
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toMatch(/^Access denied - path outside/);
+    } finally {
+      vi.useRealTimers();
+      await scoped.close();
+    }
+  });
+});

@@ -262,16 +262,25 @@ async function namesOneEntry(
 ): Promise<boolean> {
   try {
     const key = caseMatchKey(requested);
-    const entries = (await fs.readdir(parent)) ?? [];
+    const entries =
+      (await withFsTimeout(fs.readdir(parent), "readdir", parent)) ?? [];
     if (entries.filter((entry) => caseMatchKey(entry) === key).length !== 1) {
       return false;
     }
-    const requestedStats = await fs.lstat(path.join(parent, requested), {
-      bigint: true,
-    });
-    const configuredStats = await fs.lstat(path.join(parent, configured), {
-      bigint: true,
-    });
+    // Bounded like every request-path fs call (#4162); a timeout lands in the
+    // catch below and answers no, so the request is refused.
+    const requestedPath = path.join(parent, requested);
+    const configuredPath = path.join(parent, configured);
+    const requestedStats = await withFsTimeout(
+      fs.lstat(requestedPath, { bigint: true }),
+      "lstat",
+      requestedPath,
+    );
+    const configuredStats = await withFsTimeout(
+      fs.lstat(configuredPath, { bigint: true }),
+      "lstat",
+      configuredPath,
+    );
     return (
       requestedStats.dev === configuredStats.dev &&
       requestedStats.ino === configuredStats.ino
