@@ -320,13 +320,22 @@ function writeChunk(fd: number, chunk: Buffer): Promise<void> {
   );
 }
 
+function seconds(nanoseconds: bigint): number {
+  return Number(nanoseconds) / 1e9;
+}
+
 function keepModeAndTimes(fd: number, source: fs.BigIntStats): Promise<void> {
   return new Promise((resolve, reject) =>
     fs.fchmod(fd, Number(source.mode & 0o777n), (chmodError) =>
       chmodError
         ? reject(chmodError)
-        : fs.futimes(fd, source.atime, source.mtime, (timesError) =>
-            timesError ? reject(timesError) : resolve(),
+        : // In seconds from the nanosecond fields: a Date keeps only
+          // milliseconds.
+          fs.futimes(
+            fd,
+            seconds(source.atimeNs),
+            seconds(source.mtimeNs),
+            (timesError) => (timesError ? reject(timesError) : resolve()),
           ),
     ),
   );

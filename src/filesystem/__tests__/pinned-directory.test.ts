@@ -457,6 +457,19 @@ describe("moveFileAcrossDevices", () => {
     expect(process.cwd()).toBe(cwd);
   });
 
+  it("keeps the modification time below a millisecond", async () => {
+    const source = path.join(dir, "a.txt");
+    const destination = path.join(outside, "b.txt");
+    fs.writeFileSync(source, "a");
+    // 0.5 ms past a whole millisecond: a Date would drop it.
+    fs.utimesSync(source, 1_000_000_000.1235, 1_000_000_000.1235);
+    const before = fs.statSync(source, { bigint: true }).mtimeNs;
+    await moveFileAcrossDevices(source, destination);
+    const after = fs.statSync(destination, { bigint: true }).mtimeNs;
+    const drift = after > before ? after - before : before - after;
+    expect(drift < 1000n).toBe(true);
+  });
+
   it("moves an empty file", async () => {
     const source = path.join(dir, "empty");
     fs.writeFileSync(source, "");
