@@ -54,8 +54,10 @@
 // rewritten when it differs, as the monthly refresh does, except that a
 // ticked checklist box alone is not a difference. Its scope labels move by
 // the DELTA between what the old body's rows called for and what the new
-// rows do, so a label triage or a maintainer applied, or removed, stays as
-// they left it. That holds when the last outdated copy catches up or
+// rows do, and a label is removed only if the sweep applied it (recorded on
+// the body's last line, since a row can call for a label someone had
+// already applied), so a label triage or a maintainer applied, or removed,
+// stays as they left it. That holds when the last outdated copy catches up or
 // leaves the group too: the issue is rewritten to say nothing is behind,
 // though the sweep still closes nothing. A closed issue is left alone.
 //
@@ -341,31 +343,66 @@ export function bodyScopes(body) {
   );
 }
 
+/** The record, on a body's last line, of the scope labels the sweep applied. */
+const APPLIED_RE = /^<!-- sdk-watch:scopes(?: ([^ ]+))? -->$/m;
+
+/**
+ * @param {string[]} scopes
+ * @returns {string} the record line for `scopes`
+ */
+export function buildAppliedMarker(scopes) {
+  return `<!-- sdk-watch:scopes${scopes.length ? ` ${scopes.join(",")}` : ""} -->`;
+}
+
+/**
+ * The scope labels the sweep itself applied to an issue. A row calling for
+ * a label that was already there does not make it the sweep's, so this is
+ * recorded rather than read off the rows. A body written before the record
+ * existed falls back to its rows, which is what the sweep applied at filing.
+ *
+ * @param {string | undefined} body
+ * @returns {string[]}
+ */
+export function appliedScopes(body) {
+  const match = APPLIED_RE.exec(body ?? "");
+  if (!match) return bodyScopes(body);
+  return match[1] ? match[1].split(",") : [];
+}
+
 /** A body with every checklist box unticked, so ticking one is not a change. */
 const unticked = (body) => (body ?? "").replace(/^- \[[xX]\]/gm, "- [ ]");
 
 /**
  * What an OPEN issue for the current target needs to match the current
  * state, or `null` when it already does. Labels move only by the delta
- * between the old body's rows and the new ones, so labels the sweep did not
- * apply (or that someone removed) are left as they are.
+ * between the old body's rows and the new ones: one is added only when the
+ * rows newly call for it and it is absent, and removed only when the rows
+ * stop calling for it and the sweep is the one that applied it. A label
+ * triage or a maintainer applied, or removed, is left as they left it.
  *
  * @param {{body?: string, labels?: Array<{name?: string}>}} issue
  * @param {NonNullable<ReturnType<typeof groupState>>} state
  * @returns {{body: string, addLabels: string[], removeLabels: string[]} | null}
  */
 export function refreshPlan(issue, state) {
-  const body = buildIssueBody(state);
-  // Labels follow the rows, so an unchanged body means unchanged labels.
-  if (unticked(issue.body) === unticked(body)) return null;
   const had = new Set((issue.labels ?? []).map((l) => l?.name));
   const before = bodyScopes(issue.body);
-  const after = bodyScopes(body);
-  return {
-    body,
-    addLabels: after.filter((l) => !before.includes(l) && !had.has(l)),
-    removeLabels: before.filter((l) => !after.includes(l) && had.has(l)),
-  };
+  const after = bodyScopes(buildIssueBody(state));
+  const owned = appliedScopes(issue.body);
+  const addLabels = after.filter((l) => !before.includes(l) && !had.has(l));
+  const removeLabels = before.filter(
+    (l) => !after.includes(l) && had.has(l) && owned.includes(l),
+  );
+  const applied = [
+    ...new Set([
+      ...owned.filter((l) => !removeLabels.includes(l)),
+      ...addLabels,
+    ]),
+  ].sort();
+  const body = buildIssueBody(state, applied);
+  // Labels follow the rows, so an unchanged body means unchanged labels.
+  if (unticked(issue.body) === unticked(body)) return null;
+  return { body, addLabels, removeLabels };
 }
 
 /**
@@ -410,8 +447,15 @@ export function checklist(state) {
   ];
 }
 
-/** @param {NonNullable<ReturnType<typeof groupState>>} state */
-export function buildIssueBody(state) {
+/**
+ * @param {NonNullable<ReturnType<typeof groupState>>} state
+ * @param {string[]} [applied] the scope labels the sweep has applied; at
+ *   filing, the ones `issueLabels` gives
+ */
+export function buildIssueBody(
+  state,
+  applied = issueLabels(state).filter((l) => !SWEEP_LABELS.includes(l)),
+) {
   const { group, rows, target } = state;
   const registry = group.ecosystem === "pypi" ? "PyPI" : "npm";
   const table = rows
@@ -439,6 +483,7 @@ export function buildIssueBody(state) {
       `Release notes: https://github.com/${group.repo}/releases`,
       "",
       "Rewritten by the nightly SDK watch (#4874) when the last outdated copy cleared. The sweep closes nothing: close this issue by hand once a maintainer has confirmed it.",
+      buildAppliedMarker(applied),
     ].join("\n");
   }
 
@@ -467,6 +512,7 @@ export function buildIssueBody(state) {
     "An automated review of what changed upstream, and which parts of these servers it touches, is posted as a comment below.",
     "",
     "A later run will not refile this issue. A **further** release files its own issue and leaves a supersession note here.",
+    buildAppliedMarker(applied),
   ].join("\n");
 }
 

@@ -17,8 +17,10 @@ import { parse } from "yaml";
 import {
   ANALYSIS_MARKER,
   SDK_GROUPS,
+  appliedScopes,
   assertEveryPackageWatched,
   bodyScopes,
+  buildAppliedMarker,
   buildIssueBody,
   buildIssueTitle,
   buildMarker,
@@ -29,6 +31,7 @@ import {
   hasAnalysis,
   issueLabels,
   main,
+  markRows,
   needsManifestEdit,
   parseMarker,
   parseSupersededMarker,
@@ -733,11 +736,88 @@ test("refreshPlan rewrites changed rows and moves only its own scope labels", ()
     body: buildIssueBody(was),
     labels: [{ name: "server-git" }, { name: "server-memory" }],
   };
+  // The record keeps only what the sweep itself applied: time, not memory.
   assert.deepEqual(refreshPlan(trimmed, now), {
-    body: buildIssueBody(now),
+    body: buildIssueBody(now, ["server-time"]),
     addLabels: [],
     removeLabels: ["server-git"],
   });
+});
+
+test("appliedScopes reads the record, falling back to the rows", () => {
+  const state = groupState(
+    group("python-sdk"),
+    [
+      row("mcp", "src/time", ">=1", "1.0.0"),
+      row("mcp", "src/git", ">=1", "1.0.0"),
+    ],
+    { mcp: "2.0.0" },
+  );
+  const body = buildIssueBody(state);
+  assert.equal(
+    body.split("\n").at(-1),
+    buildAppliedMarker(["server-git", "server-time"]),
+  );
+  assert.deepEqual(appliedScopes(body), ["server-git", "server-time"]);
+  assert.deepEqual(appliedScopes(buildIssueBody(state, [])), []);
+  // A body written before the record existed: what its rows called for.
+  const legacy = body.split("\n").slice(0, -1).join("\n");
+  assert.deepEqual(appliedScopes(legacy), ["server-git", "server-time"]);
+  assert.deepEqual(appliedScopes(undefined), []);
+});
+
+test("a scope label someone applied first survives successive refreshes", () => {
+  const latest = { mcp: "1.30.0" };
+  const time = row("mcp", "src/time", ">=1.29.0,<2", "1.29.0");
+  const night1 = groupState(group("python-sdk"), [time], latest);
+  // A maintainer had already put server-memory on the issue.
+  let issue = {
+    body: buildIssueBody(night1),
+    labels: ["server-time", "server-memory"].map((name) => ({ name })),
+  };
+  const apply = (plan) => ({
+    body: plan.body,
+    labels: [
+      ...issue.labels.filter((l) => !plan.removeLabels.includes(l.name)),
+      ...plan.addLabels.map((name) => ({ name })),
+    ],
+  });
+
+  // Night 2: memory falls behind. Its label is already there; not the sweep's.
+  const night2 = groupState(
+    group("python-sdk"),
+    [time, row("mcp", "src/memory", ">=1.29.0,<2", "1.28.0")],
+    latest,
+  );
+  const plan2 = refreshPlan(issue, night2);
+  assert.deepEqual([plan2.addLabels, plan2.removeLabels], [[], []]);
+  assert.deepEqual(appliedScopes(plan2.body), ["server-time"]);
+  issue = apply(plan2);
+
+  // Night 3: memory catches up. The sweep did not apply its label, so keeps it.
+  const night3 = groupState(
+    group("python-sdk"),
+    [time, row("mcp", "src/memory", ">=1.29.0,<2", "1.30.0")],
+    latest,
+  );
+  const plan3 = refreshPlan(issue, night3);
+  assert.deepEqual([plan3.addLabels, plan3.removeLabels], [[], []]);
+  issue = apply(plan3);
+  assert.ok(issue.labels.some((l) => l.name === "server-memory"));
+
+  // Night 4: time catches up too. Its label was the sweep's, so it goes.
+  const done = markRows(
+    group("python-sdk"),
+    [
+      row("mcp", "src/time", ">=1.29.0,<2", "1.30.0"),
+      row("mcp", "src/memory", ">=1.29.0,<2", "1.30.0"),
+    ],
+    latest,
+  );
+  const plan4 = refreshPlan(issue, done);
+  assert.deepEqual(plan4.removeLabels, ["server-time"]);
+  assert.deepEqual(appliedScopes(plan4.body), []);
+  assert.equal(refreshPlan(apply(plan4), done), null);
 });
 
 test("an open issue whose installs changed is refreshed in place, once", (t) => {
