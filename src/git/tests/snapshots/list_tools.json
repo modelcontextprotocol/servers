@@ -251,7 +251,7 @@
     },
     {
       "name": "git_create_branch",
-      "description": "Creates a new branch from an optional base branch",
+      "description": "Creates a new branch from an optional base branch or commit",
       "inputSchema": {
         "properties": {
           "repo_path": {
@@ -272,6 +272,7 @@
               }
             ],
             "default": null,
+            "description": "Branch, tag or commit SHA to create the branch from. Defaults to the current branch, or to the current commit when HEAD is detached",
             "title": "Base Branch"
           }
         },

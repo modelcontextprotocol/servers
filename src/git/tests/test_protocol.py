@@ -632,7 +632,7 @@ async def test_git_create_branch_unknown_base_is_error(repo: git.Repo):
         None,
         "git_create_branch",
         {"repo_path": str(root_of(repo)), "branch_name": "x", "base_branch": "nope"},
-    ) == tool_error("git_create_branch", "No item found with id nope")
+    ) == tool_error("git_create_branch", "Unknown base branch or commit: 'nope'")
 
 
 async def test_git_create_branch_existing_name_at_same_commit_is_error(
@@ -676,23 +676,38 @@ async def test_git_create_branch_existing_name_at_other_commit_is_error(
     assert "already exist" in result["content"][0]["text"]
 
 
-async def test_git_create_branch_on_detached_head_asks_for_a_base(
+async def test_git_create_branch_on_detached_head_uses_current_commit(
     repo: git.Repo,
 ):
     # With no base_branch the base is the active branch, which a detached HEAD
     # does not have (GitPython would raise TypeError, a crash under MCPServer).
-    # #5174: the tool says so instead, as an anticipated failure.
+    # #5192: the tool branches from the current commit and names it.
+    head = repo.head.commit
     repo.git.checkout("--detach")
     result = await call(
         None,
         "git_create_branch",
         {"repo_path": str(root_of(repo)), "branch_name": "x"},
     )
-    assert result == tool_error(
+    assert result == text_result(f"Created branch 'x' from commit {head.hexsha[:7]}")
+    assert repo.heads["x"].commit == head
+    assert repo.head.is_detached
+
+
+async def test_git_create_branch_from_commit_sha(repo: git.Repo):
+    first = repo.head.commit
+    add_commits(repo, 1)
+    result = await call(
+        None,
         "git_create_branch",
-        "HEAD is detached, so there is no current branch to branch from; "
-        "pass base_branch",
+        {
+            "repo_path": str(root_of(repo)),
+            "branch_name": "x",
+            "base_branch": first.hexsha,
+        },
     )
+    assert result == text_result(f"Created branch 'x' from commit {first.hexsha[:7]}")
+    assert repo.heads["x"].commit == first
 
 
 async def test_an_unanticipated_exception_is_reported_generically(repo: git.Repo):

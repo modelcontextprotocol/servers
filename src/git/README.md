@@ -76,8 +76,8 @@ Please note that mcp-server-git is currently in early development. The functiona
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `branch_name` (string): Name of the new branch
-     - `base_branch` (string, optional): Base branch to create from (defaults to current branch)
-   - Returns: Confirmation of branch creation
+     - `base_branch` (string, optional): Branch, tag or commit SHA to create from (defaults to the current branch, or to the current commit when HEAD is detached)
+   - Returns: Confirmation of branch creation, naming the base branch, or the short SHA when the base is a commit
 10. `git_checkout`
    - Switches branches
    - Inputs:

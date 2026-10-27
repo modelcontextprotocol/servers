@@ -505,6 +505,59 @@ def test_git_create_branch_from_base(test_repository):
     assert "Created branch 'derived-branch' from 'base-branch'" in result
 
 
+def test_git_create_branch_on_detached_head_uses_current_commit(test_repository):
+    # #5192: with no base_branch, a detached HEAD branches from its commit.
+    head = test_repository.head.commit
+    test_repository.git.checkout("--detach")
+
+    result = git_create_branch(test_repository, "keep")
+
+    assert result == f"Created branch 'keep' from commit {head.hexsha[:7]}"
+    assert test_repository.heads["keep"].commit == head
+    # Creating the branch does not attach HEAD to it.
+    assert test_repository.head.is_detached
+
+
+def test_git_create_branch_from_commit_sha(test_repository):
+    # #5192: a base that is not a reference is resolved as a commit-ish.
+    first = test_repository.head.commit
+    file_path = Path(test_repository.working_dir) / "later.txt"
+    file_path.write_text("later")
+    test_repository.index.add(["later.txt"])
+    test_repository.index.commit("later commit")
+
+    result = git_create_branch(test_repository, "from-sha", first.hexsha)
+
+    assert result == f"Created branch 'from-sha' from commit {first.hexsha[:7]}"
+    assert test_repository.heads["from-sha"].commit == first
+
+
+def test_git_create_branch_from_relative_revision(test_repository):
+    first = test_repository.head.commit
+    test_repository.index.commit("second commit")
+
+    git_create_branch(test_repository, "from-parent", "HEAD~1")
+
+    assert test_repository.heads["from-parent"].commit == first
+
+
+@pytest.mark.parametrize("base", ["nope", "HEAD^{tree}"])
+def test_git_create_branch_unknown_base(test_repository, base):
+    # An unknown name (BadName) and an object that is not a commit (ValueError)
+    # both get the same clear message, not GitPython's raw lookup error.
+    with pytest.raises(ValueError, match="Unknown base branch or commit"):
+        git_create_branch(test_repository, "x", base)
+    assert not any(head.name == "x" for head in test_repository.heads)
+
+
+def test_git_create_branch_from_sha_keeps_existing_branch_check(test_repository):
+    sha = test_repository.head.commit.hexsha
+    test_repository.git.branch("taken")
+
+    with pytest.raises(ValueError, match="refs/heads/taken already exists"):
+        git_create_branch(test_repository, "taken", sha)
+
+
 def test_git_show(test_repository):
     file_path = Path(test_repository.working_dir) / "show_test.txt"
     file_path.write_text("show content")
