@@ -315,6 +315,42 @@ async def test_git_diff_rejects_flag_injection(repo: git.Repo):
     )
 
 
+async def test_git_diff_of_non_utf8_content_is_a_normal_result(repo: git.Repo):
+    """A Latin-1 file's diff reaches the client with U+FFFD in place of the
+    undecodable bytes, as git_show's does, and serializes as UTF-8 (#5193)."""
+    root = root_of(repo)
+    (root / "latin1.txt").write_bytes(b"caf\xe9\n")
+    repo.index.add(["latin1.txt"])
+    repo.index.commit("add Latin-1 file")
+    (root / "latin1.txt").write_bytes(b"caf\xe9 na\xefve\n")
+    result = await call(None, "git_diff_unstaged", {"repo_path": str(root)})
+    assert result["isError"] is False
+    text = result["content"][0]["text"]
+    assert text.startswith("Unstaged changes:\ndiff --git a/latin1.txt b/latin1.txt")
+    assert "-caf�\n+caf� na�ve" in text
+    json.dumps(result, ensure_ascii=False).encode("utf-8")  # no lone surrogates
+
+
+async def test_git_status_non_ascii_path_round_trips_through_git_add(
+    repo: git.Repo,
+):
+    """Under git's default core.quotepath=true the name still comes back as
+    written, so a client can pass it straight to git_add (#5129)."""
+    root = root_of(repo)
+    with repo.config_writer() as config:
+        config.set_value("core", "quotepath", "true")
+    (root / "日本語.txt").write_text("new\n", newline="\n")
+    status = await call(None, "git_status", {"repo_path": str(root)})
+    assert "\t日本語.txt\n" in status["content"][0]["text"]
+    added = await call(
+        None, "git_add", {"repo_path": str(root), "files": ["日本語.txt"]}
+    )
+    assert added["isError"] is False
+    # Read the index directly: `staged_paths` lists through git, which would
+    # octal-escape the name under the pinned core.quotepath.
+    assert "日本語.txt" in {path for path, _stage in repo.index.entries}
+
+
 # --------------------------------------------------------------------------
 # git_commit
 # --------------------------------------------------------------------------

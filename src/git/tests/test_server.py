@@ -268,6 +268,101 @@ def test_git_diff(test_repository):
     assert "feature changes" in result
 
 
+# A non-ASCII name, and the octal escape git prints for its first character
+# under its default core.quotepath=true (#5129).
+NON_ASCII_FILENAME = "日本語.txt"
+NON_ASCII_OCTAL = "\\346\\227\\245"
+
+
+def pin_quotepath_true(repo: git.Repo) -> None:
+    """Pin git's default repo-locally, so a global config cannot hide the bug."""
+    with repo.config_writer() as config:
+        config.set_value("core", "quotepath", "true")
+
+
+def commit_non_ascii_file(repo: git.Repo) -> None:
+    """Commit NON_ASCII_FILENAME, then leave an unstaged change to it."""
+    pin_quotepath_true(repo)
+    file_path = Path(repo.working_dir) / NON_ASCII_FILENAME
+    file_path.write_text("original\n")
+    repo.index.add([NON_ASCII_FILENAME])
+    repo.index.commit("add non-ASCII file")
+    file_path.write_text("changed\n")
+
+
+def test_git_status_prints_non_ascii_path_unquoted(test_repository):
+    pin_quotepath_true(test_repository)
+    (Path(test_repository.working_dir) / NON_ASCII_FILENAME).write_text("new\n")
+
+    result = git_status(test_repository)
+
+    assert f"\t{NON_ASCII_FILENAME}\n" in result
+    assert NON_ASCII_OCTAL not in result
+
+
+def test_git_status_non_ascii_path_round_trips_through_git_add(test_repository):
+    pin_quotepath_true(test_repository)
+    (Path(test_repository.working_dir) / NON_ASCII_FILENAME).write_text("new\n")
+
+    untracked = [
+        line.strip()
+        for line in git_status(test_repository).splitlines()
+        if line.startswith("\t")
+    ]
+    git_add(test_repository, untracked)
+
+    staged = [path for path, _stage in test_repository.index.entries]
+    assert NON_ASCII_FILENAME in staged
+
+
+@pytest.mark.parametrize("tool", ["unstaged", "staged", "target"])
+def test_git_diff_tools_print_non_ascii_path_unquoted(test_repository, tool):
+    commit_non_ascii_file(test_repository)
+    if tool == "unstaged":
+        result = git_diff_unstaged(test_repository)
+    elif tool == "staged":
+        test_repository.index.add([NON_ASCII_FILENAME])
+        result = git_diff_staged(test_repository)
+    else:
+        result = git_diff(test_repository, "HEAD")
+
+    assert f"diff --git a/{NON_ASCII_FILENAME} b/{NON_ASCII_FILENAME}" in result
+    assert NON_ASCII_OCTAL not in result
+
+
+def test_quotepath_override_is_not_written_to_repo_config(test_repository):
+    commit_non_ascii_file(test_repository)
+    config_path = Path(test_repository.git_dir) / "config"
+    before = config_path.read_bytes()
+
+    git_status(test_repository)
+    git_diff_unstaged(test_repository)
+
+    assert config_path.read_bytes() == before
+    # The override was for that one command: a plain call still escapes.
+    assert NON_ASCII_OCTAL in test_repository.git.status()
+
+
+@pytest.mark.parametrize("tool", ["unstaged", "staged", "target"])
+def test_git_diff_tools_replace_undecodable_bytes(test_repository, tool):
+    """A Latin-1 file's diff comes back with U+FFFD, not lone surrogates (#5193)."""
+    file_path = Path(test_repository.working_dir) / "latin1.txt"
+    file_path.write_bytes(b"caf\xe9\n")
+    test_repository.index.add(["latin1.txt"])
+    test_repository.index.commit("add Latin-1 file")
+    file_path.write_bytes(b"caf\xe9 na\xefve\n")
+    if tool == "unstaged":
+        result = git_diff_unstaged(test_repository)
+    elif tool == "staged":
+        test_repository.index.add(["latin1.txt"])
+        result = git_diff_staged(test_repository)
+    else:
+        result = git_diff(test_repository, "HEAD")
+
+    assert "+caf� na�ve" in result
+    result.encode("utf-8")  # raises UnicodeEncodeError on a lone surrogate
+
+
 def test_git_commit(test_repository):
     file_path = Path(test_repository.working_dir) / "commit_test.txt"
     file_path.write_text("content to commit")
