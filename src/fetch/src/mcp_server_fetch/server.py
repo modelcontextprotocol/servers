@@ -257,6 +257,58 @@ def make_client(proxy_url: str | None) -> httpx.AsyncClient:
         )
 
 
+def decode_page(response: httpx.Response) -> str:
+    """Decode a fetched body, honoring a charset the HTML declares (#5199).
+
+    httpx's ``response.text`` uses the Content-Type header's charset, and
+    UTF-8 without one, so a page that declares a legacy encoding only in a
+    ``<meta charset>`` or ``<meta http-equiv="Content-Type">`` tag came back
+    garbled. Following the HTML encoding-sniffing order, kept simple: a byte
+    order mark or a header charset wins (httpx already honors the header), and
+    otherwise the first 1024 bytes of an HTML (or untyped) body are scanned
+    for a declaration. A declaration Python does not know, or one that names
+    a codec that is not a web text encoding, is ignored, and the body is
+    decoded as before.
+    """
+    # Imported here so the helper stays one self-contained block of this file.
+    import codecs
+    import re
+
+    content = response.content
+    content_type = response.headers.get("content-type", "").lower()
+    if (
+        response.charset_encoding is not None
+        or (content_type and "html" not in content_type)
+        or content.startswith(
+            (codecs.BOM_UTF8, codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)
+        )
+    ):
+        return response.text
+
+    match = re.search(
+        rb"""<meta\b[^>]*?charset\s*=\s*["']?\s*([A-Za-z0-9_.:-]+)""",
+        content[:1024],
+        re.IGNORECASE,
+    )
+    if match is None:
+        return response.text
+    try:
+        name = codecs.lookup(match.group(1).decode("ascii")).name
+        # A UTF-16/32 declaration in an ASCII-compatible document cannot be
+        # true, so the HTML standard reads it as UTF-8.
+        if name.startswith(("utf-16", "utf-32")):
+            name = "utf-8"
+        # Python codecs that are not web text encodings: decoding a page with
+        # them would mangle it rather than fix it.
+        if name in ("idna", "punycode", "unicode-escape", "raw-unicode-escape"):
+            return response.text
+        return content.decode(name, errors="replace")
+    except (LookupError, UnicodeError):
+        # An unknown charset, a non-text codec (base64, rot13, …) or one that
+        # refuses to decode at all (``undefined``).
+        return response.text
+
+
 async def check_may_autonomously_fetch_url(
     url: str,
     user_agent: str,
@@ -357,7 +409,7 @@ async def fetch_url(
                 f"Failed to fetch {url} - status code {response.status_code}"
             )
 
-        page_raw = response.text
+        page_raw = decode_page(response)
 
     content_type = response.headers.get("content-type", "")
     is_page_html = (
