@@ -32,118 +32,156 @@ const config = {
   },
 };
 
-/** The form: one field of each type form-mode elicitation supports. */
+/** The form's fields: one of each type form-mode elicitation supports. */
+const properties = {
+  name: {
+    title: "String",
+    type: "string",
+    description: "Your full, legal name",
+  },
+  check: {
+    title: "Boolean",
+    type: "boolean",
+    description: "Agree to the terms and conditions",
+  },
+  firstLine: {
+    title: "String with default",
+    type: "string",
+    description: "Favorite first line of a story",
+    default: "It was a dark and stormy night.",
+  },
+  email: {
+    title: "String with email format",
+    type: "string",
+    format: "email",
+    description:
+      "Your email address (will be verified, and never shared with anyone else)",
+  },
+  homepage: {
+    type: "string",
+    format: "uri",
+    title: "String with uri format",
+    description: "Portfolio / personal website",
+  },
+  birthdate: {
+    title: "String with date format",
+    type: "string",
+    format: "date",
+    description: "Your date of birth",
+  },
+  integer: {
+    title: "Integer",
+    type: "integer",
+    description:
+      "Your favorite integer (do not give us your phone number, pin, or other sensitive info)",
+    minimum: 1,
+    maximum: 100,
+    default: 42,
+  },
+  number: {
+    title: "Number in range 1-1000",
+    type: "number",
+    description: "Favorite number (there are no wrong answers)",
+    minimum: 0,
+    maximum: 1000,
+    default: 3.14,
+  },
+  untitledSingleSelectEnum: {
+    type: "string",
+    title: "Untitled Single Select Enum",
+    description: "Choose your favorite friend",
+    enum: ["Monica", "Rachel", "Joey", "Chandler", "Ross", "Phoebe"],
+    default: "Monica",
+  },
+  untitledMultipleSelectEnum: {
+    type: "array",
+    title: "Untitled Multiple Select Enum",
+    description: "Choose your favorite instruments",
+    minItems: 1,
+    maxItems: 3,
+    items: {
+      type: "string",
+      enum: ["Guitar", "Piano", "Violin", "Drums", "Bass"],
+    },
+    default: ["Guitar"],
+  },
+  titledSingleSelectEnum: {
+    type: "string",
+    title: "Titled Single Select Enum",
+    description: "Choose your favorite hero",
+    oneOf: [
+      { const: "hero-1", title: "Superman" },
+      { const: "hero-2", title: "Green Lantern" },
+      { const: "hero-3", title: "Wonder Woman" },
+    ],
+    default: "hero-1",
+  },
+  titledMultipleSelectEnum: {
+    type: "array",
+    title: "Titled Multiple Select Enum",
+    description: "Choose your favorite types of fish",
+    minItems: 1,
+    maxItems: 3,
+    items: {
+      anyOf: [
+        { const: "fish-1", title: "Tuna" },
+        { const: "fish-2", title: "Salmon" },
+        { const: "fish-3", title: "Trout" },
+      ],
+    },
+    default: ["fish-1"],
+  },
+  legacyTitledEnum: {
+    type: "string",
+    title: "Legacy Titled Single Select Enum",
+    description: "Choose your favorite type of pet",
+    enum: ["pet-1", "pet-2", "pet-3", "pet-4", "pet-5"],
+    enumNames: ["Cats", "Dogs", "Birds", "Fish", "Reptiles"],
+    default: "pet-1",
+  },
+} satisfies ElicitRequestFormParams["requestedSchema"]["properties"];
+
+/** The form, as the elicitation request carries it. */
 const requestedSchema: ElicitRequestFormParams["requestedSchema"] = {
   type: "object",
-  properties: {
-    name: {
-      title: "String",
-      type: "string",
-      description: "Your full, legal name",
-    },
-    check: {
-      title: "Boolean",
-      type: "boolean",
-      description: "Agree to the terms and conditions",
-    },
-    firstLine: {
-      title: "String with default",
-      type: "string",
-      description: "Favorite first line of a story",
-      default: "It was a dark and stormy night.",
-    },
-    email: {
-      title: "String with email format",
-      type: "string",
-      format: "email",
-      description:
-        "Your email address (will be verified, and never shared with anyone else)",
-    },
-    homepage: {
-      type: "string",
-      format: "uri",
-      title: "String with uri format",
-      description: "Portfolio / personal website",
-    },
-    birthdate: {
-      title: "String with date format",
-      type: "string",
-      format: "date",
-      description: "Your date of birth",
-    },
-    integer: {
-      title: "Integer",
-      type: "integer",
-      description:
-        "Your favorite integer (do not give us your phone number, pin, or other sensitive info)",
-      minimum: 1,
-      maximum: 100,
-      default: 42,
-    },
-    number: {
-      title: "Number in range 1-1000",
-      type: "number",
-      description: "Favorite number (there are no wrong answers)",
-      minimum: 0,
-      maximum: 1000,
-      default: 3.14,
-    },
-    untitledSingleSelectEnum: {
-      type: "string",
-      title: "Untitled Single Select Enum",
-      description: "Choose your favorite friend",
-      enum: ["Monica", "Rachel", "Joey", "Chandler", "Ross", "Phoebe"],
-      default: "Monica",
-    },
-    untitledMultipleSelectEnum: {
-      type: "array",
-      title: "Untitled Multiple Select Enum",
-      description: "Choose your favorite instruments",
-      minItems: 1,
-      maxItems: 3,
-      items: {
-        type: "string",
-        enum: ["Guitar", "Piano", "Violin", "Drums", "Bass"],
-      },
-      default: ["Guitar"],
-    },
-    titledSingleSelectEnum: {
-      type: "string",
-      title: "Titled Single Select Enum",
-      description: "Choose your favorite hero",
-      oneOf: [
-        { const: "hero-1", title: "Superman" },
-        { const: "hero-2", title: "Green Lantern" },
-        { const: "hero-3", title: "Wonder Woman" },
-      ],
-      default: "hero-1",
-    },
-    titledMultipleSelectEnum: {
-      type: "array",
-      title: "Titled Multiple Select Enum",
-      description: "Choose your favorite types of fish",
-      minItems: 1,
-      maxItems: 3,
-      items: {
-        anyOf: [
-          { const: "fish-1", title: "Tuna" },
-          { const: "fish-2", title: "Salmon" },
-          { const: "fish-3", title: "Trout" },
-        ],
-      },
-      default: ["fish-1"],
-    },
-    legacyTitledEnum: {
-      type: "string",
-      title: "Legacy Titled Single Select Enum",
-      description: "Choose your favorite type of pet",
-      enum: ["pet-1", "pet-2", "pet-3", "pet-4", "pet-5"],
-      enumNames: ["Cats", "Dogs", "Birds", "Fish", "Reptiles"],
-      default: "pet-1",
-    },
-  },
+  properties,
   required: ["name"],
 };
+
+/**
+ * The label each field gets in the summary of an accepted form. Keyed by the
+ * form's own field names, so a field added to or removed from the form fails
+ * to compile until its label follows, and the summary cannot drift from the
+ * form again (#5209).
+ */
+const summaryLabels: Record<keyof typeof properties, string> = {
+  name: "Name",
+  check: "Agreed to terms",
+  firstLine: "Favorite first line",
+  email: "Email",
+  homepage: "Homepage",
+  birthdate: "Birthdate",
+  integer: "Favorite integer",
+  number: "Favorite number",
+  untitledSingleSelectEnum: "Favorite friend",
+  untitledMultipleSelectEnum: "Favorite instruments",
+  titledSingleSelectEnum: "Favorite hero",
+  titledMultipleSelectEnum: "Favorite fish",
+  legacyTitledEnum: "Favorite pet",
+};
+
+/**
+ * One summary line per form field the user answered, in the form's order.
+ * A field the form does not define is left out, whatever the client sent.
+ */
+const summarize = (userData: Record<string, unknown>): string[] =>
+  (Object.keys(properties) as (keyof typeof properties)[])
+    .filter((field) => userData[field] !== undefined)
+    .map((field) => {
+      const value = userData[field];
+      const shown = Array.isArray(value) ? value.join(", ") : String(value);
+      return `- ${summaryLabels[field]}: ${shown}`;
+    });
 
 /**
  * Registers the 'trigger-elicitation-request' tool.
@@ -197,21 +235,7 @@ export const registerTriggerElicitationRequestTool = (server: McpServer) => {
         });
 
         // Only access answer.content when action is accept
-        const userData = answer.content;
-        const lines = [];
-        if (userData.name) lines.push(`- Name: ${userData.name}`);
-        if (userData.check !== undefined)
-          lines.push(`- Agreed to terms: ${userData.check}`);
-        if (userData.color) lines.push(`- Favorite Color: ${userData.color}`);
-        if (userData.email) lines.push(`- Email: ${userData.email}`);
-        if (userData.homepage) lines.push(`- Homepage: ${userData.homepage}`);
-        if (userData.birthdate)
-          lines.push(`- Birthdate: ${userData.birthdate}`);
-        if (userData.integer !== undefined)
-          lines.push(`- Favorite Integer: ${userData.integer}`);
-        if (userData.number !== undefined)
-          lines.push(`- Favorite Number: ${userData.number}`);
-        if (userData.petType) lines.push(`- Pet Type: ${userData.petType}`);
+        const lines = summarize(answer.content);
 
         content.push({
           type: "text",
