@@ -132,6 +132,36 @@ describe("initial roots", () => {
     }
   });
 
+  // #5183: the advertised form names a symlink, which can be retargeted after
+  // the Roots load. A new file or directory under it must still be refused
+  // when the symlink now leads outside every allowed directory.
+  it("refuse creating under a root alias retargeted outside the root (#5183)", async () => {
+    const link = path.join(cliDir, "link-to-root");
+    await fs.symlink(rootDir, link);
+    const { client } = await connectTracked([], {
+      capabilities: ROOTS,
+      listRoots: () => [rootOf(link)],
+    });
+    await vi.waitFor(async () =>
+      expect(await allowedDirectoriesOf(client)).toEqual([link, rootDir]),
+    );
+    const outside = path.join(cliDir, "outside");
+    await fs.mkdir(outside);
+    await fs.rm(link);
+    await fs.symlink(outside, link);
+
+    const written = await call(client, "write_file", {
+      path: path.join(link, "new.txt"),
+      content: "x",
+    });
+    expect(textOf(written)).toMatch(/^Access denied/);
+    const created = await call(client, "create_directory", {
+      path: path.join(link, "a", "b"),
+    });
+    expect(textOf(created)).toMatch(/^Access denied/);
+    expect(await fs.readdir(outside)).toEqual([]);
+  });
+
   // #5183: the advertised form is kept as the client spelled it. Trimming
   // whitespace or quotes from it would name a different directory, here an
   // unrelated sibling, and allow it. POSIX only: Windows filenames cannot end

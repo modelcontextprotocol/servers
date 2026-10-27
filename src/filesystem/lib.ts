@@ -376,6 +376,19 @@ async function resolveUnicodeEquivalentPath(
   }
 
   let currentPath = await realpathWithTimeout(allowedDirectory);
+  // An allowed directory can be a symlink (the advertised form of a Root or a
+  // command-line directory), retargeted since it was allowed, so its realpath
+  // is checked like every component below it (#5183).
+  if (
+    !isPathWithinAllowedDirectories(
+      normalizePathFormat(currentPath),
+      allowedDirectories,
+    )
+  ) {
+    throw new Error(
+      `Access denied - symlink target outside allowed directories: ${currentPath} not in ${allowedDirectories.join(", ")}`,
+    );
+  }
   const relativeParts = path
     .relative(allowedDirectory, absolutePath)
     .split(path.sep)
