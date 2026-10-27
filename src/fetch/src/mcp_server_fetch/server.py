@@ -167,11 +167,14 @@ async def _refuse_private_destination(request: httpx.Request) -> None:
             )
 
 
-def extract_content_from_html(html: str) -> str:
+def extract_content_from_html(html: str, use_readability_js: bool = True) -> str:
     """Extract and convert HTML content to Markdown format.
 
     Args:
         html: Raw HTML content to process
+        use_readability_js: Ask readabilipy for Readability.js, which it runs
+            under Node when Node is on PATH. False always uses its pure-Python
+            extractor, so no Node (or npm) process is started (#4199).
 
     Returns:
         Simplified markdown version of the content
@@ -179,7 +182,7 @@ def extract_content_from_html(html: str) -> str:
     failed = "<error>Page failed to be simplified from HTML</error>"
     try:
         ret = readabilipy.simple_json.simple_json_from_html_string(
-            html, use_readability=True
+            html, use_readability=use_readability_js
         )
     except IndexError:
         # readabilipy's pure-Python extractor wraps its simplified tree with
@@ -338,6 +341,7 @@ async def fetch_url(
     proxy_url: str | None = None,
     allow_private_ips: bool = False,
     check_robots_txt: bool = False,
+    use_readability_js: bool = True,
 ) -> Tuple[str, str]:
     """
     Fetch the URL and return the content in a form ready for the LLM, as well as a prefix string with status information.
@@ -393,7 +397,7 @@ async def fetch_url(
     )
 
     if is_page_html and not force_raw:
-        return extract_content_from_html(page_raw), ""
+        return extract_content_from_html(page_raw, use_readability_js), ""
 
     return (
         page_raw,
@@ -448,6 +452,7 @@ def create_server(
     ignore_robots_txt: bool = False,
     proxy_url: str | None = None,
     allow_private_ips: bool = False,
+    use_readability_js: bool = True,
 ) -> MCPServer:
     """Build the fetch server: the `fetch` tool, the `fetch` prompt, and the guard.
 
@@ -526,6 +531,7 @@ def create_server(
             proxy_url=proxy_url,
             allow_private_ips=allow_private_ips,
             check_robots_txt=not ignore_robots_txt,
+            use_readability_js=use_readability_js,
         )
         original_length = len(content)
         if start_index >= original_length:
@@ -557,6 +563,7 @@ def create_server(
                 user_agent_manual,
                 proxy_url=proxy_url,
                 allow_private_ips=allow_private_ips,
+                use_readability_js=use_readability_js,
             )
         except ToolError as e:
             return str(e)
@@ -570,6 +577,7 @@ async def serve(
     ignore_robots_txt: bool = False,
     proxy_url: str | None = None,
     allow_private_ips: bool = False,
+    use_readability_js: bool = True,
 ) -> None:
     """Run the fetch MCP server over stdio.
 
@@ -579,9 +587,15 @@ async def serve(
         proxy_url: Optional proxy URL to use for requests
         allow_private_ips: Allow fetching private, loopback and link-local
             addresses, which are refused by default
+        use_readability_js: Extract HTML with Readability.js under Node when
+            Node is on PATH; False always uses the pure-Python extractor
     """
     server = create_server(
-        custom_user_agent, ignore_robots_txt, proxy_url, allow_private_ips
+        custom_user_agent,
+        ignore_robots_txt,
+        proxy_url,
+        allow_private_ips,
+        use_readability_js,
     )
     # Both eras (#4853): the SDK's dual-era loop lets the client's first
     # request decide. `initialize` gets the 2025-11-25 handshake;
