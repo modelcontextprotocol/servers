@@ -47,6 +47,20 @@
 // FURTHER release files a new issue and leaves a supersession comment on the
 // older open one; it never closes it.
 //
+// An OPEN issue for the current target is kept current (#5067): while the
+// target stays put, a server can upgrade on its own, be added, or move
+// between groups (the v1 -> v2 migration), and the issue would otherwise
+// keep pointing at servers with no work left. Its body is re-rendered and
+// rewritten when it differs, as the monthly refresh does, except that a
+// ticked checklist box alone is not a difference. Its scope labels move by
+// the DELTA between what the old body's rows called for and what the new
+// rows do, and a label is removed only if the sweep applied it (recorded on
+// the body's last line, since a row can call for a label someone had
+// already applied), so a label triage or a maintainer applied, or removed,
+// stays as they left it. That holds when the last outdated copy catches up or
+// leaves the group too: the issue is rewritten to say nothing is behind,
+// though the sweep still closes nothing. A closed issue is left alone.
+//
 // "An issue exists" and "it was analyzed" are different claims. The workflow
 // stamps `ANALYSIS_MARKER` on its comment, and an OPEN issue for the current
 // target with no such comment from the automation is handed to the analysis
@@ -239,16 +253,16 @@ export function assertEveryPackageWatched(declaredByManifest, ownPackages) {
 }
 
 /**
- * Decide whether one group is behind.
+ * One group's rows against its target, whether or not anything is behind.
  *
  * @param {(typeof SDK_GROUPS)[number]} group
  * @param {Array<{name: string, where: string, declared: string, installed: string | null}>} rows
  *   one per package per manifest that declares it
  * @param {Record<string, string>} latest per package
  * @returns {{group: (typeof SDK_GROUPS)[number], rows: Array<object>, target: string} | null}
- *   `null` when nothing is declared, a latest is unknown, or nothing is behind
+ *   `null` when nothing is declared or a latest is unknown
  */
-export function groupState(group, rows, latest) {
+export function markRows(group, rows, latest) {
   const { compare } = versioning(group.ecosystem);
   const names = [...new Set(rows.map((r) => r.name))];
   if (names.length === 0) return null;
@@ -261,13 +275,40 @@ export function groupState(group, rows, latest) {
     latest: latest[r.name],
     behind: r.installed !== null && compare(target, r.installed) > 0,
   }));
-  if (!marked.some((r) => r.behind)) return null;
   return { group, rows: marked, target };
+}
+
+/**
+ * Decide whether one group is behind.
+ *
+ * @param {(typeof SDK_GROUPS)[number]} group
+ * @param {Parameters<typeof markRows>[1]} rows
+ * @param {Record<string, string>} latest per package
+ * @returns {ReturnType<typeof markRows>}
+ *   `null` when nothing is declared, a latest is unknown, or nothing is behind
+ */
+export function groupState(group, rows, latest) {
+  const state = markRows(group, rows, latest);
+  return state && state.rows.some((r) => r.behind) ? state : null;
 }
 
 /** @param {NonNullable<ReturnType<typeof groupState>>} state */
 export function buildIssueTitle(state) {
   return `chore(deps): upgrade the ${state.group.label} to ${state.target}`;
+}
+
+/**
+ * The scope labels for the places a copy is behind, or none when that is
+ * every server (the issue is then repository-wide).
+ *
+ * @param {string[]} wheres each behind row's `where`
+ * @returns {string[]}
+ */
+function scopesFor(wheres) {
+  const scopes = [
+    ...new Set(wheres.map((w) => scopeLabel(`${w}/`)).filter(Boolean)),
+  ].sort();
+  return scopes.length === SERVERS.length ? [] : scopes;
 }
 
 /**
@@ -278,17 +319,89 @@ export function buildIssueTitle(state) {
  * @param {NonNullable<ReturnType<typeof groupState>>} state
  */
 export function issueLabels(state) {
-  const scopes = [
-    ...new Set(
-      state.rows
-        .filter((r) => r.behind)
-        .map((r) => scopeLabel(`${r.where}/`))
-        .filter(Boolean),
-    ),
+  return [
+    ...SWEEP_LABELS,
+    ...scopesFor(state.rows.filter((r) => r.behind).map((r) => r.where)),
+  ];
+}
+
+/** A row of the table `buildIssueBody` writes: its `where`, and `Behind`. */
+const ROW_RE = /^\| `.*?` \| `([^`]*)` \|.*\| (\*\*yes\*\*|no) \|$/gm;
+
+/**
+ * The scope labels an issue body's rows called for when the sweep wrote it,
+ * read back from its table.
+ *
+ * @param {string | undefined} body
+ * @returns {string[]}
+ */
+export function bodyScopes(body) {
+  return scopesFor(
+    [...(body ?? "").matchAll(ROW_RE)]
+      .filter((m) => m[2] === "**yes**")
+      .map((m) => m[1]),
+  );
+}
+
+/** The record, on a body's last line, of the scope labels the sweep applied. */
+const APPLIED_RE = /^<!-- sdk-watch:scopes(?: ([^ ]+))? -->$/m;
+
+/**
+ * @param {string[]} scopes
+ * @returns {string} the record line for `scopes`
+ */
+export function buildAppliedMarker(scopes) {
+  return `<!-- sdk-watch:scopes${scopes.length ? ` ${scopes.join(",")}` : ""} -->`;
+}
+
+/**
+ * The scope labels the sweep itself applied to an issue. A row calling for
+ * a label that was already there does not make it the sweep's, so this is
+ * recorded rather than read off the rows. A body written before the record
+ * existed falls back to its rows, which is what the sweep applied at filing.
+ *
+ * @param {string | undefined} body
+ * @returns {string[]}
+ */
+export function appliedScopes(body) {
+  const match = APPLIED_RE.exec(body ?? "");
+  if (!match) return bodyScopes(body);
+  return match[1] ? match[1].split(",") : [];
+}
+
+/** A body with every checklist box unticked, so ticking one is not a change. */
+const unticked = (body) => (body ?? "").replace(/^- \[[xX]\]/gm, "- [ ]");
+
+/**
+ * What an OPEN issue for the current target needs to match the current
+ * state, or `null` when it already does. Labels move only by the delta
+ * between the old body's rows and the new ones: one is added only when the
+ * rows newly call for it and it is absent, and removed only when the rows
+ * stop calling for it and the sweep is the one that applied it. A label
+ * triage or a maintainer applied, or removed, is left as they left it.
+ *
+ * @param {{body?: string, labels?: Array<{name?: string}>}} issue
+ * @param {NonNullable<ReturnType<typeof groupState>>} state
+ * @returns {{body: string, addLabels: string[], removeLabels: string[]} | null}
+ */
+export function refreshPlan(issue, state) {
+  const had = new Set((issue.labels ?? []).map((l) => l?.name));
+  const before = bodyScopes(issue.body);
+  const after = bodyScopes(buildIssueBody(state));
+  const owned = appliedScopes(issue.body);
+  const addLabels = after.filter((l) => !before.includes(l) && !had.has(l));
+  const removeLabels = before.filter(
+    (l) => !after.includes(l) && had.has(l) && owned.includes(l),
+  );
+  // Ownership lapses once the rows stop calling for a scope, whether or not
+  // the label was still there to remove: a maintainer may reapply it later.
+  const applied = [
+    ...new Set([...owned.filter((l) => after.includes(l)), ...addLabels]),
   ].sort();
-  return scopes.length === SERVERS.length
-    ? [...SWEEP_LABELS]
-    : [...SWEEP_LABELS, ...scopes];
+  const body = buildIssueBody(state, applied);
+  // Labels follow the rows, so an unchanged body means unchanged labels.
+  if (unticked(issue.body) === unticked(body)) return null;
+  return { body, addLabels, removeLabels };
 }
 
 /**
@@ -333,8 +446,15 @@ export function checklist(state) {
   ];
 }
 
-/** @param {NonNullable<ReturnType<typeof groupState>>} state */
-export function buildIssueBody(state) {
+/**
+ * @param {NonNullable<ReturnType<typeof groupState>>} state
+ * @param {string[]} [applied] the scope labels the sweep has applied; at
+ *   filing, the ones `issueLabels` gives
+ */
+export function buildIssueBody(
+  state,
+  applied = issueLabels(state).filter((l) => !SWEEP_LABELS.includes(l)),
+) {
   const { group, rows, target } = state;
   const registry = group.ecosystem === "pypi" ? "PyPI" : "npm";
   const table = rows
@@ -344,12 +464,33 @@ export function buildIssueBody(state) {
     )
     .join("\n");
 
+  const header = [
+    `| Package | Where | Declared | Installed on \`${TARGET_BRANCH}\` | Latest | Behind |`,
+    "| --- | --- | --- | --- | --- | --- |",
+  ];
+
+  // Settled: the last copy that was behind has reached the target, or left
+  // the group, since the issue was filed (#5067).
+  if (!rows.some((r) => r.behind)) {
+    return [
+      buildMarker(group, target),
+      rows.length > 0
+        ? `**Nothing here is behind ${target} any more.** Every copy of the **${group.label}** installed on \`${TARGET_BRANCH}\` has reached it, so the upgrade this issue tracked is done.`
+        : `**Nothing here is behind ${target} any more.** No manifest on \`${TARGET_BRANCH}\` declares the **${group.label}** any longer, so the upgrade this issue tracked no longer applies.`,
+      "",
+      ...(rows.length > 0 ? [...header, table, ""] : []),
+      `Release notes: https://github.com/${group.repo}/releases`,
+      "",
+      "Rewritten by the nightly SDK watch (#4874) when the last outdated copy cleared. The sweep closes nothing: close this issue by hand once a maintainer has confirmed it.",
+      buildAppliedMarker(applied),
+    ].join("\n");
+  }
+
   return [
     buildMarker(group, target),
     `A new **${group.label}** release is out. What is installed on \`${TARGET_BRANCH}\` is behind what ${registry} publishes.`,
     "",
-    `| Package | Where | Declared | Installed on \`${TARGET_BRANCH}\` | Latest | Behind |`,
-    "| --- | --- | --- | --- | --- | --- |",
+    ...header,
     table,
     "",
     ...(rows.some((r) => r.latest !== target)
@@ -370,6 +511,7 @@ export function buildIssueBody(state) {
     "An automated review of what changed upstream, and which parts of these servers it touches, is posted as a comment below.",
     "",
     "A later run will not refile this issue. A **further** release files its own issue and leaves a supersession note here.",
+    buildAppliedMarker(applied),
   ].join("\n");
 }
 
@@ -556,9 +698,16 @@ export function main({
   assertEveryPackageWatched(installs.declaredByManifest, installs.ownPackages);
 
   const states = [];
+  // Groups with nothing behind. An open issue for one still gets its rows
+  // refreshed, or it keeps naming copies that have caught up (#5067). A
+  // group no manifest declares any more has no target of its own (null).
+  const settled = [];
   for (const group of SDK_GROUPS) {
     const rows = installs.rowsFor(group);
-    if (rows.length === 0) continue;
+    if (rows.length === 0) {
+      settled.push({ group, rows: [], target: null });
+      continue;
+    }
     const latest = {};
     for (const name of new Set(rows.map((r) => r.name))) {
       latest[name] =
@@ -566,8 +715,12 @@ export function main({
           ? latestPypi(name, spawn)
           : latestNpm(name, spawn);
     }
-    const state = groupState(group, rows, latest);
-    if (state) states.push(state);
+    const state = markRows(group, rows, latest);
+    if (!state) continue;
+    if (state.rows.some((r) => r.behind)) states.push(state);
+    // A copy with no installed version is not known to have caught up, so
+    // its group is not settled: its issue is left as it is.
+    else if (state.rows.every((r) => r.installed !== null)) settled.push(state);
   }
 
   const emit = (filed) => {
@@ -576,9 +729,7 @@ export function main({
   };
 
   if (states.length === 0) {
-    log(`${SWEEP}: every MCP SDK package is current; no-op`);
-    emit([]);
-    return;
+    log(`${SWEEP}: every MCP SDK package is current`);
   }
 
   const existing = sweepIssues(repo, spawn, {
@@ -643,6 +794,19 @@ export function main({
         // OPEN only: a closed issue keeps suppressing its target, and must not
         // be handed a fresh analysis every night.
         if (match && match.state === "OPEN") {
+          const refresh = refreshPlan(match, state);
+          if (refresh) {
+            writer.edit(number, refresh);
+            log(
+              `${SWEEP}: refreshed #${number} for what is installed now` +
+                (refresh.addLabels.length
+                  ? `; added ${refresh.addLabels.join(", ")}`
+                  : "") +
+                (refresh.removeLabels.length
+                  ? `; removed ${refresh.removeLabels.join(", ")}`
+                  : ""),
+            );
+          }
           if (hasAnalysis(issueComments(repo, number, spawn))) {
             log(
               `${SWEEP}: ${state.group.label} ${state.target} has an issue and an analysis; no-op`,
@@ -683,6 +847,41 @@ export function main({
         }
       } catch (error) {
         // One group's failure must not cost another group its issue.
+        failures.push(`${state.group.label}: ${error.message}`);
+        warn(`${SWEEP}: ${state.group.label} failed: ${error.message}`);
+      }
+    }
+
+    // A settled group files nothing and queues nothing; it only rewrites an
+    // OPEN issue for its target (any target, once no manifest declares it)
+    // to say that nothing is behind, and drops the scope labels it applied.
+    for (const state of settled) {
+      const { compare } = versioning(state.group.ecosystem);
+      const open = validTargets(
+        existing.filter(
+          (i) => i.marker.key === state.group.key && i.state === "OPEN",
+        ),
+        state.group,
+      ).filter(
+        (i) =>
+          state.target === null || compare(i.marker.target, state.target) === 0,
+      );
+      try {
+        for (const issue of open) {
+          const refresh = refreshPlan(issue, {
+            ...state,
+            target: state.target ?? issue.marker.target,
+          });
+          if (!refresh) continue;
+          writer.edit(issue.number, refresh);
+          log(
+            `${SWEEP}: #${issue.number} has nothing behind any more; refreshed it` +
+              (refresh.removeLabels.length
+                ? ` and removed ${refresh.removeLabels.join(", ")}`
+                : ""),
+          );
+        }
+      } catch (error) {
         failures.push(`${state.group.label}: ${error.message}`);
         warn(`${SWEEP}: ${state.group.label} failed: ${error.message}`);
       }

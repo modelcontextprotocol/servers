@@ -1,7 +1,8 @@
 // Tests for the nightly SDK watch (#4874). The pure halves are driven
 // directly; `main()` runs with `npm`, `curl` and `gh` replaced by a fake spawn
 // and the manifests by an in-memory reader, covering filing, the dry run,
-// suppression, the analysis retry, supersession and the failure paths. The
+// suppression, the analysis retry, supersession, the refresh of an open
+// issue whose rows changed (#5067) and the failure paths. The
 // last tests read `.github/workflows/sdk-watch.yml` and pin the properties its
 // security rests on, so editing the workflow cannot quietly undo them. Run
 // via `npm run test:scripts`.
@@ -16,7 +17,10 @@ import { parse } from "yaml";
 import {
   ANALYSIS_MARKER,
   SDK_GROUPS,
+  appliedScopes,
   assertEveryPackageWatched,
+  bodyScopes,
+  buildAppliedMarker,
   buildIssueBody,
   buildIssueTitle,
   buildMarker,
@@ -27,10 +31,12 @@ import {
   hasAnalysis,
   issueLabels,
   main,
+  markRows,
   needsManifestEdit,
   parseMarker,
   parseSupersededMarker,
   readInstalls,
+  refreshPlan,
   versioning,
 } from "./sdk-watch.mjs";
 
@@ -420,6 +426,10 @@ function fakeWorld(state = {}) {
       if (s.createFail?.(args)) return ok({ status: 1, stderr: "boom" });
       return ok({ stdout: `https://github.com/o/r/issues/${s.nextIssue++}\n` });
     }
+    if (a === "issue" && b === "edit") {
+      if (s.editFail) return ok({ status: 1, stderr: "edit boom" });
+      return ok();
+    }
     if (a === "issue" && b === "comment") {
       if (s.commentFail) return ok({ status: 1, stderr: "comment boom" });
       return ok();
@@ -456,7 +466,7 @@ const writes = (calls) =>
     (c) =>
       c.cmd === "gh" &&
       c.args[0] === "issue" &&
-      ["create", "comment"].includes(c.args[1]),
+      ["create", "edit", "comment"].includes(c.args[1]),
   );
 const run = (world, extra = {}) =>
   main({
@@ -530,7 +540,9 @@ test("a quiet night is a no-op that emits []", (t) => {
   run(world, { output });
   assert.equal(writes(world.calls).length, 0);
   assert.deepEqual(filedFrom(output), []);
-  assert.ok(!world.calls.some((c) => c.args[1] === "list"));
+  // Still listed: an open issue for a settled group may need refreshing.
+  assert.ok(world.calls.some((c) => c.args[1] === "list"));
+  assert.ok(!world.calls.some((c) => /milestones/.test(c.args[1] ?? "")));
 });
 
 const sweepIssue = (number, key, target, state = "OPEN", author = bot) => ({
@@ -542,24 +554,40 @@ const sweepIssue = (number, key, target, state = "OPEN", author = bot) => ({
   labels: sweepLabels,
 });
 
+/**
+ * The issues a run against `state` files, as the next night's listing returns
+ * them: numbered from 600, with the labels and body the sweep wrote.
+ */
+function filedIssues(state = {}) {
+  const world = fakeWorld(state);
+  run(world);
+  return writes(world.calls).map((c, i) => ({
+    number: 600 + i,
+    title: c.args[c.args.indexOf("--title") + 1],
+    body: c.input,
+    state: "OPEN",
+    author: bot,
+    labels: c.args
+      .filter((_, j) => c.args[j - 1] === "--label")
+      .map((name) => ({ name })),
+  }));
+}
+
 test("an existing analyzed issue is a no-op; an unanalyzed one is re-queued", (t) => {
   const analyzed = {
     body: `${ANALYSIS_MARKER}\n...`,
     user: { login: "github-actions[bot]", type: "Bot" },
   };
   const world = fakeWorld({
-    issues: [
-      sweepIssue(10, "typescript-sdk-v1", "1.32.1"),
-      sweepIssue(11, "python-sdk", "2.3.0"),
-    ],
-    comments: { 10: [analyzed] },
+    issues: filedIssues(),
+    comments: { 600: [analyzed] },
   });
   const output = outputFile(t);
   run(world, { output });
   assert.equal(writes(world.calls).length, 0);
   assert.deepEqual(
     filedFrom(output).map((f) => f.issue),
-    [11],
+    [601],
   );
 });
 
@@ -620,13 +648,419 @@ test("a newer release supersedes the open older issue, once", (t) => {
     body: ANALYSIS_MARKER,
     user: { login: "github-actions[bot]", type: "Bot" },
   };
+  const [filed] = filedIssues({ files: noTs });
   const next = fakeWorld({
-    issues: [older, sweepIssue(600, "python-sdk", "2.3.0")],
+    issues: [older, filed],
     comments: { 9: [note], 600: [analyzed] },
     files: noTs,
   });
   run(next, { output: outputFile(t) });
   assert.equal(writes(next.calls).length, 0);
+});
+
+test("bodyScopes reads back the scope labels a body's rows called for", () => {
+  const behind = groupState(
+    group("typescript-sdk-v1"),
+    [
+      row("@modelcontextprotocol/sdk", "root", "^1.30.0", "1.30.0"),
+      row("@modelcontextprotocol/sdk", "src/memory", "^1.29.0", "1.29.0"),
+      row("@modelcontextprotocol/sdk", "src/everything", "^1.32.1", "1.32.1"),
+    ],
+    { "@modelcontextprotocol/sdk": "1.32.1" },
+  );
+  assert.deepEqual(bodyScopes(buildIssueBody(behind)), ["server-memory"]);
+  assert.deepEqual(
+    bodyScopes(buildIssueBody(behind)),
+    issueLabels(behind).filter((l) => l.startsWith("server-")),
+  );
+  assert.deepEqual(bodyScopes("no table here"), []);
+  assert.deepEqual(bodyScopes(undefined), []);
+  const everywhere = groupState(
+    group("python-sdk"),
+    ["fetch", "git", "time", "everything", "filesystem", "memory"]
+      .concat("sequentialthinking")
+      .map((s) => row("mcp", `src/${s}`, ">=1", "1.0.0")),
+    { mcp: "2.0.0" },
+  );
+  assert.deepEqual(bodyScopes(buildIssueBody(everywhere)), []);
+});
+
+test("refreshPlan is null for an unchanged issue, ticked boxes included", () => {
+  const state = groupState(
+    group("python-sdk"),
+    [row("mcp", "src/time", ">=1.29.0,<2", "1.29.0")],
+    { mcp: "1.30.0" },
+  );
+  const body = buildIssueBody(state);
+  const labels = issueLabels(state).map((name) => ({ name }));
+  assert.equal(refreshPlan({ body, labels }, state), null);
+  const ticked = body.replace("- [ ]", "- [x]");
+  assert.notEqual(ticked, body);
+  assert.equal(refreshPlan({ body: ticked, labels }, state), null);
+});
+
+test("refreshPlan rewrites changed rows and moves only its own scope labels", () => {
+  const rows = [
+    row("mcp", "src/time", ">=1.29.0,<2", "1.29.0"),
+    row("mcp", "src/git", ">=1.29.0,<2", "1.29.0"),
+  ];
+  const latest = { mcp: "1.30.0" };
+  const was = groupState(group("python-sdk"), rows, latest);
+  const issue = {
+    body: buildIssueBody(was).replace("- [ ]", "- [x]"),
+    labels: [
+      ...issueLabels(was),
+      "server-fetch", // a maintainer's, which no row ever called for
+      "help wanted",
+    ].map((name) => ({ name })),
+  };
+  // git upgrades on its own, and fetch now declares mcp and is behind.
+  const now = groupState(
+    group("python-sdk"),
+    [
+      rows[0],
+      row("mcp", "src/git", ">=1.29.0,<2", "1.30.0"),
+      row("mcp", "src/memory", ">=1.29.0,<2", "1.28.0"),
+    ],
+    latest,
+  );
+  assert.deepEqual(refreshPlan(issue, now), {
+    body: buildIssueBody(now),
+    addLabels: ["server-memory"],
+    removeLabels: ["server-git"],
+  });
+
+  // A label the rows still call for, which someone removed, stays removed;
+  // one the rows newly call for, already present, is not added twice.
+  const trimmed = {
+    body: buildIssueBody(was),
+    labels: [{ name: "server-git" }, { name: "server-memory" }],
+  };
+  // The record keeps only what the sweep itself applied: time, not memory.
+  assert.deepEqual(refreshPlan(trimmed, now), {
+    body: buildIssueBody(now, ["server-time"]),
+    addLabels: [],
+    removeLabels: ["server-git"],
+  });
+});
+
+test("appliedScopes reads the record, falling back to the rows", () => {
+  const state = groupState(
+    group("python-sdk"),
+    [
+      row("mcp", "src/time", ">=1", "1.0.0"),
+      row("mcp", "src/git", ">=1", "1.0.0"),
+    ],
+    { mcp: "2.0.0" },
+  );
+  const body = buildIssueBody(state);
+  assert.equal(
+    body.split("\n").at(-1),
+    buildAppliedMarker(["server-git", "server-time"]),
+  );
+  assert.deepEqual(appliedScopes(body), ["server-git", "server-time"]);
+  assert.deepEqual(appliedScopes(buildIssueBody(state, [])), []);
+  // A body written before the record existed: what its rows called for.
+  const legacy = body.split("\n").slice(0, -1).join("\n");
+  assert.deepEqual(appliedScopes(legacy), ["server-git", "server-time"]);
+  assert.deepEqual(appliedScopes(undefined), []);
+});
+
+test("a scope label someone applied first survives successive refreshes", () => {
+  const latest = { mcp: "1.30.0" };
+  const time = row("mcp", "src/time", ">=1.29.0,<2", "1.29.0");
+  const night1 = groupState(group("python-sdk"), [time], latest);
+  // A maintainer had already put server-memory on the issue.
+  let issue = {
+    body: buildIssueBody(night1),
+    labels: ["server-time", "server-memory"].map((name) => ({ name })),
+  };
+  const apply = (plan) => ({
+    body: plan.body,
+    labels: [
+      ...issue.labels.filter((l) => !plan.removeLabels.includes(l.name)),
+      ...plan.addLabels.map((name) => ({ name })),
+    ],
+  });
+
+  // Night 2: memory falls behind. Its label is already there; not the sweep's.
+  const night2 = groupState(
+    group("python-sdk"),
+    [time, row("mcp", "src/memory", ">=1.29.0,<2", "1.28.0")],
+    latest,
+  );
+  const plan2 = refreshPlan(issue, night2);
+  assert.deepEqual([plan2.addLabels, plan2.removeLabels], [[], []]);
+  assert.deepEqual(appliedScopes(plan2.body), ["server-time"]);
+  issue = apply(plan2);
+
+  // Night 3: memory catches up. The sweep did not apply its label, so keeps it.
+  const night3 = groupState(
+    group("python-sdk"),
+    [time, row("mcp", "src/memory", ">=1.29.0,<2", "1.30.0")],
+    latest,
+  );
+  const plan3 = refreshPlan(issue, night3);
+  assert.deepEqual([plan3.addLabels, plan3.removeLabels], [[], []]);
+  issue = apply(plan3);
+  assert.ok(issue.labels.some((l) => l.name === "server-memory"));
+
+  // Night 4: time catches up too. Its label was the sweep's, so it goes.
+  const done = markRows(
+    group("python-sdk"),
+    [
+      row("mcp", "src/time", ">=1.29.0,<2", "1.30.0"),
+      row("mcp", "src/memory", ">=1.29.0,<2", "1.30.0"),
+    ],
+    latest,
+  );
+  const plan4 = refreshPlan(issue, done);
+  assert.deepEqual(plan4.removeLabels, ["server-time"]);
+  assert.deepEqual(appliedScopes(plan4.body), []);
+  assert.equal(refreshPlan(apply(plan4), done), null);
+});
+
+test("ownership lapses with the rows, even when the label was already gone", () => {
+  const latest = { mcp: "1.30.0" };
+  const time = row("mcp", "src/time", ">=1.29.0,<2", "1.29.0");
+  const git = (installed) => row("mcp", "src/git", ">=1.29.0,<2", installed);
+  const both = groupState(group("python-sdk"), [time, git("1.29.0")], latest);
+  // The sweep applied both; a maintainer has since removed server-git.
+  const issue = {
+    body: buildIssueBody(both),
+    labels: [{ name: "server-time" }],
+  };
+  const caughtUp = groupState(
+    group("python-sdk"),
+    [time, git("1.30.0")],
+    latest,
+  );
+  const plan = refreshPlan(issue, caughtUp);
+  assert.deepEqual(plan.removeLabels, []);
+  assert.deepEqual(appliedScopes(plan.body), ["server-time"]);
+
+  // The maintainer reapplies server-git and git falls behind again: the
+  // label is theirs now, so git catching up a second time leaves it.
+  const again = refreshPlan(
+    {
+      body: plan.body,
+      labels: [{ name: "server-time" }, { name: "server-git" }],
+    },
+    both,
+  );
+  assert.deepEqual([again.addLabels, again.removeLabels], [[], []]);
+  assert.deepEqual(appliedScopes(again.body), ["server-time"]);
+  const last = refreshPlan(
+    {
+      body: again.body,
+      labels: [{ name: "server-time" }, { name: "server-git" }],
+    },
+    caughtUp,
+  );
+  assert.deepEqual(last.removeLabels, []);
+});
+
+test("a copy with no installed version does not settle its group", (t) => {
+  const [filed] = filedIssues({
+    files: files({ "src/time/uv.lock": UV("2.3.0") }),
+  });
+  // The lockfile no longer resolves either copy: nothing is behind, but
+  // nothing is known to have caught up either.
+  const lockless = files({
+    "src/time/uv.lock": UV("2.3.0"),
+    "package-lock.json": JSON.stringify({ packages: {} }),
+  });
+  const none = fakeWorld({ issues: [filed], files: lockless });
+  run(none, { output: outputFile(t) });
+  assert.equal(writes(none.calls).length, 0);
+});
+
+test("an open issue whose installs changed is refreshed in place, once", (t) => {
+  const noPy = files({ "src/time/uv.lock": UV("2.3.0") });
+  const [filed] = filedIssues({ files: noPy });
+  assert.deepEqual(bodyScopes(filed.body), ["server-memory"]);
+  filed.labels.push({ name: "server-filesystem" }, { name: "help wanted" });
+
+  // memory reaches the target on its own; the root copy is still behind.
+  const upgraded = files({
+    "src/time/uv.lock": UV("2.3.0"),
+    "package-lock.json": JSON.stringify({
+      packages: {
+        ...NPM_LOCK.packages,
+        "src/memory/node_modules/@modelcontextprotocol/sdk": {
+          version: "1.32.1",
+        },
+      },
+    }),
+  });
+  const analyzed = {
+    body: ANALYSIS_MARKER,
+    user: { login: "github-actions[bot]", type: "Bot" },
+  };
+  const world = fakeWorld({
+    issues: [filed],
+    comments: { 600: [analyzed] },
+    files: upgraded,
+  });
+  const output = outputFile(t);
+  run(world, { output });
+  const [edit, ...rest] = writes(world.calls);
+  assert.equal(rest.length, 0);
+  assert.deepEqual(edit.args.slice(0, 3), ["issue", "edit", "600"]);
+  assert.deepEqual(
+    edit.args.filter((_, i) => edit.args[i - 1] === "--remove-label"),
+    ["server-memory"],
+  );
+  assert.ok(!edit.args.includes("--add-label"));
+  assert.match(
+    edit.input,
+    /\| `src\/memory` \| \^1\.29\.0 \| 1\.32\.1 \| 1\.32\.1 \| no \|/,
+  );
+  assert.deepEqual(bodyScopes(edit.input), []);
+  // Already analyzed, so the refresh queues nothing.
+  assert.deepEqual(filedFrom(output), []);
+  assert.match(world.lines.join("\n"), /refreshed #600.*removed server-memory/);
+
+  // The next night finds it current.
+  const next = fakeWorld({
+    issues: [
+      {
+        ...filed,
+        body: edit.input,
+        labels: filed.labels.filter((l) => l.name !== "server-memory"),
+      },
+    ],
+    comments: { 600: [analyzed] },
+    files: upgraded,
+  });
+  run(next, { output: outputFile(t) });
+  assert.equal(writes(next.calls).length, 0);
+});
+
+test("a dry run previews the refresh; a closed issue is never refreshed", (t) => {
+  const [filed] = filedIssues({
+    files: files({ "src/time/uv.lock": UV("2.3.0") }),
+  });
+  const moved = files({
+    "src/time/uv.lock": UV("2.3.0"),
+    "package-lock.json": JSON.stringify({
+      packages: {
+        ...NPM_LOCK.packages,
+        "src/memory/node_modules/@modelcontextprotocol/sdk": {
+          version: "1.32.1",
+        },
+      },
+    }),
+  });
+  const dry = fakeWorld({ issues: [filed], files: moved });
+  run(dry, { output: outputFile(t), dryRun: true });
+  assert.equal(writes(dry.calls).length, 0);
+  const out = dry.lines.join("\n");
+  assert.match(out, /would edit #600/);
+  assert.match(out, /remove labels: server-memory/);
+
+  const closed = fakeWorld({
+    issues: [{ ...filed, state: "CLOSED" }],
+    files: moved,
+  });
+  run(closed, { output: outputFile(t) });
+  assert.equal(writes(closed.calls).length, 0);
+});
+
+test("the last outdated copy catching up rewrites the open issue to say so", (t) => {
+  const noPy = files({ "src/time/uv.lock": UV("2.3.0") });
+  const [filed] = filedIssues({ files: noPy });
+  filed.labels.push({ name: "help wanted" });
+  // Both copies reach the target: the group files nothing and is settled.
+  const caughtUp = files({
+    "src/time/uv.lock": UV("2.3.0"),
+    "package-lock.json": JSON.stringify({
+      packages: {
+        "": { name: "@modelcontextprotocol/servers" },
+        "node_modules/@modelcontextprotocol/sdk": { version: "1.32.1" },
+        "src/memory/node_modules/@modelcontextprotocol/sdk": {
+          version: "1.32.1",
+        },
+      },
+    }),
+  });
+  const world = fakeWorld({ issues: [filed], files: caughtUp });
+  const output = outputFile(t);
+  run(world, { output });
+  const [edit, ...rest] = writes(world.calls);
+  assert.equal(rest.length, 0);
+  assert.deepEqual(edit.args.slice(0, 3), ["issue", "edit", "600"]);
+  assert.deepEqual(
+    edit.args.filter((_, i) => edit.args[i - 1] === "--remove-label"),
+    ["server-memory"],
+  );
+  assert.ok(!edit.args.includes("--add-label"));
+  assert.equal(parseMarker(edit.input).target, "1.32.1");
+  assert.match(edit.input, /Nothing here is behind 1\.32\.1 any more/);
+  assert.doesNotMatch(edit.input, /\*\*yes\*\*/);
+  assert.doesNotMatch(edit.input, /- \[ \]/);
+  // Nothing to analyze, and nothing filed.
+  assert.deepEqual(filedFrom(output), []);
+  assert.match(world.lines.join("\n"), /#600 has nothing behind any more/);
+
+  // The next night finds it current; a closed one is never touched.
+  const next = fakeWorld({
+    issues: [{ ...filed, body: edit.input, labels: [] }],
+    files: caughtUp,
+  });
+  run(next, { output: outputFile(t) });
+  assert.equal(writes(next.calls).length, 0);
+  const closed = fakeWorld({
+    issues: [{ ...filed, state: "CLOSED" }],
+    files: caughtUp,
+  });
+  run(closed, { output: outputFile(t) });
+  assert.equal(writes(closed.calls).length, 0);
+});
+
+test("a group no manifest declares any more rewrites its open issues", (t) => {
+  const [filed] = filedIssues({
+    files: files({ "src/time/uv.lock": UV("2.3.0") }),
+  });
+  // Every server moves off the v1 SDK, leaving no row in its group.
+  const migrated = files({
+    "src/time/uv.lock": UV("2.3.0"),
+    "package.json": JSON.stringify({ name: "@modelcontextprotocol/servers" }),
+    "src/memory/package.json": JSON.stringify({
+      name: "@modelcontextprotocol/server-memory",
+    }),
+  });
+  const world = fakeWorld({ issues: [filed], files: migrated });
+  run(world, { output: outputFile(t) });
+  const [edit, ...rest] = writes(world.calls);
+  assert.equal(rest.length, 0);
+  assert.deepEqual(
+    edit.args.filter((_, i) => edit.args[i - 1] === "--remove-label"),
+    ["server-memory"],
+  );
+  assert.equal(parseMarker(edit.input).target, "1.32.1");
+  assert.match(edit.input, /No manifest on `v2\/main` declares/);
+  assert.doesNotMatch(edit.input, /\| Package \|/);
+  assert.ok(!world.calls.some((c) => c.cmd === "npm"));
+});
+
+test("a settled group's edit failure fails the run after the rest", (t) => {
+  const [filed] = filedIssues({
+    files: files({ "src/time/uv.lock": UV("2.3.0") }),
+  });
+  const world = fakeWorld({
+    issues: [filed],
+    files: files({
+      "src/time/uv.lock": UV("2.3.0"),
+      "package.json": "{}",
+      "src/memory/package.json": "{}",
+    }),
+    editFail: true,
+  });
+  assert.throws(
+    () => run(world, { output: outputFile(t) }),
+    /1 group\(s\) failed: MCP TypeScript SDK \(v1\): gh issue edit failed/,
+  );
 });
 
 test("a failure after filing still emits what was filed, then fails", (t) => {

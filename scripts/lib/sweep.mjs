@@ -386,16 +386,31 @@ export function issueWriter({
       return { url, number };
     },
     /**
+     * Labels are changed one by one, never replaced as a set, so a label
+     * someone else applied survives an edit that does not name it.
+     *
      * @param {number} number
-     * @param {{title?: string, body: string}} change
+     * @param {{title?: string, body: string, addLabels?: string[], removeLabels?: string[]}} change
      */
-    edit(number, { title, body }) {
+    edit(number, { title, body, addLabels = [], removeLabels = [] }) {
       if (dryRun) {
-        show(`edit #${number}`, { title }, body);
+        show(
+          `edit #${number}`,
+          {
+            title,
+            "add labels": addLabels.length ? addLabels.join(", ") : undefined,
+            "remove labels": removeLabels.length
+              ? removeLabels.join(", ")
+              : undefined,
+          },
+          body,
+        );
         return;
       }
       const args = ["issue", "edit", String(number), "--repo", repo];
       if (title !== undefined) args.push("--title", title);
+      for (const label of addLabels) args.push("--add-label", label);
+      for (const label of removeLabels) args.push("--remove-label", label);
       args.push("--body-file", "-");
       run(args, body, "gh issue edit");
     },
