@@ -257,16 +257,32 @@ def git_create_branch(
         raise FlagInjectionError(
             f"Invalid base branch: '{base_branch}' - cannot start with '-'"
         )
+    # The base is a reference (a branch, tag or remote-tracking ref) when one
+    # has that name, otherwise any commit-ish (a SHA, `HEAD~2`). With no base,
+    # it is the current branch, or the current commit on a detached HEAD, where
+    # GitPython's `active_branch` would raise TypeError. The reply names the
+    # base the branch was created from.
+    base: git.SymbolicReference | str
     if base_branch:
-        base = repo.references[base_branch]
+        try:
+            base = repo.references[base_branch]
+            base_label = f"'{base.name}'"
+        except IndexError:
+            try:
+                base = repo.commit(base_branch).hexsha
+            except (ODBError, ValueError) as e:
+                # BadName for an unknown name, ValueError for an object that
+                # is not a commit (a tree, say).
+                raise ValueError(
+                    f"Unknown base branch or commit: '{base_branch}'"
+                ) from e
+            base_label = f"commit {base[:7]}"
     elif repo.head.is_detached:
-        # GitPython's `active_branch` raises TypeError on a detached HEAD.
-        raise ValueError(
-            "HEAD is detached, so there is no current branch to branch from; "
-            "pass base_branch"
-        )
+        base = repo.head.commit.hexsha
+        base_label = f"commit {base[:7]}"
     else:
         base = repo.active_branch
+        base_label = f"'{base.name}'"
 
     # GitPython's create_head accepts a name that already points at the base
     # commit, so check first rather than report a branch that was not created.
@@ -277,7 +293,7 @@ def git_create_branch(
             f"Cannot create branch '{branch_name}': refs/heads/{branch_name} already exists"
         )
     repo.create_head(branch_name, base)
-    return f"Created branch '{branch_name}' from '{base.name}'"
+    return f"Created branch '{branch_name}' from {base_label}"
 
 
 def git_checkout(repo: git.Repo, branch_name: str) -> str:
@@ -633,13 +649,24 @@ def create_server(repository: Path | None) -> MCPServer:
 
     @server.tool(
         name=GitTools.CREATE_BRANCH.value,
-        description="Creates a new branch from an optional base branch",
+        description="Creates a new branch from an optional base branch or commit",
         annotations=writes(destructive=False, idempotent=False),
         structured_output=False,
     )
     @reports_failures
     def create_branch(
-        repo_path: str, branch_name: str, base_branch: str | None = None
+        repo_path: str,
+        branch_name: str,
+        base_branch: Annotated[
+            str | None,
+            Field(
+                description=(
+                    "Branch, tag or commit SHA to create the branch from. "
+                    "Defaults to the current branch, or to the current commit "
+                    "when HEAD is detached"
+                )
+            ),
+        ] = None,
     ) -> str:
         return git_create_branch(open_repo(repo_path), branch_name, base_branch)
 
