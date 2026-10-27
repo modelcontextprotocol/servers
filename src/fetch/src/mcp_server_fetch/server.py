@@ -176,10 +176,19 @@ def extract_content_from_html(html: str) -> str:
     Returns:
         Simplified markdown version of the content
     """
-    ret = readabilipy.simple_json.simple_json_from_html_string(
-        html, use_readability=True
-    )
     failed = "<error>Page failed to be simplified from HTML</error>"
+    try:
+        ret = readabilipy.simple_json.simple_json_from_html_string(
+            html, use_readability=True
+        )
+    except IndexError:
+        # readabilipy's pure-Python extractor wraps its simplified tree with
+        # `Tag.append`, which beautifulsoup4 4.13 implements as
+        # `self.insert(...)[0]`. A page that simplifies to nothing (an SPA
+        # shell, an empty body) inserts nothing, so that index raises (#5158).
+        # Under beautifulsoup4 <= 4.12 the same page comes back as an empty
+        # tree, reported below as this same failure.
+        return failed
     if not ret["content"]:
         return failed
     content = markdownify.markdownify(
