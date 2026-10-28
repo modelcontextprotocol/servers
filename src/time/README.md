@@ -31,6 +31,7 @@ The server speaks both eras of the Model Context Protocol over stdio, with nothi
 The server is built on the SDK's high-level `MCPServer`. Each tool declares an `outputSchema` and returns its result twice: as `structuredContent`, and as the same object in indented JSON in a text block, for a client that does not read structured output.
 
 - **A tool failure is an `isError` result** whose text the model can read and act on, prefixed `Error executing tool <name>: `. That covers an unknown or non-exact timezone (`Invalid timezone: ...`), an empty timezone (`Missing required argument: <argument>`), a time not in `HH:MM` 24-hour form, a wall-clock time skipped by a clock change, and an argument missing or of the wrong type (the SDK's validation message).
+- **An ambiguous time is reported, not guessed.** On the day a clock change repeats a wall-clock time (a DST fall-back, such as 01:30 on 2024-11-03 in `America/New_York`), `convert_time` returns its first occurrence in `source` and `target`, and the second in `later_occurrence`: a `note` saying the time occurs twice, with that occurrence's own `source`, `target` and `time_difference`. For any other time `later_occurrence` is `null`.
 - **An unknown tool name is a JSON-RPC `-32602` error** (`Unknown tool: <name>`), not an `isError` result, as both protocol versions specify.
 - The server registers no prompts or resources. Their list methods answer with empty lists.
 
@@ -267,7 +268,8 @@ Response (`structuredContent`, and the same JSON as text):
     "day_of_week": "Tuesday",
     "is_dst": false
   },
-  "time_difference": "+14.0h"
+  "time_difference": "+14.0h",
+  "later_occurrence": null
 }
 ```
 

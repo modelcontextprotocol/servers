@@ -53,6 +53,26 @@ class TimeConversionResult(BaseModel):
     source: TimeResult
     target: TimeResult
     time_difference: str
+    later_occurrence: "LaterOccurrence | None" = Field(
+        default=None,
+        description=(
+            "Set only when the source time occurs twice on this date because "
+            "a clock change repeats it (a DST fall-back): the same conversion "
+            "at its second occurrence. source and target are the first."
+        ),
+    )
+
+
+class LaterOccurrence(BaseModel):
+    """The second reading of an ambiguous source time (#5196)."""
+
+    note: str
+    source: TimeResult
+    target: TimeResult
+    time_difference: str
+
+
+TimeConversionResult.model_rebuild()
 
 
 class TimeConversionInput(BaseModel):
@@ -146,31 +166,63 @@ class TimeServer:
                 f"{source_time.date().isoformat()} (skipped by a clock change)"
             )
 
-        target_time = source_time.astimezone(target_timezone)
-        source_offset = source_time.utcoffset() or timedelta()
-        target_offset = target_time.utcoffset() or timedelta()
-        hours_difference = (target_offset - source_offset).total_seconds() / 3600
+        def convert(at: datetime) -> tuple[TimeResult, TimeResult, str]:
+            """`at` as a source and target `TimeResult`, and their difference."""
+            target_time = at.astimezone(target_timezone)
+            source_offset = at.utcoffset() or timedelta()
+            target_offset = target_time.utcoffset() or timedelta()
+            hours_difference = (target_offset - source_offset).total_seconds() / 3600
 
-        if hours_difference.is_integer():
-            time_diff_str = f"{hours_difference:+.1f}h"
-        else:
-            # For fractional hours like Nepal's UTC+5:45
-            time_diff_str = f"{hours_difference:+.2f}".rstrip("0").rstrip(".") + "h"
+            if hours_difference.is_integer():
+                time_diff_str = f"{hours_difference:+.1f}h"
+            else:
+                # For fractional hours like Nepal's UTC+5:45
+                time_diff_str = f"{hours_difference:+.2f}".rstrip("0").rstrip(".") + "h"
+
+            return (
+                TimeResult(
+                    timezone=source_tz,
+                    datetime=at.isoformat(timespec="seconds"),
+                    day_of_week=at.strftime("%A"),
+                    is_dst=bool(at.dst()),
+                ),
+                TimeResult(
+                    timezone=target_tz,
+                    datetime=target_time.isoformat(timespec="seconds"),
+                    day_of_week=target_time.strftime("%A"),
+                    is_dst=bool(target_time.dst()),
+                ),
+                time_diff_str,
+            )
+
+        source, target, time_difference = convert(source_time)
+
+        # A wall-clock time a clock change repeats (e.g. 01:30 on a DST
+        # fall-back day) has two instants. The datetime above is the first
+        # (fold=0); fold=1 is the second, at a different UTC offset. Report
+        # both rather than presenting the first as the only answer (#5196).
+        later_occurrence = None
+        later_time = source_time.replace(fold=1)
+        if later_time.utcoffset() != source_time.utcoffset():
+            later_source, later_target, later_difference = convert(later_time)
+            later_occurrence = LaterOccurrence(
+                note=(
+                    f"{time_str} occurs twice in {source_tz} on "
+                    f"{source_time.date().isoformat()} because a clock change "
+                    f"repeats it: first at {source.datetime}, then at "
+                    f"{later_source.datetime}. source and target are the first "
+                    "occurrence; this is the second."
+                ),
+                source=later_source,
+                target=later_target,
+                time_difference=later_difference,
+            )
 
         return TimeConversionResult(
-            source=TimeResult(
-                timezone=source_tz,
-                datetime=source_time.isoformat(timespec="seconds"),
-                day_of_week=source_time.strftime("%A"),
-                is_dst=bool(source_time.dst()),
-            ),
-            target=TimeResult(
-                timezone=target_tz,
-                datetime=target_time.isoformat(timespec="seconds"),
-                day_of_week=target_time.strftime("%A"),
-                is_dst=bool(target_time.dst()),
-            ),
-            time_difference=time_diff_str,
+            source=source,
+            target=target,
+            time_difference=time_difference,
+            later_occurrence=later_occurrence,
         )
 
 
