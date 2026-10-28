@@ -429,7 +429,21 @@ async function resolveUnicodeEquivalentPath(
       return path.join(currentPath, ...relativeParts.slice(index));
     }
 
-    currentPath = await realpathWithTimeout(candidate);
+    try {
+      currentPath = await realpathWithTimeout(candidate);
+    } catch (error) {
+      // The entry exists (lstat found it just above) but realpath cannot
+      // follow it, so it is a symlink whose target is missing. Name it: a bare
+      // ENOENT reaches validatePath's catch, which would report its parent,
+      // a directory that plainly exists, as missing (#5191).
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        throw new Error(
+          `Broken symlink: ${candidate} points to a target that does not exist`,
+          { cause: error },
+        );
+      }
+      throw error;
+    }
     if (
       !isPathWithinAllowedDirectories(
         normalizePathFormat(currentPath),
