@@ -733,10 +733,10 @@ function reindentLine(
 // differs from the file in a way the matcher does not tolerate (whitespace
 // inside a line, a typo, stale content) needs the file's real text to retry
 // with, so the error quotes the closest run of lines with their line
-// numbers. Finding it compares every window of the file against oldText, so
-// the search is skipped past a fixed number of line comparisons rather than
-// stalling the error on a huge file.
-const MISMATCH_SCAN_LIMIT = 1_000_000;
+// numbers. Finding it compares oldText against the lines at every position
+// of the file, so it is skipped past a fixed budget of bigram lookups rather
+// than stalling the error on a huge file or a huge oldText.
+const MISMATCH_WORK_LIMIT = 10_000_000;
 const MISMATCH_CONTEXT_LINES = 2;
 const MISMATCH_MAX_REGION_LINES = 30;
 
@@ -783,10 +783,15 @@ export function describeEditMismatch(
   editCount: number,
 ): string {
   const oldLines = normalizeLineEndings(oldText).split("\n");
+  // The lines as the matcher sees them, so a terminal newline in oldText
+  // lines up with the file's. The empty element after a terminal newline is
+  // not a line of the file, so it is left out of what is counted and shown.
   const fileLines = content.split("\n");
-  if (fileLines.length > 1 && fileLines[fileLines.length - 1] === "") {
-    fileLines.pop();
-  }
+  const lineCount = content.endsWith("\n")
+    ? fileLines.length - 1
+    : content === ""
+      ? 0
+      : fileLines.length;
 
   const parts = [
     `Could not find exact match for edit ${editIndex + 1} of ${editCount}. ` +
@@ -796,21 +801,30 @@ export function describeEditMismatch(
     `oldText:\n${oldText}`,
   ];
 
-  const width = Math.min(oldLines.length, fileLines.length);
-  const windows = fileLines.length - width + 1;
-  if (windows * width > MISMATCH_SCAN_LIMIT) {
-    parts.push(
-      `The file has ${fileLines.length} lines, too many to search for the ` +
-        "closest text. Read the file and copy oldText from it exactly.",
-    );
+  if (lineCount === 0) {
+    parts.push("The file is empty.");
     return parts.join("\n\n");
   }
 
   const oldGrams = oldLines.map(lineGrams);
+  let oldWork = 0;
+  for (const line of oldGrams) oldWork += line.grams.size + 1;
+  if (fileLines.length * oldWork > MISMATCH_WORK_LIMIT) {
+    parts.push(
+      `The file has ${lineCount} lines, too many to search for the closest ` +
+        "text to this oldText. Read the file and copy oldText from it exactly.",
+    );
+    return parts.join("\n\n");
+  }
+
+  // Every starting line is scored, including those near the end where fewer
+  // lines than oldText has remain, so a near match at the end of the file is
+  // still found. The earliest start wins a tie.
   const fileGrams = fileLines.map(lineGrams);
   let best = 0;
   let bestScore = 0;
-  for (let i = 0; i < windows; i++) {
+  for (let i = 0; i < fileLines.length; i++) {
+    const width = Math.min(oldLines.length, fileLines.length - i);
     let score = 0;
     for (let j = 0; j < width; j++) {
       score += lineSimilarity(oldGrams[j], fileGrams[i + j]);
@@ -829,10 +843,13 @@ export function describeEditMismatch(
     return parts.join("\n\n");
   }
 
-  const start = Math.max(0, best - MISMATCH_CONTEXT_LINES);
+  const start = Math.min(
+    Math.max(0, best - MISMATCH_CONTEXT_LINES),
+    lineCount - 1,
+  );
   const end = Math.min(
-    fileLines.length,
-    best + width + MISMATCH_CONTEXT_LINES,
+    lineCount,
+    best + oldLines.length + MISMATCH_CONTEXT_LINES,
     start + MISMATCH_MAX_REGION_LINES,
   );
   const numbered = fileLines
@@ -841,22 +858,24 @@ export function describeEditMismatch(
   const after = editIndex > 0 ? ", after the earlier edits in this call" : "";
   parts.push(
     `Closest text in the file (lines ${start + 1}-${end} of ` +
-      `${fileLines.length}${after}):\n${numbered.join("\n")}`,
+      `${lineCount}${after}):\n${numbered.join("\n")}`,
   );
 
   // Some line differs beyond leading and trailing whitespace, or oldText runs
   // past the file's end: otherwise the line-by-line matcher would have
-  // matched this window. Math.max only keeps the index a valid one.
+  // matched here. Math.max only keeps the index a valid one.
   const differs = Math.max(
     0,
     oldLines.findIndex(
-      (line, j) => j >= width || line.trim() !== fileLines[best + j].trim(),
+      (line, j) =>
+        best + j >= fileLines.length ||
+        line.trim() !== fileLines[best + j].trim(),
     ),
   );
   parts.push(
-    differs >= width
+    best + differs >= lineCount
       ? `oldText line ${differs + 1} (${JSON.stringify(oldLines[differs])}) ` +
-          `runs past the end of the file, which ends at line ${fileLines.length}.`
+          `runs past the end of the file, which ends at line ${lineCount}.`
       : `First difference, oldText line ${differs + 1} against file line ` +
           `${best + differs + 1}:\n` +
           `  oldText: ${JSON.stringify(oldLines[differs])}\n` +

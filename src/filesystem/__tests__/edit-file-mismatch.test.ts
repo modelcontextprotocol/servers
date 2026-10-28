@@ -137,9 +137,36 @@ describe("describeEditMismatch", () => {
     expect(message).not.toContain("Closest text");
   });
 
-  it("handles an empty file", () => {
+  it("says so for an empty file", () => {
     const message = describeEditMismatch("", "x", 0, 1);
-    expect(message).toContain("No line of the file resembles oldText.");
+    expect(message).toContain("The file is empty.");
+    expect(message).not.toContain("Closest text");
+  });
+
+  it("finds a near match that ends at the end of the file", () => {
+    const message = describeEditMismatch(
+      "header\nalpha\nbeta\n",
+      "alpha\nbeta\ngamma",
+      0,
+      1,
+    );
+    expect(message).toContain(
+      "(lines 1-3 of 3):\n1: header\n2: alpha\n3: beta",
+    );
+    expect(message).toContain(
+      'oldText line 3 ("gamma") runs past the end of the file, which ends at line 3.',
+    );
+  });
+
+  it("lines up a terminal newline in oldText with the file's", () => {
+    const content = "function f() {\n  return name;\n}\n";
+    const message = describeEditMismatch(content, "return naem;\n}\n", 0, 1);
+    expect(message).toContain("(lines 1-3 of 3):");
+    expect(message).toContain(
+      "oldText line 1 against file line 2:\n" +
+        '  oldText: "return naem;"\n' +
+        '  file:    "  return name;"',
+    );
   });
 
   it("caps the quoted region at 30 lines", () => {
@@ -158,7 +185,7 @@ describe("describeEditMismatch", () => {
     const message = describeEditMismatch(content, oldText, 1, 3);
     expect(message).toContain("edit 2 of 3");
     expect(message).toContain(
-      "The file has 2000 lines, too many to search for the closest text.",
+      "The file has 2000 lines, too many to search for the closest text to this oldText.",
     );
     expect(message).not.toContain("Closest text");
   });
