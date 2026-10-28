@@ -319,6 +319,41 @@
       }
     },
     {
+      "name": "git_merge",
+      "description": "Merges a branch into the current branch. Fast-forward only unless fast_forward_only is false; refuses a dirty working tree, and aborts a merge that conflicts, leaving the repository unchanged",
+      "inputSchema": {
+        "properties": {
+          "repo_path": {
+            "title": "Repo Path",
+            "type": "string"
+          },
+          "source_branch": {
+            "description": "Branch, tag or commit to merge into the current branch",
+            "title": "Source Branch",
+            "type": "string"
+          },
+          "fast_forward_only": {
+            "default": true,
+            "description": "Only fast-forward, failing if the branches have diverged. False allows a merge commit",
+            "title": "Fast Forward Only",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "repo_path",
+          "source_branch"
+        ],
+        "type": "object",
+        "title": "mergeArguments"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
       "name": "git_show",
       "description": "Shows the contents of a commit, or of a file or directory given as <revision>:<path>",
       "inputSchema": {

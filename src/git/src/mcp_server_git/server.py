@@ -69,6 +69,7 @@ class GitTools(str, Enum):
     LOG = "git_log"
     CREATE_BRANCH = "git_create_branch"
     CHECKOUT = "git_checkout"
+    MERGE = "git_merge"
     SHOW = "git_show"
 
     BRANCH = "git_branch"
@@ -343,6 +344,103 @@ def git_checkout(repo: git.Repo, branch_name: str) -> str:
     if repo.head.is_detached:
         return f"HEAD is now detached at {repo.head.commit.hexsha[:7]}"
     return f"Switched to branch '{repo.active_branch.name}'"
+
+
+def _git_stderr(error: git.GitCommandError) -> str:
+    """Git's own message from a failed command, without GitPython's framing.
+
+    GitPython formats `stderr` as `\n  stderr: '<message>'`.
+    """
+    message = str(error.stderr).strip().removeprefix("stderr: '").removesuffix("'")
+    return message or str(error)
+
+
+def _merge_failure(repo: git.Repo, error: git.GitCommandError, what: str) -> str:
+    """Why `git merge` failed, after undoing whatever it left behind.
+
+    A merge that stops on conflicts, or fails to write its merge commit,
+    leaves MERGE_HEAD and a half-merged index and working tree. The tool
+    required a clean tree before merging, so `git merge --abort` restores
+    exactly the state the call started from. `what` names the merge, as
+    "Merge of '<source>' into '<target>'".
+    """
+    unchanged = "The merge was aborted and the repository is unchanged."
+    if not (Path(repo.git_dir) / "MERGE_HEAD").exists():
+        # Git refused before changing anything.
+        return f"{what} failed. {unchanged} Git reported:\n{_git_stderr(error)}"
+    conflicts = repo.git.diff("--name-only", "--diff-filter=U").splitlines()
+    repo.git.merge("--abort")
+    if conflicts:
+        return (
+            f"{what} stopped on conflicts in: {', '.join(conflicts)}. {unchanged} "
+            "Resolve the conflicts by hand."
+        )
+    return f"{what} failed. {unchanged} Git reported:\n{_git_stderr(error)}"
+
+
+def git_merge(
+    repo: git.Repo, source_branch: str, fast_forward_only: bool = True
+) -> str:
+    """Merge `source_branch` into the current branch, or change nothing.
+
+    Conservative by design (#659): the merge goes into the branch HEAD is on,
+    never another, and it starts only from a clean working tree, so a merge
+    that stops on conflicts is aborted and the repository is left as it was.
+    The conflicts are reported for the caller to resolve by hand. By default
+    only a fast-forward is allowed; `fast_forward_only=False` lets git create
+    a merge commit when the branches have diverged.
+    """
+    # Defense in depth: reject sources starting with '-' to prevent flag
+    # injection, even if a malicious ref with that name exists.
+    if source_branch.startswith("-"):
+        raise FlagInjectionError(
+            f"Invalid source branch: '{source_branch}' - cannot start with '-'"
+        )
+    if repo.head.is_detached:
+        raise ValueError(
+            "HEAD is detached; check out the branch to merge into first (git_checkout)"
+        )
+    target = repo.active_branch.name
+    if not repo.head.is_valid():
+        raise ValueError(f"Branch '{target}' has no commits yet; nothing to merge into")
+    if (Path(repo.git_dir) / "MERGE_HEAD").exists():
+        raise ValueError(
+            "A merge is already in progress; conclude it with git_commit first"
+        )
+    if repo.is_dirty():
+        raise ValueError(
+            f"Cannot merge into '{target}': the working tree has uncommitted "
+            "changes. Commit or discard them first, so a failed merge can be "
+            "undone cleanly."
+        )
+    # Resolves the revision (BadName if unknown) and requires a commit.
+    source = repo.commit(source_branch)
+    head = repo.head.commit
+    if repo.is_ancestor(source, head):
+        return f"Already up to date: '{target}' already contains '{source_branch}'"
+    fast_forward = repo.is_ancestor(head, source)
+    if fast_forward_only and not fast_forward:
+        raise ValueError(
+            f"Cannot fast-forward '{target}' to '{source_branch}': the branches "
+            "have diverged. Nothing was changed. Pass fast_forward_only=false "
+            "to create a merge commit."
+        )
+    # --ff overrides a merge.ff setting in the user's config, so the outcome
+    # is the one this tool describes; --no-edit keeps git from opening an
+    # editor for the merge commit message.
+    mode = "--ff-only" if fast_forward_only else "--ff"
+    try:
+        repo.git.merge(mode, "--no-edit", source_branch)
+    except git.GitCommandError as e:
+        what = f"Merge of '{source_branch}' into '{target}'"
+        raise ValueError(_merge_failure(repo, e, what)) from e
+    merged = repo.head.commit
+    if fast_forward:
+        return f"Fast-forwarded '{target}' to '{source_branch}' ({merged.hexsha[:7]})"
+    return (
+        f"Merged '{source_branch}' into '{target}' with merge commit "
+        f"{merged.hexsha[:7]}"
+    )
 
 
 def git_show(repo: git.Repo, revision: str) -> str:
@@ -773,6 +871,37 @@ def create_server(repository: Path | None) -> MCPServer:
     @reports_failures
     def checkout(repo_path: str, branch_name: str) -> str:
         return git_checkout(open_repo(repo_path), branch_name)
+
+    @server.tool(
+        name=GitTools.MERGE.value,
+        description=(
+            "Merges a branch into the current branch. Fast-forward only unless "
+            "fast_forward_only is false; refuses a dirty working tree, and "
+            "aborts a merge that conflicts, leaving the repository unchanged"
+        ),
+        annotations=writes(destructive=False, idempotent=True),
+        structured_output=False,
+    )
+    @reports_failures
+    def merge(
+        repo_path: str,
+        source_branch: Annotated[
+            str,
+            Field(
+                description=("Branch, tag or commit to merge into the current branch")
+            ),
+        ],
+        fast_forward_only: Annotated[
+            bool,
+            Field(
+                description=(
+                    "Only fast-forward, failing if the branches have diverged. "
+                    "False allows a merge commit"
+                )
+            ),
+        ] = True,
+    ) -> str:
+        return git_merge(open_repo(repo_path), source_branch, fast_forward_only)
 
     @server.tool(
         name=GitTools.SHOW.value,
