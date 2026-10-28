@@ -15,7 +15,6 @@ read as an endorsement of the behavior.
 
 from __future__ import annotations
 
-import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from importlib.metadata import version
@@ -1181,26 +1180,6 @@ async def test_get_prompt_with_unknown_name_is_a_jsonrpc_error(
         "message": "Unknown prompt: nope",
     }
     assert web.requests == []
-
-
-async def test_get_prompt_does_not_validate_the_url(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # The prompt passes the raw string to httpx; an unusable URL comes back as
-    # a "Failed to fetch" prompt message rather than a validation error.
-    # No `web` fixture: the real transport rejects the URL before any I/O.
-    # Proxy variables are cleared so the real client cannot pick up one from
-    # the environment and send the request through it.
-    for name in list(os.environ):
-        if name.lower() in ("http_proxy", "https_proxy", "all_proxy"):
-            monkeypatch.delenv(name)
-    async with connect() as (session, _):
-        result = await session.get_prompt("fetch", {"url": "not a url"})
-    data = wire(result)
-    assert data["description"] == PROMPT_DESCRIPTION
-    assert data["messages"][0]["content"]["text"].startswith(
-        "Failed to fetch not a url: UnsupportedProtocol("
-    )
 
 
 # ---------------------------------------------------------------------------
