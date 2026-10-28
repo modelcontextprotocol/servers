@@ -1,5 +1,13 @@
 # @modelcontextprotocol/server-memory
 
+## 2.0.1
+
+### Patch Changes
+
+- [#5291](https://github.com/modelcontextprotocol/servers/pull/5291) [`91d3745`](https://github.com/modelcontextprotocol/servers/commit/91d3745b9dd604c503e182aef19a9caaf85f0629) [@cliffhall](https://github.com/cliffhall) - A failed `memory.json` to `memory.jsonl` migration now stops startup with an error naming both paths and the cause, instead of being silently ignored and starting the server on an empty graph.
+
+- [#5292](https://github.com/modelcontextprotocol/servers/pull/5292) [`df743d4`](https://github.com/modelcontextprotocol/servers/commit/df743d41b076691c3aebc90bf1a0943e6935fcce) [@cliffhall](https://github.com/cliffhall) - Keep the fields the server does not model on stored entities and relations (a `createdAt` written by an older version or another client, say) when a write saves the graph. Before, every write dropped them from the memory file, even an empty `create_entities` call, so `create_entities`, `create_relations` and `add_observations` destroyed data despite declaring `destructiveHint: false`. A record a delete tool removes still goes with its fields, and the fields never appear in tool results.
+
 ## 2.0.0
 
 ### Major Changes
