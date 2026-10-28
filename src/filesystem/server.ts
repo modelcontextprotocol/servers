@@ -177,6 +177,12 @@ export interface ServerOptions {
    * Roots (#4992). The stdio entry point exits the process from here.
    */
   onCannotOperate?: (error: Error) => void;
+  /**
+   * Serve only the tools that cannot change the filesystem (#632, #1160):
+   * every tool whose annotations do not declare `readOnlyHint: true` is left
+   * out of the server, so clients never see it and cannot call it.
+   */
+  readOnly?: boolean;
 }
 
 /**
@@ -250,6 +256,25 @@ export function createServer(
       }
       return handler(...args);
     }) as never)) as typeof server.registerTool;
+  // Read-only mode (#632, #1160) withholds every tool that does not declare
+  // itself read-only. Keying on the annotation rather than on a list of write
+  // tools fails closed: a new tool is withheld unless its registration says
+  // `readOnlyHint: true`, the hint the repository already requires to be set
+  // truthfully, so a new write tool needs no change here. A withheld tool is
+  // registered and then removed, before any client connects, so it is absent
+  // from tools/list and a call to it is answered as an unknown tool.
+  if (options.readOnly) {
+    const registerReadWrite = server.registerTool.bind(server);
+    server.registerTool = ((
+      name: string,
+      config: Parameters<typeof registerReadWrite>[1],
+      handler: Parameters<typeof registerReadWrite>[2],
+    ) => {
+      const tool = registerReadWrite(name, config, handler);
+      if (config.annotations?.readOnlyHint !== true) tool.remove();
+      return tool;
+    }) as typeof server.registerTool;
+  }
 
   // Tool registrations
 
