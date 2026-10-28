@@ -1,3 +1,4 @@
+from .allowlist import parse_allowed_host
 from .server import serve
 
 
@@ -22,6 +23,15 @@ def main():
         help="Allow fetching private, loopback and link-local addresses (refused by default)",
     )
     parser.add_argument(
+        "--allowed-hosts",
+        nargs="+",
+        action="extend",
+        type=parse_allowed_host,
+        metavar="HOST",
+        help="Only fetch from these hosts: an exact host name or IP address, or "
+        "*.example.com for any subdomain of example.com (all hosts by default)",
+    )
+    parser.add_argument(
         "--no-readability-js",
         action="store_true",
         help="Extract HTML with the pure-Python extractor only, never starting Node.js "
@@ -35,6 +45,7 @@ def main():
             args.ignore_robots_txt,
             args.proxy_url,
             args.allow_private_ips,
+            args.allowed_hosts,
             not args.no_readability_js,
         )
     )

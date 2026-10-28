@@ -188,6 +188,38 @@ The client receives an error naming the refused address.
 To fetch from local or internal hosts (a development server, an intranet page), add the argument
 `--allow-private-ips` to the `args` list in the configuration.
 
+### Customization - Allowed hosts
+
+By default the server may fetch from any host (subject to the private-address guard above). To restrict it to the
+hosts you name, add `--allowed-hosts` followed by one or more entries to the `args` list (the argument can also be
+repeated). Each entry is one of:
+
+- an exact host name, such as `docs.python.org`, which matches that host only, not its subdomains;
+- `*.` followed by a domain, such as `*.github.com`, which matches every subdomain of it at any depth
+  (`api.github.com`, `a.b.github.com`) but not `github.com` itself: list both to allow both;
+- an IP address, such as `203.0.113.7` or `2001:db8::7`, which matches a URL that uses that address literally.
+
+Matching ignores case and a trailing dot, and an internationalized name may be given in either its Unicode or its
+`xn--` form. An entry names a host only, so it carries no scheme, port or path. The list is checked before every request
+the server sends, by the host name in the URL rather than by the addresses it resolves to: the requested page, its
+robots.txt check, and every redirect hop of either, from the tool and from the prompt alike. A request to any other host
+is refused before it is sent, and the client receives an error naming the refused host.
+
+The allowlist and the private-address guard are separate checks, and a request must pass both. Listing an internal
+host, such as `localhost` or `10.0.0.5`, does not by itself let the server reach it: that also needs
+`--allow-private-ips`, which in turn does not lift the allowlist.
+
+```json
+{
+  "mcpServers": {
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch", "--allowed-hosts", "docs.python.org", "*.wikipedia.org"]
+    }
+  }
+}
+```
+
 ### Customization - User-agent
 
 By default, depending on if the request came from the model (via a tool), or was user initiated (via a prompt), the
