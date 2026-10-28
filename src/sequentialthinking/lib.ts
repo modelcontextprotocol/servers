@@ -64,20 +64,32 @@ export class SequentialThinkingServer {
 
     const counts = ` ${thoughtNumber}/${totalThoughts}${context}`;
     const visibleHeader = `${label}${counts}`;
-    const border = "─".repeat(
-      Math.max(visibleHeader.length, thought.length) + 4,
+    // #5205: each line of the thought is a row of its own, and the box is as
+    // wide as the longest of them (or the header). Any line ending (\r\n, \n
+    // or a lone \r) ends a row: a \r left inside a row would send the cursor
+    // back to the left border and draw the rest of the row over it.
+    const lines = thought.split(/\r\n|\r|\n/);
+    // A reduce rather than Math.max(...lengths): spreading one argument per
+    // line would overflow the call stack on a thought with very many lines.
+    const width = lines.reduce(
+      (widest, line) => Math.max(widest, line.length),
+      visibleHeader.length,
     );
-    // The header row is padded to the border's width like the thought row, by
+    const border = "─".repeat(width + 4);
+    // The header row is padded to the border's width like the thought rows, by
     // the visible text's length. Each label's emoji is one surrogate pair, so
     // its length of 2 is also its display width in a terminal.
     const padding = " ".repeat(border.length - 2 - visibleHeader.length);
     const header = `${colour(label)}${counts}${padding}`;
+    const rows = lines
+      .map((line) => `│ ${line.padEnd(border.length - 2)} │`)
+      .join("\n");
 
     return `
 ┌${border}┐
 │ ${header} │
 ├${border}┤
-│ ${thought.padEnd(border.length - 2)} │
+${rows}
 └${border}┘`;
   }
 

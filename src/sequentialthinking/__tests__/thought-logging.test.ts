@@ -1,6 +1,7 @@
 // The server's other observable output: unless DISABLE_THOUGHT_LOGGING is
 // "true" (any case), each accepted thought is drawn as a box on stderr, with
-// a header that differs for plain thoughts, revisions and branches. Thoughts
+// a header that differs for plain thoughts, revisions and branches, and one
+// row per line of the thought. Thoughts
 // are driven through the in-process client and stderr is captured by spying
 // on console.error, which also keeps the boxes off the test output. chalk's
 // colour level depends on the terminal the tests run in, so it is pinned to 0
@@ -41,14 +42,20 @@ describe("sequentialthinking thought logging", () => {
     return errorSpy.mock.calls.map((args) => String(args[0]));
   }
 
-  /** The box the server draws, for an uncoloured header. */
-  function box(header: string, text: string): string {
-    const border = "─".repeat(Math.max(header.length, text.length) + 4);
+  /**
+   * The box the server draws, for an uncoloured header: one row per line of
+   * the thought (given as an array), sized to the longest row.
+   */
+  function box(header: string, text: string | string[]): string {
+    const lines = typeof text === "string" ? [text] : text;
+    const width = Math.max(header.length, ...lines.map((l) => l.length));
+    const border = "─".repeat(width + 4);
+    const rows = lines.map((l) => `│ ${l.padEnd(border.length - 2)} │`);
     return `
 ┌${border}┐
 │ ${header.padEnd(border.length - 2)} │
 ├${border}┤
-│ ${text.padEnd(border.length - 2)} │
+${rows.join("\n")}
 └${border}┘`;
   }
 
@@ -176,6 +183,58 @@ describe("sequentialthinking thought logging", () => {
     const rows = logged()[0].split("\n").slice(1);
     expect(rows).toHaveLength(5);
     expect(new Set(rows.map((row) => row.length)).size).toBe(1);
+  });
+
+  // #5205: a thought with line breaks is drawn one row per line, the box as
+  // wide as its longest line, whichever line ending the client sent.
+  describe("a multi-line thought", () => {
+    beforeEach(async () => {
+      conn = await connect({ disableThoughtLogging: undefined });
+    });
+
+    it.each([
+      ["\\n", "\n"],
+      ["\\r\\n", "\r\n"],
+      ["a lone \\r", "\r"],
+    ])("draws one row per line split by %s", async (_l, eol) => {
+      const lines = [
+        "first line",
+        "a much longer second line of the thought",
+        "3",
+      ];
+      await conn!.think(thought({ thought: lines.join(eol) }));
+      expect(logged()).toEqual([box("💭 Thought 1/3", lines)]);
+      expect(logged()[0]).not.toContain("\r");
+    });
+
+    it("sizes the box from the longest line, not the whole thought", async () => {
+      await conn!.think(thought({ thought: "ab\ncd\nef" }));
+      // Shorter than the header, so the header sets the width.
+      expect(logged()).toEqual([box("💭 Thought 1/3", ["ab", "cd", "ef"])]);
+    });
+
+    it("keeps blank lines as blank rows", async () => {
+      await conn!.think(thought({ thought: "top\n\nbottom\n" }));
+      expect(logged()).toEqual([
+        box("💭 Thought 1/3", ["top", "", "bottom", ""]),
+      ]);
+    });
+
+    it("draws every row the same width", async () => {
+      await conn!.think(
+        thought({ thought: "short\na considerably longer line here\nmid" }),
+      );
+      const rows = logged()[0].split("\n").slice(1);
+      expect(rows).toHaveLength(7);
+      expect(new Set(rows.map((row) => row.length)).size).toBe(1);
+    });
+
+    it("draws a thought with very many lines", async () => {
+      const lines = Array.from({ length: 200_000 }, (_, i) => `${i % 10}`);
+      const result = await conn!.think(thought({ thought: lines.join("\n") }));
+      expect(result.isError).toBeFalsy();
+      expect(logged()[0].split("\n")).toHaveLength(200_000 + 5);
+    });
   });
 
   // #5000: when colour is on, the header carries chalk's escape codes, but the
