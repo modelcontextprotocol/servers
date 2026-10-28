@@ -568,7 +568,8 @@ async def fetch_url(
             hooks.append(_check_redirect_robots_txt)
         if hooks:
             client.event_hooks = {"request": hooks}
-        # A raw fetch keeps httpx's default Accept, so it still gets the HTML.
+        # A raw fetch keeps httpx's default Accept: */*, so it gets the site's
+        # default representation (a page's HTML), as before this negotiation.
         if not force_raw:
             client.headers["Accept"] = MARKDOWN_ACCEPT
         try:

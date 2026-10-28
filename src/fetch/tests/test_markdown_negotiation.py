@@ -6,8 +6,9 @@ markdown through content negotiation sent HTML to be simplified, and a
 to markdown" behind the raw-content prefix. Now a non-raw fetch prefers
 ``text/markdown`` (HTML next, anything else last), and a markdown response is
 returned as-is with no prefix. A ``raw`` fetch keeps the default ``Accept``,
-so it still gets the page's own HTML. These tests drive ``serve()`` through an
-MCP client with HTTP served by ``harness.FakeWeb``.
+so it gets the site's default representation (a page's HTML) as before. These
+tests drive ``serve()`` through an MCP client with HTTP served by
+``harness.FakeWeb``.
 """
 
 from __future__ import annotations

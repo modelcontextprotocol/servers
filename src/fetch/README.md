@@ -41,7 +41,7 @@ The server is built on the MCP Python SDK's high-level `MCPServer`: the tool and
 
 ### Content negotiation
 
-The tool and the prompt ask for markdown first, with the request header `Accept: text/markdown, text/html;q=0.9, */*;q=0.8`. A site that serves markdown through content negotiation sends it directly, and a `text/markdown` response is returned as-is: it is not simplified and carries no raw-content notice. A site that ignores the header sends what it always did, and HTML is simplified to markdown as before. A `raw` fetch does not ask for markdown, so it still gets the page's own HTML (a markdown response it receives anyway is returned as-is too).
+The tool and the prompt ask for markdown first, with the request header `Accept: text/markdown, text/html;q=0.9, */*;q=0.8`. A site that serves markdown through content negotiation sends it directly, and a `text/markdown` response is returned as-is: it is not simplified and carries no raw-content notice. A site that ignores the header sends what it always did, and HTML is simplified to markdown as before. A `raw` fetch keeps the default `Accept: */*`, so it gets whatever the site serves by default (for a web page, its HTML), unsimplified; a markdown response it receives anyway is returned as-is too.
 
 ### Protocol versions
 
