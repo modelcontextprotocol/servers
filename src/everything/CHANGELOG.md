@@ -1,5 +1,23 @@
 # @modelcontextprotocol/server-everything
 
+## 2.1.0
+
+### Minor Changes
+
+- [#5293](https://github.com/modelcontextprotocol/servers/pull/5293) [`f0c74aa`](https://github.com/modelcontextprotocol/servers/commit/f0c74aac70ab45d22b7d9e9373cd09460ec3e82e) [@cliffhall](https://github.com/cliffhall) - `get-env` now masks the values of credential-like environment variables (names with a `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `CREDENTIAL`, `AUTH` or `COOKIE` segment) as `"<redacted>"`. Set `GET_ENV_INCLUDE_SECRETS=1` to return every value unmasked.
+
+- [#5295](https://github.com/modelcontextprotocol/servers/pull/5295) [`344a4bd`](https://github.com/modelcontextprotocol/servers/commit/344a4bdf3914bebb514a8f27196aa96db2e3b828) [@cliffhall](https://github.com/cliffhall) - `gzip-file-as-resource` now refuses to fetch from loopback, private, link-local (cloud metadata) and other non-public addresses, on the caller's URL and on every redirect hop, and applies `GZIP_ALLOWED_DOMAINS` to every hop too. Set `GZIP_ALLOW_PRIVATE_IPS=1` to fetch from a local or private origin as before.
+
+### Patch Changes
+
+- [#5289](https://github.com/modelcontextprotocol/servers/pull/5289) [`d4a8eb0`](https://github.com/modelcontextprotocol/servers/commit/d4a8eb0dd8b889a047938a6be0783923dd174ff1) [@cliffhall](https://github.com/cliffhall) - `trigger-elicitation-request` now summarizes an accepted form by the fields the form actually asks for: it lists the favorite first line and the five enum fields, and no longer reports `color` or `petType`, which the form never defined.
+
+- [#5290](https://github.com/modelcontextprotocol/servers/pull/5290) [`81a1e63`](https://github.com/modelcontextprotocol/servers/commit/81a1e63b261fbe169e7f729aeca0a392b473ded8) [@cliffhall](https://github.com/cliffhall) - `gzip-file-as-resource` now fails with an error naming the URL and HTTP status when the fetch returns a non-2xx response, instead of gzipping the error page as the file.
+
+- [#5297](https://github.com/modelcontextprotocol/servers/pull/5297) [`9130496`](https://github.com/modelcontextprotocol/servers/commit/9130496ad3a64483d4bd9414111327b1dea39fb0) [@cliffhall](https://github.com/cliffhall) - `get-resource-links`: rename the misleading `isOdd` flag to `isText`, and say in its JSDoc and in `docs/features.md` that even IDs are Text resources and odd IDs are Blob resources. The JSDoc headers of `get-resource-links` and `trigger-long-running-operation` now name the tool their file registers. No behavior change.
+
+- [#5298](https://github.com/modelcontextprotocol/servers/pull/5298) [`e220d44`](https://github.com/modelcontextprotocol/servers/commit/e220d444a304630db4eb5acb240a6afc72d220ab) [@cliffhall](https://github.com/cliffhall) - `get-tiny-image` (and `get-annotated-message`'s image) now returns a fully valid PNG: the embedded logo's corrupt `iCCP` color-profile chunk, whose CRC-32 did not match and which strict decoders rejected, is removed. The pixels are unchanged.
+
 ## 2.0.1
 
 ### Patch Changes
