@@ -406,14 +406,16 @@ describe("memory tools over the protocol", () => {
         ],
       ];
       for (const [name, args] of calls) {
-        await call(client, name, args);
+        expect((await call(client, name, args)).isError).toBeUndefined();
       }
-      const once = await readGraph();
+      // Compare around each repeat on its own, so a later repeat cannot mask
+      // a change an earlier one made.
       for (const [name, args] of calls) {
+        const before = await readGraph();
         const repeat = await call(client, name, args);
         expect(repeat.isError).toBeUndefined();
+        expect(await readGraph()).toEqual(before);
       }
-      expect(await readGraph()).toEqual(once);
     });
 
     it("offers no prompts", async () => {
