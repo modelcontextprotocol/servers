@@ -12,6 +12,7 @@
 import { McpServer, CallToolResult } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import type { ServerContext } from "../server/context.js";
+import { TOOL_ICONS } from "../server/icons.js";
 
 // Tool input schema
 const TriggerListChangedSchema = z.object({
@@ -29,6 +30,7 @@ const config = {
     "2026-07-28 it is delivered on each subscriptions/listen stream that asked for that list; a 2025-era " +
     "client receives it unsolicited.",
   inputSchema: TriggerListChangedSchema,
+  icons: TOOL_ICONS,
   annotations: {
     readOnlyHint: true,
     destructiveHint: false,

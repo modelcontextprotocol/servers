@@ -79,6 +79,10 @@ A read of a resource that does not exist (an unknown URI, a template id that is 
 - **2025-era**: clients subscribe and unsubscribe to resource URIs with `resources/subscribe` and `resources/unsubscribe`. `toggle-subscriber-updates` starts or stops a per-connection interval that emits `notifications/resources/updated { uri }` for the URIs that connection subscribed to, and `trigger-resource-update` sends one on demand. List changes arrive unsolicited.
 - Each client's subscriptions belong to the server instance serving its connection, so concurrent clients are independent.
 
+## Icons
+
+**Both.** The server demonstrates icons with light and dark themes (SEP-973). Its `serverInfo` (in `initialize` and in `server/discover`) and every entry of `tools/list`, `prompts/list`, `resources/list` and `resources/templates/list` carry an `icons` array of two scalable SVG icons, one with `theme: "light"` (drawn for a light background) and one with `theme: "dark"`. Each kind has its own glyph: a server rack, a wrench for tools, a speech bubble for prompts, a document for resources, and a document with braces for templates. The icons are inline `data:` URIs, so a client fetches nothing; they are defined in `server/icons.ts`.
+
 ## Logging
 
 Logging is deprecated as of 2026-07-28 (SEP-2577) and remains available on both eras.

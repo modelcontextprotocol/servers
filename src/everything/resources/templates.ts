@@ -6,6 +6,7 @@ import {
   ResourceTemplate,
   completable,
 } from "@modelcontextprotocol/server";
+import { RESOURCE_TEMPLATE_ICONS } from "../server/icons.js";
 
 // Resource types
 export const RESOURCE_TYPE_TEXT = "Text" as const;
@@ -176,6 +177,7 @@ export const registerResourceTemplates = (server: McpServer) => {
     }),
     {
       mimeType: "text/plain",
+      icons: RESOURCE_TEMPLATE_ICONS,
       description:
         "Plaintext dynamic resource fabricated from the {resourceId} variable, which must be an integer.",
     },
@@ -196,6 +198,7 @@ export const registerResourceTemplates = (server: McpServer) => {
     }),
     {
       mimeType: "application/octet-stream",
+      icons: RESOURCE_TEMPLATE_ICONS,
       description:
         "Binary (base64) dynamic resource fabricated from the {resourceId} variable, which must be an integer.",
     },

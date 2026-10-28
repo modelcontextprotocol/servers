@@ -2,6 +2,7 @@ import { McpServer, type CacheHint } from "@modelcontextprotocol/server";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { readdirSync, readFileSync, statSync } from "fs";
+import { RESOURCE_ICONS } from "../server/icons.js";
 
 /** How long a client or shared cache may keep a static document. */
 export const STATIC_DOCUMENT_CACHE_HINT: CacheHint = {
@@ -54,7 +55,12 @@ export const registerFileResources = (server: McpServer) => {
       uri,
       // A static document changes only when the server is upgraded, so any
       // cache may keep it for an hour (2026-07-28 clients only; #4852).
-      { mimeType, description, cacheHint: STATIC_DOCUMENT_CACHE_HINT },
+      {
+        mimeType,
+        description,
+        icons: RESOURCE_ICONS,
+        cacheHint: STATIC_DOCUMENT_CACHE_HINT,
+      },
       async (uri) => {
         const text = readFileSafe(fullPath);
         return {

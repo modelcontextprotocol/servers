@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { McpServer, CallToolResult } from "@modelcontextprotocol/server";
+import { TOOL_ICONS } from "../server/icons.js";
 
 // Tool input schema
 const TriggerLongRunningOperationSchema = z.object({
@@ -16,6 +17,7 @@ const config = {
   title: "Trigger Long Running Operation Tool",
   description: "Demonstrates a long running operation with progress updates.",
   inputSchema: TriggerLongRunningOperationSchema,
+  icons: TOOL_ICONS,
   annotations: {
     readOnlyHint: true,
     destructiveHint: false,

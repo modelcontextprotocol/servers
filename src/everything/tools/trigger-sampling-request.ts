@@ -17,6 +17,7 @@ import {
   type InputRequiredResult,
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
+import { TOOL_ICONS } from "../server/icons.js";
 
 // Tool input schema
 const TriggerSamplingRequestSchema = z.object({
@@ -35,6 +36,7 @@ const config = {
     "Trigger a Request from the Server for LLM Sampling. Deprecated: Sampling is deprecated as of protocol " +
     "version 2026-07-28. The server asks with a multi-round-trip request on every protocol version.",
   inputSchema: TriggerSamplingRequestSchema,
+  icons: TOOL_ICONS,
   annotations: {
     readOnlyHint: false,
     destructiveHint: false,
