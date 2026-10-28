@@ -328,3 +328,154 @@ describe("Registration Index Files", () => {
     });
   });
 });
+
+// Every tool carries all four annotation hints as booleans, on every path that
+// registers tools (#5156). surface.test.ts snapshots the advertised values;
+// this checks presence at registration, so a refactor that drops a hint fails
+// here, next to the path that dropped it. The tool set is read from what each
+// path registers rather than listed, so a tool added later is covered without
+// editing this test.
+describe("tool annotation hints at registration", () => {
+  const HINTS = [
+    "readOnlyHint",
+    "destructiveHint",
+    "idempotentHint",
+    "openWorldHint",
+  ] as const;
+
+  // Every capability registerConditionalTools gates on, so it registers its
+  // whole set.
+  const allCapabilities = {
+    roots: {},
+    sampling: {},
+    elicitation: { form: {}, url: {} },
+  };
+
+  type RegisterFn = (server: McpServer, context: ServerContext) => void;
+
+  /** Each tool a path registers, with the annotations it was registered with. */
+  const registeredBy = (
+    register: RegisterFn,
+    era: "legacy" | "modern",
+  ): { name: string; annotations: unknown }[] => {
+    const mockServer = createMockServer();
+    vi.mocked(mockServer.server.getClientCapabilities).mockReturnValue(
+      allCapabilities,
+    );
+    register(mockServer, contextFor(era));
+    return vi.mocked(mockServer.registerTool).mock.calls.map((call) => {
+      const config: { annotations?: unknown } = call[1];
+      return { name: call[0], annotations: config.annotations };
+    });
+  };
+
+  /** "tool: hint" for each hint a tool lacks or holds as a non-boolean. */
+  const missingHints = (
+    tools: { name: string; annotations: unknown }[],
+  ): string[] =>
+    tools.flatMap(({ name, annotations }) =>
+      HINTS.filter(
+        (hint) =>
+          typeof annotations !== "object" ||
+          annotations === null ||
+          typeof (annotations as Record<string, unknown>)[hint] !== "boolean",
+      ).map((hint) => `${name}: ${hint}`),
+    );
+
+  const paths: {
+    path: string;
+    register: RegisterFn;
+    era: "legacy" | "modern";
+    includes: string[];
+  }[] = [
+    {
+      path: "registerTools (2025 era)",
+      register: registerTools,
+      era: "legacy",
+      includes: ["echo", "get-sum", "trigger-long-running-operation"],
+    },
+    {
+      path: "registerTools (2026-07-28)",
+      register: registerTools,
+      era: "modern",
+      includes: ["echo", "get-sum", "trigger-long-running-operation"],
+    },
+    {
+      path: "registerLegacyTools (2025 era)",
+      register: registerLegacyTools,
+      era: "legacy",
+      includes: ["toggle-simulated-logging", "toggle-subscriber-updates"],
+    },
+    {
+      path: "registerConditionalTools (2025 era, every capability declared)",
+      register: registerConditionalTools,
+      era: "legacy",
+      includes: [
+        "get-roots-list",
+        "trigger-elicitation-request",
+        "trigger-multi-step-elicitation",
+        "trigger-url-elicitation",
+        "trigger-sampling-request",
+      ],
+    },
+    {
+      path: "registerModernTools (2026-07-28)",
+      register: registerModernTools,
+      era: "modern",
+      includes: [
+        // capability-gated, registered up front on this era
+        "get-roots-list",
+        "trigger-elicitation-request",
+        "trigger-multi-step-elicitation",
+        "trigger-url-elicitation",
+        "trigger-sampling-request",
+        // task tools
+        "simulate-research-query",
+        "trigger-sampling-request-async",
+        "trigger-elicitation-request-async",
+      ],
+    },
+  ];
+
+  it.each(paths)(
+    "$path registers every tool with all four hints as booleans",
+    ({ register, era, includes }) => {
+      const tools = registeredBy(register, era);
+
+      // A path that silently registers nothing would pass the hint check
+      // vacuously, so pin the tools it is known to register.
+      expect(tools.length).toBeGreaterThan(0);
+      expect(tools.map((tool) => tool.name)).toEqual(
+        expect.arrayContaining(includes),
+      );
+
+      expect(missingHints(tools), "tools missing an annotation hint").toEqual(
+        [],
+      );
+    },
+  );
+
+  it("reports a tool registered without a hint", () => {
+    // Guards the check itself: a missing, null or non-boolean hint is flagged.
+    expect(
+      missingHints([
+        { name: "none", annotations: undefined },
+        {
+          name: "partial",
+          annotations: {
+            readOnlyHint: true,
+            destructiveHint: "no",
+            idempotentHint: false,
+          },
+        },
+      ]),
+    ).toEqual([
+      "none: readOnlyHint",
+      "none: destructiveHint",
+      "none: idempotentHint",
+      "none: openWorldHint",
+      "partial: destructiveHint",
+      "partial: openWorldHint",
+    ]);
+  });
+});
