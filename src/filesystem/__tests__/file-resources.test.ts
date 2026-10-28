@@ -149,6 +149,25 @@ describe("resources/read", () => {
     expect(error.data).toEqual({ uri });
   });
 
+  it("reports a dangling symlink as resource not found", async () => {
+    const link = path.join(allowed, "dangling.txt");
+    await fs.symlink(path.join(allowed, "gone", "nowhere.txt"), link);
+    const client = await connectTo([allowed]);
+    const uri = uriOf(link);
+    const error = await readError(client, uri);
+    expect(error).toBeInstanceOf(ResourceNotFoundError);
+    expect(error.data).toEqual({ uri });
+  });
+
+  it("reports a path beneath a regular file as resource not found", async () => {
+    await fs.writeFile(path.join(allowed, "parent.txt"), "x");
+    const client = await connectTo([allowed]);
+    const uri = uriOf(path.join(allowed, "parent.txt", "child.txt"));
+    const error = await readError(client, uri);
+    expect(error).toBeInstanceOf(ResourceNotFoundError);
+    expect(error.data).toEqual({ uri });
+  });
+
   it("reports a directory as not a resource", async () => {
     await fs.mkdir(path.join(allowed, "sub"));
     const client = await connectTo([allowed]);

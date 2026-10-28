@@ -112,6 +112,21 @@ export function fileResourceContents(
   };
 }
 
+/** The errno codes that mean a path does not exist. */
+const MISSING_PATH_CODES = new Set(["ENOENT", "ENOTDIR"]);
+
+/**
+ * Whether `error` says the path does not exist, directly or through its
+ * cause: validatePath wraps a missing parent's ENOENT in an Error of its own.
+ */
+function isMissingPathError(error: unknown): boolean {
+  for (let e = error; e instanceof Error; e = e.cause) {
+    const code = (e as NodeJS.ErrnoException).code;
+    if (code !== undefined && MISSING_PATH_CODES.has(code)) return true;
+  }
+  return false;
+}
+
 export interface FileResourceContext {
   /** The directories reads are confined to, read at the moment of each read. */
   allowedDirectories: () => readonly string[];
@@ -173,8 +188,14 @@ export function registerFileResources(
           context.allowedDirectories(),
         );
       } catch (error) {
-        // Outside the allowed directories, a symlink out of them, or a parent
-        // that does not exist: the message says which, as the tools do.
+        // A path that does not exist (a dangling symlink, a missing parent, a
+        // path beneath a regular file) is a missing resource, so a client can
+        // recognise it by the URI in the error data.
+        if (isMissingPathError(error)) {
+          throw new ResourceNotFoundError(uri.href, (error as Error).message);
+        }
+        // Outside the allowed directories, or a symlink out of them: the
+        // message says which, as the tools do.
         throw new ProtocolError(
           ProtocolErrorCode.InvalidParams,
           (error as Error).message,
@@ -185,9 +206,10 @@ export function registerFileResources(
       try {
         bytes = await fs.readFile(validPath);
       } catch (error) {
-        const code = (error as NodeJS.ErrnoException).code;
-        if (code === "ENOENT") throw new ResourceNotFoundError(uri.href);
-        if (code === "EISDIR") {
+        if (isMissingPathError(error)) {
+          throw new ResourceNotFoundError(uri.href);
+        }
+        if ((error as NodeJS.ErrnoException).code === "EISDIR") {
           throw new ResourceNotFoundError(
             uri.href,
             `Not a file: ${uri.href} is a directory; directories are not resources`,
