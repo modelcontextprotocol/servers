@@ -80,6 +80,11 @@ The server's directory access control follows this flow:
 5. **Access Control**
    - All filesystem operations are restricted to allowed directories
    - Use `list_allowed_directories` tool to see current directories
+   - The server also logs the effective allowed directories to stderr, with where they came from (the command line, or the client's Roots and whether those replaced the command-line directories), at startup and whenever they change: after `initialize`, after each Roots update, and when a withdrawal leaves none. For example:
+     ```
+     Effective allowed directories (from the client's Roots, which replaced the command-line directories):
+       /Users/username/project
+     ```
    - Server requires at least ONE allowed directory to operate
 
 **Note**: The server will only allow operations within directories specified either via `args` or, for a 2025-era client, via Roots.

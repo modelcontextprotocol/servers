@@ -22,6 +22,7 @@ import {
 } from "@modelcontextprotocol/server/stdio";
 import { normalizePath, expandHome, realpathWithRetry } from "./path-utils.js";
 import { createServer } from "./server.js";
+import { describeAllowedDirectories } from "./allowed-directories.js";
 
 /**
  * Resolve the allowed directories given on the command line, warning about and
@@ -171,6 +172,12 @@ export async function main(
   if (allowedDirectories.length === 0) {
     console.error(
       "Started without allowed directories - waiting for a 2025-era client to provide roots via MCP protocol",
+    );
+  } else {
+    // The directories in force until a 2025-era client's Roots replace them;
+    // on 2026-07-28 they are final (#4912).
+    console.error(
+      describeAllowedDirectories(allowedDirectories, { from: "command-line" }),
     );
   }
   return handle;
