@@ -1093,10 +1093,11 @@ async def test_get_time_ago_echoes_the_requested_name_not_a_canonical_one() -> N
             {"hours_ago": -1},
             ["hours_ago\n  Input should be greater than or equal to 0"],
         ),
-        (
-            {"days_ago": 1.5},
-            ["days_ago\n  Input should be a valid integer, got a number with a"],
-        ),
+        # The offsets are strict integers: no fraction, numeric string or
+        # boolean is coerced into a different cutoff.
+        ({"days_ago": 1.5}, ["days_ago\n  Input should be a valid integer"]),
+        ({"hours_ago": "2"}, ["hours_ago\n  Input should be a valid integer"]),
+        ({"hours_ago": True}, ["hours_ago\n  Input should be a valid integer"]),
         ({"minutes_ago": "ten"}, ["minutes_ago\n  Input should be a valid integer"]),
         ({"seconds_ago": None}, ["seconds_ago\n  Input should be a valid integer"]),
         ({"timezone": None}, ["timezone\n  Input should be a valid string"]),

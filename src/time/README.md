@@ -23,7 +23,7 @@ Requires MCP Python SDK 2.x (`mcp>=2.3,<3`).
 - `get_time_ago` - Get the time a given number of days, hours, minutes and seconds ago in a specific timezone, for questions such as "what happened in the last 5 hours?".
   - Optional arguments:
     - `timezone` (string): IANA timezone name; defaults to the server's local timezone
-    - `days_ago`, `hours_ago`, `minutes_ago`, `seconds_ago` (non-negative integers, default 0): how far back to go. They add up, so two and a half hours ago is `hours_ago: 2, minutes_ago: 30`.
+    - `days_ago`, `hours_ago`, `minutes_ago`, `seconds_ago` (non-negative JSON integers, default 0; a fraction, numeric string or boolean is rejected): how far back to go. They add up, so two and a half hours ago is `hours_ago: 2, minutes_ago: 30`.
   - The offset is elapsed time, counted back from the current instant, so across a daylight-saving change "a day ago" is exactly 24 hours ago and its wall-clock reading can differ from now by an hour. An offset reaching before year 1 is an error.
 
 A timezone name, here and in `--local-timezone`, must be an exact IANA key, case included: `Europe/Warsaw` is accepted and `europe/warsaw` is rejected on every platform, including macOS, whose case-insensitive filesystem would otherwise resolve it.

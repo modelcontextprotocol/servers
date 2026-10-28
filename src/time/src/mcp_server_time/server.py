@@ -310,15 +310,17 @@ def create_server(local_tz: str) -> MCPServer:
                 description=f"IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Optional: defaults to the server's local timezone, '{local_tz}', when omitted."
             ),
         ] = local_tz,
-        days_ago: Annotated[int, Field(description="Whole days before now", ge=0)] = 0,
+        days_ago: Annotated[
+            int, Field(description="Whole days before now", ge=0, strict=True)
+        ] = 0,
         hours_ago: Annotated[
-            int, Field(description="Whole hours before now", ge=0)
+            int, Field(description="Whole hours before now", ge=0, strict=True)
         ] = 0,
         minutes_ago: Annotated[
-            int, Field(description="Whole minutes before now", ge=0)
+            int, Field(description="Whole minutes before now", ge=0, strict=True)
         ] = 0,
         seconds_ago: Annotated[
-            int, Field(description="Whole seconds before now", ge=0)
+            int, Field(description="Whole seconds before now", ge=0, strict=True)
         ] = 0,
     ) -> TimeResult:
         require("timezone", timezone)
