@@ -557,10 +557,21 @@ export async function copyFileInDirectory(
   destinationPath: string,
 ): Promise<void> {
   const { fd, opened: source } = openSourceInDirectory(sourcePath, "copy");
+  // Set once the copy is complete; until then copyIntoNewFile cleans up.
+  let created: EntryIdentity | undefined;
   try {
-    await copyIntoNewFile(fd, source, destinationPath);
-  } finally {
-    await close(fd);
+    try {
+      created = await copyIntoNewFile(fd, source, destinationPath);
+    } finally {
+      await close(fd);
+    }
+  } catch (error) {
+    // A failure after the copy completed (closing the source) still fails
+    // the call, so the copy goes too, as the move's does.
+    if (created) {
+      discardCopy(destinationPath, created);
+    }
+    throw error;
   }
 }
 

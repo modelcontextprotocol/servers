@@ -164,6 +164,35 @@ describe("copy_file", () => {
     },
   );
 
+  it("removes the copy when closing the source fails after it", async () => {
+    const source = path.join(dir, "a.txt");
+    const destination = path.join(dir, "b.txt");
+    await fs.writeFile(source, "data");
+    // The copy closes the destination first, then the source: fail the
+    // second close, after really closing the descriptor.
+    const realClose = fsSync.close;
+    let closes = 0;
+    vi.spyOn(fsSync, "close").mockImplementation(((
+      fd: number,
+      callback: (error: NodeJS.ErrnoException | null) => void,
+    ) =>
+      realClose(fd, (error) =>
+        ++closes === 2
+          ? callback(
+              Object.assign(new Error("EIO: i/o error, close"), {
+                code: "EIO",
+              }),
+            )
+          : callback(error),
+      )) as typeof fsSync.close);
+    const result = await call(client, "copy_file", { source, destination });
+    expect(closes).toBe(2);
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toBe("EIO: i/o error, close");
+    expect(fsSync.existsSync(destination)).toBe(false);
+    expect(await fs.readFile(source, "utf-8")).toBe("data");
+  });
+
   it("reports a missing source", async () => {
     const result = await call(client, "copy_file", {
       source: path.join(dir, "missing.txt"),
