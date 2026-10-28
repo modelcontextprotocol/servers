@@ -37,8 +37,9 @@ from conftest import connect, make_repo, text_result, tool_error, wire
 
 SNAPSHOTS = Path(__file__).parent / "snapshots"
 
-# What the server advertises in either era. MCPServer serves empty prompt and
-# resource lists, so both appear; nothing ever changes, so no listChanged.
+# What the server advertises in either era. MCPServer serves prompt and
+# resource lists (the git prompts, #5195; no resources), so both appear;
+# nothing ever changes, so no listChanged.
 CAPABILITIES = {
     "prompts": {"listChanged": False},
     "resources": {"listChanged": False, "subscribe": False},
@@ -78,8 +79,8 @@ async def test_initialize_reports_package_version_as_server_version(repo: git.Re
         "version": version("mcp-server-git"),
     }
     assert version("mcp") != version("mcp-server-git")
-    # MCPServer (#5174) always serves prompts/list and resources/list (empty
-    # here), so it advertises both capabilities beside tools.
+    # MCPServer (#5174) always serves prompts/list and resources/list (the
+    # resource list is empty here), so it advertises both beside tools.
     assert init["capabilities"] == CAPABILITIES
 
 
