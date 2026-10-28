@@ -36,7 +36,7 @@ The server then registers only the tools annotated `readOnlyHint: true` (see [To
 
 The flag may appear anywhere among the arguments. `--` ends the options, so a directory literally named `--read-only` can be given after it.
 
-Read-only mode covers every allowed directory. To make only some of them read-only, run two servers: one with `--read-only` for the directories to protect, and one without it for the rest. With Docker, a bind mount's `ro` flag also makes a single directory read-only at the operating-system level.
+Read-only mode covers every allowed directory. To make only some of them read-only, run two servers: one with `--read-only` for the directories to protect, and one without it for the rest. That separation holds only while the writable server keeps its command-line directories: a 2025-era client that supports Roots replaces them (see Method 2), so it could expose a protected directory to the writable server. Where that matters, make the protected directories read-only at the operating-system level as well, with file permissions or, with Docker, a bind mount's `ro` flag.
 
 ### Method 2: MCP Roots (Deprecated, 2025-era clients only)
 A client that connects with a 2025-era protocol version (the `initialize` handshake) and supports [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots) can dynamically update the Allowed directories.
