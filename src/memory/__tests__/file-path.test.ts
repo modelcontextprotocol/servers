@@ -1,5 +1,6 @@
 // Tests for how the memory server picks its graph file: MEMORY_FILE_PATH
-// handling, the memory.json -> memory.jsonl migration, and "~" expansion.
+// handling, the memory.json -> memory.jsonl migration, "~" expansion, and the
+// startup warning for a graph file npm could delete (#4117).
 //
 // Every test runs ensureMemoryFilePath against its own temporary directory.
 // Vitest runs test files in parallel, so files written beside the source are
@@ -14,6 +15,7 @@ import {
   ensureMemoryFilePath,
   defaultMemoryPath,
   expandHome,
+  memoryFileLocationWarning,
 } from "../index.js";
 
 describe("ensureMemoryFilePath", () => {
@@ -290,5 +292,55 @@ describe("expandHome", () => {
     expect(expandHome(path.join("data", "memory.jsonl"))).toBe(
       path.join("data", "memory.jsonl"),
     );
+  });
+});
+
+describe("memoryFileLocationWarning", () => {
+  it("warns about a file inside an npx or npm install's node_modules", () => {
+    const installed = path.join(
+      os.homedir(),
+      ".npm",
+      "_npx",
+      "abc123",
+      "node_modules",
+      "@modelcontextprotocol",
+      "server-memory",
+      "dist",
+      "memory.jsonl",
+    );
+    const warning = memoryFileLocationWarning(installed);
+    expect(warning).toContain(installed);
+    expect(warning).toContain("node_modules");
+    expect(warning).toContain("MEMORY_FILE_PATH");
+  });
+
+  it("warns about a Windows path inside node_modules on any platform", () => {
+    expect(
+      memoryFileLocationWarning(
+        "C:\\Users\\me\\AppData\\npm\\node_modules\\@modelcontextprotocol\\server-memory\\dist\\memory.jsonl",
+      ),
+    ).toContain("node_modules");
+  });
+
+  it("does not warn about a file outside node_modules", () => {
+    expect(
+      memoryFileLocationWarning(path.join(os.homedir(), "memory.jsonl")),
+    ).toBeUndefined();
+  });
+
+  it("does not warn about a directory whose name only contains node_modules", () => {
+    expect(
+      memoryFileLocationWarning(
+        path.join(os.homedir(), "my_node_modules_notes", "memory.jsonl"),
+      ),
+    ).toBeUndefined();
+  });
+
+  it("does not warn about the Docker image's /app/dist, which the setup mounts as a volume", () => {
+    expect(
+      memoryFileLocationWarning(
+        path.join(path.sep, "app", "dist", "memory.jsonl"),
+      ),
+    ).toBeUndefined();
   });
 });
