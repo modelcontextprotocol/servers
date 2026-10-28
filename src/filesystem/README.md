@@ -179,6 +179,10 @@ The server's directory access control follows this flow:
   - Glob-style pattern matching
   - Returns full paths to matches
   - Bounded: see [Slow and very large trees](#slow-and-very-large-trees)
+  - A subdirectory that cannot be read (no permission, say) is skipped, and the
+    result says so: after the matches, a note that the search is incomplete
+    lists each unreadable directory with its error code. Paths outside the
+    allowed directories are still skipped silently.
 
 - **directory_tree**
   - Get recursive JSON tree structure of directory contents

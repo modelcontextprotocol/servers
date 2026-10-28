@@ -763,13 +763,29 @@ export function createServer(
     },
     async (args: z.infer<typeof SearchFilesArgsSchema>) => {
       const validPath = await validatePath(args.path, allowedDirectories);
+      // A subdirectory that cannot be read is skipped, and named after the
+      // matches so the caller knows they are partial (#5189).
+      const unreadable: string[] = [];
       const results = await searchFilesWithValidation(
         validPath,
         args.pattern,
         allowedDirectories,
-        { excludePatterns: args.excludePatterns },
+        {
+          excludePatterns: args.excludePatterns,
+          onUnreadable: (directory, error) => {
+            const code = (error as NodeJS.ErrnoException).code;
+            unreadable.push(code ? `${directory} (${code})` : directory);
+          },
+        },
       );
-      const text = results.length > 0 ? results.join("\n") : "No matches found";
+      let text = results.length > 0 ? results.join("\n") : "No matches found";
+      if (unreadable.length > 0) {
+        text +=
+          `\n\nThe search is incomplete: ${unreadable.length} ` +
+          `${unreadable.length === 1 ? "directory" : "directories"} could not be read, ` +
+          "and any matches inside are missing:\n" +
+          unreadable.join("\n");
+      }
       return {
         content: [{ type: "text" as const, text }],
         structuredContent: { content: text },
