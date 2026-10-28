@@ -41,6 +41,8 @@ from mcp.types import INVALID_PARAMS, ToolAnnotations
 from protego import Protego
 from pydantic import AnyUrl, Field
 
+from .title import with_page_title
+
 # The version this server reports in serverInfo, read from the installed
 # distribution's metadata (pyproject.toml) so it cannot drift from the
 # published version (#360). Without it the SDK reports its own `mcp` version.
@@ -601,7 +603,7 @@ async def fetch_url(
         content = await asyncio.to_thread(
             extract_content_from_html, page_raw, use_readability_js
         )
-        return content, ""
+        return with_page_title(page_raw, content), ""
 
     # A response with no Content-Type would otherwise leave an empty slot here.
     declared_type = content_type or "(not declared)"
