@@ -871,8 +871,9 @@ describe("edit_file", () => {
       edits: [{ oldText: "return 9;", newText: "x" }],
     });
     expect(result.isError).toBe(true);
-    expect(textOf(result)).toBe(
-      "Could not find exact match for edit:\nreturn 9;",
+    // #2034: the error also quotes the closest lines of the file.
+    expect(textOf(result)).toMatch(
+      /^Could not find exact match for edit 1 of 1\. [^]*\n\noldText:\nreturn 9;\n\nClosest text in the file \(lines 1-4 of 4\):\n[^]*3:   return 1;\n/,
     );
   });
 

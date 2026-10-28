@@ -729,6 +729,146 @@ function reindentLine(
   return indent + body;
 }
 
+// What the no-match error shows (#2034). A model that sent oldText which
+// differs from the file in a way the matcher does not tolerate (whitespace
+// inside a line, a typo, stale content) needs the file's real text to retry
+// with, so the error quotes the closest run of lines with their line
+// numbers. Finding it compares every window of the file against oldText, so
+// the search is skipped past a fixed number of line comparisons rather than
+// stalling the error on a huge file.
+const MISMATCH_SCAN_LIMIT = 1_000_000;
+const MISMATCH_CONTEXT_LINES = 2;
+const MISMATCH_MAX_REGION_LINES = 30;
+
+interface LineGrams {
+  grams: Map<string, number>;
+  size: number;
+}
+
+/** A line's character bigrams with all whitespace removed, for similarity. */
+function lineGrams(line: string): LineGrams {
+  const text = line.replace(/\s+/g, "");
+  const grams = new Map<string, number>();
+  if (text.length === 1) grams.set(text, 1);
+  for (let i = 0; i < text.length - 1; i++) {
+    const gram = text.slice(i, i + 2);
+    grams.set(gram, (grams.get(gram) ?? 0) + 1);
+  }
+  let size = 0;
+  for (const count of grams.values()) size += count;
+  return { grams, size };
+}
+
+/** Dice similarity of two lines' bigrams: 1 for two blank lines, 0 for nothing shared. */
+function lineSimilarity(a: LineGrams, b: LineGrams): number {
+  if (a.size + b.size === 0) return 1;
+  let shared = 0;
+  for (const [gram, count] of a.grams) {
+    shared += Math.min(count, b.grams.get(gram) ?? 0);
+  }
+  return (2 * shared) / (a.size + b.size);
+}
+
+/**
+ * The error message for an edit that matched nowhere in `content` (the file
+ * as the earlier edits in the same call left it). It names the edit, says
+ * what the matcher tolerates, and quotes the run of file lines most similar
+ * to oldText, numbered, with the first line that differs shown quoted so
+ * whitespace is visible. It only reports: it never changes what matches.
+ */
+export function describeEditMismatch(
+  content: string,
+  oldText: string,
+  editIndex: number,
+  editCount: number,
+): string {
+  const oldLines = normalizeLineEndings(oldText).split("\n");
+  const fileLines = content.split("\n");
+  if (fileLines.length > 1 && fileLines[fileLines.length - 1] === "") {
+    fileLines.pop();
+  }
+
+  const parts = [
+    `Could not find exact match for edit ${editIndex + 1} of ${editCount}. ` +
+      "oldText must match the file's text exactly; only line endings, and " +
+      "leading and trailing whitespace on whole lines, may differ. " +
+      "No edits were applied.",
+    `oldText:\n${oldText}`,
+  ];
+
+  const width = Math.min(oldLines.length, fileLines.length);
+  const windows = fileLines.length - width + 1;
+  if (windows * width > MISMATCH_SCAN_LIMIT) {
+    parts.push(
+      `The file has ${fileLines.length} lines, too many to search for the ` +
+        "closest text. Read the file and copy oldText from it exactly.",
+    );
+    return parts.join("\n\n");
+  }
+
+  const oldGrams = oldLines.map(lineGrams);
+  const fileGrams = fileLines.map(lineGrams);
+  let best = 0;
+  let bestScore = 0;
+  for (let i = 0; i < windows; i++) {
+    let score = 0;
+    for (let j = 0; j < width; j++) {
+      score += lineSimilarity(oldGrams[j], fileGrams[i + j]);
+    }
+    if (score > bestScore) {
+      best = i;
+      bestScore = score;
+    }
+  }
+
+  if (bestScore === 0) {
+    parts.push(
+      "No line of the file resembles oldText. Read the file and copy " +
+        "oldText from it exactly.",
+    );
+    return parts.join("\n\n");
+  }
+
+  const start = Math.max(0, best - MISMATCH_CONTEXT_LINES);
+  const end = Math.min(
+    fileLines.length,
+    best + width + MISMATCH_CONTEXT_LINES,
+    start + MISMATCH_MAX_REGION_LINES,
+  );
+  const numbered = fileLines
+    .slice(start, end)
+    .map((line, k) => `${start + k + 1}: ${line}`);
+  const after = editIndex > 0 ? ", after the earlier edits in this call" : "";
+  parts.push(
+    `Closest text in the file (lines ${start + 1}-${end} of ` +
+      `${fileLines.length}${after}):\n${numbered.join("\n")}`,
+  );
+
+  // Some line differs beyond leading and trailing whitespace, or oldText runs
+  // past the file's end: otherwise the line-by-line matcher would have
+  // matched this window. Math.max only keeps the index a valid one.
+  const differs = Math.max(
+    0,
+    oldLines.findIndex(
+      (line, j) => j >= width || line.trim() !== fileLines[best + j].trim(),
+    ),
+  );
+  parts.push(
+    differs >= width
+      ? `oldText line ${differs + 1} (${JSON.stringify(oldLines[differs])}) ` +
+          `runs past the end of the file, which ends at line ${fileLines.length}.`
+      : `First difference, oldText line ${differs + 1} against file line ` +
+          `${best + differs + 1}:\n` +
+          `  oldText: ${JSON.stringify(oldLines[differs])}\n` +
+          `  file:    ${JSON.stringify(fileLines[best + differs])}`,
+  );
+  parts.push(
+    "Retry with oldText copied exactly from the file, without the " +
+      "line-number prefixes.",
+  );
+  return parts.join("\n\n");
+}
+
 export async function applyFileEdits(
   filePath: string,
   edits: FileEdit[],
@@ -742,7 +882,7 @@ export async function applyFileEdits(
 
   // Apply edits sequentially
   let modifiedContent = content;
-  for (const edit of edits) {
+  for (const [index, edit] of edits.entries()) {
     const normalizedOld = normalizeLineEndings(edit.oldText);
     const normalizedNew = normalizeLineEndings(edit.newText);
 
@@ -798,7 +938,14 @@ export async function applyFileEdits(
     }
 
     if (!matchFound) {
-      throw new Error(`Could not find exact match for edit:\n${edit.oldText}`);
+      throw new Error(
+        describeEditMismatch(
+          modifiedContent,
+          edit.oldText,
+          index,
+          edits.length,
+        ),
+      );
     }
   }
 
