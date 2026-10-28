@@ -264,6 +264,19 @@ describe("Path Utilities", () => {
     it("leaves other paths unchanged", () => {
       expect(expandHome("C:/test")).toBe("C:/test");
     });
+
+    // On POSIX a backslash is a filename character, so ~\notes names a
+    // file in the working directory, not one in the home directory (#5180).
+    // win32.test.ts covers the Windows expansion.
+    it("leaves ~\\ alone on POSIX", () => {
+      const realPlatform = process.platform;
+      Object.defineProperty(process, "platform", { value: "linux" });
+      try {
+        expect(expandHome("~\\notes")).toBe("~\\notes");
+      } finally {
+        Object.defineProperty(process, "platform", { value: realPlatform });
+      }
+    });
   });
 
   describe("WSL path handling (issue #2795 fix)", () => {

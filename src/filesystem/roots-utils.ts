@@ -1,7 +1,10 @@
 import { promises as fs, type Stats } from "fs";
 import path from "path";
-import os from "os";
-import { normalizePathFormat, realpathWithRetry } from "./path-utils.js";
+import {
+  normalizePathFormat,
+  realpathWithRetry,
+  expandHome,
+} from "./path-utils.js";
 import type { Root } from "@modelcontextprotocol/server";
 import { fileURLToPath } from "url";
 
@@ -25,10 +28,7 @@ async function parseRootUri(rootUri: string): Promise<RootPaths | null> {
     const rawPath = rootUri.startsWith("file://")
       ? fileURLToPath(rootUri)
       : rootUri;
-    const expandedPath =
-      rawPath.startsWith("~/") || rawPath === "~"
-        ? path.join(os.homedir(), rawPath.slice(1))
-        : rawPath;
+    const expandedPath = expandHome(rawPath);
     const absolutePath = path.resolve(expandedPath);
     const resolvedPath = await realpathWithRetry(absolutePath);
     return {
