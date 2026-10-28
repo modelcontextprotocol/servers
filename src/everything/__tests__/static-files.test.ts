@@ -112,7 +112,9 @@ describe("static document resources", () => {
     const session = await harness.connect();
     try {
       const { resources } = await session.client.listResources();
-      expect(resources).toEqual([]);
+      expect(
+        resources.filter((r) => r.uri.includes("/static/document/")),
+      ).toEqual([]);
       expect(session.client.getInstructions()).toBe(
         "Server instructions not loaded: Error: ENOENT: no docs",
       );

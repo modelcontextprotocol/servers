@@ -3,6 +3,7 @@ import type { ServerContext } from "../server/context.js";
 import { registerResourceTemplates } from "./templates.js";
 import { registerFileResources } from "./files.js";
 import { registerMintedResources } from "./minted.js";
+import { registerCollectionResources } from "./collections.js";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { readFileSync } from "fs";
@@ -19,6 +20,7 @@ export const registerResources = (
 ) => {
   registerResourceTemplates(server);
   registerFileResources(server);
+  registerCollectionResources(server);
   if (context.era === "modern") registerMintedResources(server);
 };
 
