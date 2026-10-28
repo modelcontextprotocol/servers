@@ -20,6 +20,12 @@ Requires MCP Python SDK 2.x (`mcp>=2.3,<3`).
     - `time` (string): Time in 24-hour format (HH:MM)
     - `target_timezone` (string): Target IANA timezone name
 
+- `get_time_ago` - Get the time a given number of days, hours, minutes and seconds ago in a specific timezone, for questions such as "what happened in the last 5 hours?".
+  - Optional arguments:
+    - `timezone` (string): IANA timezone name; defaults to the server's local timezone
+    - `days_ago`, `hours_ago`, `minutes_ago`, `seconds_ago` (non-negative integers, default 0): how far back to go. They add up, so two and a half hours ago is `hours_ago: 2, minutes_ago: 30`.
+  - The offset is elapsed time, counted back from the current instant, so across a daylight-saving change "a day ago" is exactly 24 hours ago and its wall-clock reading can differ from now by an hour. An offset reaching before year 1 is an error.
+
 A timezone name, here and in `--local-timezone`, must be an exact IANA key, case included: `Europe/Warsaw` is accepted and `europe/warsaw` is rejected on every platform, including macOS, whose case-insensitive filesystem would otherwise resolve it.
 
 ### Protocol versions
@@ -271,6 +277,27 @@ Response (`structuredContent`, and the same JSON as text):
 }
 ```
 
+3. Get a past time:
+```json
+{
+  "name": "get_time_ago",
+  "arguments": {
+    "timezone": "Europe/Warsaw",
+    "hours_ago": 2,
+    "minutes_ago": 30
+  }
+}
+```
+Response (`structuredContent`, and the same JSON as text):
+```json
+{
+  "timezone": "Europe/Warsaw",
+  "datetime": "2024-01-01T10:30:00+01:00",
+  "day_of_week": "Monday",
+  "is_dst": false
+}
+```
+
 ## Debugging
 
 You can use the MCP inspector to debug the server. For uvx installations:
@@ -292,6 +319,7 @@ npx @modelcontextprotocol/inspector uv run mcp-server-time
 2. "What time is it in Tokyo?"
 3. "When it's 4 PM in New York, what time is it in London?"
 4. "Convert 9:30 AM Tokyo time to New York time"
+5. "What time was it two and a half hours ago?"
 
 ## Development
 

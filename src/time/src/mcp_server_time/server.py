@@ -40,6 +40,7 @@ SERVER_VERSION = version("mcp-server-time")
 class TimeTools(str, Enum):
     GET_CURRENT_TIME = "get_current_time"
     CONVERT_TIME = "convert_time"
+    GET_TIME_AGO = "get_time_ago"
 
 
 class TimeResult(BaseModel):
@@ -113,6 +114,37 @@ class TimeServer:
             datetime=current_time.isoformat(timespec="seconds"),
             day_of_week=current_time.strftime("%A"),
             is_dst=bool(current_time.dst()),
+        )
+
+    def get_time_ago(
+        self,
+        timezone_name: str,
+        days: int = 0,
+        hours: int = 0,
+        minutes: int = 0,
+        seconds: int = 0,
+    ) -> TimeResult:
+        """Get the time an elapsed span before now, in specified timezone.
+
+        The span is subtracted from the current instant in UTC, not from the
+        local wall clock, so "5 hours ago" across a clock change is the instant
+        five real hours back (#2710). An offset that reaches past what
+        `datetime` can hold is a `ToolError`, not an `OverflowError`.
+        """
+        timezone = get_zoneinfo(timezone_name)
+        try:
+            span = timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
+            past_time = (datetime.now(ZoneInfo("UTC")) - span).astimezone(timezone)
+        except OverflowError:
+            raise ToolError(
+                "Time offset out of range: the result would be before year 1"
+            )
+
+        return TimeResult(
+            timezone=timezone_name,
+            datetime=past_time.isoformat(timespec="seconds"),
+            day_of_week=past_time.strftime("%A"),
+            is_dst=bool(past_time.dst()),
         )
 
     def convert_time(
@@ -262,6 +294,37 @@ def create_server(local_tz: str) -> MCPServer:
         require("source_timezone", source_timezone)
         require("target_timezone", target_timezone)
         return time_server.convert_time(source_timezone, time, target_timezone)
+
+    @server.tool(
+        name=TimeTools.GET_TIME_AGO.value,
+        description=(
+            "Get the time a given number of days, hours, minutes and seconds "
+            "ago in a specific timezone"
+        ),
+        annotations=READ_ONLY,
+    )
+    def get_time_ago(
+        timezone: Annotated[
+            str,
+            Field(
+                description=f"IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Optional: defaults to the server's local timezone, '{local_tz}', when omitted."
+            ),
+        ] = local_tz,
+        days_ago: Annotated[int, Field(description="Whole days before now", ge=0)] = 0,
+        hours_ago: Annotated[
+            int, Field(description="Whole hours before now", ge=0)
+        ] = 0,
+        minutes_ago: Annotated[
+            int, Field(description="Whole minutes before now", ge=0)
+        ] = 0,
+        seconds_ago: Annotated[
+            int, Field(description="Whole seconds before now", ge=0)
+        ] = 0,
+    ) -> TimeResult:
+        require("timezone", timezone)
+        return time_server.get_time_ago(
+            timezone, days_ago, hours_ago, minutes_ago, seconds_ago
+        )
 
     return server
 

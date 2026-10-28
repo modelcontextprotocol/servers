@@ -261,6 +261,41 @@ def expected_tools(local_tz: str) -> list[dict[str, Any]]:
             },
             "annotations": READ_ONLY_ANNOTATIONS,
         },
+        {
+            "name": "get_time_ago",
+            "description": (
+                "Get the time a given number of days, hours, minutes and seconds "
+                "ago in a specific timezone"
+            ),
+            "inputSchema": {
+                "type": "object",
+                "title": "get_time_agoArguments",
+                "properties": {
+                    "timezone": {
+                        "type": "string",
+                        "title": "Timezone",
+                        "default": local_tz,
+                        "description": (
+                            "IANA timezone name (e.g., 'America/New_York', "
+                            "'Europe/London'). Optional: defaults to the server's "
+                            f"local timezone, '{local_tz}', when omitted."
+                        ),
+                    },
+                    **{
+                        f"{unit}_ago": {
+                            "type": "integer",
+                            "title": f"{unit.capitalize()} Ago",
+                            "default": 0,
+                            "minimum": 0,
+                            "description": f"Whole {unit} before now",
+                        }
+                        for unit in ("days", "hours", "minutes", "seconds")
+                    },
+                },
+            },
+            "outputSchema": TIME_RESULT_SCHEMA,
+            "annotations": READ_ONLY_ANNOTATIONS,
+        },
     ]
 
 
@@ -947,6 +982,163 @@ async def test_convert_time_checks_timezones_before_the_time_string() -> None:
     assert result == tool_error(
         "convert_time", "Invalid timezone: 'No time zone found with key Bad/Zone'"
     )
+
+
+# ---------------------------------------------------------------------------
+# tools/call get_time_ago
+# ---------------------------------------------------------------------------
+
+
+async def test_get_time_ago_wire_result() -> None:
+    # The issue's own example (#2710): two and a half hours ago.
+    async with connected() as session:
+        with frozen_at("2024-01-01 12:00:00+00:00"):
+            result = await call(
+                session,
+                "get_time_ago",
+                {"timezone": "UTC", "hours_ago": 2, "minutes_ago": 30},
+            )
+    expected = {
+        "timezone": "UTC",
+        "datetime": "2024-01-01T09:30:00+00:00",
+        "day_of_week": "Monday",
+        "is_dst": False,
+    }
+    assert result == {
+        "content": [{"type": "text", "text": json.dumps(expected, indent=2)}],
+        "structuredContent": expected,
+        "isError": False,
+    }
+
+
+@pytest.mark.parametrize(
+    "arguments,expected",
+    [
+        # No offset at all is now.
+        ({}, "2024-01-01T12:00:00+00:00"),
+        ({"seconds_ago": 1}, "2024-01-01T11:59:59+00:00"),
+        ({"minutes_ago": 90}, "2024-01-01T10:30:00+00:00"),
+        # Every unit at once, crossing back into the previous year.
+        (
+            {"days_ago": 1, "hours_ago": 2, "minutes_ago": 3, "seconds_ago": 4},
+            "2023-12-31T09:56:56+00:00",
+        ),
+        # 2023 is not a leap year: 365 days back is the same date.
+        ({"days_ago": 365}, "2023-01-01T12:00:00+00:00"),
+    ],
+)
+async def test_get_time_ago_offsets(arguments: dict[str, Any], expected: str) -> None:
+    async with connected() as session:
+        with frozen_at("2024-01-01 12:00:00+00:00"):
+            result = await call_json(
+                session, "get_time_ago", {"timezone": "UTC", **arguments}
+            )
+    assert result["datetime"] == expected
+
+
+async def test_get_time_ago_defaults_to_the_local_timezone() -> None:
+    # An omitted timezone is the server's local timezone, as the schema's
+    # `default` says.
+    async with connected("Europe/Warsaw") as session:
+        with frozen_at("2024-01-01 12:00:00+00:00"):
+            result = await call_json(session, "get_time_ago", {"hours_ago": 1})
+    assert result == {
+        "timezone": "Europe/Warsaw",
+        "datetime": "2024-01-01T12:00:00+01:00",
+        "day_of_week": "Monday",
+        "is_dst": False,
+    }
+
+
+@pytest.mark.parametrize(
+    "arguments,expected,is_dst",
+    [
+        # 03:30 CEST on the spring-forward day is 01:30 UTC; two real hours
+        # back is 23:30 UTC, 00:30 CET. Subtracting from the wall clock would
+        # wrongly give 01:30.
+        ({"hours_ago": 2}, "2024-03-31T00:30:00+01:00", False),
+        # A day ago is 24 elapsed hours, 01:30 UTC the day before, so across
+        # the change the wall clock reads 02:30 CET, not 03:30.
+        ({"days_ago": 1}, "2024-03-30T02:30:00+01:00", False),
+        ({"minutes_ago": 30}, "2024-03-31T03:00:00+02:00", True),
+    ],
+)
+async def test_get_time_ago_counts_elapsed_time_across_a_clock_change(
+    arguments: dict[str, Any], expected: str, is_dst: bool
+) -> None:
+    async with connected() as session:
+        with frozen_at("2024-03-31 01:30:00+00:00"):
+            result = await call_json(
+                session, "get_time_ago", {"timezone": "Europe/Warsaw", **arguments}
+            )
+    assert (result["datetime"], result["is_dst"]) == (expected, is_dst)
+
+
+async def test_get_time_ago_echoes_the_requested_name_not_a_canonical_one() -> None:
+    async with connected() as session:
+        with frozen_at("2024-01-01 12:00:00+00:00"):
+            result = await call_json(
+                session, "get_time_ago", {"timezone": "US/Eastern", "days_ago": 1}
+            )
+    assert result["timezone"] == "US/Eastern"
+    assert result["datetime"] == "2023-12-31T07:00:00-05:00"
+    assert result["day_of_week"] == "Sunday"
+
+
+@pytest.mark.parametrize(
+    "arguments,needles",
+    [
+        # Rejected by MCPServer against the tool's signature, before it runs.
+        (
+            {"hours_ago": -1},
+            ["hours_ago\n  Input should be greater than or equal to 0"],
+        ),
+        (
+            {"days_ago": 1.5},
+            ["days_ago\n  Input should be a valid integer, got a number with a"],
+        ),
+        ({"minutes_ago": "ten"}, ["minutes_ago\n  Input should be a valid integer"]),
+        ({"seconds_ago": None}, ["seconds_ago\n  Input should be a valid integer"]),
+        ({"timezone": None}, ["timezone\n  Input should be a valid string"]),
+    ],
+)
+async def test_get_time_ago_argument_validation(
+    arguments: dict[str, Any], needles: list[str]
+) -> None:
+    async with connected() as session:
+        result = await call(session, "get_time_ago", arguments)
+    assert_validation_error(result, "get_time_ago", *needles)
+
+
+@pytest.mark.parametrize(
+    "arguments,message",
+    [
+        # Raised by the tool as a ToolError.
+        ({"timezone": ""}, "Missing required argument: timezone"),
+        (
+            {"timezone": "europe/warsaw"},
+            "Invalid timezone: 'No time zone found with key europe/warsaw'",
+        ),
+        # Past what timedelta can hold, and past year 1.
+        (
+            {"days_ago": 10**10},
+            "Time offset out of range: the result would be before year 1",
+        ),
+        (
+            {"days_ago": 999_999_999},
+            "Time offset out of range: the result would be before year 1",
+        ),
+        # The timezone is checked before the offset.
+        (
+            {"timezone": "Bad/Zone", "days_ago": 10**10},
+            "Invalid timezone: 'No time zone found with key Bad/Zone'",
+        ),
+    ],
+)
+async def test_get_time_ago_errors(arguments: dict[str, Any], message: str) -> None:
+    async with connected() as session:
+        result = await call(session, "get_time_ago", arguments)
+    assert result == tool_error("get_time_ago", message)
 
 
 # ---------------------------------------------------------------------------
