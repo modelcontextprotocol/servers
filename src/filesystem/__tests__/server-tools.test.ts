@@ -37,6 +37,7 @@ const TOOL_NAMES = [
   "list_directory_with_sizes",
   "directory_tree",
   "move_file",
+  "copy_file",
   "search_files",
   "get_file_info",
   "list_allowed_directories",
@@ -89,7 +90,7 @@ describe("server identity and tool list", () => {
     });
   });
 
-  it("lists the 14 tools in registration order", async () => {
+  it("lists the tools in registration order", async () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name)).toEqual(TOOL_NAMES);
   });
@@ -139,6 +140,13 @@ describe("server identity and tool list", () => {
         readOnlyHint: false,
         idempotentHint: false,
         destructiveHint: true,
+        openWorldHint: false,
+      },
+      copy_file: {
+        title: "Copy File",
+        readOnlyHint: false,
+        idempotentHint: true,
+        destructiveHint: false,
         openWorldHint: false,
       },
       search_files: { title: "Search Files", ...readOnly },

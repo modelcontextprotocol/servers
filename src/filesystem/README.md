@@ -168,6 +168,19 @@ The server's directory access control follows this flow:
     source is left in place. A directory cannot be moved across filesystems
     and fails with an error; move its files one at a time instead
 
+- **copy_file**
+  - Copy a file to a new location, without its content passing through the
+    conversation
+  - Inputs:
+    - `source` (string): The file to copy
+    - `destination` (string): Where to create the copy
+  - Fails if destination exists: it never overwrites
+  - Copies one regular file, with its permissions and modification time, into
+    a newly created destination. A directory, or anything else that is not a
+    regular file, is refused; create the directory and copy its files one at a
+    time instead. If the copy fails, the partial destination is removed. The
+    source is never changed
+
 - **search_files**
   - Recursively search for files/directories that match or do not match patterns
   - Inputs:
@@ -263,6 +276,7 @@ The mapping for filesystem tools is:
 | `write_file`                | `false`      | `true`         | `true`          | Overwrites existing files                       |
 | `edit_file`                 | `false`      | `false`        | `true`          | Re‑applying edits can fail or double‑apply      |
 | `move_file`                 | `false`      | `false`        | `true`          | Deletes source file                             |
+| `copy_file`                 | `false`      | `true`         | `false`         | Never overwrites; a repeat fails, changing nothing |
 
 > Note: `idempotentHint` and `destructiveHint` are meaningful only when `readOnlyHint` is `false`, as defined by the MCP spec. Every tool also sets `openWorldHint: false` — this server only accesses the local filesystem within its allowed directories, never an open or external world.
 
