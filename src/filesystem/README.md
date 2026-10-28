@@ -82,8 +82,8 @@ The server's directory access control follows this flow:
   - Read complete contents of a file as text
   - Inputs:
     - `path` (string)
-    - `head` (number, optional): First N lines
-    - `tail` (number, optional): Last N lines
+    - `head` (non-negative integer, optional): First N lines; `0` returns no lines
+    - `tail` (non-negative integer, optional): Last N lines; `0` returns no lines
   - Always treats the file as UTF-8 text regardless of extension
   - Cannot specify both `head` and `tail` simultaneously
 

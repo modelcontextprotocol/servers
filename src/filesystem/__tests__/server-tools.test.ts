@@ -209,11 +209,15 @@ describe("server identity and tool list", () => {
       properties: {
         path: { type: "string" },
         tail: {
-          type: "number",
+          type: "integer",
+          minimum: 0,
+          maximum: Number.MAX_SAFE_INTEGER,
           description: "If provided, returns only the last N lines of the file",
         },
         head: {
-          type: "number",
+          type: "integer",
+          minimum: 0,
+          maximum: Number.MAX_SAFE_INTEGER,
           description:
             "If provided, returns only the first N lines of the file",
         },
@@ -449,12 +453,55 @@ describe("read_text_file and read_file", () => {
     });
   });
 
-  it("treats head: 0 as absent and returns the whole file", async () => {
-    const result = await call(client, "read_text_file", {
-      path: file,
-      head: 0,
+  describe("a zero count (#5184)", () => {
+    it.each(["head", "tail"])("%s: 0 returns no lines", async (key) => {
+      const result = await call(client, "read_text_file", {
+        path: file,
+        [key]: 0,
+      });
+      expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toEqual({ content: "" });
     });
-    expect(textOf(result)).toBe("one\ntwo\nthree\nfour\n");
+
+    it.each(["head", "tail"])(
+      "%s: 0 still reports a missing file",
+      async (key) => {
+        const result = await call(client, "read_text_file", {
+          path: path.join(dir, "missing.txt"),
+          [key]: 0,
+        });
+        expect(result.isError).toBe(true);
+        expect(textOf(result)).toMatch(/^ENOENT: no such file or directory/);
+      },
+    );
+
+    it("rejects head: 0 and tail: 0 together", async () => {
+      const result = await call(client, "read_text_file", {
+        path: file,
+        head: 0,
+        tail: 0,
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toBe(
+        "Cannot specify both head and tail parameters simultaneously",
+      );
+    });
+
+    it.each([
+      ["head", -1],
+      ["tail", -1],
+      ["head", 1.5],
+      ["tail", 1.5],
+    ])("rejects %s: %s as invalid input", async (key, value) => {
+      for (const tool of ["read_text_file", "read_file"]) {
+        const result = await call(client, tool, {
+          path: file,
+          [key]: value,
+        });
+        expect(result.isError, tool).toBe(true);
+        expect(textOf(result), tool).toMatch(/Input validation error/);
+      }
+    });
   });
 
   it("rejects head and tail together", async () => {
