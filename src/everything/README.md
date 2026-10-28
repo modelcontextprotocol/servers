@@ -167,6 +167,32 @@ npx @modelcontextprotocol/server-everything streamableHttp
 npx @modelcontextprotocol/server-everything sse
 ```
 
+## Running with Docker
+
+This repository publishes no image; build one from the repository root (the build context):
+
+```shell
+docker build -f src/everything/Dockerfile -t mcp/everything .
+```
+
+The `mcp/everything` image on Docker Hub is built by Docker, not by this repository, and can lag behind it.
+
+### Run over stdio (the default)
+
+```shell
+docker run -i --rm mcp/everything
+```
+
+`-i` keeps stdin open, which the stdio transport reads. This is the command an MCP client configuration launches.
+
+### Run the Streamable HTTP server
+
+```shell
+docker run --rm -p 127.0.0.1:3001:3001 mcp/everything streamableHttp
+```
+
+The endpoint is `http://localhost:3001/mcp`. The server listens on port 3001 on every interface inside the container; `127.0.0.1:` publishes it on the host's loopback only. To use another port, set `PORT` and publish that one (`-e PORT=8080 -p 127.0.0.1:8080:8080`). The localhost-only `Origin` check described above applies inside the container too. `docker stop` ends the server cleanly.
+
 ## License
 
 This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.
