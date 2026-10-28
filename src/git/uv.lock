@@ -509,7 +509,7 @@ wheels = [
 
 [[package]]
 name = "mcp-server-git"
-version = "2026.10.19"
+version = "2026.10.28"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
