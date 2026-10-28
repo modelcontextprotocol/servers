@@ -185,6 +185,9 @@ The server's directory access control follows this flow:
   - Inputs:
     - `path` (string): Starting directory
     - `excludePatterns` (string[]): Exclude any patterns. Glob formats are supported.
+    - `depth` (positive integer, optional): How many levels to descend. `1`
+      lists only the entries directly in `path`, `2` adds their children, and
+      so on. Omitted, the whole tree is returned
   - Returns:
     - JSON array where each entry contains:
       - `name` (string): File/directory name
@@ -192,6 +195,10 @@ The server's directory access control follows this flow:
       - `children` (array): Present only for directories
         - Empty array for empty directories
         - Omitted for files
+        - Omitted for directories at the last level when `depth` is set: they
+          are not read, so whether they hold anything is not reported
+  - A `depth` limit also keeps the walk out of deeper levels entirely, so
+    entries below it do not count toward the 100,000-entry bound
   - Output is formatted with 2-space indentation for readability
   - Bounded: see [Slow and very large trees](#slow-and-very-large-trees)
     

@@ -111,6 +111,15 @@ const ListDirectoryWithSizesArgsSchema = z.object({
 const DirectoryTreeArgsSchema = z.object({
   path: z.string(),
   excludePatterns: z.array(z.string()).optional().default([]),
+  depth: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      "How many levels to descend: 1 lists only the entries directly in path. " +
+        "Directories at the last level have no children array. Omit for the whole tree.",
+    ),
 });
 
 const MoveFileArgsSchema = z.object({
@@ -638,7 +647,8 @@ export function createServer(
       description:
         "Get a recursive tree view of files and directories as a JSON structure. " +
         "Each entry includes 'name', 'type' (file/directory), and 'children' for directories. " +
-        "Files have no children array, while directories always have a children array (which may be empty). " +
+        "Files have no children array, while directories always have a children array (which may be empty), " +
+        "except at the last level when 'depth' limits the tree: those directories are not read and have no children array. " +
         "The output is formatted with 2-space indentation for readability. Only works within allowed directories.",
       inputSchema: jsonSchema2020(DirectoryTreeArgsSchema.shape),
       outputSchema: jsonSchema2020({ content: z.string() }),
@@ -653,9 +663,13 @@ export function createServer(
       const rootPath = args.path;
       const visit = createEntryBudget("directory_tree", rootPath);
 
+      // `level` is the depth of currentPath's entries: 1 for those directly
+      // in the requested path. A directory at the depth limit is listed but
+      // not read, so its subtree costs no readdir and no entry budget (#1077).
       async function buildTree(
         currentPath: string,
         excludePatterns: string[] = [],
+        level: number = 1,
       ): Promise<TreeEntry[]> {
         const validPath = await validatePath(currentPath, allowedDirectories);
         const entries = await readdirWithTimeout(validPath);
@@ -689,9 +703,16 @@ export function createServer(
             type: entry.isDirectory() ? "directory" : "file",
           };
 
-          if (entry.isDirectory()) {
+          if (
+            entry.isDirectory() &&
+            (args.depth === undefined || level < args.depth)
+          ) {
             const subPath = path.join(currentPath, entry.name);
-            entryData.children = await buildTree(subPath, excludePatterns);
+            entryData.children = await buildTree(
+              subPath,
+              excludePatterns,
+              level + 1,
+            );
           }
 
           result.push(entryData);
