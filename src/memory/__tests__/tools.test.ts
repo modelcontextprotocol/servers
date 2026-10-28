@@ -283,7 +283,8 @@ const expectedTools = [
   {
     name: "search_nodes",
     title: "Search Nodes",
-    description: "Search for nodes in the knowledge graph based on a query",
+    description:
+      "Search the knowledge graph for entities whose name, type or observations contain the query (case-insensitive). Use this when you have a keyword, a topic or part of a name but not the exact entity names. Prefer open_nodes when you already know the exact names, and use read_graph only when you need the whole graph. Returns the matching entities and every relation that touches one of them.",
     inputSchema: {
       type: "object",
       properties: {
@@ -304,7 +305,8 @@ const expectedTools = [
   {
     name: "open_nodes",
     title: "Open Nodes",
-    description: "Open specific nodes in the knowledge graph by their names",
+    description:
+      "Retrieve specific entities by their exact names, with every relation that touches one of them. Use this when you already know the names (from the conversation, or from an earlier search_nodes or read_graph result); it is the cheapest way to read entities you can name. Prefer search_nodes when you only have a keyword or part of a name. Names that do not exist are skipped.",
     inputSchema: {
       type: "object",
       properties: {
