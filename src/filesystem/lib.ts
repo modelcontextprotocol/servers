@@ -632,7 +632,9 @@ export async function appendFileContent(
   content: string,
 ): Promise<void> {
   try {
-    await createFileInDirectory(filePath, content);
+    // O_APPEND here too: another append can reach the file between its
+    // creation and this write, and must not be overwritten.
+    await createFileInDirectory(filePath, content, true);
     return;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "EEXIST") {

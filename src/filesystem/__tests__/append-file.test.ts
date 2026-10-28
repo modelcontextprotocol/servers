@@ -93,6 +93,32 @@ describe("append_file", () => {
     expect(await fs.readFile(file, "utf-8")).toBe("hello");
   });
 
+  it("keeps an append that lands on a new file before the creating write", async () => {
+    const file = path.join(dir, "race.txt");
+    // The creating call's write is held back until another caller's append
+    // has reached the new file; without O_APPEND the held write would land at
+    // offset 0 over it.
+    const realWriteFile = fsSync.writeFile;
+    let raced = false;
+    vi.spyOn(fsSync, "writeFile").mockImplementation(((
+      target: number,
+      ...rest: unknown[]
+    ) => {
+      if (!raced && typeof target === "number") {
+        raced = true;
+        fsSync.appendFileSync(file, "SECOND");
+      }
+      return (realWriteFile as (...args: unknown[]) => void)(target, ...rest);
+    }) as typeof fsSync.writeFile);
+    const result = await call(client, "append_file", {
+      path: file,
+      content: "FIRST",
+    });
+    expect(result.isError).toBeFalsy();
+    expect(raced).toBe(true);
+    expect(await fs.readFile(file, "utf-8")).toBe("SECONDFIRST");
+  });
+
   it("leaves a file unchanged when the content is empty", async () => {
     const file = path.join(dir, "same.txt");
     await fs.writeFile(file, "kept");

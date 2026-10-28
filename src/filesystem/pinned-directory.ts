@@ -229,10 +229,15 @@ function openInDirectory(
   });
 }
 
-/** Create `filePath`, which must not exist, and write `content` to it. */
+/**
+ * Create `filePath`, which must not exist, and write `content` to it. With
+ * `append`, the descriptor is opened O_APPEND, so an append that lands on the
+ * new file before this write does is kept rather than overwritten (#1208).
+ */
 export async function createFileInDirectory(
   filePath: string,
   content: string,
+  append: boolean = false,
 ): Promise<void> {
   // O_EXCL: an existing file or symlink fails with EEXIST, never followed.
   const { fd } = openInDirectory(
@@ -240,6 +245,7 @@ export async function createFileInDirectory(
     fs.constants.O_WRONLY |
       fs.constants.O_CREAT |
       fs.constants.O_EXCL |
+      (append ? fs.constants.O_APPEND : 0) |
       noFollow(),
     false,
   );
