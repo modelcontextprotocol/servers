@@ -156,6 +156,54 @@ async def test_conflict_is_aborted_and_reported(repo: git.Repo):
     assert (root_of(repo) / "test.txt").read_text() == "main\n"
 
 
+async def test_conflict_in_non_ascii_file_names_it_as_written(repo: git.Repo):
+    name = "日本語.txt"
+    commit_file(repo, name, "base\n")
+    repo.git.checkout("-b", "feature")
+    commit_file(repo, name, "feature\n")
+    repo.git.checkout("main")
+    commit_file(repo, name, "main\n")
+    head = repo.head.commit.hexsha
+
+    assert await merge(repo, "feature", fast_forward_only=False) == tool_error(
+        "git_merge",
+        f"Merge of 'feature' into 'main' stopped on conflicts in: {name}. "
+        "The merge was aborted and the repository is unchanged. "
+        "Resolve the conflicts by hand.",
+    )
+    assert_untouched(repo, head)
+
+
+async def test_merge_commit_message_names_the_source(repo: git.Repo):
+    diverge(repo, conflicting=False)
+
+    await merge(repo, "feature", fast_forward_only=False)
+
+    assert repo.head.commit.message.strip() == "Merge 'feature' into 'main'"
+
+
+async def test_fetch_head_merges_only_the_commit_it_resolves_to(repo: git.Repo):
+    # FETCH_HEAD can list several heads, and `git merge FETCH_HEAD` would
+    # merge them all as an octopus. The tool merges only the one it resolved.
+    repo.git.checkout("-b", "first")
+    first = commit_file(repo, "first.txt", "first\n")
+    repo.git.checkout("-b", "second", "main")
+    second = commit_file(repo, "second.txt", "second\n")
+    repo.git.checkout("main")
+    (Path(repo.git_dir) / "FETCH_HEAD").write_text(
+        f"{first.hexsha}\t\tbranch 'first' of origin\n"
+        f"{second.hexsha}\t\tbranch 'second' of origin\n"
+    )
+
+    result = await merge(repo, "FETCH_HEAD", fast_forward_only=False)
+
+    assert result == text_result(
+        f"Fast-forwarded 'main' to 'FETCH_HEAD' ({first.hexsha[:7]})"
+    )
+    assert repo.head.commit == first
+    assert not (root_of(repo) / "second.txt").exists()
+
+
 @pytest.mark.skipif(
     sys.platform == "win32", reason="git for Windows runs hooks through sh"
 )

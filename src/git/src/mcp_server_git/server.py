@@ -368,7 +368,9 @@ def _merge_failure(repo: git.Repo, error: git.GitCommandError, what: str) -> str
     if not (Path(repo.git_dir) / "MERGE_HEAD").exists():
         # Git refused before changing anything.
         return f"{what} failed. {unchanged} Git reported:\n{_git_stderr(error)}"
-    conflicts = repo.git.diff("--name-only", "--diff-filter=U").splitlines()
+    # Through _git_text, so a non-ASCII name prints as written, not as
+    # core.quotepath's octal escapes.
+    conflicts = _git_text(repo, "diff", "--name-only", "--diff-filter=U").splitlines()
     repo.git.merge("--abort")
     if conflicts:
         return (
@@ -432,6 +434,12 @@ def git_merge(
     # opening an editor for the message. --no-overwrite-ignore refuses to
     # replace an ignored local file (a `.env`, say) that the source tracks:
     # `is_dirty()` cannot see one, and git would overwrite it unrecoverably.
+    #
+    # Git is given the commit validated above, not the name: a name can stand
+    # for more than one commit (`git merge FETCH_HEAD` merges every head
+    # FETCH_HEAD lists, as an octopus), and only the one checked is merged.
+    # With a sha, git's default message would name the sha, so the message
+    # names what the caller asked for.
     mode = "--ff-only" if fast_forward_only else "--ff"
     try:
         repo.git.merge(
@@ -440,7 +448,9 @@ def git_merge(
             "--no-squash",
             "--no-edit",
             "--no-overwrite-ignore",
-            source_branch,
+            "-m",
+            f"Merge '{source_branch}' into '{target}'",
+            source.hexsha,
         )
     except git.GitCommandError as e:
         what = f"Merge of '{source_branch}' into '{target}'"
