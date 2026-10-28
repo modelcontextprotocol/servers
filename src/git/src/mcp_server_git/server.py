@@ -18,6 +18,7 @@
 # logging), so nothing differs between them.
 
 import logging
+import re
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -72,6 +73,7 @@ class GitTools(str, Enum):
     SHOW = "git_show"
 
     BRANCH = "git_branch"
+    REMOTE = "git_remote"
 
 
 def _git_text(repo: git.Repo, command: str, *args: str) -> str:
@@ -517,6 +519,65 @@ def git_branch(
     return branch_info
 
 
+# A URL with an authority part: `scheme://[userinfo@]host...`. The userinfo is
+# everything up to the last '@' before the first '/', which is where git itself
+# stops reading it.
+_URL_USERINFO = re.compile(
+    r"^(?P<scheme>[A-Za-z][A-Za-z0-9+.-]*)://(?P<userinfo>[^/]*)@"
+)
+
+# Schemes whose username is an account name rather than a secret, so it is kept
+# (`ssh://git@host/...`) and only a password after it is redacted.
+_SSH_SCHEMES = frozenset({"ssh", "git+ssh", "ssh+git"})
+
+REDACTED = "<redacted>"
+
+
+def redact_url(url: str) -> str:
+    """`url` with any credential in its userinfo replaced by `<redacted>` (#1611).
+
+    A remote URL can carry a credential (`https://user:token@host/...`), and
+    the tool's output goes to the model, so it must not echo one. Over HTTP(S)
+    and every other scheme a token is as often the username as the password
+    (`https://<token>@github.com/...`), so the whole userinfo is redacted. An
+    SSH username names the account and authenticates nothing, so it stays,
+    with only a password after it redacted. An scp-like address
+    (`git@host:path`) or a local path has no userinfo to carry a password and
+    is returned as is.
+    """
+    match = _URL_USERINFO.match(url)
+    if match is None:
+        return url
+    scheme, userinfo = match["scheme"], match["userinfo"]
+    if scheme.lower() in _SSH_SCHEMES:
+        user, has_password, _ = userinfo.partition(":")
+        kept = f"{user}:{REDACTED}" if has_password else user
+    else:
+        kept = REDACTED
+    return f"{scheme}://{kept}@{url[match.end() :]}"
+
+
+def git_remote(repo: git.Repo) -> str:
+    """The repository's remotes with their fetch and push URLs, as `git remote -v`.
+
+    Each line is `<name>\t<url> (fetch|push)`; the URL goes through
+    `redact_url` so no credential reaches the client.
+    """
+    lines = []
+    for line in _git_text(repo, "remote", "-v").splitlines():
+        name, tab, rest = line.partition("\t")
+        url, space, direction = rest.rpartition(" ")
+        if not tab or not space:
+            # Not the `<name>\t<url> (<direction>)` shape `git remote -v`
+            # prints; redact it whole rather than pass a URL through unread.
+            lines.append(redact_url(line))
+            continue
+        lines.append(f"{name}\t{redact_url(url)} {direction}")
+    if not lines:
+        return "No remotes configured"
+    return "\n".join(lines)
+
+
 # The failures a tool reports to the model as a `ToolError`, each with the
 # message it was raised with: the guards' `ValueError`s and
 # `FlagInjectionError`s, git and GitPython errors (`GitError`: a failed
@@ -813,6 +874,22 @@ def create_server(repository: Path | None) -> MCPServer:
         ] = None,
     ) -> str:
         return git_branch(open_repo(repo_path), branch_type, contains, not_contains)
+
+    @server.tool(
+        name=GitTools.REMOTE.value,
+        description=(
+            "Lists the repository's remotes with their fetch and push URLs, "
+            "like `git remote -v`. Credentials embedded in a URL are shown as "
+            "<redacted>"
+        ),
+        annotations=READ_ONLY,
+        structured_output=False,
+    )
+    @reports_failures
+    def remote(
+        repo_path: Annotated[str, Field(description="The path to the Git repository.")],
+    ) -> str:
+        return git_remote(open_repo(repo_path))
 
     return server
 
