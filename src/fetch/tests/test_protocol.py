@@ -1008,9 +1008,10 @@ async def test_guard_uses_the_real_resolver() -> None:
     )
 
 
-async def test_timeouts_are_hard_coded(web: FakeWeb) -> None:
-    # Characterizes #4448: the page fetch uses a fixed 30s timeout and the
-    # robots.txt fetch uses httpx's 5s default; neither is configurable.
+async def test_default_timeouts(web: FakeWeb) -> None:
+    # With nothing configured the page fetch waits 30s and the robots.txt
+    # fetch uses httpx's 5s default. Only the page timeout is configurable
+    # (#4448; tests/test_timeout.py).
     web.add(ROBOTS, plain("", status=404))
     web.add(PAGE, plain("ok"))
     async with connect() as (session, _):

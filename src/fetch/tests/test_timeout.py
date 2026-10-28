@@ -38,9 +38,11 @@ TOOL_ERROR = "Error executing tool fetch: "
 
 @pytest.fixture(autouse=True)
 def no_timeout_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    # A developer's own FETCH_TIMEOUT_MS must not leak into these tests, and
-    # monkeypatch restores whatever main() writes to the variable.
-    monkeypatch.delenv(TIMEOUT_ENV, raising=False)
+    # A developer's own FETCH_TIMEOUT_MS must not leak into these tests, nor
+    # what main() writes to it into later tests. setenv first: delenv of an
+    # absent variable records no undo, so main()'s write would survive.
+    monkeypatch.setenv(TIMEOUT_ENV, "")
+    monkeypatch.delenv(TIMEOUT_ENV)
 
 
 def recording_page(seen: list[dict[str, Any]]) -> Any:
