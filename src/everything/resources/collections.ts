@@ -23,6 +23,7 @@ import {
   ResourceNotFoundError,
   ResourceTemplate,
 } from "@modelcontextprotocol/server";
+import { RESOURCE_ICONS, RESOURCE_TEMPLATE_ICONS } from "../server/icons.js";
 
 /** One product in the example catalog. */
 export type CollectionItem = {
@@ -96,6 +97,7 @@ export const registerCollectionResources = (server: McpServer) => {
     SUMMER_SPECIALS_URI,
     {
       title: "Summer Specials Collection",
+      icons: RESOURCE_ICONS,
       mimeType: MIME_TYPE,
       description:
         "A resource collection: one read returns every item in the catalog as a separate content, each under its own demo://resource/collection/item/{itemId} URI.",
@@ -112,6 +114,7 @@ export const registerCollectionResources = (server: McpServer) => {
     }),
     {
       title: "Collection by Category",
+      icons: RESOURCE_TEMPLATE_ICONS,
       mimeType: MIME_TYPE,
       description: `A resource collection filtered by the {category} variable (${COLLECTION_CATEGORIES.join(", ")}): one read returns each item in that category as a separate content, under its own URI.`,
     },
@@ -134,6 +137,7 @@ export const registerCollectionResources = (server: McpServer) => {
     }),
     {
       title: "Collection Item",
+      icons: RESOURCE_TEMPLATE_ICONS,
       mimeType: MIME_TYPE,
       description:
         "One item of the resource collections, selected by the {itemId} variable (1 to 5). The collections return their items under these URIs.",
