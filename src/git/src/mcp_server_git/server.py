@@ -650,7 +650,10 @@ def summarize_changes_prompt(repo: git.Repo, target: str | None = None) -> str:
             parts.append(f"Staged changes:\n{_fenced(staged)}")
         if unstaged.strip():
             parts.append(f"Unstaged changes:\n{_fenced(unstaged)}")
-        changes = "\n\n".join(parts) if staged.strip() or unstaged.strip() else ""
+        # The porcelain status is empty only on a clean tree; an untracked file
+        # alone leaves both diffs empty but is still a change to summarize.
+        clean = not repo.git.status("--porcelain").strip()
+        changes = "" if clean else "\n\n".join(parts)
     if not changes:
         return f"There are no changes {scope} to summarize. Tell the user so."
     return (

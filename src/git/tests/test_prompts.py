@@ -265,6 +265,16 @@ def test_summarize_only_staged_changes(repo: git.Repo) -> None:
     assert "Unstaged changes:" not in text
 
 
+def test_summarize_only_untracked_files(repo: git.Repo) -> None:
+    # Both diffs are empty, but the status lists the new file.
+    (repo_dir(repo) / "untracked.txt").write_text("new\n")
+    text = summarize_changes_prompt(repo)
+    assert text.startswith("Summarize the changes in the working tree below")
+    assert "untracked.txt" in text
+    assert "Staged changes:" not in text
+    assert "Unstaged changes:" not in text
+
+
 def test_summarize_against_a_target_with_no_difference(repo: git.Repo) -> None:
     assert summarize_changes_prompt(repo, "HEAD") == (
         "There are no changes compared with `HEAD` to summarize. Tell the user so."
