@@ -9,6 +9,7 @@ means changing that test.
 """
 
 import json
+import shutil
 import re
 import threading
 import time
@@ -1224,6 +1225,111 @@ async def test_restricted_server_rejects_symlink_escape(tmp_path: Path, repo: gi
         ) == outside_error(link, root)
     finally:
         other.close()
+
+
+def uses_outside(result: dict[str, Any], used: Path, allowed: Path) -> bool:
+    """The result is the error for a repository git opened outside `allowed`."""
+    text = result["content"][0]["text"]
+    return (
+        result["isError"] is True
+        and f"uses '{used}'" in text
+        and f"which is outside the allowed repository '{allowed}'" in text
+    )
+
+
+async def test_restricted_server_rejects_gitdir_file_pointing_outside(
+    tmp_path: Path, repo: git.Repo
+):
+    # A `.git` file inside the allowed repository passes the path check, but
+    # git follows its `gitdir:` line to the repository it names. Neither a read
+    # nor a write may reach that repository.
+    root = root_of(repo)
+    other = make_repo(tmp_path / "other")
+    nested = root / "nested"
+    nested.mkdir()
+    (nested / ".git").write_text(f"gitdir: {other.git_dir}\n")
+    try:
+        shown = await call(
+            root, "git_show", {"repo_path": str(nested), "revision": "HEAD"}
+        )
+        assert uses_outside(shown, Path(other.git_dir), root)
+        branched = await call(
+            root,
+            "git_create_branch",
+            {"repo_path": str(nested), "branch_name": "escaped"},
+        )
+        assert uses_outside(branched, Path(other.git_dir), root)
+        assert "escaped" not in {head.name for head in other.heads}
+    finally:
+        other.close()
+
+
+async def test_restricted_server_rejects_commondir_pointing_outside(
+    tmp_path: Path, repo: git.Repo
+):
+    # A worktree-style git directory inside the allowed repository whose
+    # `commondir` names another repository's `.git` reads that repository's
+    # objects and refs.
+    root = root_of(repo)
+    other = make_repo(tmp_path / "other")
+    other.git.worktree("add", str(tmp_path / "other-wt"))
+    admin = root / "admin"
+    shutil.copytree(
+        Path(other.git_dir) / "worktrees" / "other-wt",
+        admin,
+        ignore=shutil.ignore_patterns("*.ipc"),  # git's fsmonitor socket
+    )
+    (admin / "commondir").write_text(f"{other.git_dir}\n")
+    nested = root / "nested"
+    nested.mkdir()
+    (nested / ".git").write_text(f"gitdir: {admin}\n")
+    try:
+        result = await call(root, "git_log", {"repo_path": str(nested)})
+        assert uses_outside(result, Path(other.git_dir), root)
+    finally:
+        other.close()
+
+
+async def test_restricted_server_rejects_worktree_config_pointing_outside(
+    tmp_path: Path, repo: git.Repo
+):
+    # `core.worktree` in a nested repository moves its working tree, and every
+    # checkout or add with it, to wherever the setting names.
+    root = root_of(repo)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    nested = make_repo(root / "nested")
+    with nested.config_writer() as config:
+        config.set_value("core", "worktree", str(elsewhere))
+    nested.close()
+    result = await call(root, "git_status", {"repo_path": str(root / "nested")})
+    assert uses_outside(result, elsewhere, root)
+
+
+async def test_restricted_server_serves_a_linked_worktree(tmp_path: Path):
+    # A linked worktree's git directory lives under the main repository's
+    # `.git`, outside the worktree, and is still the allowed repository's own.
+    main = make_repo(tmp_path / "main")
+    worktree = tmp_path / "worktree"
+    main.git.worktree("add", str(worktree))
+    try:
+        result = await call(worktree, "git_status", {"repo_path": str(worktree)})
+        assert result["isError"] is False
+    finally:
+        main.close()
+
+
+async def test_restricted_server_accepts_nested_bare_repository(repo: git.Repo):
+    # A bare repository has no working tree; its git directory is inside.
+    root = root_of(repo)
+    bare = git.Repo.init(root / "bare.git", bare=True)
+    bare.close()
+    result = await call(
+        root,
+        "git_branch",
+        {"repo_path": str(root / "bare.git"), "branch_type": "local"},
+    )
+    assert result["isError"] is False
 
 
 async def test_restricted_server_accepts_nested_repository(repo: git.Repo):
