@@ -92,6 +92,8 @@ export interface ParsedArgs {
   directories: string[];
   /** `--read-only`: serve only the tools that cannot change anything (#632). */
   readOnly: boolean;
+  /** `--confine-roots`: keep a client's Roots inside the directories (#3133). */
+  confineRoots: boolean;
 }
 
 /**
@@ -101,13 +103,19 @@ export interface ParsedArgs {
  * every argument was before options existed.
  */
 export function parseArgs(args: string[]): ParsedArgs {
-  const parsed: ParsedArgs = { directories: [], readOnly: false };
+  const parsed: ParsedArgs = {
+    directories: [],
+    readOnly: false,
+    confineRoots: false,
+  };
   let options = true;
   for (const arg of args) {
     if (options && arg === "--") {
       options = false;
     } else if (options && arg === "--read-only") {
       parsed.readOnly = true;
+    } else if (options && arg === "--confine-roots") {
+      parsed.confineRoots = true;
     } else {
       parsed.directories.push(arg);
     }
@@ -126,10 +134,10 @@ export async function main(
   stdin: Readable = process.stdin,
   stdout: Writable = process.stdout,
 ): Promise<StdioServerHandle> {
-  const { directories, readOnly } = parseArgs(args);
+  const { directories, readOnly, confineRoots } = parseArgs(args);
   if (directories.length === 0) {
     console.error(
-      "Usage: mcp-server-filesystem [--read-only] [allowed-directory] [additional-directories...]",
+      "Usage: mcp-server-filesystem [--read-only] [--confine-roots] [allowed-directory] [additional-directories...]",
     );
     console.error("Note: Allowed directories can be provided via:");
     console.error("  1. Command-line arguments (shown above)");
@@ -150,6 +158,7 @@ export async function main(
       createServer(allowedDirectories, {
         era,
         readOnly,
+        confineRoots,
         onCannotOperate: () => process.exit(1),
       }),
     {
@@ -167,6 +176,11 @@ export async function main(
   if (readOnly) {
     console.error(
       "Read-only mode: only tools that cannot change the filesystem are served",
+    );
+  }
+  if (confineRoots && allowedDirectories.length === 0) {
+    console.error(
+      "Warning: --confine-roots has no effect without command-line directories; a client's Roots will set the allowed directories",
     );
   }
   if (allowedDirectories.length === 0) {
