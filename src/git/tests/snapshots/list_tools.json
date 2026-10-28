@@ -81,7 +81,7 @@
     },
     {
       "name": "git_diff",
-      "description": "Shows differences between branches or commits",
+      "description": "Shows differences between branches or commits, or across a revision range (main..feature, main...feature)",
       "inputSchema": {
         "properties": {
           "repo_path": {

@@ -316,6 +316,58 @@ async def test_git_diff_rejects_flag_injection(repo: git.Repo):
     )
 
 
+def _diverge(repo: git.Repo) -> None:
+    """Give `main` and a new `feature` branch one commit each past their base."""
+    root = root_of(repo)
+    repo.git.checkout("-b", "feature")
+    (root / "feature.txt").write_text("FEATURE\n", newline="\n")
+    repo.index.add(["feature.txt"])
+    repo.index.commit("feature commit")
+    repo.git.checkout("main")
+    (root / "main.txt").write_text("MAIN\n", newline="\n")
+    repo.index.add(["main.txt"])
+    repo.index.commit("main commit")
+
+
+@pytest.mark.parametrize("target", ["main..feature", "main...feature"])
+async def test_git_diff_accepts_revision_range(repo: git.Repo, target: str):
+    """A range reaches `git diff` as given (#5194); rev_parse refuses it whole."""
+    _diverge(repo)
+    result = await call(
+        None, "git_diff", {"repo_path": str(root_of(repo)), "target": target}
+    )
+    assert result == text_result(
+        f"Diff with {target}:\n" + repo.git.diff("--unified=3", target)
+    )
+    text = result["content"][0]["text"]
+    assert "+FEATURE" in text
+    # Two dots compare the tips, so main's own commit shows as removed; three
+    # dots start from the merge base, so it does not appear at all.
+    assert ("-MAIN" in text) is (target == "main..feature")
+
+
+@pytest.mark.parametrize(
+    ("target", "message"),
+    [
+        ("main..nope", "Ref 'nope' did not resolve to an object"),
+        ("nope...main", "Ref 'nope' did not resolve to an object"),
+        (
+            "main..-output=/tmp/evil",
+            "Invalid target: 'main..-output=/tmp/evil' - range endpoint "
+            "'-output=/tmp/evil' cannot start with '-'",
+        ),
+        ("..", "Ref '..' did not resolve to an object"),
+    ],
+)
+async def test_git_diff_range_endpoints_are_validated(
+    repo: git.Repo, target: str, message: str
+):
+    """Each endpoint gets the single-target checks: it resolves, no leading '-'."""
+    assert await call(
+        None, "git_diff", {"repo_path": str(root_of(repo)), "target": target}
+    ) == tool_error("git_diff", message)
+
+
 async def test_git_diff_of_non_utf8_content_is_a_normal_result(repo: git.Repo):
     """A Latin-1 file's diff reaches the client with U+FFFD in place of the
     undecodable bytes, as git_show's does, and serializes as UTF-8 (#5193)."""
