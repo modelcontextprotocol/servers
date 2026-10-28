@@ -83,9 +83,10 @@ describe("server identity and tool list", () => {
     });
   });
 
-  it("advertises only the tools capability", () => {
+  it("advertises the tools and resources capabilities", () => {
     expect(client.getServerCapabilities()).toEqual({
       tools: { listChanged: true },
+      resources: { listChanged: true },
     });
   });
 

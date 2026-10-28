@@ -76,6 +76,17 @@ The server's directory access control follows this flow:
 
 ## API
 
+### Resources
+
+Files inside the allowed directories are also [resources](https://modelcontextprotocol.io/specification/2026-07-28/server/resources), so a client application can read one with `resources/read` and decide itself what to do with it (attach it to the model's context, show it to the user), rather than relaying it through a tool result.
+
+- **Resource template** `file://{+path}` (name `file`)
+  - Read any file by its absolute `file://` URI, for example `file:///home/user/project/README.md`. A path with spaces or other reserved characters is percent-encoded, as in any `file://` URL.
+  - Text files are returned as `text`, with a MIME type from the extension (`text/plain` for an unknown extension whose bytes are UTF-8). Images, audio, PDFs and other binary files are returned as a base64 `blob` with their MIME type (`application/octet-stream` when unknown).
+  - Confined exactly as the tools are: a URI outside the allowed directories, or a symlink whose target is outside them, is refused with an `Access denied` error (`-32602`). A missing file is "resource not found" (`-32602` with the URI in the error data), and a directory is not a resource.
+  - `resources/list` returns nothing: the server never enumerates the disk. Find files with `list_directory`, `directory_tree` or `search_files`, then read them by URI.
+  - Results carry a cache hint of `ttlMs: 0`, `cacheScope: "private"` (2026-07-28), since a file can change at any time.
+
 ### Tools
 
 - **read_text_file**
