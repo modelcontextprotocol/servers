@@ -24,6 +24,13 @@ import { FS_CALL_TIMEOUT_MS, MAX_WALK_ENTRIES } from "../lib.js";
 const realReaddir = fs.readdir.bind(fs);
 const realRealpath = fs.realpath.bind(fs);
 
+// The cap tests walk MAX_WALK_ENTRIES + 1 entries on purpose, so their cost is
+// the bound they check and scales with the runner: about 1 s locally, near
+// vitest's 5 s default on a loaded Windows runner (#5328). An explicit timeout
+// keeps them from failing on load; a retry would hide a real failure, and a
+// smaller cap would stop them testing the real bound.
+const WALK_CAP = { timeout: 30_000 };
+
 let dir: string;
 let conn: Connected;
 let client: Client;
@@ -143,24 +150,28 @@ describe("search_files", () => {
     expect(textOf(result)).toContain(`realpath ${stalled}`);
   });
 
-  it(`stops with an error after visiting ${MAX_WALK_ENTRIES} entries`, async () => {
-    vi.spyOn(fs, "readdir").mockImplementation(((target: PathLike) =>
-      target.toString() === dir
-        ? Promise.resolve(fileEntries(dir, MAX_WALK_ENTRIES + 1))
-        : realReaddir(target)) as typeof fs.readdir);
-    // The listed names do not exist on disk; resolve them as themselves so
-    // each entry costs a string check rather than a real lookup.
-    vi.spyOn(fs, "realpath").mockImplementation(((target: PathLike) =>
-      Promise.resolve(target.toString())) as typeof fs.realpath);
-    const result = await call(client, "search_files", {
-      path: dir,
-      pattern: "nothing-matches",
-    });
-    expect(result.isError).toBe(true);
-    expect(textOf(result)).toContain(
-      `search_files stopped after visiting ${MAX_WALK_ENTRIES} entries under ${dir}`,
-    );
-  });
+  it(
+    `stops with an error after visiting ${MAX_WALK_ENTRIES} entries`,
+    WALK_CAP,
+    async () => {
+      vi.spyOn(fs, "readdir").mockImplementation(((target: PathLike) =>
+        target.toString() === dir
+          ? Promise.resolve(fileEntries(dir, MAX_WALK_ENTRIES + 1))
+          : realReaddir(target)) as typeof fs.readdir);
+      // The listed names do not exist on disk; resolve them as themselves so
+      // each entry costs a string check rather than a real lookup.
+      vi.spyOn(fs, "realpath").mockImplementation(((target: PathLike) =>
+        Promise.resolve(target.toString())) as typeof fs.realpath);
+      const result = await call(client, "search_files", {
+        path: dir,
+        pattern: "nothing-matches",
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toContain(
+        `search_files stopped after visiting ${MAX_WALK_ENTRIES} entries under ${dir}`,
+      );
+    },
+  );
 
   it("still skips an entry that fails for any other reason", async () => {
     const refused = path.join(dir, "local", "a.txt");
@@ -188,19 +199,23 @@ describe("directory_tree", () => {
     );
   });
 
-  it(`stops with an error after visiting ${MAX_WALK_ENTRIES} entries`, async () => {
-    vi.spyOn(fs, "readdir").mockImplementation(((target: PathLike) =>
-      target.toString() === dir
-        ? Promise.resolve(fileEntries(dir, MAX_WALK_ENTRIES + 1))
-        : realReaddir(target)) as typeof fs.readdir);
-    const result = await call(client, "directory_tree", { path: dir });
-    expect(result.isError).toBe(true);
-    expect(textOf(result)).toContain(
-      `directory_tree stopped after visiting ${MAX_WALK_ENTRIES} entries under ${dir}`,
-    );
-  });
+  it(
+    `stops with an error after visiting ${MAX_WALK_ENTRIES} entries`,
+    WALK_CAP,
+    async () => {
+      vi.spyOn(fs, "readdir").mockImplementation(((target: PathLike) =>
+        target.toString() === dir
+          ? Promise.resolve(fileEntries(dir, MAX_WALK_ENTRIES + 1))
+          : realReaddir(target)) as typeof fs.readdir);
+      const result = await call(client, "directory_tree", { path: dir });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toContain(
+        `directory_tree stopped after visiting ${MAX_WALK_ENTRIES} entries under ${dir}`,
+      );
+    },
+  );
 
-  it("does not count excluded entries toward the cap", async () => {
+  it("does not count excluded entries toward the cap", WALK_CAP, async () => {
     vi.spyOn(fs, "readdir").mockImplementation(((target: PathLike) =>
       target.toString() === dir
         ? Promise.resolve(fileEntries(dir, MAX_WALK_ENTRIES + 1))
