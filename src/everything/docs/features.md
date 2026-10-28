@@ -70,8 +70,9 @@ On a 2025-era connection the tools that need a client capability are registered 
 - Static Documents: `demo://resource/static/document/<filename>` (serves files from `src/everything/docs/` as static file-based resources; a 2026-07-28 read carries a one-hour public cache hint)
 - Session Scoped, **2025-era**: `demo://resource/session/<name>` (per-session resources registered dynamically; available only for the lifetime of the session)
 - Minted, **2026-07-28**: `demo://resource/minted/<id>/<name>` (resources a tool created, under a server-minted id; readable by any client that has the URI, for ten minutes; the process keeps at most 100 of them and 64 MiB of content, dropping the oldest first)
+- Collections: `demo://resource/collection/summer-specials`, `demo://resource/collection/by-category/{category}` and `demo://resource/collection/item/{itemId}` (resources/collections.ts; one `resources/read` of a collection returns several contents, one per item, each under its item's own URI, which reads back on its own; `category` and `itemId` complete)
 
-A read of a resource that does not exist (an unknown URI, a template id that is not a positive integer, an expired minted resource) is answered with `-32602` and the URI in the error's `data`.
+A read of a resource that does not exist (an unknown URI, a template id that is not a positive integer, a collection category or item that is not in the catalog, an expired minted resource) is answered with `-32602` and the URI in the error's `data`.
 
 ## Resource Subscriptions and Notifications
 
