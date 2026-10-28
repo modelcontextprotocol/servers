@@ -425,12 +425,23 @@ def git_merge(
             "have diverged. Nothing was changed. Pass fast_forward_only=false "
             "to create a merge commit."
         )
-    # --ff overrides a merge.ff setting in the user's config, so the outcome
-    # is the one this tool describes; --no-edit keeps git from opening an
-    # editor for the merge commit message.
+    # The flags pin the outcome this tool describes, whatever the user's
+    # config says (merge.ff, branch.<name>.mergeOptions): --ff/--ff-only
+    # choose fast-forwarding, --commit and --no-squash make a merge that
+    # succeeds a completed one that moves HEAD, and --no-edit keeps git from
+    # opening an editor for the message. --no-overwrite-ignore refuses to
+    # replace an ignored local file (a `.env`, say) that the source tracks:
+    # `is_dirty()` cannot see one, and git would overwrite it unrecoverably.
     mode = "--ff-only" if fast_forward_only else "--ff"
     try:
-        repo.git.merge(mode, "--no-edit", source_branch)
+        repo.git.merge(
+            mode,
+            "--commit",
+            "--no-squash",
+            "--no-edit",
+            "--no-overwrite-ignore",
+            source_branch,
+        )
     except git.GitCommandError as e:
         what = f"Merge of '{source_branch}' into '{target}'"
         raise ValueError(_merge_failure(repo, e, what)) from e

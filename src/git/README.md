@@ -91,7 +91,7 @@ Please note that mcp-server-git is currently in early development. The functiona
      - `source_branch` (string): Branch, tag or commit to merge into the current branch (check out the branch to merge into first with `git_checkout`)
      - `fast_forward_only` (boolean, optional): Only fast-forward, failing if the branches have diverged (default `true`). `false` lets Git create a merge commit when they have
    - Returns: `Fast-forwarded`, `Merged ... with merge commit <short sha>`, or `Already up to date`
-   - Refuses a detached HEAD, a working tree with uncommitted changes, and a merge already in progress. A merge that stops on conflicts is aborted (`git merge --abort`) and the error names the conflicting files, so the repository is left as it was
+   - Refuses a detached HEAD, a working tree with uncommitted changes, a merge already in progress, and a merge that would overwrite an ignored local file. A merge that stops on conflicts is aborted (`git merge --abort`) and the error names the conflicting files, so the repository is left as it was
 12. `git_show`
    - Shows the contents of a commit, or of a file or directory at a revision
    - Inputs:

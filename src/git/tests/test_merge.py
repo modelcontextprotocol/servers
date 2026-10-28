@@ -203,6 +203,49 @@ async def test_git_refusal_before_merging_is_reported(repo: git.Repo):
     assert (root_of(repo) / "new.txt").read_text() == "untracked\n"
 
 
+async def test_ignored_file_the_source_tracks_is_not_overwritten(repo: git.Repo):
+    # is_dirty() does not see an ignored file, and git overwrites one by
+    # default; the tool passes --no-overwrite-ignore so git refuses instead.
+    commit_file(repo, ".gitignore", ".env\n")
+    repo.git.checkout("-b", "feature")
+    (root_of(repo) / ".env").write_text("tracked\n")
+    repo.git.add("-f", ".env")
+    repo.index.commit("track .env")
+    repo.git.checkout("main")
+    head = repo.head.commit.hexsha
+    (root_of(repo) / ".env").write_text("SECRET=local\n")
+
+    result = await merge(repo, "feature")
+
+    assert result["isError"] is True
+    assert "would be overwritten by merge" in result["content"][0]["text"]
+    assert repo.head.commit.hexsha == head
+    assert (root_of(repo) / ".env").read_text() == "SECRET=local\n"
+
+
+@pytest.mark.parametrize("options", ["--no-commit", "--squash"])
+async def test_configured_merge_options_still_complete_the_merge(
+    repo: git.Repo, options: str
+):
+    # branch.<name>.mergeOptions could make git stop short of a commit (or
+    # squash); the tool overrides them, so a reported merge commit is real.
+    diverge(repo, conflicting=False)
+    with repo.config_writer() as config:
+        config.set_value('branch "main"', "mergeOptions", options)
+    main_tip = repo.head.commit
+    feature_tip = repo.commit("feature")
+
+    result = await merge(repo, "feature", fast_forward_only=False)
+
+    merged = repo.head.commit
+    assert result == text_result(
+        f"Merged 'feature' into 'main' with merge commit {merged.hexsha[:7]}"
+    )
+    assert merged.parents == (main_tip, feature_tip)
+    assert not (Path(repo.git_dir) / "MERGE_HEAD").exists()
+    assert not repo.is_dirty(untracked_files=True)
+
+
 async def test_dirty_working_tree_is_refused(repo: git.Repo):
     repo.git.checkout("-b", "feature")
     commit_file(repo, "feature.txt", "feature\n")
