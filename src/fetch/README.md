@@ -46,6 +46,7 @@ The server speaks both eras of the Model Context Protocol over stdio, with nothi
 ## Installation
 
 Optionally: Install node.js, this will cause the fetch server to use a different HTML simplifier that is more robust.
+Its JavaScript dependencies are then installed with npm on first use, which contacts the npm registry.
 To keep the server from ever starting Node.js, see [Customization - HTML extraction](#customization---html-extraction).
 
 ### Using uv (recommended)
@@ -213,11 +214,34 @@ installed with the server). A `socks://` proxy URL, as many desktop proxy settin
 
 ### Customization - HTML extraction
 
-HTML is converted to Markdown by [readabilipy](https://github.com/alan-turing-institute/ReadabiliPy). When Node.js is
-on the `PATH`, readabilipy runs Mozilla's Readability.js in a Node.js subprocess; otherwise it uses its own
-pure-Python extractor, which keeps headings and text but drops link targets. The Node.js subprocess runs with no
-timeout, so a Node.js that hangs, or fails in a way readabilipy does not detect, stalls the tool call until the client
-gives up.
+HTML is converted to Markdown with [readabilipy](https://github.com/alan-turing-institute/ReadabiliPy). When Node.js 14
+or newer is on the `PATH`, the server runs Mozilla's Readability.js (readabilipy's `ExtractArticle.js`) in a Node.js
+subprocess; otherwise it uses readabilipy's pure-Python extractor, which keeps headings and text but drops link
+targets. The subprocess runs off the server's event loop, so other requests are answered while it works, and under a
+30 second timeout: a Node.js that hangs is killed, together with anything it started, and that page is extracted with
+the pure-Python extractor instead. If Readability.js fails in any other way, the same fallback is used. Every reason
+for a fallback is written to stderr (the server's log), never to stdout, which carries the protocol.
+
+**Readability.js's dependencies are installed with npm on first use, which reaches the npm registry.** readabilipy
+ships only the `package.json` for its JavaScript (`@mozilla/readability`, `jsdom`, `minimist`). The first time the
+server extracts HTML with Node.js on the `PATH` and those packages missing, it runs `npm install` in readabilipy's
+`javascript` directory, inside that tool call, so:
+
+- `registry.npmjs.org` belongs in the egress allowlist of a deployment that restricts outbound traffic, unless the
+  packages are installed ahead of time (below) or Readability.js is turned off. Without it the install fails and the
+  server uses the pure-Python extractor.
+- The JavaScript that runs is resolved from readabilipy's unpinned version ranges when it is installed, so pinning
+  `mcp-server-fetch` does not pin it.
+- The install runs at most once per server process, under a 120 second timeout. Its output goes to stderr. If it
+  fails, or Node.js is missing or older than 14, the server uses the pure-Python extractor until it is restarted.
+
+To install the packages ahead of time (in a container image, say), run `npm install` in readabilipy's `javascript`
+directory from the Python environment the server runs in; the server then finds them and installs nothing:
+
+```bash
+cd "$(python -c "import os, readabilipy; print(os.path.join(os.path.dirname(readabilipy.__file__), 'javascript'))")"
+npm install --no-audit --no-fund
+```
 
 Readability.js discards hidden elements. Pages rendered progressively on the server often send a visible loading
 shell, then the real content in a container hidden (`display: none`, `visibility: hidden`, `hidden`) until scripts
@@ -226,7 +250,8 @@ Readability.js extracted, the server unhides it and runs Readability.js again, k
 text. Other pages are extracted once, exactly as before.
 
 To always use the pure-Python extractor, add the argument `--no-readability-js` to the `args` list in the
-configuration. The server then never starts Node.js (or npm), whether or not it is installed.
+configuration. The server then never starts Node.js (or npm), whether or not it is installed, and never contacts the
+npm registry.
 
 ## Windows Configuration
 
@@ -270,6 +295,10 @@ If you're experiencing timeout issues on Windows, you may need to set the `PYTHO
 
 This addresses character encoding issues that can cause the server to timeout on Windows systems.
 
+Readability.js works on Windows as it does elsewhere: the server finds Node.js and npm (`npm.cmd`) on the `PATH`, and
+installs Readability.js's dependencies on first use as described in
+[Customization - HTML extraction](#customization---html-extraction).
+
 ## Debugging
 
 You can use the MCP inspector to debug the server. For uvx installations:
@@ -294,7 +323,7 @@ uv sync --frozen --all-extras --dev
 uv run --frozen pytest
 ```
 
-The tests drive `serve()` through an MCP `ClientSession` in-process (and, in `tests/test_eras.py`, through a `Client` as a 2026-07-28 and as a 2025-11-25 client), with HTTP mocked, so they need no network. The HTML extraction tests need Node.js on `PATH` (readabilipy uses Readability.js when Node is present and a pure-Python fallback when it is not).
+The tests drive `serve()` through an MCP `ClientSession` in-process (and, in `tests/test_eras.py`, through a `Client` as a 2026-07-28 and as a 2025-11-25 client), with HTTP mocked, so they need no network. The HTML extraction tests need Node.js and npm on `PATH` (the server uses Readability.js when Node is present and a pure-Python fallback when it is not), and the first run installs Readability.js's dependencies from the npm registry.
 
 Coverage, measured per file with branch coverage:
 

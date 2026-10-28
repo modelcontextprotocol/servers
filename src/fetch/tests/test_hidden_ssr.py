@@ -12,7 +12,7 @@ copy bundled with readabilipy 0.2 (the lockfile's) drops ``display: none`` and
 ``hidden``; the ``@mozilla/readability`` that readabilipy 0.3 installs also
 drops ``visibility: hidden`` and ``aria-hidden="true"``. The protocol tests
 that prove the second run happens use the two hidings both versions drop. They
-count readabilipy calls, so "a normal page is unchanged" is asserted as "it
+count extractor calls, so "a normal page is unchanged" is asserted as "it
 was extracted once, as before", not inferred from the Markdown.
 """
 
@@ -26,6 +26,7 @@ import readabilipy.simple_json
 from bs4 import BeautifulSoup
 from mcp.types import CallToolResult
 
+import mcp_server_fetch.server as server_module
 from mcp_server_fetch.server import _is_hidden
 
 from .harness import FakeWeb, connect
@@ -49,15 +50,28 @@ def ssr_page(hiding: str) -> str:
 
 @pytest.fixture
 def calls(monkeypatch: pytest.MonkeyPatch) -> list[str]:
-    """Record every HTML string readabilipy is asked to simplify."""
+    """Record every HTML string an extractor is asked to simplify.
+
+    Both extractors: the server's Readability.js runner and readabilipy's
+    pure-Python extractor, which it falls back to.
+    """
     seen: list[str] = []
-    original = readabilipy.simple_json.simple_json_from_html_string
+    original_js = server_module.extract_article
+    original_py = readabilipy.simple_json.simple_json_from_html_string
 
-    def spy(html: str, **kwargs: Any) -> Any:
+    def spy_js(html: str) -> Any:
+        result = original_js(html)
+        # None: Readability.js did not run (no Node), so nothing was extracted.
+        if result is not None:
+            seen.append(html)
+        return result
+
+    def spy_py(html: str, **kwargs: Any) -> Any:
         seen.append(html)
-        return original(html, **kwargs)
+        return original_py(html, **kwargs)
 
-    monkeypatch.setattr(readabilipy.simple_json, "simple_json_from_html_string", spy)
+    monkeypatch.setattr(server_module, "extract_article", spy_js)
+    monkeypatch.setattr(readabilipy.simple_json, "simple_json_from_html_string", spy_py)
     return seen
 
 
