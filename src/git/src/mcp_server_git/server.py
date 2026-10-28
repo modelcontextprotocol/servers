@@ -526,6 +526,18 @@ _URL_USERINFO = re.compile(
     r"^(?P<scheme>[A-Za-z][A-Za-z0-9+.-]*)://(?P<userinfo>[^/]*)@"
 )
 
+# An explicit remote-helper address, `<transport>::<address>`
+# (`https::https://user:token@host/...`, gitremote-helpers(7)). The address
+# after the `::` is a URL of its own, and is redacted as one.
+_REMOTE_HELPER = re.compile(r"^(?P<transport>[A-Za-z][A-Za-z0-9+.-]*)::")
+
+# One line of `git remote -v`: `<name>\t<url> (fetch|push)`. `.` matches
+# everything but '\n', so a URL holding another line separator (U+2028, say)
+# stays whole.
+_REMOTE_LINE = re.compile(
+    r"^(?P<name>[^\t]*)\t(?P<url>.*) \((?P<direction>fetch|push)\)$"
+)
+
 # Schemes whose username is an account name rather than a secret, so it is kept
 # (`ssh://git@host/...`) and only a password after it is redacted.
 _SSH_SCHEMES = frozenset({"ssh", "git+ssh", "ssh+git"})
@@ -541,10 +553,14 @@ def redact_url(url: str) -> str:
     and every other scheme a token is as often the username as the password
     (`https://<token>@github.com/...`), so the whole userinfo is redacted. An
     SSH username names the account and authenticates nothing, so it stays,
-    with only a password after it redacted. An scp-like address
+    with only a password after it redacted. A remote-helper address
+    (`<transport>::<url>`) has its inner URL redacted. An scp-like address
     (`git@host:path`) or a local path has no userinfo to carry a password and
     is returned as is.
     """
+    helper = _REMOTE_HELPER.match(url)
+    if helper is not None:
+        return url[: helper.end()] + redact_url(url[helper.end() :])
     match = _URL_USERINFO.match(url)
     if match is None:
         return url
@@ -561,20 +577,23 @@ def git_remote(repo: git.Repo) -> str:
     """The repository's remotes with their fetch and push URLs, as `git remote -v`.
 
     Each line is `<name>\t<url> (fetch|push)`; the URL goes through
-    `redact_url` so no credential reaches the client.
+    `redact_url` so no credential reaches the client. Lines are split on
+    '\n' alone, the only separator git prints, not on every separator
+    `str.splitlines` knows, which would cut a URL holding U+2028 in two.
     """
-    lines = []
-    for line in _git_text(repo, "remote", "-v").splitlines():
-        name, tab, rest = line.partition("\t")
-        url, space, direction = rest.rpartition(" ")
-        if not tab or not space:
-            # Not the `<name>\t<url> (<direction>)` shape `git remote -v`
-            # prints; redact it whole rather than pass a URL through unread.
-            lines.append(redact_url(line))
-            continue
-        lines.append(f"{name}\t{redact_url(url)} {direction}")
-    if not lines:
+    output = _git_text(repo, "remote", "-v").rstrip("\n")
+    if not output:
         return "No remotes configured"
+    lines = []
+    for line in output.split("\n"):
+        match = _REMOTE_LINE.match(line)
+        if match is None:
+            # Not a line in the shape `git remote -v` prints (a URL holding a
+            # newline, say): it cannot be parsed, so none of it is returned.
+            lines.append(REDACTED)
+            continue
+        url = redact_url(match["url"])
+        lines.append(f"{match['name']}\t{url} ({match['direction']})")
     return "\n".join(lines)
 
 

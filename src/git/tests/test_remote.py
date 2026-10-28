@@ -111,20 +111,55 @@ async def test_not_a_repository(tmp_path: Path):
         ("git@github.com:org/r.git", "git@github.com:org/r.git"),
         ("/srv/repos/r.git", "/srv/repos/r.git"),
         ("file:///srv/repos/r.git", "file:///srv/repos/r.git"),
+        # A remote-helper address: the URL after `::` is redacted as a URL.
+        (
+            "https::https://alice:token@example.com/r.git",
+            "https::https://<redacted>@example.com/r.git",
+        ),
+        ("ext::ssh://git:pw@example.com/r", "ext::ssh://git:<redacted>@example.com/r"),
+        ("https::https://example.com/r.git", "https::https://example.com/r.git"),
+        # A password holding a line separator other than '\n'.
+        ("https://u:s3cret\u2028tok@example.com/r", "https://<redacted>@example.com/r"),
     ],
 )
 def test_redact_url(url: str, expected: str):
     assert redact_url(url) == expected
 
 
-def test_unrecognized_line_is_redacted_whole(repo: git.Repo):
-    # `git remote -v` always prints `<name>\t<url> (<direction>)`; a line in any
-    # other shape is still redacted rather than passed through.
+def test_unparseable_line_is_withheld(repo: git.Repo):
+    # `git remote -v` always prints `<name>\t<url> (<direction>)`. A line in
+    # any other shape (a URL holding a raw newline is split across two) cannot
+    # be parsed, so none of it is returned.
     with mock.patch.object(
         server,
         "_git_text",
-        return_value="https://u:p@example.com/r\norigin\tno-direction\n",
+        return_value=(
+            "origin\thttps://u:pa\nss@example.com/r (fetch)\n"
+            "origin\tno-direction\n"
+            "up\thttps://example.com/r (push)\n"
+        ),
     ):
         assert git_remote(repo) == (
-            "https://<redacted>@example.com/r\norigin\tno-direction"
+            "<redacted>\n<redacted>\n<redacted>\nup\thttps://example.com/r (push)"
         )
+
+
+async def test_line_separator_in_password_is_not_split(repo: git.Repo):
+    # str.splitlines() would cut this URL at U+2028 and leak both halves of
+    # the password (Copilot review on #5373).
+    repo.create_remote("origin", "https://alice:s3cret\u2028token@example.com/r.git")
+    result = await call_remote(None, repo)
+    assert result == text_result(
+        "origin\thttps://<redacted>@example.com/r.git (fetch)\n"
+        "origin\thttps://<redacted>@example.com/r.git (push)"
+    )
+    assert "s3cret" not in result["content"][0]["text"]
+    assert "token" not in result["content"][0]["text"]
+
+
+async def test_remote_helper_url_is_redacted(repo: git.Repo):
+    repo.git.remote("add", "origin", "https::https://alice:token@example.com/r.git")
+    assert await call_remote(None, repo) == text_result(
+        "origin\thttps::https://<redacted>@example.com/r.git (fetch)\n"
+        "origin\thttps::https://<redacted>@example.com/r.git (push)"
+    )
