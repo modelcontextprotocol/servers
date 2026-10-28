@@ -169,10 +169,13 @@ The server's directory access control follows this flow:
     and fails with an error; move its files one at a time instead
 
 - **search_files**
-  - Recursively search for files/directories that match or do not match patterns
+  - Recursively find files/directories by name (a glob over their paths), not
+    by content: it never reads or searches inside files
   - Inputs:
     - `path` (string): Starting directory
-    - `pattern` (string): Search pattern
+    - `pattern` (string): Glob matched, case-sensitively, against each entry's
+      path relative to `path`: `*.ext` matches entries directly under `path`,
+      `**/*.ext` or `**/name` matches at any depth
     - `excludePatterns` (string[]): Exclude any patterns. An excluded entry is
       skipped before it is resolved or read, so excluding a slow folder keeps
       the search out of it entirely.
