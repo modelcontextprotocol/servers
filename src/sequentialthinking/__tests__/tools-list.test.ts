@@ -3,8 +3,9 @@
 // annotations, input schema and output schema, exactly as the SDK emits them
 // today. These are characterization tests. The annotations assert the values
 // fixed in #4721 (the tool is stateful, so neither read-only nor idempotent).
-// The 2781-character description (#799) is pinned as current design: the
-// 1024 cap is an OpenAI/Azure client limit, not the MCP spec.
+// The description is held to the 1024-character cap OpenAI and Azure OpenAI
+// put on tool descriptions (#799), and leaves explaining each parameter to the
+// input schema's own field descriptions (#4507).
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createRequire } from "node:module";
@@ -72,16 +73,33 @@ describe("sequentialthinking: initialize and tools/list", () => {
     expect(tool.execution).toBeUndefined();
   });
 
-  // #799: some clients cap a tool description at 1024 characters. This one is
-  // 2781 today; asserting <= 1024 would fail, so the current length is pinned.
-  it("has a 2781-character description today (#799)", () => {
-    expect(tool.description).toHaveLength(2781);
+  // #799: OpenAI and Azure OpenAI reject a tool description over 1024
+  // characters. The MCP spec sets no cap; this keeps the tool usable there.
+  it("keeps the description within 1024 characters (#799)", () => {
+    expect(tool.description).toBeDefined();
+    expect(tool.description?.length ?? 0).toBeLessThanOrEqual(1024);
     expect(tool.description).toMatch(
       /^A detailed tool for dynamic and reflective problem-solving through thoughts\.\n/,
     );
+    expect(tool.description).toContain("When to use this tool:");
     expect(tool.description).toMatch(
-      /11\. Only set nextThoughtNeeded to false when truly done and a satisfactory answer is reached$/,
+      /Set nextThoughtNeeded to false only when truly done and a satisfactory answer is reached$/,
     );
+  });
+
+  // #4507: the parameters are explained by the input schema, not the
+  // description, so every property must carry a description of its own, and
+  // the description no longer restates them in a "Parameters explained" list.
+  it("leaves explaining each parameter to the input schema (#4507)", () => {
+    const properties = tool.inputSchema.properties ?? {};
+    expect(Object.keys(properties)).toHaveLength(9);
+    for (const [name, schema] of Object.entries(properties)) {
+      expect(
+        (schema as { description?: unknown }).description,
+        `inputSchema property ${name}`,
+      ).toEqual(expect.any(String));
+    }
+    expect(tool.description).not.toMatch(/Parameters explained|Key features/);
   });
 
   it("advertises the input schema as JSON Schema 2020-12", () => {
