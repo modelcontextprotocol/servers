@@ -205,12 +205,12 @@ def expected_tools(local_tz: str) -> list[dict[str, Any]]:
                         "title": "Timezone",
                         "description": (
                             "IANA timezone name (e.g., 'America/New_York', "
-                            f"'Europe/London'). Use '{local_tz}' as local timezone "
-                            "if no timezone provided by the user."
+                            "'Europe/London'). Optional: defaults to the "
+                            f"server's local timezone, '{local_tz}', when omitted."
                         ),
+                        "default": local_tz,
                     }
                 },
-                "required": ["timezone"],
             },
             "outputSchema": TIME_RESULT_SCHEMA,
             "annotations": READ_ONLY_ANNOTATIONS,
@@ -227,9 +227,10 @@ def expected_tools(local_tz: str) -> list[dict[str, Any]]:
                         "title": "Source Timezone",
                         "description": (
                             "Source IANA timezone name (e.g., 'America/New_York', "
-                            f"'Europe/London'). Use '{local_tz}' as local timezone "
-                            "if no source timezone provided by the user."
+                            "'Europe/London'). Optional: defaults to the "
+                            f"server's local timezone, '{local_tz}', when omitted."
                         ),
+                        "default": local_tz,
                     },
                     "time": {
                         "type": "string",
@@ -241,12 +242,13 @@ def expected_tools(local_tz: str) -> list[dict[str, Any]]:
                         "title": "Target Timezone",
                         "description": (
                             "Target IANA timezone name (e.g., 'Asia/Tokyo', "
-                            f"'America/San_Francisco'). Use '{local_tz}' as local "
-                            "timezone if no target timezone provided by the user."
+                            "'America/San_Francisco'). Optional: defaults to the "
+                            f"server's local timezone, '{local_tz}', when omitted."
                         ),
+                        "default": local_tz,
                     },
                 },
-                "required": ["source_timezone", "time", "target_timezone"],
+                "required": ["time"],
             },
             "outputSchema": {
                 "type": "object",
@@ -512,9 +514,9 @@ async def test_get_current_time_ignores_extra_arguments() -> None:
     assert result["datetime"] == "2024-01-01T12:00:00+00:00"
 
 
-async def test_get_current_time_does_not_default_to_the_local_timezone() -> None:
-    # The local timezone only appears in the schema descriptions; the server
-    # never substitutes it for an empty argument.
+async def test_get_current_time_does_not_default_an_empty_timezone() -> None:
+    # Only an omitted timezone takes the local default (#2853). An explicitly
+    # empty one is a mistake, reported as missing rather than guessed at.
     async with connected("Europe/Warsaw") as session:
         result = await call(session, "get_current_time", {"timezone": ""})
     assert result == tool_error(
@@ -522,11 +524,70 @@ async def test_get_current_time_does_not_default_to_the_local_timezone() -> None
     )
 
 
+async def test_get_current_time_defaults_to_the_local_timezone() -> None:
+    # An omitted timezone is the server's local one (#2853): the
+    # --local-timezone override here.
+    async with connected("Asia/Kolkata") as session:
+        with frozen_at("2024-01-01 12:00:00+00:00"):
+            result = await call_json(session, "get_current_time", {})
+    assert result == {
+        "timezone": "Asia/Kolkata",
+        "datetime": "2024-01-01T17:30:00+05:30",
+        "day_of_week": "Monday",
+        "is_dst": False,
+    }
+
+
+async def test_get_current_time_defaults_to_the_detected_local_timezone() -> None:
+    # With no --local-timezone, the default is the detected zone, the same one
+    # the argument's description names.
+    with patch("mcp_server_time.server.get_localzone_name", return_value="Asia/Tokyo"):
+        async with connected(None) as session:
+            with frozen_at("2024-01-01 12:00:00+00:00"):
+                result = await call_json(session, "get_current_time", {})
+    assert result["timezone"] == "Asia/Tokyo"
+    assert result["datetime"] == "2024-01-01T21:00:00+09:00"
+
+
+@pytest.mark.parametrize(
+    "arguments,source,target",
+    [
+        # Either timezone, or both, may be omitted (#2853); each omitted one
+        # is the local timezone, Europe/Warsaw here.
+        (
+            {"time": "12:00", "target_timezone": "Asia/Tokyo"},
+            ("Europe/Warsaw", "2024-01-01T12:00:00+01:00"),
+            ("Asia/Tokyo", "2024-01-01T20:00:00+09:00"),
+        ),
+        (
+            {"source_timezone": "Asia/Tokyo", "time": "12:00"},
+            ("Asia/Tokyo", "2024-01-01T12:00:00+09:00"),
+            ("Europe/Warsaw", "2024-01-01T04:00:00+01:00"),
+        ),
+        (
+            {"time": "12:00"},
+            ("Europe/Warsaw", "2024-01-01T12:00:00+01:00"),
+            ("Europe/Warsaw", "2024-01-01T12:00:00+01:00"),
+        ),
+    ],
+)
+async def test_convert_time_defaults_omitted_timezones_to_the_local_timezone(
+    arguments: dict[str, Any],
+    source: tuple[str, str],
+    target: tuple[str, str],
+) -> None:
+    async with connected("Europe/Warsaw") as session:
+        with frozen_at("2024-01-01 06:00:00+00:00"):
+            result = await call_json(session, "convert_time", arguments)
+    assert (result["source"]["timezone"], result["source"]["datetime"]) == source
+    assert (result["target"]["timezone"], result["target"]["datetime"]) == target
+
+
 @pytest.mark.parametrize(
     "arguments,needles",
     [
         # Rejected by MCPServer against the tool's signature, before it runs.
-        ({}, ["timezone\n  Field required [type=missing"]),
+        # An omitted timezone is not an error: it defaults (#2853).
         ({"timezone": 5}, ["timezone\n  Input should be a valid string"]),
         ({"timezone": None}, ["timezone\n  Input should be a valid string"]),
     ],
@@ -867,13 +928,14 @@ async def test_convert_time_ignores_extra_arguments() -> None:
     "arguments,needles",
     [
         # Rejected by MCPServer against the tool's signature, before it runs.
+        # `time` stays required; the timezones default when omitted (#2853).
         (
-            {"source_timezone": "UTC", "time": "12:00"},
-            ["target_timezone\n  Field required [type=missing"],
+            {"source_timezone": "UTC", "target_timezone": "UTC"},
+            ["time\n  Field required [type=missing"],
         ),
         (
-            {"time": "12:00", "target_timezone": "UTC"},
-            ["source_timezone\n  Field required [type=missing"],
+            {"source_timezone": 5, "time": "12:00"},
+            ["source_timezone\n  Input should be a valid string"],
         ),
         (
             {"source_timezone": "UTC", "time": 1200, "target_timezone": "UTC"},

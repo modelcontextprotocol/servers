@@ -11,14 +11,15 @@ Requires MCP Python SDK 2.x (`mcp>=2.3,<3`).
 ### Available Tools
 
 - `get_current_time` - Get current time in a specific timezone or system timezone.
-  - Required arguments:
-    - `timezone` (string): IANA timezone name (e.g., 'America/New_York', 'Europe/London')
+  - Optional arguments:
+    - `timezone` (string): IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Defaults to the server's local timezone.
 
 - `convert_time` - Convert time between timezones.
   - Required arguments:
-    - `source_timezone` (string): Source IANA timezone name
     - `time` (string): Time in 24-hour format (HH:MM)
-    - `target_timezone` (string): Target IANA timezone name
+  - Optional arguments:
+    - `source_timezone` (string): Source IANA timezone name. Defaults to the server's local timezone.
+    - `target_timezone` (string): Target IANA timezone name. Defaults to the server's local timezone.
 
 A timezone name, here and in `--local-timezone`, must be an exact IANA key, case included: `Europe/Warsaw` is accepted and `europe/warsaw` is rejected on every platform, including macOS, whose case-insensitive filesystem would otherwise resolve it.
 
@@ -208,7 +209,7 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 
 ### Customization - System Timezone
 
-By default, the server automatically detects your system's timezone. You can override this by adding the argument `--local-timezone` to the `args` list in the configuration.
+By default, the server automatically detects your system's timezone. You can override this by adding the argument `--local-timezone` to the `args` list in the configuration. This local timezone is also what a tool uses for a timezone argument the call omits, and each tool's input schema names it as that argument's `default`. An explicitly empty timezone is still an error.
 
 Example:
 ```json
@@ -288,7 +289,7 @@ npx @modelcontextprotocol/inspector uv run mcp-server-time
 
 ## Examples of Questions for Claude
 
-1. "What time is it now?" (will use system timezone)
+1. "What time is it now?" (the timezone can be omitted: the server uses its local timezone)
 2. "What time is it in Tokyo?"
 3. "When it's 4 PM in New York, what time is it in London?"
 4. "Convert 9:30 AM Tokyo time to New York time"
