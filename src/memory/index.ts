@@ -62,27 +62,48 @@ export async function ensureMemoryFilePath(
   const oldMemoryPath = path.join(baseDir, "memory.json");
   const newMemoryPath = path.join(baseDir, "memory.jsonl");
 
-  try {
-    // Check if old file exists and new file doesn't
-    await fs.access(oldMemoryPath);
-    try {
-      await fs.access(newMemoryPath);
-      // Both files exist, use new one (no migration needed)
-      return newMemoryPath;
-    } catch {
-      // Old file exists, new file doesn't - migrate
-      console.error(
-        "DETECTED: Found legacy memory.json file, migrating to memory.jsonl for JSONL format compatibility",
-      );
-      await fs.rename(oldMemoryPath, newMemoryPath);
-      console.error(
-        "COMPLETED: Successfully migrated memory.json to memory.jsonl",
-      );
-      return newMemoryPath;
-    }
-  } catch {
-    // Old file doesn't exist, use new path
+  // Only a missing legacy file means there is nothing to migrate. Any other
+  // failure, from the existence checks or the rename itself, propagates and
+  // stops startup: carrying on would serve an empty memory.jsonl while the
+  // user's graph sat unread in memory.json (#5203).
+  if (!(await pathExists(oldMemoryPath))) {
     return newMemoryPath;
+  }
+  if (await pathExists(newMemoryPath)) {
+    // Both files exist, use new one (no migration needed)
+    return newMemoryPath;
+  }
+
+  // Old file exists, new file doesn't - migrate
+  console.error(
+    "DETECTED: Found legacy memory.json file, migrating to memory.jsonl for JSONL format compatibility",
+  );
+  try {
+    await fs.rename(oldMemoryPath, newMemoryPath);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Failed to migrate legacy memory file ${oldMemoryPath} to ${newMemoryPath}: ${reason}. ` +
+        "The server will not start on an empty graph; fix the cause and restart, " +
+        "or set MEMORY_FILE_PATH to choose a file explicitly.",
+      { cause: error },
+    );
+  }
+  console.error("COMPLETED: Successfully migrated memory.json to memory.jsonl");
+  return newMemoryPath;
+}
+
+// True when filePath exists, false when it does not (ENOENT). Any other error,
+// such as a permission failure, is rethrown rather than read as "missing".
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return false;
+    }
+    throw error;
   }
 }
 
@@ -340,6 +361,20 @@ export class KnowledgeGraphManager {
   // it against other server processes sharing the same file. See #4797.
   private mutationQueue: Promise<unknown> = Promise.resolve();
 
+  // Members of a stored entity or relation record that the schema does not
+  // model (a createdAt written by an older version or another client, say),
+  // keyed by the parsed object loadGraphWithUnreadable made from that record.
+  // saveGraph writes them back, so a write keeps every record it did not
+  // delete exactly as it found it: that is what makes create_entities,
+  // create_relations and add_observations additive, as their
+  // destructiveHint: false declares (#5058). A WeakMap rather than a property
+  // on the object, so the extras never reach a tool result or read_graph,
+  // whose output schemas do not allow them, and are collected with the graph
+  // they came from. A deleted record is dropped from the graph and takes its
+  // extras with it; one changed in place (add_observations,
+  // delete_observations) keeps its object, so keeps them too.
+  private extraFields = new WeakMap<object, Record<string, unknown>>();
+
   private async withLock<T>(operation: () => Promise<T>): Promise<T> {
     const locked = () =>
       withFileLock(`${this.memoryFilePath}.lock`, operation, this.lockOptions);
@@ -393,6 +428,7 @@ export class KnowledgeGraphManager {
         if (record.type === "entity") {
           const parsed = EntitySchema.safeParse(item);
           if (parsed.success) {
+            this.keepExtraFields(parsed.data, record, EntitySchema.shape);
             graph.entities.push(parsed.data);
           } else {
             unreadable.push(line);
@@ -406,6 +442,7 @@ export class KnowledgeGraphManager {
         } else if (record.type === "relation") {
           const parsed = RelationSchema.safeParse(item);
           if (parsed.success) {
+            this.keepExtraFields(parsed.data, record, RelationSchema.shape);
             graph.relations.push(parsed.data);
           } else {
             unreadable.push(line);
@@ -434,10 +471,30 @@ export class KnowledgeGraphManager {
     }
   }
 
+  // Record the members of a valid stored record that are neither its type nor
+  // a field of its schema, for saveGraph to write back. Object.fromEntries
+  // defines each key as an own property, so even a "__proto__" member stays
+  // data rather than setting the object's prototype.
+  private keepExtraFields(
+    parsed: object,
+    record: Record<string, unknown>,
+    shape: Record<string, unknown>,
+  ): void {
+    const extras = Object.entries(record).filter(
+      ([key]) => key !== "type" && !Object.hasOwn(shape, key),
+    );
+    if (extras.length > 0) {
+      this.extraFields.set(parsed, Object.fromEntries(extras));
+    }
+  }
+
   private async saveGraph(
     graph: KnowledgeGraph,
     unreadable: string[],
   ): Promise<void> {
+    // The modelled fields come first and always hold the current values; a
+    // record's extras (see extraFields) follow unchanged. A record created by
+    // this write has none and is written exactly as before.
     const lines = [
       ...graph.entities.map((e) =>
         JSON.stringify({
@@ -445,6 +502,7 @@ export class KnowledgeGraphManager {
           name: e.name,
           entityType: e.entityType,
           observations: e.observations,
+          ...this.extraFields.get(e),
         }),
       ),
       ...graph.relations.map((r) =>
@@ -453,6 +511,7 @@ export class KnowledgeGraphManager {
           from: r.from,
           to: r.to,
           relationType: r.relationType,
+          ...this.extraFields.get(r),
         }),
       ),
       ...unreadable,

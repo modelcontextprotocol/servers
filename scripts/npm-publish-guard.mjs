@@ -42,7 +42,7 @@ export const REGISTRY = "https://registry.npmjs.org";
  * @returns {string}
  */
 export function packageUrl(name) {
-  return `${REGISTRY}/${name.replace("/", "%2F")}`;
+  return `${REGISTRY}/${name.replaceAll("/", "%2F")}`;
 }
 
 /**

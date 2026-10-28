@@ -526,10 +526,24 @@ what changed in the server they use:
    judgment, so it is written by hand, never generated.
 7. **`## Thanks for helping us improve`**: one list for the whole release, as
    the Inspector's release notes have it, crediting the community members
-   whose issues the listed PRs close, one line per person, most issues first.
+   whose issues the listed PRs close and whose advisories (`--advisory`) the
+   release fixes, one line per person, most references first; then the
+   prototype paragraph, one line per `--thank`.
 
 GitHub adds everyone `@`-mentioned in a release body to that release's
 **Contributors** strip, so the people credited appear there too.
+
+**Collect both kinds of credit the helper cannot find on its own before the
+preview**, since the generator writes the whole Thanks section and nothing is
+added to the draft by hand:
+
+- **Every advisory this release fixes**, as `--advisory GHSA-xxxx-yyyy-zzzz`,
+  once each: the `[GHSA-…]` cards on the board for the milestone's work
+  (`security-advisory`). Its fix shipped from a private fork with no public
+  issue, so its reporters are no issue's author. A draft advisory works.
+- **Every outside contributor credited on one of the milestone's issues**, as
+  `--thank "@login (#PR), <what it prototyped>, for #ISSUE"`, once per line
+  of the prototype paragraph. The preview lists each candidate (below).
 
 Preview first. The default run prints the notes and creates nothing:
 
@@ -545,20 +559,34 @@ git fetch origin main && git rev-parse "$MERGE_SHA^{tree}"   # must be the tree 
 NOTES=$(mktemp)
 npm run --silent release:notes -- --milestone "$MILESTONE" --merge-sha "$MERGE_SHA" \
   --merge-branch "v2/chore/$N-release-$MILESTONE" --ledger-url "<the ledger's URL>" \
+  --advisory GHSA-xxxx-yyyy-zzzz --thank "@login (#PR), <what>, for #ISSUE" \
   > "$NOTES"; echo "EXIT=$?"
 ```
 
 Add `--known-issue "<markdown>"` once per known issue. The helper reads the
 manifests at `$MERGE_SHA` from GitHub, so it needs no checkout of that
 commit. It takes a few minutes: it looks up every listed PR's files and
-closing issues, and every reporter's permission.
+closing issues, every reporter's permission, and, in a preview, every
+comment on the milestone's closed issues.
 
-**Read the preview before going on.** Then create the draft with the same
-arguments plus `--draft`:
+**Read the preview before going on**, and its standard error with it:
+
+- **`credit notes on <milestone>'s closed issues`** lists every credit a
+  maintainer left on one of them (an issue body or comment saying "credit" or
+  "thanks to" and naming a non-maintainer), each person marked
+  `(--thank given)` or `(NO --thank)`. Add a `--thank` for each one marked
+  `NO` whose prototype ships in this release, and re-run the preview. A note
+  that only credits a reporter the list already has needs none.
+- **`PENDING advisory credit`** names a credit its recipient has not accepted
+  yet. It is listed, and may still be declined: settle it with the reporter
+  (`security-advisory`) before publishing, or re-run once they answer.
+
+Then create the draft with the same arguments plus `--draft`:
 
 ```sh
 npm run --silent release:notes -- --milestone "$MILESTONE" --merge-sha "$MERGE_SHA" \
-  --merge-branch "v2/chore/$N-release-$MILESTONE" --ledger-url "<the ledger's URL>" --draft
+  --merge-branch "v2/chore/$N-release-$MILESTONE" --ledger-url "<the ledger's URL>" \
+  --advisory GHSA-xxxx-yyyy-zzzz --thank "@login (#PR), <what>, for #ISSUE" --draft
 ```
 
 `--draft` creates a **draft** Release tagged `$MILESTONE` at `$MERGE_SHA`. It
@@ -582,14 +610,21 @@ The rules the helper applies:
 - **Maintainers and bots are excluded by permission, not by name.** A
   maintainer is anyone with `admin`, `maintain` or `write` on the repo. Bots,
   deleted accounts, PR numbers and other repos' issues are dropped.
-- **Outside PRs are credited through their issue, by hand.** This repo
+- **An advisory's credits are read from the advisory**, accepted and pending
+  ones, any credit type. A declined credit, a bot and a maintainer are
+  dropped. An advisory in `triage` (not accepted), `closed` or `withdrawn`
+  aborts the run: it has no fix in this release to credit.
+- **Outside PRs are credited through their issue, with `--thank`.** This repo
   closes an outside PR and files an issue for a fix worth keeping, crediting
   the PR's author in that issue (`issue-triage`, Harvest). The helper credits
-  the issue's *author*, who is then a maintainer and is excluded. Read the
-  milestone's issues for such credits and add those people to the draft's
-  Thanks section by hand before publishing.
+  the issue's *author*, who is then a maintainer and is excluded, so the
+  credit comes from a `--thank`, and the preview's discovery list is what
+  shows which ones are still missing. Discovery only reads notes a maintainer
+  wrote; a community member offering a fix in a comment is credited when a
+  maintainer says so on the issue.
 - **"Addresses", not "fixes."** The credited issues include feature requests.
-- **The Thanks section is left out** when no community reporter remains.
+- **The Thanks section is left out** when nobody is credited: no community
+  reporter, no advisory credit and no `--thank`.
 - **It fails fast.** A failed `gh` call, a GraphQL error, a missing PR or
   issue, an unknown permission value, a generated line it does not recognize,
   or a registry answer other than 200 or 404 aborts the run before anything is

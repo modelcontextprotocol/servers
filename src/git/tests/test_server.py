@@ -268,6 +268,101 @@ def test_git_diff(test_repository):
     assert "feature changes" in result
 
 
+# A non-ASCII name, and the octal escape git prints for its first character
+# under its default core.quotepath=true (#5129).
+NON_ASCII_FILENAME = "日本語.txt"
+NON_ASCII_OCTAL = "\\346\\227\\245"
+
+
+def pin_quotepath_true(repo: git.Repo) -> None:
+    """Pin git's default repo-locally, so a global config cannot hide the bug."""
+    with repo.config_writer() as config:
+        config.set_value("core", "quotepath", "true")
+
+
+def commit_non_ascii_file(repo: git.Repo) -> None:
+    """Commit NON_ASCII_FILENAME, then leave an unstaged change to it."""
+    pin_quotepath_true(repo)
+    file_path = Path(repo.working_dir) / NON_ASCII_FILENAME
+    file_path.write_text("original\n")
+    repo.index.add([NON_ASCII_FILENAME])
+    repo.index.commit("add non-ASCII file")
+    file_path.write_text("changed\n")
+
+
+def test_git_status_prints_non_ascii_path_unquoted(test_repository):
+    pin_quotepath_true(test_repository)
+    (Path(test_repository.working_dir) / NON_ASCII_FILENAME).write_text("new\n")
+
+    result = git_status(test_repository)
+
+    assert f"\t{NON_ASCII_FILENAME}\n" in result
+    assert NON_ASCII_OCTAL not in result
+
+
+def test_git_status_non_ascii_path_round_trips_through_git_add(test_repository):
+    pin_quotepath_true(test_repository)
+    (Path(test_repository.working_dir) / NON_ASCII_FILENAME).write_text("new\n")
+
+    untracked = [
+        line.strip()
+        for line in git_status(test_repository).splitlines()
+        if line.startswith("\t")
+    ]
+    git_add(test_repository, untracked)
+
+    staged = [path for path, _stage in test_repository.index.entries]
+    assert NON_ASCII_FILENAME in staged
+
+
+@pytest.mark.parametrize("tool", ["unstaged", "staged", "target"])
+def test_git_diff_tools_print_non_ascii_path_unquoted(test_repository, tool):
+    commit_non_ascii_file(test_repository)
+    if tool == "unstaged":
+        result = git_diff_unstaged(test_repository)
+    elif tool == "staged":
+        test_repository.index.add([NON_ASCII_FILENAME])
+        result = git_diff_staged(test_repository)
+    else:
+        result = git_diff(test_repository, "HEAD")
+
+    assert f"diff --git a/{NON_ASCII_FILENAME} b/{NON_ASCII_FILENAME}" in result
+    assert NON_ASCII_OCTAL not in result
+
+
+def test_quotepath_override_is_not_written_to_repo_config(test_repository):
+    commit_non_ascii_file(test_repository)
+    config_path = Path(test_repository.git_dir) / "config"
+    before = config_path.read_bytes()
+
+    git_status(test_repository)
+    git_diff_unstaged(test_repository)
+
+    assert config_path.read_bytes() == before
+    # The override was for that one command: a plain call still escapes.
+    assert NON_ASCII_OCTAL in test_repository.git.status()
+
+
+@pytest.mark.parametrize("tool", ["unstaged", "staged", "target"])
+def test_git_diff_tools_replace_undecodable_bytes(test_repository, tool):
+    """A Latin-1 file's diff comes back with U+FFFD, not lone surrogates (#5193)."""
+    file_path = Path(test_repository.working_dir) / "latin1.txt"
+    file_path.write_bytes(b"caf\xe9\n")
+    test_repository.index.add(["latin1.txt"])
+    test_repository.index.commit("add Latin-1 file")
+    file_path.write_bytes(b"caf\xe9 na\xefve\n")
+    if tool == "unstaged":
+        result = git_diff_unstaged(test_repository)
+    elif tool == "staged":
+        test_repository.index.add(["latin1.txt"])
+        result = git_diff_staged(test_repository)
+    else:
+        result = git_diff(test_repository, "HEAD")
+
+    assert "+caf� na�ve" in result
+    result.encode("utf-8")  # raises UnicodeEncodeError on a lone surrogate
+
+
 def test_git_commit(test_repository):
     file_path = Path(test_repository.working_dir) / "commit_test.txt"
     file_path.write_text("content to commit")
@@ -503,6 +598,59 @@ def test_git_create_branch_from_base(test_repository):
     result = git_create_branch(test_repository, "derived-branch", "base-branch")
 
     assert "Created branch 'derived-branch' from 'base-branch'" in result
+
+
+def test_git_create_branch_on_detached_head_uses_current_commit(test_repository):
+    # #5192: with no base_branch, a detached HEAD branches from its commit.
+    head = test_repository.head.commit
+    test_repository.git.checkout("--detach")
+
+    result = git_create_branch(test_repository, "keep")
+
+    assert result == f"Created branch 'keep' from commit {head.hexsha[:7]}"
+    assert test_repository.heads["keep"].commit == head
+    # Creating the branch does not attach HEAD to it.
+    assert test_repository.head.is_detached
+
+
+def test_git_create_branch_from_commit_sha(test_repository):
+    # #5192: a base that is not a reference is resolved as a commit-ish.
+    first = test_repository.head.commit
+    file_path = Path(test_repository.working_dir) / "later.txt"
+    file_path.write_text("later")
+    test_repository.index.add(["later.txt"])
+    test_repository.index.commit("later commit")
+
+    result = git_create_branch(test_repository, "from-sha", first.hexsha)
+
+    assert result == f"Created branch 'from-sha' from commit {first.hexsha[:7]}"
+    assert test_repository.heads["from-sha"].commit == first
+
+
+def test_git_create_branch_from_relative_revision(test_repository):
+    first = test_repository.head.commit
+    test_repository.index.commit("second commit")
+
+    git_create_branch(test_repository, "from-parent", "HEAD~1")
+
+    assert test_repository.heads["from-parent"].commit == first
+
+
+@pytest.mark.parametrize("base", ["nope", "HEAD^{tree}"])
+def test_git_create_branch_unknown_base(test_repository, base):
+    # An unknown name (BadName) and an object that is not a commit (ValueError)
+    # both get the same clear message, not GitPython's raw lookup error.
+    with pytest.raises(ValueError, match="Unknown base branch or commit"):
+        git_create_branch(test_repository, "x", base)
+    assert not any(head.name == "x" for head in test_repository.heads)
+
+
+def test_git_create_branch_from_sha_keeps_existing_branch_check(test_repository):
+    sha = test_repository.head.commit.hexsha
+    test_repository.git.branch("taken")
+
+    with pytest.raises(ValueError, match="refs/heads/taken already exists"):
+        git_create_branch(test_repository, "taken", sha)
 
 
 def test_git_show(test_repository):

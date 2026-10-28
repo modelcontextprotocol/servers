@@ -44,7 +44,7 @@ labels, tracked by the draft card).
 | 2 | **Verify the claim**: which server, and does the code belong to it or to an SDK? | Judgment |
 | 3 | Valid and ours → **accept** (`triage` → `draft`); otherwise close with a reason | **Human only** |
 | 4 | Create the **private fork**, fix and review there | Mechanical |
-| 5 | Merge to `v2/main`, milestone merge, **release**, then **publish** | **Human only** |
+| 5 | Merge to `v2/main`, milestone merge, **release**, close the fork's PR, then **publish** | **Human only** (closing the fork's PR is mechanical) |
 | 6 | **After publication**, convert the draft card into a public issue | Mechanical |
 
 There is **one release line**. Every fix lands on `v2/main` and ships through
@@ -272,15 +272,20 @@ body nobody will read again.
   `[GHSA-xxxx-yyyy-zzzz]` with its closing bracket, so it never finds the
   follow-up by mistake. A second follow-up for the same advisory is
   `[GHSA-xxxx-yyyy-zzzz follow-up 2]`.
-- **Body:** the same link-and-triage-only rule as step 1. Its lines, in order:
+- **Body:** step 1's link-and-triage rule, with **one exception: the
+  write-up**, held to the confidentiality limits in the next bullet. Its
+  lines, in order:
   - `**Advisory:** <html_url>` on the first line.
   - `Follow-up to the fix for this advisory. Convert to an issue only once the advisory is published.`
-  - A link to the write-up.
   - The `Priority <level> (provisional, <YYYY-MM-DD>)` line.
-- **The write-up lives in the private fork**, where only the advisory's
-  collaborators can read it. Draft it as the public issue it will become
-  (problem, options, acceptance criteria), and post it as a `COMMENT` review on
-  the fork's PR, since the fork refuses issue comments (see the API table).
+  - The write-up, under a `## Write-up` heading.
+- **The write-up lives on the card itself**, never only in the private fork.
+  ⚠️ **Publishing an advisory deletes its temporary private fork**, and every
+  review and comment in it with it, while step 6 needs the write-up _after_
+  publication. Draft it as the public issue it will become (problem, options,
+  acceptance criteria). The card is read by everyone with board access (step
+  1), so the write-up describes the remaining work and leaves the reproduction
+  and any proof of concept in the private advisory.
 - **Status `Todo`** when a maintainer asked for the follow-up: the advisory is
   already accepted, and asking for the work approves it. Otherwise it goes in
   `Incoming`. Score its Priority with step 1's table, using the severity of the
@@ -325,9 +330,60 @@ stop there.
 ⚠️ **Publishing is irreversible and human-only.** It makes the advisory public,
 with no undo. Same rule as accepting: recommend, never perform.
 
-**Before publishing, check what publishing will show**, because a published
-advisory is what users and advisory tooling (Dependabot, `npm audit`,
-`pip-audit`) remediate from:
+#### Close the fork's PR once its fix is on `v2/main`
+
+**GitHub will not publish an advisory while its private fork has an open pull
+request.** The advisory page says "you must merge or close outstanding pull
+requests" and **Publish advisory** stays disabled. The fix reaches `v2/main`
+through a PR in this repository, so the fork's own PR is left open with
+nothing still to merge, and blocks publication until someone closes it.
+
+Closing it is mechanical and reversible (a PR can be reopened), and it neither
+closes nor publishes the advisory. Close a PR **only once its head is on
+`origin/v2/main`**:
+
+```sh
+GHSA=<GHSA_ID>
+FORK=$(gh api repos/modelcontextprotocol/servers/security-advisories/$GHSA \
+  --jq '.private_fork.full_name // empty') || FORK=
+[ -n "$FORK" ] || echo "no private fork for $GHSA (or the lookup failed)" >&2
+git fetch origin v2/main
+for pr in $( [ -n "$FORK" ] && gh api --paginate "repos/$FORK/pulls?state=open" \
+    --jq '.[] | "\(.number):\(.head.sha)"'); do
+  n=${pr%%:*}; sha=${pr#*:}
+  # The fork's commits are not in this clone until fetched; an unknown SHA
+  # fails --is-ancestor, which leaves the PR open: the safe direction.
+  git fetch -q "https://github.com/$FORK.git" "$sha" 2>/dev/null
+  if git merge-base --is-ancestor "$sha" origin/v2/main; then
+    gh api -X PATCH "repos/$FORK/pulls/$n" -f state=closed --jq '"closed \(.html_url)"'
+  else
+    echo "$FORK#$n: head $sha is NOT on v2/main; left open" >&2
+  fi
+  sleep 1
+done
+```
+
+- ⚠️ **A PR whose head is not on `v2/main` stays open.** Its fix has not
+  shipped, so the advisory is not ready to publish; find out what is missing
+  rather than closing the PR to unblock the button.
+- **Close it without a comment.** The forks have issues disabled, so a PR
+  comment (the issue-comments endpoint) returns `404`.
+
+#### Before publishing, check what publishing will show
+
+A published advisory is what users and advisory tooling (Dependabot,
+`npm audit`, `pip-audit`) remediate from, and publishing deletes the private
+fork, so check each of these first:
+
+- **No open PR in the private fork.** Run the close recipe above. Found now,
+  it is a recipe; found at the button, it is a disabled button and no reason
+  given beyond "outstanding pull requests".
+- **Nothing that matters lives only in the fork.** Publishing deletes it.
+  Review findings worth keeping, a residual-exposure note, a follow-up's
+  write-up: copy each onto the advisory (if it belongs in what is published) or
+  onto the draft card that tracks it (a follow-up's write-up goes in **its
+  follow-up card's** `## Write-up` section, where step 6 reads it), within step
+  4's confidentiality limits, before the button is pressed.
 
 - **The affected product**: ecosystem (`npm` or `pip`) and package name, as
   published (`@modelcontextprotocol/server-filesystem`, `mcp-server-git`).
@@ -345,9 +401,6 @@ advisory is what users and advisory tooling (Dependabot, `npm audit`,
 - **What the fix leaves open**, if the advisory has a follow-up card. Say which
   platforms or cases are still exposed, so a user who upgrades does not believe
   they are fully covered.
-- **The follow-up's write-up, copied out of the fork** before publishing. Once
-  the advisory is published, don't count on the temporary fork, or on access to
-  it, surviving.
 
 ### 6. After publication, convert the card into public tracking
 
@@ -379,8 +432,9 @@ work has not shipped:
 
 1. Retitle it `[GHSA-xxxx-yyyy-zzzz follow-up] - <summary>`.
 2. Convert it.
-3. Replace the body's triage lines with the write-up copied out of the fork
-   (step 5), linking the now-public advisory.
+3. Replace the body's triage lines with the card's own `## Write-up` section
+   (step 4), linking the now-public advisory. The fork is gone by now, so the
+   card is the only copy.
 4. Apply `/issue-create`'s labels. A card already past `Incoming` also takes
    the milestone the follow-up is planned for, not the one the fix shipped in.
    A card still in `Incoming` stays unmilestoned: once it is an issue the
@@ -397,7 +451,8 @@ work has not shipped:
 | Listing | `GET repos/{owner}/{repo}/security-advisories`, 30 per page, so always `--paginate` |
 | Private fork | `POST …/security-advisories/{ghsa_id}/forks` → `202`, a private repo `servers-ghsa-xxxx-yyyy-zzzz` (lowercase) in the org; exact name in `.private_fork.full_name` |
 | Fork idempotency | Read `.private_fork` first; the POST creates, it does not probe |
-| Fork deletion | Needs the `delete_repo` OAuth scope, which a default `gh` token lacks |
+| Fork deletion | Needs the `delete_repo` OAuth scope, which a default `gh` token lacks. **Publishing deletes the fork** on its own: the repo returns `404` and `.private_fork` reads `null` |
+| Publishing blocked | An open PR in the private fork disables **Publish advisory**; close it once its head is on `v2/main` (step 5) |
 | Comments | **No API at all**, REST or GraphQL; UI-only |
 | Fork PR comments | Issue comments (`gh pr comment`, `issues/N/comments`) are refused and `…/comments/{id}/replies` returns `404`; reply in a thread with `POST pulls/N/comments -F in_reply_to=<id>`, and post a PR-level summary as a `COMMENT` review |
 | Credits | `credits_detailed` on the advisory; a private report carries the reporter's credit (`type` `reporter`, `state` `pending` or `accepted`) from submission |

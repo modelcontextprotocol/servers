@@ -55,14 +55,14 @@ The following reference servers are now archived and can be found at [servers-ar
 ## 🚀 Getting Started
 
 ### Using MCP Servers in this Repository
-TypeScript-based servers in this repository can be used directly with `npx`.
+TypeScript-based servers in this repository can be started with `npx`.
 
 For example, this will start the [Memory](src/memory) server:
 ```sh
 npx -y @modelcontextprotocol/server-memory
 ```
 
-Python-based servers in this repository can be used directly with [`uvx`](https://docs.astral.sh/uv/concepts/tools/) or [`pip`](https://pypi.org/project/pip/). `uvx` is recommended for ease of use and setup.
+Python-based servers in this repository can be started with [`uvx`](https://docs.astral.sh/uv/concepts/tools/) or [`pip`](https://pypi.org/project/pip/). `uvx` is recommended for ease of use and setup.
 
 For example, this will start the [Git](src/git) server:
 ```sh
@@ -116,22 +116,39 @@ Additional examples of using the Claude Desktop as an MCP client might look like
       "command": "uvx",
       "args": ["mcp-server-git", "--repository", "path/to/git/repo"]
     },
-    "github": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
-      }
-    },
-    "postgres": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/mydb"]
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"]
     }
   }
 }
 ```
 
-On Windows, apply the same wrapper to each `npx`-based entry above by changing `"command"` to `"cmd"` and prepending `"/c", "npx"` to the existing `args`. Leave `uvx` entries unchanged.
+On Windows, apply the same wrapper to the `npx`-based `filesystem` entry above by changing its `"command"` to `"cmd"` and prepending `"/c", "npx"` to its existing `args`. Leave the `uvx` entries unchanged.
+
+### Transports: stdio and Streamable HTTP
+
+An MCP server talks to its client over a **transport**. The protocol defines two standard ones, and they run very differently:
+
+| Transport | How the server runs | How a client reaches it |
+|---|---|---|
+| **stdio** | The client launches the server as a subprocess and talks to it over the process's stdin and stdout. The server opens no port. | A `command` and `args` in the client's configuration, as in the examples above |
+| **Streamable HTTP** | The server runs on its own as an HTTP service, and can serve many clients | A URL, such as `http://localhost:3001/mcp` |
+
+**Every server in this repository serves stdio, and only [Everything](src/everything) also serves Streamable HTTP** (its README shows how to start it that way, and covers its deprecated HTTP+SSE transport too). So when you run `uvx mcp-server-git` or `npx -y @modelcontextprotocol/server-memory` in a terminal, it opens no port, prints at most a one-line startup notice, and then appears to hang. That is expected: it is waiting for a client to send it messages on stdin. You do not normally start a stdio server yourself; your MCP client starts it from its configuration and stops it when it is done.
+
+To try a server without setting up a client, use the [MCP Inspector](https://github.com/modelcontextprotocol/inspector). Given a stdio server's command, it launches the server for you and lets you browse and call its tools; given a URL, it connects to a running Streamable HTTP server:
+
+```sh
+# A stdio server: the Inspector launches it
+npx @modelcontextprotocol/inspector uvx mcp-server-git
+
+# A Streamable HTTP server: start it first, then connect to its URL
+npx @modelcontextprotocol/server-everything streamableHttp
+npx @modelcontextprotocol/inspector --transport http --server-url http://localhost:3001/mcp
+```
+
+For more, see the [transport layer](https://modelcontextprotocol.io/docs/learn/architecture#transport-layer) in the MCP architecture overview, and [Transports](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports) in the specification.
 
 ## 🛠️ Creating Your Own Server
 

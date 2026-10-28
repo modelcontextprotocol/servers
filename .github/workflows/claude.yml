@@ -16,13 +16,23 @@ jobs:
   # SHA with the release it came from in a trailing comment. A moving tag
   # here would let whoever can move it run code next to both.
   # `verify:action-pins` enforces it.
+  #
+  # It runs only for a trusted author (#4795). A mention is not enough: the
+  # repository is public, so anyone could otherwise start an agent that holds
+  # a shell and the API key, and steer it with the text of their comment.
+  # Each event checks the author of the text that carries the mention (the
+  # comment, the review, or the issue), never someone further up the thread,
+  # and only OWNER, MEMBER and COLLABORATOR count. An outside contributor's
+  # issue that mentions @claude starts nothing; a maintainer's comment on it
+  # does. `scripts/claude-workflow.test.mjs` evaluates this condition against
+  # each event, so a disjunct that loses its check fails the script tests.
   claude:
     timeout-minutes: 30
     if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.review.author_association)) ||
+      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')) && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
     runs-on: ubuntu-latest
     permissions:
       contents: read

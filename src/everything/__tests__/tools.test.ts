@@ -5,7 +5,9 @@
  * to the client (sampling, elicitation, roots), the task tools, logging,
  * subscriptions and gzip each have their own file.
  */
-import { afterEach, describe, expect, it } from "vitest";
+import { crc32 } from "node:zlib";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { INCLUDE_SECRETS_VAR, REDACTED } from "../tools/get-env.js";
 import { MCP_TINY_IMAGE } from "../tools/get-tiny-image.js";
 import {
   connect,
@@ -69,18 +71,92 @@ describe("get-sum", () => {
 });
 
 describe("get-env", () => {
-  it("returns the whole server process environment as JSON", async () => {
-    // Characterization: every variable is returned, secrets included. This
-    // is the tool's documented purpose (debugging server configuration).
-    process.env.EVERYTHING_TEST_VAR = "test-value";
-    try {
-      const result = await call("get-env");
-      const env = JSON.parse(textOf(contentOf(result)[0]));
-      expect(env.EVERYTHING_TEST_VAR).toBe("test-value");
-      expect(env.PATH).toBe(process.env.PATH);
-    } finally {
-      delete process.env.EVERYTHING_TEST_VAR;
-    }
+  /** Calls `get-env` and parses the JSON object it returns. */
+  async function getEnv(): Promise<Record<string, string>> {
+    const result = await call("get-env");
+    return JSON.parse(textOf(contentOf(result)[0]));
+  }
+
+  beforeEach(() => {
+    // Mask by default even if the developer's shell sets the opt-in.
+    vi.stubEnv(INCLUDE_SECRETS_VAR, undefined);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("returns every variable name, with non-credential values intact", async () => {
+    vi.stubEnv("EVERYTHING_TEST_VAR", "test-value");
+    const env = await getEnv();
+    expect(env.EVERYTHING_TEST_VAR).toBe("test-value");
+    expect(env.PATH).toBe(process.env.PATH);
+    expect(Object.keys(env).sort()).toEqual(Object.keys(process.env).sort());
+  });
+
+  it.each([
+    "OPENAI_API_KEY",
+    "GITHUB_TOKEN",
+    "AWS_SECRET_ACCESS_KEY",
+    "DB_PASSWORD",
+    "MYSQL_PASSWD",
+    "GOOGLE_APPLICATION_CREDENTIAL",
+    "BASIC_AUTH",
+    "SESSION_COOKIE",
+    "key",
+    "my_Token",
+  ])("masks the value of the credential-like name %s", async (key) => {
+    vi.stubEnv(key, "planted-secret-9f3a1c");
+    const env = await getEnv();
+    expect(env[key]).toBe(REDACTED);
+    expect(JSON.stringify(env)).not.toContain("planted-secret-9f3a1c");
+  });
+
+  it.each([
+    "PWD",
+    "OLDPWD",
+    "KEYBOARD_LAYOUT",
+    "MONKEY",
+    "TOKENIZER_PATH",
+    "AUTHOR_NAME",
+    "PASSWORDLESS",
+  ])(
+    "leaves %s readable: no whole segment is a credential word",
+    async (key) => {
+      vi.stubEnv(key, "plain-value");
+      const env = await getEnv();
+      expect(env[key]).toBe("plain-value");
+    },
+  );
+
+  it.each(["1", "true", "TRUE", " yes ", "on"])(
+    "returns credential values unmasked when GET_ENV_INCLUDE_SECRETS=%j",
+    async (flag) => {
+      vi.stubEnv(INCLUDE_SECRETS_VAR, flag);
+      vi.stubEnv("OPENAI_API_KEY", "planted-secret-9f3a1c");
+      const env = await getEnv();
+      expect(env.OPENAI_API_KEY).toBe("planted-secret-9f3a1c");
+      expect(env[INCLUDE_SECRETS_VAR]).toBe(flag);
+    },
+  );
+
+  it.each(["", "0", "false", "no"])(
+    "keeps masking when GET_ENV_INCLUDE_SECRETS=%j",
+    async (flag) => {
+      vi.stubEnv(INCLUDE_SECRETS_VAR, flag);
+      vi.stubEnv("OPENAI_API_KEY", "planted-secret-9f3a1c");
+      const env = await getEnv();
+      expect(env.OPENAI_API_KEY).toBe(REDACTED);
+    },
+  );
+
+  it("says in its description that credential values are masked", async () => {
+    session ??= await connect();
+    const { tools } = await session.client.listTools();
+    const tool = tools.find((t) => t.name === "get-env");
+    expect(tool?.description).toContain(REDACTED);
+    expect(tool?.description).toContain(INCLUDE_SECRETS_VAR);
+    expect(tool?.inputSchema.properties ?? {}).toEqual({});
   });
 });
 
@@ -95,6 +171,34 @@ describe("get-tiny-image", () => {
     expect(
       Buffer.from(MCP_TINY_IMAGE, "base64").subarray(1, 4).toString(),
     ).toBe("PNG");
+  });
+
+  // #5208: the embedded PNG once carried an iCCP chunk whose CRC did not
+  // match, which strict decoders reject. Walk every chunk of the image the
+  // client receives and check its stored CRC-32 against its type and data.
+  it("returns a PNG whose every chunk has a valid CRC", async () => {
+    const result = await call("get-tiny-image");
+    const image = contentOfType(contentOf(result)[1], "image");
+    const png = Buffer.from(image.data, "base64");
+    expect(png.subarray(0, 8)).toEqual(
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    );
+    const chunks: string[] = [];
+    let offset = 8;
+    while (offset < png.length) {
+      const length = png.readUInt32BE(offset);
+      const type = png.subarray(offset + 4, offset + 8).toString("latin1");
+      const stored = png.readUInt32BE(offset + 8 + length);
+      expect(crc32(png.subarray(offset + 4, offset + 8 + length)), type).toBe(
+        stored,
+      );
+      chunks.push(type);
+      offset += 12 + length;
+    }
+    expect(offset).toBe(png.length);
+    expect(chunks[0]).toBe("IHDR");
+    expect(chunks.at(-1)).toBe("IEND");
+    expect(chunks).toContain("IDAT");
   });
 });
 

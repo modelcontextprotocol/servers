@@ -46,6 +46,7 @@ The server speaks both eras of the Model Context Protocol over stdio, with nothi
 ## Installation
 
 Optionally: Install node.js, this will cause the fetch server to use a different HTML simplifier that is more robust.
+To keep the server from ever starting Node.js, see [Customization - HTML extraction](#customization---html-extraction).
 
 ### Using uv (recommended)
 
@@ -169,8 +170,10 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 
 By default, the server will obey a websites robots.txt file if the request came from the model (via a tool), but not if
 the request was user initiated (via a prompt). Every redirect hop of a tool fetch is checked against the robots.txt of
-the host it leads to, the same way as the requested URL. This can be disabled by adding the argument
-`--ignore-robots-txt` to the `args` list in the configuration.
+the host it leads to, the same way as the requested URL. If the robots.txt request fails to connect, or is answered
+with 401, 403 or a server error (5xx), the tool refuses the fetch rather than reading the response as rules (RFC 9309
+treats a 5xx robots.txt as complete disallow); any other 4xx is treated as no rules. This can be disabled by adding the
+argument `--ignore-robots-txt` to the `args` list in the configuration.
 
 ### Customization - Private addresses
 
@@ -178,7 +181,8 @@ By default, the server refuses any request, including a redirect hop or a robots
 address that is not globally routable: loopback (`127.0.0.0/8`, `::1`), private (`10.0.0.0/8`, `172.16.0.0/12`,
 `192.168.0.0/16`, `fc00::/7`), link-local (`169.254.0.0/16`, `fe80::/10`), shared address space (`100.64.0.0/10`),
 multicast, unspecified, documentation and the other IANA special-purpose ranges. An IPv4-mapped (`::ffff:0:0/96`) or
-well-known NAT64 (`64:ff9b::/96`) address is judged by the IPv4 address it carries. A hostname is refused if any one of its addresses is in those ranges.
+well-known NAT64 (`64:ff9b::/96`) address is judged by the IPv4 address it carries; a deprecated IPv4-compatible
+address (`::/96`, such as `::127.0.0.1`) is refused whatever IPv4 it carries. A hostname is refused if any one of its addresses is in those ranges.
 The client receives an error naming the refused address.
 
 To fetch from local or internal hosts (a development server, an intranet page), add the argument
@@ -206,6 +210,23 @@ Without `--proxy-url`, the server uses the proxy in the standard `HTTP_PROXY`, `
 environment variables (honoring `NO_PROXY`). Both `http(s)://` and SOCKS5 proxies are supported (SOCKS support is
 installed with the server). A `socks://` proxy URL, as many desktop proxy settings export it, is treated as
 `socks5://`. A proxy setting the server cannot use makes each fetch fail with a tool error that says so.
+
+### Customization - HTML extraction
+
+HTML is converted to Markdown by [readabilipy](https://github.com/alan-turing-institute/ReadabiliPy). When Node.js is
+on the `PATH`, readabilipy runs Mozilla's Readability.js in a Node.js subprocess; otherwise it uses its own
+pure-Python extractor, which keeps headings and text but drops link targets. The Node.js subprocess runs with no
+timeout, so a Node.js that hangs, or fails in a way readabilipy does not detect, stalls the tool call until the client
+gives up.
+
+Readability.js discards hidden elements. Pages rendered progressively on the server often send a visible loading
+shell, then the real content in a container hidden (`display: none`, `visibility: hidden`, `hidden`) until scripts
+run in the browser. When a hidden element other than navigation or similar page furniture holds more text than
+Readability.js extracted, the server unhides it and runs Readability.js again, keeping that result only if it has more
+text. Other pages are extracted once, exactly as before.
+
+To always use the pure-Python extractor, add the argument `--no-readability-js` to the `args` list in the
+configuration. The server then never starts Node.js (or npm), whether or not it is installed.
 
 ## Windows Configuration
 

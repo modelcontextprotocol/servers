@@ -1,7 +1,8 @@
 # The git MCP server: tools that read and change a Git repository through
-# GitPython. Repository confinement (`--repository`, `validate_repo_path`) and
-# the flag-injection guards live beside the handlers because every tool call
-# must pass them before any git command runs.
+# GitPython. Repository confinement (`--repository`, `validate_repo_path` on the
+# path given, `validate_opened_repo` on the directories git then uses) and the
+# flag-injection guards live beside the handlers because every tool call must
+# pass them before any git command runs.
 #
 # Built on the MCP Python SDK's high-level `MCPServer` (#5174), the API these
 # reference servers are meant to teach: each tool is a typed function, and the
@@ -73,18 +74,47 @@ class GitTools(str, Enum):
     BRANCH = "git_branch"
 
 
+def _git_text(repo: git.Repo, command: str, *args: str) -> str:
+    """Run `git <command> <args>` for a tool that hands git's output to the client.
+
+    Two things about that output are fixed here, for git_status and the three
+    diff tools alike:
+
+    - Paths (#5129). Under git's default `core.quotepath=true`, every byte of a
+      path at or above 0x80 prints as an octal escape (`"\\346\\227\\245.txt"`),
+      a name the client cannot pass back to git_add. `-c core.quotepath=false`
+      prints such names as written, for this one command only: nothing is
+      written to the repository's config. Git still C-quotes a name holding a
+      control character (a tab, say) or a double quote or backslash; the flag
+      governs only the high-bit bytes.
+    - Content (#5193). GitPython decodes output with surrogateescape, so a
+      non-UTF-8 file (Latin-1, say) leaves lone surrogates that cannot be
+      serialized as UTF-8. Take the bytes and replace what does not decode
+      with U+FFFD, as git_show does.
+
+    The `-c` has to come before the subcommand, so it goes through
+    `repo.git(c=...)`; `repo.git.status(c=...)` would put it after and fail.
+    That call sets the option on the shared `repo.git` until its next command
+    runs, which is the one made here.
+    """
+    output = getattr(repo.git(c="core.quotepath=false"), command)(
+        *args, stdout_as_string=False
+    )
+    return output.decode("utf-8", errors="replace")
+
+
 def git_status(repo: git.Repo) -> str:
-    return repo.git.status()
+    return _git_text(repo, "status")
 
 
 def git_diff_unstaged(
     repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES
 ) -> str:
-    return repo.git.diff(f"--unified={context_lines}")
+    return _git_text(repo, "diff", f"--unified={context_lines}")
 
 
 def git_diff_staged(repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
-    return repo.git.diff(f"--unified={context_lines}", "--cached")
+    return _git_text(repo, "diff", f"--unified={context_lines}", "--cached")
 
 
 def git_diff(
@@ -95,7 +125,7 @@ def git_diff(
     if target.startswith("-"):
         raise FlagInjectionError(f"Invalid target: '{target}' - cannot start with '-'")
     repo.rev_parse(target)  # Validates target is a real git ref, throws BadName if not
-    return repo.git.diff(f"--unified={context_lines}", target)
+    return _git_text(repo, "diff", f"--unified={context_lines}", target)
 
 
 def _has_staged_changes(repo: git.Repo) -> bool:
@@ -257,16 +287,32 @@ def git_create_branch(
         raise FlagInjectionError(
             f"Invalid base branch: '{base_branch}' - cannot start with '-'"
         )
+    # The base is a reference (a branch, tag or remote-tracking ref) when one
+    # has that name, otherwise any commit-ish (a SHA, `HEAD~2`). With no base,
+    # it is the current branch, or the current commit on a detached HEAD, where
+    # GitPython's `active_branch` would raise TypeError. The reply names the
+    # base the branch was created from.
+    base: git.SymbolicReference | str
     if base_branch:
-        base = repo.references[base_branch]
+        try:
+            base = repo.references[base_branch]
+            base_label = f"'{base.name}'"
+        except IndexError:
+            try:
+                base = repo.commit(base_branch).hexsha
+            except (ODBError, ValueError) as e:
+                # BadName for an unknown name, ValueError for an object that
+                # is not a commit (a tree, say).
+                raise ValueError(
+                    f"Unknown base branch or commit: '{base_branch}'"
+                ) from e
+            base_label = f"commit {base[:7]}"
     elif repo.head.is_detached:
-        # GitPython's `active_branch` raises TypeError on a detached HEAD.
-        raise ValueError(
-            "HEAD is detached, so there is no current branch to branch from; "
-            "pass base_branch"
-        )
+        base = repo.head.commit.hexsha
+        base_label = f"commit {base[:7]}"
     else:
         base = repo.active_branch
+        base_label = f"'{base.name}'"
 
     # GitPython's create_head accepts a name that already points at the base
     # commit, so check first rather than report a branch that was not created.
@@ -277,7 +323,7 @@ def git_create_branch(
             f"Cannot create branch '{branch_name}': refs/heads/{branch_name} already exists"
         )
     repo.create_head(branch_name, base)
-    return f"Created branch '{branch_name}' from '{base.name}'"
+    return f"Created branch '{branch_name}' from {base_label}"
 
 
 def git_checkout(repo: git.Repo, branch_name: str) -> str:
@@ -367,6 +413,64 @@ def validate_repo_path(repo_path: Path, allowed_repository: Path | None) -> None
         raise ValueError(
             f"Repository path '{repo_path}' is outside the allowed repository '{allowed_repository}'"
         )
+
+
+def validate_opened_repo(
+    repo: git.Repo, repo_path: Path, allowed_repository: Path | None
+) -> None:
+    """Validate that the directories git opened are within the allowed repository.
+
+    `validate_repo_path` checks only the path the caller passed. Git can then
+    follow a `.git` file (`gitdir:`), a `commondir` file or `core.worktree` to
+    a directory anywhere else, so the working tree, git directory and common
+    directory git actually uses are checked too. The working tree must lie
+    inside the allowed repository. The two git directories must lie inside it
+    or be the allowed repository's own: a linked worktree's git directory
+    lives under the main repository's `.git`, outside the worktree it serves.
+
+    Both git's answer (`rev-parse`, which the tools' git commands follow) and
+    GitPython's (which some tools read directly) are checked: GitPython does
+    not apply `core.worktree`, so the two can differ.
+    """
+    if allowed_repository is None:
+        return
+
+    allowed = allowed_repository.resolve()
+
+    def outside(used: Path) -> ValueError:
+        return ValueError(
+            f"Repository path '{repo_path}' uses '{used}', which is outside the "
+            f"allowed repository '{allowed_repository}'"
+        )
+
+    git_dir, common_dir, bare = repo.git.rev_parse(
+        "--path-format=absolute",
+        "--git-dir",
+        "--git-common-dir",
+        "--is-bare-repository",
+    ).splitlines()
+    working_trees = [] if bare == "true" else [repo.git.rev_parse("--show-toplevel")]
+    if repo.working_tree_dir is not None:
+        working_trees.append(str(repo.working_tree_dir))
+    for working_tree in map(Path, working_trees):
+        if not working_tree.resolve().is_relative_to(allowed):
+            raise outside(working_tree)
+
+    escaped = [
+        p
+        for p in map(Path, (git_dir, common_dir, repo.git_dir, repo.common_dir))
+        if not p.resolve().is_relative_to(allowed)
+    ]
+    if not escaped:
+        return
+    with git.Repo(allowed) as allowed_repo:
+        own = {
+            Path(allowed_repo.git_dir).resolve(),
+            Path(allowed_repo.common_dir).resolve(),
+        }
+    for p in escaped:
+        if p.resolve() not in own:
+            raise outside(p)
 
 
 def git_branch(
@@ -524,7 +628,13 @@ def create_server(repository: Path | None) -> MCPServer:
     def open_repo(repo_path: str) -> git.Repo:
         path = Path(repo_path)
         validate_repo_path(path, repository)
-        return git.Repo(path)
+        repo = git.Repo(path)
+        try:
+            validate_opened_repo(repo, path, repository)
+        except Exception:
+            repo.close()
+            raise
+        return repo
 
     @server.tool(
         name=GitTools.STATUS.value,
@@ -633,13 +743,24 @@ def create_server(repository: Path | None) -> MCPServer:
 
     @server.tool(
         name=GitTools.CREATE_BRANCH.value,
-        description="Creates a new branch from an optional base branch",
+        description="Creates a new branch from an optional base branch or commit",
         annotations=writes(destructive=False, idempotent=False),
         structured_output=False,
     )
     @reports_failures
     def create_branch(
-        repo_path: str, branch_name: str, base_branch: str | None = None
+        repo_path: str,
+        branch_name: str,
+        base_branch: Annotated[
+            str | None,
+            Field(
+                description=(
+                    "Branch, tag or commit SHA to create the branch from. "
+                    "Defaults to the current branch, or to the current commit "
+                    "when HEAD is detached"
+                )
+            ),
+        ] = None,
     ) -> str:
         return git_create_branch(open_repo(repo_path), branch_name, base_branch)
 

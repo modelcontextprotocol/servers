@@ -242,6 +242,8 @@ On Windows, use:
 
 - `MEMORY_FILE_PATH`: Path to the memory storage JSONL file (default: `memory.jsonl` in the server directory)
 
+When `MEMORY_FILE_PATH` is not set and the server directory still holds a legacy `memory.json` but no `memory.jsonl`, the server renames `memory.json` to `memory.jsonl` at startup. If that rename fails, the server exits with an error naming both paths and the cause, rather than starting on an empty graph; fix the cause (a permission problem, say) and restart, or set `MEMORY_FILE_PATH` to choose a file explicitly.
+
 #### Sharing one memory file between clients
 
 Each MCP client starts its own server process, so two clients using the same `MEMORY_FILE_PATH` (or both using the default) are two processes writing one file. Every write tool takes an exclusive lock file, `<memory file>.lock`, next to the memory file while it reads, changes and saves the graph, so writes from different processes take turns and none is lost. The lock file exists only while a write is in progress, so the directory holding the memory file must be writable (it already must be, for the atomic save).

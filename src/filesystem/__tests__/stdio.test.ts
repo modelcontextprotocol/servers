@@ -195,6 +195,20 @@ describe("startup", () => {
     expect(await resolveAllowedDirectories([link])).toEqual([link, target]);
   });
 
+  // #5185: a realpath that fails once (on Windows, the first native call
+  // after `subst` maps a drive) is retried, so the resolved spelling, which
+  // every request resolves to, is not lost for the life of the process.
+  it("retries a realpath that fails once, keeping the resolved spelling (#5185)", async () => {
+    const link = path.join(dir, "link");
+    const target = path.join(dir, "target");
+    await fs.mkdir(target);
+    await fs.symlink(target, link);
+    vi.spyOn(fs, "realpath").mockRejectedValueOnce(
+      Object.assign(new Error("ENOENT"), { code: "ENOENT" }),
+    );
+    expect(await resolveAllowedDirectories([link])).toEqual([link, target]);
+  });
+
   it("expands ~ to the home directory", async () => {
     const home = await fs.realpath(os.homedir());
     const resolved = await resolveAllowedDirectories(["~"]);

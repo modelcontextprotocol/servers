@@ -357,12 +357,96 @@ describe("read_text_file and read_file", () => {
     expect(textOf(result)).toBe("one\ntwo");
   });
 
-  it("returns the last N lines with tail, counting the trailing newline as a line", async () => {
+  it("returns the last N lines with tail, not counting the trailing newline as a line (#5187)", async () => {
     const result = await call(client, "read_text_file", {
       path: file,
       tail: 2,
     });
-    expect(textOf(result)).toBe("four\n");
+    expect(textOf(result)).toBe("three\nfour");
+  });
+
+  describe("head line endings (#5187)", () => {
+    async function head(content: string, n: number): Promise<string> {
+      const target = path.join(dir, "head.txt");
+      await fs.writeFile(target, content);
+      return textOf(
+        await call(client, "read_text_file", { path: target, head: n }),
+      );
+    }
+
+    it("returns the first lines of an LF file unchanged", async () => {
+      expect(await head("a\nb\nc\n", 2)).toBe("a\nb");
+    });
+
+    it("returns the first lines of a CRLF file without their \\r", async () => {
+      expect(await head("a\r\nb\r\nc\r\n", 2)).toBe("a\nb");
+    });
+
+    it("returns a CRLF file with no final newline normalized to LF", async () => {
+      expect(await head("a\r\nb\r\nc", 5)).toBe("a\nb\nc");
+    });
+
+    // headFile reads 1 KB chunks from the start. Here the first chunk ends
+    // on the "\r" of a "\r\n" pair whose "\n" opens the second chunk.
+    it("joins a CRLF pair split across a chunk boundary", async () => {
+      const content = "C".repeat(1023) + "\r\nnext\r\n";
+      expect(await head(content, 2)).toBe("C".repeat(1023) + "\nnext");
+    });
+  });
+
+  describe("tail at the end of the file (#5187)", () => {
+    async function tail(content: string, n: number): Promise<string> {
+      const target = path.join(dir, "tail.txt");
+      await fs.writeFile(target, content);
+      return textOf(
+        await call(client, "read_text_file", { path: target, tail: n }),
+      );
+    }
+
+    it("returns the last line of an LF file that ends with a newline", async () => {
+      expect(await tail("a\nb\nc\n", 1)).toBe("c");
+    });
+
+    it("returns the last lines of a CRLF file that ends with a newline", async () => {
+      expect(await tail("a\r\nb\r\nc\r\n", 2)).toBe("b\nc");
+    });
+
+    it("returns the last lines of a file with no final newline unchanged", async () => {
+      expect(await tail("a\nb\nc", 2)).toBe("b\nc");
+    });
+
+    it("counts a blank last line as a line", async () => {
+      expect(await tail("a\nb\n\n", 2)).toBe("b\n");
+    });
+
+    it("returns the whole file when tail exceeds its line count", async () => {
+      expect(await tail("a\nb\n", 5)).toBe("a\nb");
+    });
+
+    // tailFile reads 1 KB chunks from the end. Here the last chunk holds both
+    // remaining newlines but starts partway through the first wanted line, so
+    // the read loop must not count the final newline as a line break it needs.
+    it("reads back past a chunk boundary for the first wanted line (LF)", async () => {
+      const content =
+        "head\n" + "A".repeat(611) + "\n" + "B".repeat(511) + "\n";
+      expect(await tail(content, 2)).toBe(
+        "A".repeat(611) + "\n" + "B".repeat(511),
+      );
+    });
+
+    it("reads back past a chunk boundary for the first wanted line (CRLF)", async () => {
+      const content =
+        "head\r\n" + "A".repeat(611) + "\r\n" + "B".repeat(510) + "\r\n";
+      expect(await tail(content, 2)).toBe(
+        "A".repeat(611) + "\n" + "B".repeat(510),
+      );
+    });
+
+    it("joins a CRLF pair split across a chunk boundary", async () => {
+      // The last 1024 bytes start with the "\n" of the "\r\n" after "x".
+      const content = "x\r\n" + "C".repeat(1021) + "\r\n";
+      expect(await tail(content, 2)).toBe("x\n" + "C".repeat(1021));
+    });
   });
 
   it("treats head: 0 as absent and returns the whole file", async () => {
@@ -1299,6 +1383,72 @@ describe("move_file", () => {
     expect(textOf(result)).toMatch(/^ENOENT/);
   });
 
+  // #5188: rename cannot cross a device boundary. A second mount cannot be
+  // staged in a test, so the rename is made to fail as it would across one.
+  describe("across filesystems (rename fails with EXDEV)", () => {
+    const crossDevice = () =>
+      vi.spyOn(fsSync, "renameSync").mockImplementation(() => {
+        throw Object.assign(
+          new Error("EXDEV: cross-device link not permitted"),
+          {
+            code: "EXDEV",
+          },
+        );
+      });
+
+    it("moves a file by copying it and removing the source", async () => {
+      const source = path.join(dir, "a.txt");
+      const destination = path.join(dir, "sub", "b.txt");
+      await fs.mkdir(path.join(dir, "sub"));
+      await fs.writeFile(source, "across");
+      const rename = crossDevice();
+      const result = await call(client, "move_file", { source, destination });
+      expect(rename).toHaveBeenCalled();
+      expect(result.isError).toBeFalsy();
+      expect(textOf(result)).toBe(
+        `Successfully moved ${source} to ${destination}`,
+      );
+      expect(await fs.readFile(destination, "utf-8")).toBe("across");
+      await expect(fs.stat(source)).rejects.toThrow();
+    });
+
+    it("refuses a directory with a clear error, and leaves it in place", async () => {
+      const source = path.join(dir, "d1");
+      await fs.mkdir(source);
+      await fs.writeFile(path.join(source, "f"), "x");
+      crossDevice();
+      const result = await call(client, "move_file", {
+        source,
+        destination: path.join(dir, "d2"),
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toBe(
+        `Cannot move a directory across filesystems: ${source}. ` +
+          "Create the directory at the destination and move its files one at a time.",
+      );
+      expect(await fs.readFile(path.join(source, "f"), "utf-8")).toBe("x");
+      await expect(fs.stat(path.join(dir, "d2"))).rejects.toThrow();
+    });
+
+    it("leaves no partial destination when the copy fails", async () => {
+      const source = path.join(dir, "a.txt");
+      await fs.writeFile(source, "keep");
+      crossDevice();
+      vi.spyOn(fsSync, "read").mockImplementationOnce(((...args: unknown[]) => {
+        (args[args.length - 1] as (error: Error) => void)(
+          Object.assign(new Error("EIO: i/o error, read"), { code: "EIO" }),
+        );
+      }) as typeof fsSync.read);
+      const result = await call(client, "move_file", {
+        source,
+        destination: path.join(dir, "b.txt"),
+      });
+      expect(textOf(result)).toBe("EIO: i/o error, read");
+      expect(await fs.readdir(dir)).toEqual(["a.txt"]);
+      expect(await fs.readFile(source, "utf-8")).toBe("keep");
+    });
+  });
+
   it("reports a destination lstat failure other than ENOENT as is", async () => {
     await fs.writeFile(path.join(dir, "a.txt"), "a");
     vi.spyOn(fs, "lstat").mockRejectedValueOnce(new Error("EACCES lstat"));
@@ -1888,6 +2038,7 @@ describe("get_file_info", () => {
       "isDirectory",
       "isFile",
       "permissions",
+      "hardLinks",
     ]);
     expect(lines[0]).toBe("size: 5");
     expect(lines[4]).toBe("isDirectory: false");
@@ -1898,6 +2049,16 @@ describe("get_file_info", () => {
     );
     // Dates are rendered with Date#toString, in the server's local time zone.
     expect(lines[2]).toMatch(/^modified: \w{3} \w{3} \d{2} \d{4} /);
+  });
+
+  it("reports a file's hard-link count (#5226)", async () => {
+    const file = path.join(dir, "linked.txt");
+    await fs.writeFile(file, "shared");
+    const info = async () =>
+      textOf(await call(client, "get_file_info", { path: file }));
+    expect(await info()).toContain("hardLinks: 1");
+    await fs.link(file, path.join(dir, "hardlink.txt"));
+    expect(await info()).toContain("hardLinks: 2");
   });
 
   it("reports a directory", async () => {

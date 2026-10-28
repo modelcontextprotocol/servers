@@ -5,8 +5,11 @@
  * registering it for later reads, and the errors for bad protocols, oversized
  * or empty responses and failed fetches. It also guards #4808: two sessions
  * that use the same file name each keep their own resource. The configurable
- * limits are in `gzip-limits.test.ts`.
+ * limits are in `gzip-limits.test.ts`. Its fixture listens on 127.0.0.1, so it
+ * opts in to private addresses (#5130) before the server loads; the default
+ * refusal is in `gzip-private-addresses.test.ts`.
  */
+import "./private-ips-opted-in.js";
 import { createServer as createHttpServer, type Server } from "node:http";
 import { once } from "node:events";
 import { gunzipSync } from "node:zlib";
@@ -220,4 +223,67 @@ describe("gzip-file-as-resource", () => {
       content: [{ type: "text", text: "fetch failed" }],
     });
   });
+});
+
+describe("gzip-file-as-resource with an HTTP error response (#5207)", () => {
+  // A server of its own, so these routes stay apart from the shared one above.
+  let errors: Server;
+  let errorBase: string;
+
+  beforeAll(async () => {
+    errors = createHttpServer((req, res) => {
+      if (req.url === "/server-error") {
+        res.writeHead(500, { "content-type": "text/plain" });
+        res.end("internal failure");
+        return;
+      }
+      res.writeHead(404, { "content-type": "text/html" });
+      res.end("<h1>Not Found</h1>");
+    });
+    errors.listen(0, "127.0.0.1");
+    await once(errors, "listening");
+    const address = errors.address();
+    if (address === null || typeof address === "string")
+      throw new Error("no port");
+    errorBase = `http://127.0.0.1:${address.port}`;
+  });
+
+  afterAll(async () => {
+    errors.closeAllConnections();
+    await new Promise((resolve) => errors.close(resolve));
+  });
+
+  // Both output types: "resource" is the embedded path the issue reproduced,
+  // and "resourceLink" is the one that would register a session resource, so
+  // it is what the listResources assertion guards.
+  it.each([
+    ["/missing", "404 Not Found", "resource"],
+    ["/server-error", "500 Internal Server Error", "resource"],
+    ["/missing", "404 Not Found", "resourceLink"],
+    ["/server-error", "500 Internal Server Error", "resourceLink"],
+  ])(
+    "fails on %s with HTTP %s (outputType %s) and registers no resource",
+    async (path, status, outputType) => {
+      const s = await open();
+      const url = `${errorBase}${path}`;
+      const result = await gzip(s, {
+        name: "error.gz",
+        data: url,
+        outputType,
+      });
+      expect(result).toEqual({
+        isError: true,
+        content: [
+          {
+            type: "text",
+            text: `Fetching ${url} failed with HTTP ${status}`,
+          },
+        ],
+      });
+      const { resources } = await s.client.listResources();
+      expect(resources.map((r) => r.uri)).not.toContain(
+        "demo://resource/session/error.gz",
+      );
+    },
+  );
 });

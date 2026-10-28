@@ -31,7 +31,7 @@ not in advance.
 | [`local-dev`](.claude/skills/local-dev/SKILL.md)                 | Install, build and run each server from the checkout over the transports it implements; local `npx`/`uvx` and client-config runs; stale builds and fresh worktrees; the `overrides`, lockstep and `uv.lock` procedures  | Model-invoked, or `/local-dev`         |
 | [`testing`](.claude/skills/testing/SKILL.md)                     | The in-process protocol-level harness, test placement, the commands per suite, `test` versus `coverage`, and clearing the per-file coverage gate                                                                        | Model-invoked, or `/testing`           |
 | [`release`](.claude/skills/release/SKILL.md)                     | A milestone release end to end: the release issue, the preparation PRs on `v2/main` (audit, Version Packages, Python CalVer), the pure `v2/main` → `main` merge PR, the release ledger, and what a maintainer publishes | **Name-only**: `/release`              |
-| [`client-smoke`](.claude/skills/client-smoke/SKILL.md)           | Driving a built server with the Inspector CLI (the scripted path), the Inspector web UI (by hand) and an LLM client; the CLI's argument split and exit codes; protocol eras and what can be exercised today             | Model-invoked, or `/client-smoke`      |
+| [`client-smoke`](.claude/skills/client-smoke/SKILL.md)           | Driving a built server with the Inspector CLI (the scripted path), the Inspector web UI (through Playwright) and an LLM client; the CLI's argument split and exit codes; protocol eras and what can be exercised today             | Model-invoked, or `/client-smoke`      |
 
 A PR that adds a skill under `.claude/skills/<name>/SKILL.md` adds its row to
 this table in the same change, and the table never lists a skill that does not
@@ -184,6 +184,12 @@ build jobs and `sdk-watch.yml`'s `sweep`, whose outputs `analyze` reads.
   downloads**, since what it builds is what gets published, and for **a job
   whose outputs a credentialed job reads**, since the reader acts on them.
   `verify:action-pins` enforces both. Other jobs keep moving major tags.
+- **A credentialed job that a comment, review or issue can start runs only
+  for a trusted author**: `OWNER`, `MEMBER` or `COLLABORATOR` in the
+  `author_association` of the text that triggered it, never of the thread
+  around it. Today that is `claude.yml`, whose `if:` checks it on every event
+  it listens to; `scripts/claude-workflow.test.mjs` evaluates that condition
+  per event and fails when one loses its check.
 - **A job that holds a publish credential does not install dependencies or
   build.** `release.yml` builds, tests and verifies each package in a job
   with no `id-token`, and the publish job only downloads that artifact and
@@ -211,11 +217,11 @@ halves are replaced by scheduled workflows that file **issues**, and a
 maintainer writes each fix by hand against `v2/main`. Each script's header holds
 its reasoning; these are the rules.
 
-| Sweep                                                       | Replaces                                                                   | Files                                                                                                                                                                                                       | Cadence |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| `dependency-refresh.yml` → `scripts/dependency-refresh.mjs` | `.github/dependabot.yml` (deleted)                                         | **One** tracking issue: `npm outdated` across the root and workspaces, each Python server's `uv lock --upgrade` dry run, and each workflow `uses:` ref against its action's highest release                 | Monthly |
-| `dependabot-alerts.yml` → `scripts/dependabot-alerts.mjs`   | Security-update PRs (the `automated-security-fixes` **repo setting**, off) | One issue per vulnerable package per lockfile (npm and pip) that has a patched release, targeting the lowest patched version outside every applicable range, or flagging that no listed fix clears them all | Daily   |
-| `sdk-watch.yml` → `scripts/sdk-watch.mjs`                   | Nothing: SDK releases were watched by habit                                | One issue per MCP SDK group behind its registry (npm `@modelcontextprotocol/*`, PyPI `mcp`), plus a Claude analysis comment                                                                                 | Nightly |
+| Sweep                                                       | Replaces                                                                   | Files                                                                                                                                                                                                                                          | Cadence |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `dependency-refresh.yml` → `scripts/dependency-refresh.mjs` | `.github/dependabot.yml` (deleted)                                         | **One** tracking issue: `npm outdated` across the root and workspaces, each Python server's `uv lock --upgrade` dry run, and each workflow `uses:` ref against its action's highest release                                                    | Monthly |
+| `dependabot-alerts.yml` → `scripts/dependabot-alerts.mjs`   | Security-update PRs (the `automated-security-fixes` **repo setting**, off) | One issue per vulnerable package per lockfile (npm and pip), targeting the lowest patched version outside every applicable range, flagging that no listed fix clears them all, or asking for a decision on an advisory with no patched release | Daily   |
+| `sdk-watch.yml` → `scripts/sdk-watch.mjs`                   | Nothing: SDK releases were watched by habit                                | One issue per MCP SDK group behind its registry (npm `@modelcontextprotocol/*`, PyPI `mcp`), plus a Claude analysis comment                                                                                                                    | Nightly |
 
 - **Never re-add `.github/dependabot.yml` or switch `automated-security-fixes`
   back on.** Keep Dependabot **alerts** on: the alert sweep consumes them. The

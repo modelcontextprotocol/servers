@@ -745,9 +745,10 @@ wheels = [
 
 [[package]]
 name = "mcp-server-fetch"
-version = "2026.10.24"
+version = "2026.10.28"
 source = { editable = "." }
 dependencies = [
+    { name = "beautifulsoup4" },
     { name = "httpx", extra = ["socks"] },
     { name = "markdownify" },
     { name = "mcp" },
@@ -768,12 +769,13 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "beautifulsoup4", specifier = ">=4.7.1" },
     { name = "httpx", extras = ["socks"], specifier = ">=0.27" },
     { name = "markdownify", specifier = ">=0.13.1" },
     { name = "mcp", specifier = ">=2.3,<3" },
     { name = "protego", specifier = ">=0.6.2" },
     { name = "pydantic", specifier = ">=2.0.0" },
-    { name = "readabilipy", specifier = ">=0.2.0" },
+    { name = "readabilipy", specifier = ">=0.3.0" },
     { name = "requests", specifier = ">=2.32.3" },
 ]
 
@@ -1107,7 +1109,7 @@ wheels = [
 
 [[package]]
 name = "readabilipy"
-version = "0.2.0"
+version = "0.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "beautifulsoup4" },
@@ -1115,9 +1117,9 @@ dependencies = [
     { name = "lxml" },
     { name = "regex" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e0/ca/0c9e5afed873dd29f529f24bb3174d582f77e343acfa8c77a39745fa7073/readabilipy-0.2.0.tar.gz", hash = "sha256:098bf347b19f362042fb6c08864ad776588bf844ac2261fb230f7f9c250fdae5", size = 38948, upload-time = "2020-09-22T11:14:54.018Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b8/e4/260a202516886c2e0cc6e6ae96d1f491792d829098886d9529a2439fbe8e/readabilipy-0.3.0.tar.gz", hash = "sha256:e13313771216953935ac031db4234bdb9725413534bfb3c19dbd6caab0887ae0", size = 35491, upload-time = "2024-12-02T23:03:02.311Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/39/42/11f5795b747841912a6f7bacab32ab1eaabc911a4e9949fbf8786121f4d3/readabilipy-0.2.0-py3-none-any.whl", hash = "sha256:0050853cd6ab012ac75bb4d8f06427feb7dc32054da65060da44654d049802d0", size = 4339504, upload-time = "2020-09-22T11:14:51.007Z" },
+    { url = "https://files.pythonhosted.org/packages/dd/46/8a640c6de1a6c6af971f858b2fb178ca5e1db91f223d8ba5f40efe1491e5/readabilipy-0.3.0-py3-none-any.whl", hash = "sha256:d106da0fad11d5fdfcde21f5c5385556bfa8ff0258483037d39ea6b1d6db3943", size = 22158, upload-time = "2024-12-02T23:03:00.438Z" },
 ]
 
 [[package]]

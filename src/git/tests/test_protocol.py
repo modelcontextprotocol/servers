@@ -9,6 +9,7 @@ means changing that test.
 """
 
 import json
+import shutil
 import re
 import threading
 import time
@@ -313,6 +314,42 @@ async def test_git_diff_rejects_flag_injection(repo: git.Repo):
     ) == tool_error(
         "git_diff", "Invalid target: '--output=/tmp/evil' - cannot start with '-'"
     )
+
+
+async def test_git_diff_of_non_utf8_content_is_a_normal_result(repo: git.Repo):
+    """A Latin-1 file's diff reaches the client with U+FFFD in place of the
+    undecodable bytes, as git_show's does, and serializes as UTF-8 (#5193)."""
+    root = root_of(repo)
+    (root / "latin1.txt").write_bytes(b"caf\xe9\n")
+    repo.index.add(["latin1.txt"])
+    repo.index.commit("add Latin-1 file")
+    (root / "latin1.txt").write_bytes(b"caf\xe9 na\xefve\n")
+    result = await call(None, "git_diff_unstaged", {"repo_path": str(root)})
+    assert result["isError"] is False
+    text = result["content"][0]["text"]
+    assert text.startswith("Unstaged changes:\ndiff --git a/latin1.txt b/latin1.txt")
+    assert "-caf�\n+caf� na�ve" in text
+    json.dumps(result, ensure_ascii=False).encode("utf-8")  # no lone surrogates
+
+
+async def test_git_status_non_ascii_path_round_trips_through_git_add(
+    repo: git.Repo,
+):
+    """Under git's default core.quotepath=true the name still comes back as
+    written, so a client can pass it straight to git_add (#5129)."""
+    root = root_of(repo)
+    with repo.config_writer() as config:
+        config.set_value("core", "quotepath", "true")
+    (root / "日本語.txt").write_text("new\n", newline="\n")
+    status = await call(None, "git_status", {"repo_path": str(root)})
+    assert "\t日本語.txt\n" in status["content"][0]["text"]
+    added = await call(
+        None, "git_add", {"repo_path": str(root), "files": ["日本語.txt"]}
+    )
+    assert added["isError"] is False
+    # Read the index directly: `staged_paths` lists through git, which would
+    # octal-escape the name under the pinned core.quotepath.
+    assert "日本語.txt" in {path for path, _stage in repo.index.entries}
 
 
 # --------------------------------------------------------------------------
@@ -632,7 +669,7 @@ async def test_git_create_branch_unknown_base_is_error(repo: git.Repo):
         None,
         "git_create_branch",
         {"repo_path": str(root_of(repo)), "branch_name": "x", "base_branch": "nope"},
-    ) == tool_error("git_create_branch", "No item found with id nope")
+    ) == tool_error("git_create_branch", "Unknown base branch or commit: 'nope'")
 
 
 async def test_git_create_branch_existing_name_at_same_commit_is_error(
@@ -676,23 +713,38 @@ async def test_git_create_branch_existing_name_at_other_commit_is_error(
     assert "already exist" in result["content"][0]["text"]
 
 
-async def test_git_create_branch_on_detached_head_asks_for_a_base(
+async def test_git_create_branch_on_detached_head_uses_current_commit(
     repo: git.Repo,
 ):
     # With no base_branch the base is the active branch, which a detached HEAD
     # does not have (GitPython would raise TypeError, a crash under MCPServer).
-    # #5174: the tool says so instead, as an anticipated failure.
+    # #5192: the tool branches from the current commit and names it.
+    head = repo.head.commit
     repo.git.checkout("--detach")
     result = await call(
         None,
         "git_create_branch",
         {"repo_path": str(root_of(repo)), "branch_name": "x"},
     )
-    assert result == tool_error(
+    assert result == text_result(f"Created branch 'x' from commit {head.hexsha[:7]}")
+    assert repo.heads["x"].commit == head
+    assert repo.head.is_detached
+
+
+async def test_git_create_branch_from_commit_sha(repo: git.Repo):
+    first = repo.head.commit
+    add_commits(repo, 1)
+    result = await call(
+        None,
         "git_create_branch",
-        "HEAD is detached, so there is no current branch to branch from; "
-        "pass base_branch",
+        {
+            "repo_path": str(root_of(repo)),
+            "branch_name": "x",
+            "base_branch": first.hexsha,
+        },
     )
+    assert result == text_result(f"Created branch 'x' from commit {first.hexsha[:7]}")
+    assert repo.heads["x"].commit == first
 
 
 async def test_an_unanticipated_exception_is_reported_generically(repo: git.Repo):
@@ -1173,6 +1225,111 @@ async def test_restricted_server_rejects_symlink_escape(tmp_path: Path, repo: gi
         ) == outside_error(link, root)
     finally:
         other.close()
+
+
+def uses_outside(result: dict[str, Any], used: Path, allowed: Path) -> bool:
+    """The result is the error for a repository git opened outside `allowed`."""
+    text = result["content"][0]["text"]
+    return (
+        result["isError"] is True
+        and f"uses '{used}'" in text
+        and f"which is outside the allowed repository '{allowed}'" in text
+    )
+
+
+async def test_restricted_server_rejects_gitdir_file_pointing_outside(
+    tmp_path: Path, repo: git.Repo
+):
+    # A `.git` file inside the allowed repository passes the path check, but
+    # git follows its `gitdir:` line to the repository it names. Neither a read
+    # nor a write may reach that repository.
+    root = root_of(repo)
+    other = make_repo(tmp_path / "other")
+    nested = root / "nested"
+    nested.mkdir()
+    (nested / ".git").write_text(f"gitdir: {other.git_dir}\n")
+    try:
+        shown = await call(
+            root, "git_show", {"repo_path": str(nested), "revision": "HEAD"}
+        )
+        assert uses_outside(shown, Path(other.git_dir), root)
+        branched = await call(
+            root,
+            "git_create_branch",
+            {"repo_path": str(nested), "branch_name": "escaped"},
+        )
+        assert uses_outside(branched, Path(other.git_dir), root)
+        assert "escaped" not in {head.name for head in other.heads}
+    finally:
+        other.close()
+
+
+async def test_restricted_server_rejects_commondir_pointing_outside(
+    tmp_path: Path, repo: git.Repo
+):
+    # A worktree-style git directory inside the allowed repository whose
+    # `commondir` names another repository's `.git` reads that repository's
+    # objects and refs.
+    root = root_of(repo)
+    other = make_repo(tmp_path / "other")
+    other.git.worktree("add", str(tmp_path / "other-wt"))
+    admin = root / "admin"
+    shutil.copytree(
+        Path(other.git_dir) / "worktrees" / "other-wt",
+        admin,
+        ignore=shutil.ignore_patterns("*.ipc"),  # git's fsmonitor socket
+    )
+    (admin / "commondir").write_text(f"{other.git_dir}\n")
+    nested = root / "nested"
+    nested.mkdir()
+    (nested / ".git").write_text(f"gitdir: {admin}\n")
+    try:
+        result = await call(root, "git_log", {"repo_path": str(nested)})
+        assert uses_outside(result, Path(other.git_dir), root)
+    finally:
+        other.close()
+
+
+async def test_restricted_server_rejects_worktree_config_pointing_outside(
+    tmp_path: Path, repo: git.Repo
+):
+    # `core.worktree` in a nested repository moves its working tree, and every
+    # checkout or add with it, to wherever the setting names.
+    root = root_of(repo)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    nested = make_repo(root / "nested")
+    with nested.config_writer() as config:
+        config.set_value("core", "worktree", str(elsewhere))
+    nested.close()
+    result = await call(root, "git_status", {"repo_path": str(root / "nested")})
+    assert uses_outside(result, elsewhere, root)
+
+
+async def test_restricted_server_serves_a_linked_worktree(tmp_path: Path):
+    # A linked worktree's git directory lives under the main repository's
+    # `.git`, outside the worktree, and is still the allowed repository's own.
+    main = make_repo(tmp_path / "main")
+    worktree = tmp_path / "worktree"
+    main.git.worktree("add", str(worktree))
+    try:
+        result = await call(worktree, "git_status", {"repo_path": str(worktree)})
+        assert result["isError"] is False
+    finally:
+        main.close()
+
+
+async def test_restricted_server_accepts_nested_bare_repository(repo: git.Repo):
+    # A bare repository has no working tree; its git directory is inside.
+    root = root_of(repo)
+    bare = git.Repo.init(root / "bare.git", bare=True)
+    bare.close()
+    result = await call(
+        root,
+        "git_branch",
+        {"repo_path": str(root / "bare.git"), "branch_type": "local"},
+    )
+    assert result["isError"] is False
 
 
 async def test_restricted_server_accepts_nested_repository(repo: git.Repo):

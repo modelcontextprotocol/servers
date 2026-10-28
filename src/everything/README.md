@@ -13,6 +13,8 @@ This MCP server attempts to exercise all the features of the MCP protocol. It is
 
 A complete list of the registered MCP primitives and other protocol features demonstrated can be found in the [Server Features](docs/features.md) document.
 
+The `get-env` tool returns the server's environment variables, but masks the value of any credential-like name (a `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `CREDENTIAL`, `AUTH` or `COOKIE` segment, such as `OPENAI_API_KEY`) as `"<redacted>"`. To see every value unmasked while debugging, start the server with `GET_ENV_INCLUDE_SECRETS=1` (or `true`). Leave it unset otherwise: with it set, every credential in the server's environment reaches the model's context.
+
 ## Protocol versions
 
 The server serves both protocol eras, over stdio and Streamable HTTP, from one process:
@@ -21,6 +23,19 @@ The server serves both protocol eras, over stdio and Streamable HTTP, from one p
 - **2025-era** clients connect with the `initialize` handshake, as before. Elicitation, sampling and roots are served to them from the same multi-round-trip handlers through the SDK's legacy shim.
 
 Roots, sampling and logging are deprecated as of 2026-07-28 and stay available, labelled deprecated. [Server Features](docs/features.md) marks which era each feature belongs to.
+
+## Configuring `gzip-file-as-resource`
+
+The `gzip-file-as-resource` tool fetches the URL it is given, so these environment variables limit what it will fetch:
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `GZIP_MAX_FETCH_SIZE` | 10 MiB | The largest response, in bytes, it reads |
+| `GZIP_MAX_FETCH_TIME_MILLIS` | 30000 | How long a fetch may take, redirects included |
+| `GZIP_ALLOWED_DOMAINS` | empty (any name) | Comma-separated host names; a host must be one of them or a subdomain of one. Checked on the caller's URL and on every redirect hop |
+| `GZIP_ALLOW_PRIVATE_IPS` | off | Set to `1` or `true` to allow loopback, private (RFC 1918), CGNAT, link-local (cloud metadata) and other non-public addresses |
+
+By default the tool refuses a URL whose host resolves to a non-public address, and follows at most five redirects, checking each hop the same way. `GZIP_ALLOWED_DOMAINS` filters names, not addresses: a listed name that resolves to a private address is still refused unless `GZIP_ALLOW_PRIVATE_IPS` is set. The address is checked before the request and resolved again when it is made, so a DNS answer that changes in between (DNS rebinding) is not caught. `data:` URLs are not fetched, so neither check applies to them.
 
 ## Requirements
 

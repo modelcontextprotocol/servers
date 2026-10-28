@@ -218,6 +218,8 @@ Example:
 }
 ```
 
+The Docker image cannot see the host's timezone, so it reads the `LOCAL_TIMEZONE` environment variable when the container starts, and uses `UTC` when it is unset or empty. Pass it with `-e`: `"-e", "LOCAL_TIMEZONE"` forwards the client's own value, as in the Docker configuration above, and `"-e", "LOCAL_TIMEZONE=America/New_York"` sets one. A `--local-timezone` given after the image name takes precedence.
+
 ## Example Interactions
 
 1. Get current time:

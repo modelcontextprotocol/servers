@@ -168,7 +168,7 @@ src/everything
 - `get-annotated-message.ts`
   - Registers a `get-annotated-message` tool which demonstrates content-level annotations. Emits a primary `text` message with content `annotations` (`priority`, `audience`) that vary by `messageType` (`"error" | "success" | "debug"`), and optionally includes an annotated `image` (tiny PNG) when `includeImage` is true. All tools in this server include tool-level annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`).
 - `get-env.ts`
-  - Registers a `get-env` tool that returns the current process environment variables as formatted JSON text; useful for debugging configuration.
+  - Registers a `get-env` tool that returns the current process environment variables as formatted JSON text; useful for debugging configuration. Values of credential-like names are masked as `"<redacted>"` unless `GET_ENV_INCLUDE_SECRETS` is set to a truthy value.
 - `get-header-params.ts`
   - Registers a `get-header-params` tool with JSON Schema 2020-12 input and output schemas whose `region` argument carries `x-mcp-header`; returns the argument and the `Mcp-Param-Region` header it arrived in.
 - `get-resource-links.ts`
@@ -185,7 +185,8 @@ src/everything
   - Environment controls:
     - `GZIP_MAX_FETCH_SIZE` (bytes, default 10 MiB)
     - `GZIP_MAX_FETCH_TIME_MILLIS` (ms, default 30000)
-    - `GZIP_ALLOWED_DOMAINS` (comma-separated allowlist; empty means all domains allowed)
+    - `GZIP_ALLOWED_DOMAINS` (comma-separated name allowlist, checked on the caller's URL and on every redirect hop; empty means any name is allowed)
+    - `GZIP_ALLOW_PRIVATE_IPS` (`1`/`true` to allow loopback, private, link-local and other non-public addresses; by default a host that resolves to one is refused, on every hop)
 - `simulate-research-query.ts`
   - 2026-07-28: registers a `simulate-research-query` tool that runs as a task on the tasks extension, through four timed stages, pausing at `input_required` for a clarification on an ambiguous topic.
 - `trigger-elicitation-request.ts`

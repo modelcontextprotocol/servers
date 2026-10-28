@@ -8,7 +8,7 @@ import {
   type Mock,
 } from "vitest";
 import fs, { type FileHandle } from "fs/promises";
-import type { Dirent, PathLike, Stats } from "fs";
+import type { BigIntStats, Dirent, PathLike, Stats } from "fs";
 import path from "path";
 import {
   // Pure utility functions
@@ -54,6 +54,15 @@ const mockReaddirNames = vi.mocked(
   fs.readdir as (path: PathLike) => Promise<string[]>,
 );
 
+// The case respelling (#470) lstats with { bigint: true }, to compare inodes
+// Windows reports as 64-bit file IDs without losing precision.
+const mockLstatBigInt = vi.mocked(
+  fs.lstat as (
+    path: PathLike,
+    options: { bigint: true },
+  ) => Promise<BigIntStats>,
+);
+
 interface MockFileHandle {
   read: Mock;
   close: Mock;
@@ -89,9 +98,15 @@ function createMockFileHandle(content: Buffer) {
   };
 }
 
-// What lstat and the opened handle's stat report for the file an in-place
-// write replaces: a regular file, the same device and inode both times.
-const REGULAR_FILE = { isFile: () => true, dev: 1, ino: 42 } as Stats;
+// What lstat reports for the file an in-place write replaces: a regular file,
+// as a BigInt stat, the form the identity check compares exactly (#5154).
+const REGULAR_FILE = {
+  isFile: () => true,
+  dev: 1n,
+  ino: 42n,
+  size: 8n,
+  mtimeNs: 1_700_000_000_000_000_000n,
+} as BigIntStats;
 
 // The allow-list validatePath checks against; each server instance passes its
 // own (#4854), so the unit tests pass this one explicitly.
@@ -429,6 +444,93 @@ describe("Lib Functions", () => {
           process.cwd = originalCwd;
         }
       });
+
+      // #470: the allowed directory's own name spelled in a letter case that
+      // matches neither the configured nor the on-disk spelling. It is
+      // respelled only where the file system confirms, component by
+      // component, that both spellings name one entry.
+      describe("letter case of an allowed directory's own name (#470)", () => {
+        const win = process.platform === "win32";
+        const configured = win ? "C:\\Users\\test" : "/home/user";
+        const requestedFile = win
+          ? "C:\\USERS\\Test\\file.txt"
+          : "/HOME/User/file.txt";
+        const respelled = path.join(configured, "file.txt");
+        // Each directory the walk lists, as the configured spelling names it.
+        const listings: Record<string, string[]> = win
+          ? { "C:\\": ["Users"], "C:\\Users": ["test"] }
+          : { "/": ["home"], "/home": ["user"] };
+
+        // lstat on a case-insensitive file system: any spelling of a listed
+        // entry is that entry, one inode per lowercased path.
+        function foldingLstat() {
+          mockLstatBigInt.mockImplementation(
+            async (p: PathLike) =>
+              ({
+                dev: 1n,
+                ino: BigInt(p.toString().toLowerCase().length),
+              }) as BigIntStats,
+          );
+        }
+
+        beforeEach(() => {
+          mockReaddirNames.mockImplementation(
+            async (p: PathLike) => listings[p.toString()] ?? [],
+          );
+        });
+
+        it("respells the request onto the allowed directory when the file system folds case", async () => {
+          foldingLstat();
+          await expect(validatePath(requestedFile, allowedDirs)).resolves.toBe(
+            respelled,
+          );
+        });
+
+        it("refuses when a directory holds two entries differing only in case", async () => {
+          foldingLstat();
+          const [first, second] = win ? ["Users", "test"] : ["home", "user"];
+          const parent = win ? "C:\\" : "/";
+          mockReaddirNames.mockImplementation(async (p: PathLike) =>
+            p.toString() === parent ? [first, first.toUpperCase()] : [second],
+          );
+          await expect(
+            validatePath(requestedFile, allowedDirs),
+          ).rejects.toThrow("Access denied - path outside allowed directories");
+        });
+
+        it("refuses when the requested spelling does not exist (a case-sensitive directory)", async () => {
+          // beforeEach makes every lstat ENOENT.
+          await expect(
+            validatePath(requestedFile, allowedDirs),
+          ).rejects.toThrow("Access denied - path outside allowed directories");
+        });
+
+        it("refuses when the two spellings are different entries", async () => {
+          let ino = 0n;
+          mockLstatBigInt.mockImplementation(
+            async () => ({ dev: 1n, ino: ++ino }) as BigIntStats,
+          );
+          await expect(
+            validatePath(requestedFile, allowedDirs),
+          ).rejects.toThrow("Access denied - path outside allowed directories");
+        });
+
+        it("refuses when a directory cannot be listed", async () => {
+          foldingLstat();
+          mockReaddirNames.mockRejectedValue(new Error("EACCES readdir"));
+          await expect(
+            validatePath(requestedFile, allowedDirs),
+          ).rejects.toThrow("Access denied - path outside allowed directories");
+        });
+
+        it("still refuses a name that only folds onto part of an allowed directory", async () => {
+          foldingLstat();
+          const parentOnly = win ? "C:\\USERS\\x.txt" : "/HOME/x.txt";
+          await expect(validatePath(parentOnly, allowedDirs)).rejects.toThrow(
+            "Access denied - path outside allowed directories",
+          );
+        });
+      });
     });
   });
 
@@ -443,6 +545,7 @@ describe("Lib Functions", () => {
           isDirectory: () => false,
           isFile: () => true,
           mode: 0o644,
+          nlink: 2,
         };
 
         mockFs.stat.mockResolvedValueOnce(mockStats as Stats);
@@ -457,6 +560,7 @@ describe("Lib Functions", () => {
           isDirectory: false,
           isFile: true,
           permissions: "644",
+          hardLinks: 2,
         });
       });
 
@@ -520,7 +624,9 @@ describe("Lib Functions", () => {
 
         await writeFileContent("/test/script.sh", "new content");
 
-        expect(mockFs.lstat).toHaveBeenCalledWith("/test/script.sh");
+        expect(mockFs.lstat).toHaveBeenCalledWith("/test/script.sh", {
+          bigint: true,
+        });
         expect(mockPinned.overwriteFileInDirectory).toHaveBeenCalledWith(
           "/test/script.sh",
           "new content",
@@ -540,7 +646,7 @@ describe("Lib Functions", () => {
         mockFs.lstat.mockResolvedValueOnce({
           ...REGULAR_FILE,
           isFile: () => false,
-        } as Stats);
+        } as BigIntStats);
 
         await expect(
           writeFileContent("/test/link.txt", "new content"),
@@ -596,6 +702,40 @@ describe("Lib Functions", () => {
         ).rejects.toThrow("Destination already exists");
 
         expect(mockPinned.renameIntoDirectory).not.toHaveBeenCalled();
+      });
+
+      it("copies and removes instead when the rename crosses a device (EXDEV)", async () => {
+        mockFs.lstat.mockRejectedValueOnce(
+          Object.assign(new Error("not found"), { code: "ENOENT" }),
+        );
+        mockPinned.renameIntoDirectory.mockImplementationOnce(() => {
+          throw Object.assign(new Error("EXDEV: cross-device link"), {
+            code: "EXDEV",
+          });
+        });
+
+        await moveFile("/test/source.txt", "/mnt/other/dest.txt");
+
+        expect(mockPinned.moveFileAcrossDevices).toHaveBeenCalledWith(
+          "/test/source.txt",
+          "/mnt/other/dest.txt",
+        );
+      });
+
+      it("reports a rename failure other than EXDEV as is, without copying", async () => {
+        mockFs.lstat.mockRejectedValueOnce(
+          Object.assign(new Error("not found"), { code: "ENOENT" }),
+        );
+        mockPinned.renameIntoDirectory.mockImplementationOnce(() => {
+          throw Object.assign(new Error("EACCES: permission denied"), {
+            code: "EACCES",
+          });
+        });
+
+        await expect(
+          moveFile("/test/source.txt", "/test/dest.txt"),
+        ).rejects.toThrow("EACCES: permission denied");
+        expect(mockPinned.moveFileAcrossDevices).not.toHaveBeenCalled();
       });
     });
   });

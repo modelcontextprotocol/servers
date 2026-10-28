@@ -1,5 +1,29 @@
 # @modelcontextprotocol/server-filesystem
 
+## 2.1.0
+
+### Minor Changes
+
+- [#5315](https://github.com/modelcontextprotocol/servers/pull/5315) [`15f16b9`](https://github.com/modelcontextprotocol/servers/commit/15f16b9ff8ff68350f16dec80e4d2761dd05c9be) [@cliffhall](https://github.com/cliffhall) - `get_file_info` now reports a file's hard-link count as a `hardLinks: <n>` line, after `permissions`, so a client can see that a file has other names before changing it. The README now says that allowed-directory checks are path-based, and that overwriting or editing a file that is hard-linked from elsewhere changes it at every name ([#5226](https://github.com/modelcontextprotocol/servers/issues/5226)).
+
+### Patch Changes
+
+- [#5326](https://github.com/modelcontextprotocol/servers/pull/5326) [`f3e5d36`](https://github.com/modelcontextprotocol/servers/commit/f3e5d36819cf68cc732c66e854e4a83fc40bb2b0) [@cliffhall](https://github.com/cliffhall) - `search_files`, `directory_tree` and path validation no longer hang on slow provider-backed folders (macOS CloudStorage, iCloud Drive, slow network mounts). Each `realpath` and recursive `readdir` now waits at most 15 seconds and then fails the request with an error naming the path; a path whose realpath times out is refused. `search_files` and `directory_tree` stop with an error after visiting 100,000 entries. `search_files` now applies `excludePatterns` before resolving an entry, so an excluded folder is never touched.
+
+- [#5319](https://github.com/modelcontextprotocol/servers/pull/5319) [`b57b04c`](https://github.com/modelcontextprotocol/servers/commit/b57b04c479d87a312728378a321beab0c1baec64) [@cliffhall](https://github.com/cliffhall) - A path that spells an allowed directory's own name in a letter case matching neither the configured nor the on-disk spelling (for example `C:\Work\CASETEST\file.txt` for an allowed `C:\Work\CaseTest`) is no longer refused on a case-insensitive file system (Windows NTFS, default macOS APFS). The request is mapped onto the allowed directory only where the file system confirms, component by component, that both spellings name one entry, so a sibling directory differing only in case is still refused on a case-sensitive directory.
+
+- [#5325](https://github.com/modelcontextprotocol/servers/pull/5325) [`322dcf0`](https://github.com/modelcontextprotocol/servers/commit/322dcf02e79f9a2dc74a32dba1337a42dbf74e02) [@cliffhall](https://github.com/cliffhall) - `write_file` and `edit_file` compare the file they opened against the one they checked as BigInt stats, so a Windows file id above 2^53 is compared exactly rather than rounded. Where a path-based stat on Windows reports no device (libuv < 1.51.0, the Node 23 line), the overwrite no longer refuses every existing file: the file must instead match on inode, size and modification time, and any difference still refuses.
+
+- [#5317](https://github.com/modelcontextprotocol/servers/pull/5317) [`d98c856`](https://github.com/modelcontextprotocol/servers/commit/d98c8566ef278a6caf802b7db8f647ca1e377981) [@cliffhall](https://github.com/cliffhall) - A client Root is now allowed in the form the client advertised it as well as in its resolved form, as command-line directories already were. A request that names a path through a symlinked Root's own spelling (for example `/tmp/...` for a Root of `file:///tmp/...` on macOS) is no longer refused, and `list_allowed_directories` lists both forms. Every request is still resolved and checked against the resolved directory, so a symlink inside a Root that points outside it stays refused.
+
+- [#5318](https://github.com/modelcontextprotocol/servers/pull/5318) [`dfe9187`](https://github.com/modelcontextprotocol/servers/commit/dfe9187334af83208a27ba871abc4d729e39685d) [@cliffhall](https://github.com/cliffhall) - A Root or command-line directory whose `realpath` fails once is now retried after a short delay instead of being lost for the life of the process. On Windows the first native `realpath` right after `subst` maps a drive can fail before the mapping is visible; a Root was dropped as inaccessible, and a command-line directory lost its resolved spelling, so every request on the drive was refused.
+
+- [#5324](https://github.com/modelcontextprotocol/servers/pull/5324) [`1002969`](https://github.com/modelcontextprotocol/servers/commit/1002969d59dc1e1a6e6754ecea7d12c689833c6d) [@cliffhall](https://github.com/cliffhall) - `read_text_file` with `head` no longer leaves a `\r` at the end of each line of a CRLF file. Like `tail`, it returns lines normalized to LF, including a `\r\n` pair split across a read chunk. LF output is unchanged.
+
+- [#5316](https://github.com/modelcontextprotocol/servers/pull/5316) [`30afc34`](https://github.com/modelcontextprotocol/servers/commit/30afc34bfcc851ed0175b727c45320de57c3fe6b) [@cliffhall](https://github.com/cliffhall) - `read_text_file` with `tail` no longer returns one line too few when the file ends with a newline: the final newline ends the last line instead of counting as an empty one, for LF and CRLF files and for files longer than one read chunk. Like `head`, the result carries no trailing newline.
+
+- [#5322](https://github.com/modelcontextprotocol/servers/pull/5322) [`f438a62`](https://github.com/modelcontextprotocol/servers/commit/f438a620a601cf5ed489cc476d93066573f8c4f2) [@cliffhall](https://github.com/cliffhall) - `move_file` now moves a regular file between allowed directories on different filesystems (mounts, disks or shares), where it used to fail with `EXDEV`: it copies the file to a newly created destination, keeping its permissions and modification time, then removes the source, and removes a partial copy if anything fails. A directory still cannot be moved across filesystems, and now fails with an error that says so.
+
 ## 2.0.1
 
 ### Patch Changes

@@ -84,7 +84,58 @@ describe("initial roots", () => {
     );
   });
 
-  it("resolve a symlinked root to its target", async () => {
+  // #5183: a Root is allowed in its advertised spelling as well as its
+  // realpath, as a command-line directory is, so a request that uses the
+  // Root's own spelling is not refused.
+  it("admit a symlinked root in both its advertised and its resolved form (#5183)", async () => {
+    const link = path.join(cliDir, "link-to-root");
+    await fs.symlink(rootDir, link);
+    await fs.writeFile(path.join(rootDir, "note.txt"), "inside the root");
+    const { client } = await connectTracked([], {
+      capabilities: ROOTS,
+      listRoots: () => [rootOf(link)],
+    });
+    await vi.waitFor(async () =>
+      expect(await allowedDirectoriesOf(client)).toEqual([link, rootDir]),
+    );
+    const viaLink = await call(client, "read_text_file", {
+      path: path.join(link, "note.txt"),
+    });
+    expect(textOf(viaLink)).toBe("inside the root");
+    const viaTarget = await call(client, "read_text_file", {
+      path: path.join(rootDir, "note.txt"),
+    });
+    expect(textOf(viaTarget)).toBe("inside the root");
+  });
+
+  // #5183: admitting the advertised spelling does not widen access. Every
+  // request is still realpath'd and re-checked, so a symlink inside the Root
+  // that points outside it is refused under either spelling.
+  it("refuse a symlink inside a symlinked root that points outside it (#5183)", async () => {
+    const link = path.join(cliDir, "link-to-root");
+    await fs.symlink(rootDir, link);
+    const secret = path.join(cliDir, "secret.txt");
+    await fs.writeFile(secret, "outside the root");
+    await fs.symlink(secret, path.join(rootDir, "escape.txt"));
+    const { client } = await connectTracked([], {
+      capabilities: ROOTS,
+      listRoots: () => [rootOf(link)],
+    });
+    await vi.waitFor(async () =>
+      expect(await allowedDirectoriesOf(client)).toEqual([link, rootDir]),
+    );
+    for (const dir of [link, rootDir]) {
+      const result = await call(client, "read_text_file", {
+        path: path.join(dir, "escape.txt"),
+      });
+      expect(textOf(result)).toMatch(/^Access denied/);
+    }
+  });
+
+  // #5183: the advertised form names a symlink, which can be retargeted after
+  // the Roots load. A new file or directory under it must still be refused
+  // when the symlink now leads outside every allowed directory.
+  it("refuse creating under a root alias retargeted outside the root (#5183)", async () => {
     const link = path.join(cliDir, "link-to-root");
     await fs.symlink(rootDir, link);
     const { client } = await connectTracked([], {
@@ -92,7 +143,89 @@ describe("initial roots", () => {
       listRoots: () => [rootOf(link)],
     });
     await vi.waitFor(async () =>
-      expect(await allowedDirectoriesOf(client)).toEqual([rootDir]),
+      expect(await allowedDirectoriesOf(client)).toEqual([link, rootDir]),
+    );
+    const outside = path.join(cliDir, "outside");
+    await fs.mkdir(outside);
+    await fs.rm(link);
+    await fs.symlink(outside, link);
+
+    const written = await call(client, "write_file", {
+      path: path.join(link, "new.txt"),
+      content: "x",
+    });
+    expect(textOf(written)).toMatch(/^Access denied/);
+    const created = await call(client, "create_directory", {
+      path: path.join(link, "a", "b"),
+    });
+    expect(textOf(created)).toMatch(/^Access denied/);
+    expect(await fs.readdir(outside)).toEqual([]);
+  });
+
+  // #5183: the advertised form is kept as the client spelled it. Trimming
+  // whitespace or quotes from it would name a different directory, here an
+  // unrelated sibling, and allow it. POSIX only: Windows filenames cannot end
+  // in a space.
+  it.skipIf(process.platform === "win32")(
+    "keep a root's advertised form verbatim, not trimmed to a sibling's name (#5183)",
+    async () => {
+      const link = path.join(cliDir, "alias ");
+      await fs.symlink(rootDir, link);
+      const sibling = path.join(cliDir, "alias");
+      await fs.mkdir(sibling);
+      await fs.writeFile(path.join(sibling, "secret.txt"), "not in the root");
+      const { client } = await connectTracked([], {
+        capabilities: ROOTS,
+        listRoots: () => [rootOf(link)],
+      });
+      await vi.waitFor(async () =>
+        expect(await allowedDirectoriesOf(client)).toEqual([link, rootDir]),
+      );
+      const result = await call(client, "read_text_file", {
+        path: path.join(sibling, "secret.txt"),
+      });
+      expect(textOf(result)).toMatch(/^Access denied/);
+    },
+  );
+
+  // #5183 as reported: on macOS /tmp is a symlink to /private/tmp, so a Root
+  // of file:///tmp/... was allowed only as /private/tmp/... and a request
+  // naming /tmp/... was refused.
+  it.runIf(process.platform === "darwin")(
+    "admit a macOS /tmp root under its /tmp spelling (#5183)",
+    async () => {
+      const tmpRoot = await fs.mkdtemp("/tmp/mcp-fs-5183-");
+      try {
+        await fs.writeFile(path.join(tmpRoot, "note.txt"), "in /tmp");
+        const { client } = await connectTracked([], {
+          capabilities: ROOTS,
+          listRoots: () => [rootOf(tmpRoot)],
+        });
+        await vi.waitFor(async () =>
+          expect(await allowedDirectoriesOf(client)).toEqual([
+            tmpRoot,
+            await fs.realpath(tmpRoot),
+          ]),
+        );
+        const result = await call(client, "read_text_file", {
+          path: path.join(tmpRoot, "note.txt"),
+        });
+        expect(textOf(result)).toBe("in /tmp");
+      } finally {
+        await fs.rm(tmpRoot, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it("list a root once when it is advertised in both its forms (#5183)", async () => {
+    const link = path.join(cliDir, "link-to-root");
+    await fs.symlink(rootDir, link);
+    const { client } = await connectTracked([], {
+      capabilities: ROOTS,
+      listRoots: () => [rootOf(link), rootOf(rootDir)],
+    });
+    await vi.waitFor(async () =>
+      expect(await allowedDirectoriesOf(client)).toEqual([link, rootDir]),
     );
   });
 
