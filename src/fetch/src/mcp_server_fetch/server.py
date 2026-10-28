@@ -786,11 +786,12 @@ async def serve(
         custom_user_agent: Optional custom User-Agent string to use for requests
         ignore_robots_txt: Whether to ignore robots.txt restrictions
         proxy_url: Optional proxy URL to use for requests
+        allowed_hosts: When given, the only hosts the server may fetch from:
+            exact hosts, or ``*.example.com`` for any subdomain of it, checked
+            in addition to the private-address guard. Empty or None allows
+            every host
         allow_private_ips: Allow fetching private, loopback and link-local
             addresses, which are refused by default
-        allowed_hosts: When given, the only hosts the server may fetch from:
-            exact hosts, or ``*.example.com`` for any subdomain of it. Empty
-            or None allows every host
         use_readability_js: Extract HTML with Readability.js under Node when
             Node is on PATH; False always uses the pure-Python extractor
     """
