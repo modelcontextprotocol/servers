@@ -281,6 +281,36 @@ export async function overwriteFileInDirectory(
 }
 
 /**
+ * Append `content` to the end of the regular file at `filePath`, which must be
+ * the file `expected` (its BigInt lstat) describes, through a single
+ * descriptor (#1208). The same checks as overwriteFileInDirectory guard the
+ * open; O_APPEND makes every write land at the file's end as it is at that
+ * moment, so a concurrent append is never overwritten.
+ */
+export async function appendFileInDirectory(
+  filePath: string,
+  content: string,
+  expected: EntryIdentity,
+): Promise<void> {
+  // O_RDWR rather than O_WRONLY, for the FIFO reason given above.
+  const { fd, opened } = openInDirectory(
+    filePath,
+    fs.constants.O_RDWR | fs.constants.O_APPEND | noFollow(),
+    onWindows(),
+  );
+  try {
+    if (!opened.isFile() || !isSameEntry(expected, opened)) {
+      throw new Error(
+        `Refusing to append: ${filePath} was replaced while it was being opened`,
+      );
+    }
+    await writeAll(fd, content);
+  } finally {
+    await close(fd);
+  }
+}
+
+/**
  * Rename `sourcePath` (absolute, outside this fix's scope) to the final
  * component of `destinationPath`, relative to its anchored directory.
  */

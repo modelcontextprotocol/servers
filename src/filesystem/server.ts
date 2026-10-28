@@ -19,6 +19,7 @@ import {
   getFileStats,
   readFileContent,
   writeFileContent,
+  appendFileContent,
   createDirectory,
   moveFile,
   searchFilesWithValidation,
@@ -75,6 +76,15 @@ const ReadMultipleFilesArgsSchema = z.object({
 const WriteFileArgsSchema = z.object({
   path: z.string(),
   content: z.string(),
+});
+
+const AppendFileArgsSchema = z.object({
+  path: z.string(),
+  content: z
+    .string()
+    .describe(
+      "Text to append, exactly as given. No newline is added: end it with \\n if the next append should start on a new line.",
+    ),
 });
 
 const EditOperation = z.object({
@@ -452,6 +462,35 @@ export function createServer(
       const validPath = await validatePath(args.path, allowedDirectories);
       await writeFileContent(validPath, args.content);
       const text = `Successfully wrote to ${args.path}`;
+      return {
+        content: [{ type: "text" as const, text }],
+        structuredContent: { content: text },
+      };
+    },
+  );
+
+  server.registerTool(
+    "append_file",
+    {
+      title: "Append File",
+      description:
+        "Append text to the end of a file, creating the file if it does not exist. " +
+        "The existing content is never changed or replaced. The text is appended exactly " +
+        "as given, with no newline added before or after it, so end it with a newline " +
+        "if the next append should start on a new line. Only works within allowed directories.",
+      inputSchema: jsonSchema2020(AppendFileArgsSchema.shape),
+      outputSchema: jsonSchema2020({ content: z.string() }),
+      annotations: {
+        readOnlyHint: false,
+        idempotentHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
+    },
+    async (args: z.infer<typeof AppendFileArgsSchema>) => {
+      const validPath = await validatePath(args.path, allowedDirectories);
+      await appendFileContent(validPath, args.content);
+      const text = `Successfully appended to ${args.path}`;
       return {
         content: [{ type: "text" as const, text }],
         structuredContent: { content: text },

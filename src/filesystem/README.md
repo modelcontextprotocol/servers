@@ -118,6 +118,18 @@ The server's directory access control follows this flow:
     `get_file_info` reports a file's `hardLinks` count; more than 1 means
     the file has other names
 
+- **append_file**
+  - Append text to the end of a file, creating the file if it does not exist
+  - Inputs:
+    - `path` (string): File location
+    - `content` (string): Text to append
+  - The text is appended exactly as given: no newline is added before or
+    after it. To build a file line by line, end each `content` with `\n`
+  - The existing content is never changed. The file is appended to in place,
+    so it keeps its inode, creation time, hard links and permissions, and a
+    path that is not a regular file (a directory, say) is refused. The same
+    hard-link caveat as `write_file` applies
+
 - **edit_file**
   - Make selective edits using advanced pattern matching and formatting
   - Features:
@@ -261,6 +273,7 @@ The mapping for filesystem tools is:
 | `list_allowed_directories`  | `true`       | –              | –               | Pure read                                       |
 | `create_directory`          | `false`      | `true`         | `false`         | Re‑creating the same dir is a no‑op             |
 | `write_file`                | `false`      | `true`         | `true`          | Overwrites existing files                       |
+| `append_file`               | `false`      | `false`        | `false`         | Adds to a file; repeating it appends again      |
 | `edit_file`                 | `false`      | `false`        | `true`          | Re‑applying edits can fail or double‑apply      |
 | `move_file`                 | `false`      | `false`        | `true`          | Deletes source file                             |
 

@@ -31,6 +31,7 @@ const TOOL_NAMES = [
   "read_media_file",
   "read_multiple_files",
   "write_file",
+  "append_file",
   "edit_file",
   "create_directory",
   "list_directory",
@@ -89,7 +90,7 @@ describe("server identity and tool list", () => {
     });
   });
 
-  it("lists the 14 tools in registration order", async () => {
+  it("lists the tools in registration order", async () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name)).toEqual(TOOL_NAMES);
   });
@@ -112,6 +113,13 @@ describe("server identity and tool list", () => {
         readOnlyHint: false,
         idempotentHint: true,
         destructiveHint: true,
+        openWorldHint: false,
+      },
+      append_file: {
+        title: "Append File",
+        readOnlyHint: false,
+        idempotentHint: false,
+        destructiveHint: false,
         openWorldHint: false,
       },
       edit_file: {
