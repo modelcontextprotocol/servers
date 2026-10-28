@@ -187,6 +187,15 @@ async def test_list_tools_wire_shape(web: FakeWeb) -> None:
                 "title": "Raw",
                 "type": "boolean",
             },
+            # #4448: the server-wide timeout is the advertised default.
+            "timeout_ms": {
+                "default": 30000,
+                "description": "How long to wait, in milliseconds, to connect to the server and for each read of its response before giving up. Raise it for a slow server or a large download; lower it to fail fast.",
+                "maximum": 600000,
+                "minimum": 100,
+                "title": "Timeout Ms",
+                "type": "integer",
+            },
         },
         "required": ["url"],
         "title": "fetchArguments",

@@ -36,6 +36,12 @@ from mcp.server import MCPServer, ServerRequestContext
 from mcp.server.context import CallNext, HandlerResult, ServerMiddleware
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.shared.exceptions import MCPError
+from .timeout import (
+    DEFAULT_TIMEOUT_MS,
+    MAX_TIMEOUT_MS,
+    MIN_TIMEOUT_MS,
+    timeout_ms_from_env,
+)
 from mcp.types import INVALID_PARAMS, ToolAnnotations
 from protego import Protego
 from pydantic import AnyUrl, Field
@@ -523,6 +529,7 @@ async def fetch_url(
     url: str,
     user_agent: str,
     force_raw: bool = False,
+    timeout_ms: int = DEFAULT_TIMEOUT_MS,
     proxy_url: str | None = None,
     allow_private_ips: bool = False,
     check_robots_txt: bool = False,
@@ -562,7 +569,11 @@ async def fetch_url(
                 url,
                 follow_redirects=True,
                 headers={"User-Agent": user_agent},
-                timeout=30,
+                timeout=timeout_ms / 1000,
+            )
+        except httpx.TimeoutException as e:
+            raise ToolError(
+                f"Failed to fetch {url}: timed out after {timeout_ms} ms: {e!r}"
             )
         except HTTPError as e:
             raise ToolError(f"Failed to fetch {url}: {e!r}")
@@ -650,6 +661,7 @@ def create_server(
     normalize_proxy_env()
     user_agent_autonomous = custom_user_agent or DEFAULT_USER_AGENT_AUTONOMOUS
     user_agent_manual = custom_user_agent or DEFAULT_USER_AGENT_MANUAL
+    default_timeout_ms = timeout_ms_from_env()
 
     # subscriptions=False: the tool and prompt lists never change and there are
     # no resources to watch, so `subscriptions/listen` is not served and the
@@ -703,6 +715,15 @@ def create_server(
                 strict=True,
             ),
         ] = False,
+        timeout_ms: Annotated[
+            int,
+            Field(
+                description="How long to wait, in milliseconds, to connect to the server and for each read of its response before giving up. Raise it for a slow server or a large download; lower it to fail fast.",
+                ge=MIN_TIMEOUT_MS,
+                le=MAX_TIMEOUT_MS,
+                strict=True,
+            ),
+        ] = default_timeout_ms,
     ) -> str:
         page_url = str(url)
 
@@ -715,6 +736,7 @@ def create_server(
             page_url,
             user_agent_autonomous,
             force_raw=raw,
+            timeout_ms=timeout_ms,
             proxy_url=proxy_url,
             allow_private_ips=allow_private_ips,
             check_robots_txt=not ignore_robots_txt,
@@ -748,6 +770,7 @@ def create_server(
             content, prefix = await fetch_url(
                 url,
                 user_agent_manual,
+                timeout_ms=default_timeout_ms,
                 proxy_url=proxy_url,
                 allow_private_ips=allow_private_ips,
                 use_readability_js=use_readability_js,
