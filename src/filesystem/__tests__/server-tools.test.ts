@@ -1174,15 +1174,38 @@ describe("list_directory_with_sizes", () => {
     expect(files).toEqual(["b.txt", "a.txt"]);
   });
 
-  it("lists an entry it cannot stat (a dangling symlink) as size 0", async () => {
+  it("lists an entry it cannot stat (a dangling symlink) as unknown size, left out of the total (#5190)", async () => {
     await fs.symlink(path.join(dir, "gone"), path.join(dir, "dangling"));
     const result = await call(client, "list_directory_with_sizes", {
       path: dir,
     });
     expect(textOf(result)).toContain(
-      `[FILE] ${"dangling".padEnd(30)} ${"0 B".padStart(10)}`,
+      `[FILE] ${"dangling".padEnd(30)} ${"unknown".padStart(10)}`,
     );
+    expect(textOf(result)).not.toContain(" 0 B");
     expect(textOf(result)).toContain("Total: 3 files, 1 directories");
+    expect(textOf(result)).toContain(
+      "Combined size: 2.00 KB (excludes 1 file of unknown size)",
+    );
+  });
+
+  it("sorts entries of unknown size last when sorting by size (#5190)", async () => {
+    await fs.symlink(path.join(dir, "gone"), path.join(dir, "dangling"));
+    await fs.symlink(path.join(dir, "gone2"), path.join(dir, "dangling2"));
+    await fs.writeFile(path.join(dir, "empty.txt"), "");
+    const result = await call(client, "list_directory_with_sizes", {
+      path: dir,
+      sortBy: "size",
+    });
+    const files = textOf(result)
+      .split("\n")
+      .filter((line) => line.startsWith("[FILE]"))
+      .map((line) => line.split(/\s+/)[1]);
+    expect(files.slice(0, 3)).toEqual(["b.txt", "a.txt", "empty.txt"]);
+    expect(files.slice(3).sort()).toEqual(["dangling", "dangling2"]);
+    expect(textOf(result)).toContain(
+      "Combined size: 2.00 KB (excludes 2 files of unknown size)",
+    );
   });
 
   it("does not report the size of a symlink target outside the allowed directories", async () => {
@@ -1197,10 +1220,12 @@ describe("list_directory_with_sizes", () => {
         path: dir,
       });
       expect(textOf(result)).toContain(
-        `[FILE] ${"link-out".padEnd(30)} ${"0 B".padStart(10)}`,
+        `[FILE] ${"link-out".padEnd(30)} ${"unknown".padStart(10)}`,
       );
       expect(textOf(result)).not.toContain("1.50 KB");
-      expect(textOf(result)).toContain("Combined size: 2.00 KB");
+      expect(textOf(result)).toContain(
+        "Combined size: 2.00 KB (excludes 1 file of unknown size)",
+      );
     } finally {
       await fs.rm(outside, { recursive: true, force: true });
     }

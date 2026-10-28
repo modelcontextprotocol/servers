@@ -154,6 +154,7 @@ The server's directory access control follows this flow:
     - `sortBy` (string, optional): Sort entries by "name" or "size" (default: "name")
   - Returns detailed listing with file sizes and summary statistics
   - Shows total files, directories, and combined size
+  - An entry that cannot be stat'd (unreadable, a dangling symlink, or a symlink leaving the allowed directories) is listed with size `unknown` and left out of the combined size
 
 - **move_file**
   - Move or rename files and directories

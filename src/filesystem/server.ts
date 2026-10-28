@@ -561,9 +561,15 @@ export function createServer(
       const validPath = await validatePath(args.path, allowedDirectories);
       const entries = await fs.readdir(validPath, { withFileTypes: true });
 
-      // Get detailed information for each entry
+      // Get detailed information for each entry; size is undefined when the
+      // entry could not be stat'd
+      type SizedEntry = {
+        name: string;
+        isDirectory: boolean;
+        size: number | undefined;
+      };
       const detailedEntries = await Promise.all(
-        entries.map(async (entry) => {
+        entries.map(async (entry): Promise<SizedEntry> => {
           const entryPath = path.join(validPath, entry.name);
           try {
             // fs.stat follows symlinks, so validate each entry first: a
@@ -578,14 +584,16 @@ export function createServer(
               name: entry.name,
               isDirectory: entry.isDirectory(),
               size: stats.size,
-              mtime: stats.mtime,
             };
           } catch {
+            // The entry could not be stat'd (unreadable, a dangling symlink,
+            // removed since readdir, or outside the allowed directories).
+            // Its size is unknown, not 0: inventing one would list it as an
+            // empty file and count it in the total (#5190).
             return {
               name: entry.name,
               isDirectory: entry.isDirectory(),
-              size: 0,
-              mtime: new Date(0),
+              size: undefined,
             };
           }
         }),
@@ -594,7 +602,8 @@ export function createServer(
       // Sort entries based on sortBy parameter
       const sortedEntries = [...detailedEntries].sort((a, b) => {
         if (args.sortBy === "size") {
-          return b.size - a.size; // Descending by size
+          // Descending by size; an entry of unknown size sorts last
+          return (b.size ?? -1) - (a.size ?? -1);
         }
         // Default sort by name
         return a.name.localeCompare(b.name);
@@ -604,7 +613,12 @@ export function createServer(
       const formattedEntries = sortedEntries.map(
         (entry) =>
           `${entry.isDirectory ? "[DIR]" : "[FILE]"} ${entry.name.padEnd(30)} ${
-            entry.isDirectory ? "" : formatSize(entry.size).padStart(10)
+            entry.isDirectory
+              ? ""
+              : (entry.size === undefined
+                  ? "unknown"
+                  : formatSize(entry.size)
+                ).padStart(10)
           }`,
       );
 
@@ -612,14 +626,20 @@ export function createServer(
       const totalFiles = detailedEntries.filter((e) => !e.isDirectory).length;
       const totalDirs = detailedEntries.filter((e) => e.isDirectory).length;
       const totalSize = detailedEntries.reduce(
-        (sum, entry) => sum + (entry.isDirectory ? 0 : entry.size),
+        (sum, entry) => sum + (entry.isDirectory ? 0 : (entry.size ?? 0)),
         0,
       );
+      const unknownFiles = detailedEntries.filter(
+        (e) => !e.isDirectory && e.size === undefined,
+      ).length;
 
       const summary = [
         "",
         `Total: ${totalFiles} files, ${totalDirs} directories`,
-        `Combined size: ${formatSize(totalSize)}`,
+        `Combined size: ${formatSize(totalSize)}` +
+          (unknownFiles > 0
+            ? ` (excludes ${unknownFiles} ${unknownFiles === 1 ? "file" : "files"} of unknown size)`
+            : ""),
       ];
 
       const text = [...formattedEntries, ...summary].join("\n");
