@@ -1,11 +1,7 @@
 import { promises as fs, type Stats } from "fs";
 import path from "path";
 import os from "os";
-import {
-  normalizePath,
-  normalizePathFormat,
-  realpathWithRetry,
-} from "./path-utils.js";
+import { normalizePathFormat, realpathWithRetry } from "./path-utils.js";
 import type { Root } from "@modelcontextprotocol/server";
 import { fileURLToPath } from "url";
 
@@ -36,10 +32,11 @@ async function parseRootUri(rootUri: string): Promise<RootPaths | null> {
     const absolutePath = path.resolve(expandedPath);
     const resolvedPath = await realpathWithRetry(absolutePath);
     return {
-      // normalizePathFormat, not normalizePath: trimming whitespace or quotes
-      // from the client's spelling would name a different directory.
+      // normalizePathFormat, not normalizePath, for both: trimming whitespace
+      // or quotes from the client's spelling or from the realpath would name
+      // a different directory, and allow it (#5183, #5320).
       advertised: normalizePathFormat(absolutePath),
-      resolved: normalizePath(resolvedPath),
+      resolved: normalizePathFormat(resolvedPath),
     };
   } catch {
     return null; // Path doesn't exist or other error

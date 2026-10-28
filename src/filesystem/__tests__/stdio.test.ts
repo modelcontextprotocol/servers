@@ -275,3 +275,76 @@ describe("isEntryPoint", () => {
     expect(isEntryPoint(undefined, moduleUrl)).toBe(false);
   });
 });
+
+// #5320: a command-line directory whose name ends in a space or quote is
+// allowed under that exact name. Trimming it, in its given form or its
+// realpath, names the sibling without the suffix and allows that instead.
+// Windows refuses or strips these characters in names, so POSIX only.
+describe.skipIf(process.platform === "win32").each([
+  ["a space", " "],
+  ["a single quote", "'"],
+  ["a double quote", '"'],
+])("an allowed directory whose name ends in %s (#5320)", (_, suffix) => {
+  let allowed: string;
+  let sibling: string;
+
+  beforeEach(async () => {
+    allowed = path.join(dir, `project${suffix}`);
+    sibling = path.join(dir, "project");
+    await fs.mkdir(allowed);
+    await fs.mkdir(sibling);
+    await fs.writeFile(path.join(allowed, "mine.txt"), "allowed");
+    await fs.writeFile(path.join(sibling, "secret.txt"), "not allowed");
+  });
+
+  async function readOver(args: string[], file: string) {
+    await session.start(args);
+    await session.initialize();
+    session.send(2, "tools/call", {
+      name: "list_allowed_directories",
+      arguments: {},
+    });
+    session.send(3, "tools/call", {
+      name: "read_text_file",
+      arguments: { path: file },
+    });
+    return {
+      listed: (await session.response(2)).result?.structuredContent,
+      read: (await session.response(3)).result,
+    };
+  }
+
+  it("lists it untrimmed and refuses the sibling, given directly", async () => {
+    const { listed, read } = await readOver(
+      [allowed],
+      path.join(sibling, "secret.txt"),
+    );
+    expect(listed).toEqual({ content: `Allowed directories:\n${allowed}` });
+    expect(read?.isError).toBe(true);
+    expect(JSON.stringify(read?.content)).toMatch(
+      /Access denied - path outside allowed directories/,
+    );
+  });
+
+  it("keeps the realpath untrimmed and refuses the sibling, given through a symlink", async () => {
+    const link = path.join(dir, "link");
+    await fs.symlink(allowed, link);
+    const { listed, read } = await readOver(
+      [link],
+      path.join(sibling, "secret.txt"),
+    );
+    expect(listed).toEqual({
+      content: `Allowed directories:\n${link}\n${allowed}`,
+    });
+    expect(read?.isError).toBe(true);
+    expect(JSON.stringify(read?.content)).toMatch(
+      /Access denied - path outside allowed directories/,
+    );
+  });
+
+  it("still reads the allowed directory's own file", async () => {
+    const { read } = await readOver([allowed], path.join(allowed, "mine.txt"));
+    expect(read?.isError).toBeFalsy();
+    expect(read?.structuredContent).toEqual({ content: "allowed" });
+  });
+});
