@@ -453,12 +453,35 @@ gh issue list --repo modelcontextprotocol/servers --milestone "$MILESTONE" \
   before and after.
 
 **4d. The ledger.** Write the results up as a published artifact (a private
-page, shared with the maintainers) and link it from the merge PR's body. It
-holds:
+page, shared with the maintainers) and link it from the merge PR's body.
+
+**Title it `Servers vX.Y.Z Release Ledger`**, the milestone's version, in both
+the page's `<title>` and its `<h1>`.
+
+**Start from the previous release's ledger**, so every ledger reads as one
+series. It is linked from the latest published Release's notes, on the
+`Release ledger:` line (5a):
+
+```sh
+gh release view --repo modelcontextprotocol/servers --json tagName,body \
+  --jq '.tagName, (.body | split("\n")[] | select(startswith("Release ledger:")))'
+```
+
+Read that page (the artifact tool's read action), and build the new one on its
+stylesheet and section structure, changing the content only. This skill
+deliberately names no ledger URL: the latest Release always points at the
+current one, and a URL written here would go stale with the next release.
+
+It holds, in this order:
 
 - **Masthead**: repository, the merge PR and its commit, the milestone, the
   date, and a line saying what tree was tested and that its hash matches
-  `origin/v2/main`.
+  `origin/v2/main`. Two more lines:
+  - **SDKs**: the MCP SDK versions the lockfiles hold (each
+    `@modelcontextprotocol/*` SDK package, and Python `mcp`).
+  - **Toolchain**: the versions used to verify: Node (with OS and
+    architecture), uv, the Inspector CLI and web UI, Playwright, Docker and
+    Claude Code.
 - **Verdict**: `local:gate` and `pack:verify` results, milestone issues
   verified as `N / N`, findings.
 - **The gate**: one cell per stage, with its numbers.
@@ -469,12 +492,33 @@ holds:
   (`node scripts/npm-publish-guard.mjs src/<server>` for npm; for PyPI,
   `curl -s -o /dev/null -w '%{http_code}' https://pypi.org/pypi/<name>/<version>/json`,
   where 404 means it will publish).
-- **One table per theme**: *Issue · What was driven · Observed · Status*. One
-  row per closed issue, linked, with the actual output in the Observed cell.
+- **One table per theme** (a server, a group of servers, or the tooling),
+  with the columns *Issue · Title · What was driven · Observed · Status*. One
+  row per closed issue. The Issue cell links it and is tagged with how it was
+  exercised: `client` (the Inspector CLI or an SDK client), `web UI` (the
+  Inspector web UI through Playwright) or `probe`. The Observed cell holds the
+  actual output. Status is a pill: `PASS`, or a named exception.
+- **Preparation PRs**: the audit PR (or, when the audit forced no fix, its
+  report), Version Packages and Prepare Python Release, each with what was
+  checked on it.
+- **Tool schemas against the previous release**: each TypeScript server's
+  `tools/list` (input and output schemas, annotations and descriptions)
+  compared with the version the previous release published, in both eras.
+- **LLM client**: one headless Claude Code run (`--strict-mcp-config`)
+  calling one tool on each of the seven release-candidate builds, with what
+  each returned (`/client-smoke`).
+- **Also shipping: advisory fixes**: each fix that shipped through a security
+  advisory rather than a milestone issue.
 - **Findings**: anything that is a caveat rather than a pass, stated on its
   own.
 
 A row that says "verified" without saying what was run is not a ledger entry.
+
+**A second merge PR.** When a fix lands after the first merge PR merged (4e;
+in v2.2.0, #5342 followed #5338 for a `certifi` lockfile bump), the masthead
+names both merge PRs with their heads, and the page says which checks ran on
+which head and what differs between the two trees
+(`git diff --stat <first head> <second head>`).
 
 **4e. When verification finds something, the fix goes on `v2/main`, never on
 the merge branch.** File the issue (`/issue-create`), fix it through an
