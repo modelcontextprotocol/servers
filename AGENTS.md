@@ -63,7 +63,7 @@ servers/
 │                             overview of how the rules, skills, gates and sweeps fit together
 ├── .github/workflows/        typescript.yml, python.yml (per-package CI), release.yml (publishes on a GitHub Release),
 │                             version-packages.yml (the changesets PR), prepare-python-release.yml (the CalVer PR),
-│                             claude.yml (@claude mentions), everything-mcp-diff.yml (everything's interface diff on PRs),
+│                             everything-mcp-diff.yml (everything's interface diff on PRs),
 │                             main-source.yml (a PR into main must bring nothing that is not on v2/main),
 │                             and the scheduled sweeps that file issues: dependency-refresh.yml, dependabot-alerts.yml, sdk-watch.yml
 ├── .github/ISSUE_TEMPLATE/   Bug and feature issue forms; config.yml routes security and new servers away
@@ -171,8 +171,8 @@ diagnosing a red stage is the `pre-push-gate` skill.
 
 A workflow job **holds a credential** when it can mint an OIDC token or push a
 package (`id-token: write`, `packages: write`), or is handed any secret other
-than `GITHUB_TOKEN`. Today that is `release.yml`'s publish jobs, `claude.yml`,
-and `sdk-watch.yml`'s `analyze` and `post` jobs (`ANTHROPIC_API_KEY`). Jobs
+than `GITHUB_TOKEN`. Today that is `release.yml`'s publish jobs and
+`sdk-watch.yml`'s `analyze` and `post` jobs (`ANTHROPIC_API_KEY`). Jobs
 that hold none can still need pinning under the rules below: `release.yml`'s
 build jobs and `sdk-watch.yml`'s `sweep`, whose outputs `analyze` reads.
 
@@ -184,12 +184,6 @@ build jobs and `sdk-watch.yml`'s `sweep`, whose outputs `analyze` reads.
   downloads**, since what it builds is what gets published, and for **a job
   whose outputs a credentialed job reads**, since the reader acts on them.
   `verify:action-pins` enforces both. Other jobs keep moving major tags.
-- **A credentialed job that a comment, review or issue can start runs only
-  for a trusted author**: `OWNER`, `MEMBER` or `COLLABORATOR` in the
-  `author_association` of the text that triggered it, never of the thread
-  around it. Today that is `claude.yml`, whose `if:` checks it on every event
-  it listens to; `scripts/claude-workflow.test.mjs` evaluates that condition
-  per event and fails when one loses its check.
 - **A job that holds a publish credential does not install dependencies or
   build.** `release.yml` builds, tests and verifies each package in a job
   with no `id-token`, and the publish job only downloads that artifact and
