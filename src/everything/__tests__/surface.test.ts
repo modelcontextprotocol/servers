@@ -827,7 +827,7 @@ describe("prompts/list", () => {
 });
 
 describe("resources/list and resources/templates/list", () => {
-  it("lists one static resource per file in docs/", async () => {
+  it("lists one static resource per file in docs/, and the summer-specials collection", async () => {
     session = await connect();
     const { resources } = await session.client.listResources();
     expect(resources).toMatchInlineSnapshot(`
@@ -874,11 +874,18 @@ describe("resources/list and resources/templates/list", () => {
           "name": "structure.md",
           "uri": "demo://resource/static/document/structure.md",
         },
+        {
+          "description": "A resource collection: one read returns every item in the catalog as a separate content, each under its own demo://resource/collection/item/{itemId} URI.",
+          "mimeType": "application/json",
+          "name": "summer-specials",
+          "title": "Summer Specials Collection",
+          "uri": "demo://resource/collection/summer-specials",
+        },
       ]
     `);
   });
 
-  it("lists the dynamic text and blob templates", async () => {
+  it("lists the dynamic text and blob templates, and the collection templates", async () => {
     session = await connect();
     const { resourceTemplates } = await session.client.listResourceTemplates();
     expect(resourceTemplates).toMatchInlineSnapshot(`
@@ -894,6 +901,20 @@ describe("resources/list and resources/templates/list", () => {
           "mimeType": "application/octet-stream",
           "name": "Dynamic Blob Resource",
           "uriTemplate": "demo://resource/dynamic/blob/{resourceId}",
+        },
+        {
+          "description": "A resource collection filtered by the {category} variable (accessories, footwear, skincare): one read returns each item in that category as a separate content, under its own URI.",
+          "mimeType": "application/json",
+          "name": "collection-by-category",
+          "title": "Collection by Category",
+          "uriTemplate": "demo://resource/collection/by-category/{category}",
+        },
+        {
+          "description": "One item of the resource collections, selected by the {itemId} variable (1 to 5). The collections return their items under these URIs.",
+          "mimeType": "application/json",
+          "name": "collection-item",
+          "title": "Collection Item",
+          "uriTemplate": "demo://resource/collection/item/{itemId}",
         },
       ]
     `);
