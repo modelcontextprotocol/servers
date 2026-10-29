@@ -393,6 +393,9 @@ git fetch origin v2/main
 If the branch no longer merges cleanly onto `origin/v2/main`, resolve that in
 the fork, where the review is, before pushing.
 
+The worktree is on a detached `HEAD`, so `gh pr create` cannot infer the
+branch: add `--head "$BRANCH"` to `/pr-flow`'s create command.
+
 - **Title**: `fix(<server>): GHSA-xxxx-yyyy-zzzz`, and nothing more.
 - **Body**: `Closes #<N>` (the converted issue) on the first line, then
   `/pr-flow`'s sections, **describing no part of the vulnerability**: what it
