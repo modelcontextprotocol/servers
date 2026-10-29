@@ -287,3 +287,5 @@ def test_fence_outgrows_backticks_in_the_content() -> None:
     assert _fenced("plain\n") == "```diff\nplain\n```"
     assert _fenced("+```python\n+x\n+```\n") == ("````diff\n+```python\n+x\n+```\n````")
     assert _fenced("a ```` b", "text") == "`````text\na ```` b\n`````"
+    # A long run is measured in one pass, not by growing the fence.
+    assert _fenced("`" * 10_000).startswith("`" * 10_001 + "diff\n")

@@ -608,9 +608,13 @@ def _fenced(text: str, info: str = "diff") -> str:
     A diff can itself hold a ``` line (a Markdown file's code block), which
     would close a fixed three-backtick fence early.
     """
-    fence = "```"
-    while fence in text:
-        fence += "`"
+    # One pass for the longest run: growing the fence and searching again for
+    # each extra backtick is quadratic in a long run, under the git lock.
+    longest = run = 0
+    for char in text:
+        run = run + 1 if char == "`" else 0
+        longest = max(longest, run)
+    fence = "`" * max(3, longest + 1)
     body = text.rstrip("\n")
     return f"{fence}{info}\n{body}\n{fence}"
 
