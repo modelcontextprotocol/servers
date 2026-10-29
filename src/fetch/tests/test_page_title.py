@@ -175,5 +175,38 @@ def test_partial_words_do_not_match(title: str, content: str) -> None:
     assert with_page_title(html, content) == f"# {title}\n\n{content}"
 
 
+def test_code_span_contents_count_as_visible() -> None:
+    # A heading's inline HTML example is text, not a tag, inside a code span.
+    content = "# The `<input>` element\n\nBody."
+    assert (
+        with_page_title("<title>The &lt;input&gt; element</title>", content) == content
+    )
+
+
+@pytest.mark.parametrize("opener", ["](", "<", "`"])
+def test_unterminated_markup_on_a_long_first_line(opener: str) -> None:
+    # Linear in the line's length: a quadratic scan of 200,000 openers would
+    # not finish in the test's time. The title is not on the line, so it is added.
+    content = opener * 200_000
+    result = with_page_title("<title>Title Here</title>", content)
+    assert result == f"# Title Here\n\n{content}"
+
+
+@pytest.mark.parametrize(
+    ("title_html", "heading"),
+    [
+        ("Using &lt;T&gt;", "# Using \\<T\\>"),
+        ("__init__ and *args", "# \\_\\_init\\_\\_ and \\*args"),
+        (
+            "[Draft] R&amp;D #3 `x` | a~b \\ c",
+            "# \\[Draft\\] R\\&D \\#3 \\`x\\` \\| a\\~b \\\\ c",
+        ),
+    ],
+)
+def test_heading_escapes_markdown_and_html(title_html: str, heading: str) -> None:
+    result = with_page_title(f"<title>{title_html}</title>", "Body.")
+    assert result == f"{heading}\n\nBody."
+
+
 def test_title_with_no_word_characters_is_not_matched() -> None:
     assert with_page_title("<title>—</title>", "Body.") == "# —\n\nBody."

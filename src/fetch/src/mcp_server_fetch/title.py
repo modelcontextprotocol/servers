@@ -24,10 +24,10 @@ _FAILURE_PREFIX = "<error>"
 # escapes, Sphinx's "¶" permalink and other punctuation are ignored, but word
 # boundaries are kept, so "Rust" does not match "Trust".
 _WORD = re.compile(r"[^\W_]+")
-# What a reader does not see on a Markdown line: a link's destination and any
-# HTML tag (an autolink's URL included). A title found only there is not shown.
-_LINK_DESTINATION = re.compile(r"\]\([^)]*\)")
-_HTML_TAG = re.compile(r"<[^>]*>")
+# Characters that Markdown or inline HTML would interpret in the emitted
+# heading ("<T>" read as a tag, "__init__" as emphasis, "&lt;" as an entity),
+# each escaped with a backslash so the heading shows the title as written.
+_MARKDOWN_SPECIAL = re.compile(r"([\\`*_\[\]<>#&|~])")
 
 
 def _normalized(text: str) -> str:
@@ -40,7 +40,36 @@ def _normalized(text: str) -> str:
 
 
 def _visible(line: str) -> str:
-    return _HTML_TAG.sub(" ", _LINK_DESTINATION.sub("]", line))
+    """The text a reader sees on one Markdown line.
+
+    A link's destination (`](...)`) and an HTML tag (an autolink's URL
+    included) are dropped; a code span's contents are kept, tag-like text
+    and all. One pass, so a long line with an unterminated `](`, `<` or
+    backtick costs linear time: each closer is searched for forward from
+    where it is needed, and once a search for one fails it is never repeated.
+    """
+    out: list[str] = []
+    missing: set[str] = set()
+    i, end = 0, len(line)
+    while i < end:
+        for opener, closer, keep in (
+            ("`", "`", True),
+            ("<", ">", False),
+            ("](", ")", False),
+        ):
+            if closer in missing or not line.startswith(opener, i):
+                continue
+            j = line.find(closer, i + len(opener))
+            if j == -1:
+                missing.add(closer)
+                continue
+            out.append(line[i + len(opener) : j] if keep else " ")
+            i = j + 1
+            break
+        else:
+            out.append(line[i])
+            i += 1
+    return "".join(out)
 
 
 def _collapsed(text: str) -> str:
@@ -105,4 +134,5 @@ def with_page_title(html: str, content: str) -> str:
     title = page_title(html)
     if title is None or _opens_with_title(content, title):
         return content
-    return f"# {title}\n\n{content.lstrip()}"
+    heading = _MARKDOWN_SPECIAL.sub(r"\\\1", title)
+    return f"# {heading}\n\n{content.lstrip()}"
