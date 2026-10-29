@@ -537,6 +537,17 @@ async def check_may_autonomously_fetch_url(
         )
 
 
+# The Accept header of a non-raw fetch (#5198). A site that negotiates content
+# can then serve native markdown, which is returned as-is, and a site that does
+# not still serves HTML (preferred over everything else) to be simplified.
+MARKDOWN_ACCEPT = "text/markdown, text/html;q=0.9, */*;q=0.8"
+
+
+def _is_markdown(content_type: str) -> bool:
+    """Whether a Content-Type header declares markdown (``text/markdown``, RFC 7763)."""
+    return content_type.split(";", 1)[0].strip().lower() == "text/markdown"
+
+
 def _body_looks_like_html(page_raw: str) -> bool:
     """Whether a body served with no Content-Type is an HTML document.
 
@@ -591,6 +602,10 @@ async def fetch_url(
             hooks.append(_check_redirect_robots_txt)
         if hooks:
             client.event_hooks = {"request": hooks}
+        # A raw fetch keeps httpx's default Accept: */*, so it gets the site's
+        # default representation (a page's HTML), as before this negotiation.
+        if not force_raw:
+            client.headers["Accept"] = MARKDOWN_ACCEPT
         try:
             response = await client.get(
                 url,
@@ -612,6 +627,10 @@ async def fetch_url(
         page_raw = decode_page(response)
 
     content_type = response.headers.get("content-type", "")
+    # Markdown is already what this tool returns, so it is not simplified, and
+    # it carries no raw-content prefix even under force_raw: it is unchanged.
+    if _is_markdown(content_type):
+        return page_raw, ""
     is_page_html = (
         "<html" in page_raw[:100]
         or "text/html" in content_type.lower()
