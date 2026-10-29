@@ -13,7 +13,10 @@ import { pathToFileURL } from "url";
 import { z } from "zod";
 import { minimatch } from "minimatch";
 import { getValidRootDirectories } from "./roots-utils.js";
-import { describeAllowedDirectories } from "./allowed-directories.js";
+import {
+  confineRootsToDirectories,
+  describeAllowedDirectories,
+} from "./allowed-directories.js";
 import {
   formatSize,
   validatePath,
@@ -216,6 +219,13 @@ export interface ServerOptions {
    * out of the server, so clients never see it and cannot call it.
    */
   readOnly?: boolean;
+  /**
+   * Confine the client's Roots to the command-line directories (#3133): on a
+   * 2025-era connection a root may narrow them but never widen them, and a
+   * root outside every one of them is ignored. Has no effect when the server
+   * was started with no command-line directories.
+   */
+  confineRoots?: boolean;
 }
 
 /**
@@ -1076,13 +1086,14 @@ export function createServer(
     requestedRoots: Root[],
     generation: number,
   ) {
-    const validatedRootDirs = await getValidRootDirectories(requestedRoots);
+    const validRootDirs = await getValidRootDirectories(requestedRoots);
     if (generation !== rootsGeneration) {
       console.error(
         "Discarded a stale roots/list answer: a newer roots update has started",
       );
       return;
     }
+    const validatedRootDirs = confineRoots(validRootDirs);
     if (validatedRootDirs.length > 0) {
       allowedDirectories = [...validatedRootDirs];
       rootsInForce = true;
@@ -1109,10 +1120,34 @@ export function createServer(
           ? {
               from: "roots",
               replacedCommandLine: initialAllowedDirectories.length > 0,
+              confined: confining,
             }
           : { from: "command-line" },
       ),
     );
+  }
+
+  // True when the client's Roots are kept inside the command-line directories
+  // (#3133). With none given there is nothing to confine them to.
+  const confining =
+    options.confineRoots === true && initialAllowedDirectories.length > 0;
+
+  // The client's valid roots as the server will apply them: unchanged, or,
+  // with --confine-roots, cut down to their overlap with the command-line
+  // directories. A root outside all of them is dropped like an invalid one,
+  // so roots that are all outside leave the state as invalid roots would.
+  function confineRoots(validRootDirs: string[]): string[] {
+    if (!confining) return validRootDirs;
+    const { confined, ignored } = confineRootsToDirectories(
+      validRootDirs,
+      initialAllowedDirectories,
+    );
+    if (ignored.length > 0) {
+      console.error(
+        `Ignored client roots outside the command-line directories (--confine-roots): ${ignored.join(", ")}`,
+      );
+    }
+    return confined;
   }
 
   // Handles dynamic roots updates during runtime, when client sends "roots/list_changed" notification, server fetches the updated roots and replaces all allowed directories with the new roots.
