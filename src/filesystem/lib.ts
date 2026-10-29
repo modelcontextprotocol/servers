@@ -7,6 +7,7 @@ import { minimatch } from "minimatch";
 import { normalizePathFormat, expandHome } from "./path-utils.js";
 import { isPathWithinAllowedDirectories } from "./path-validation.js";
 import {
+  appendFileInDirectory,
   createDirectoryInPlace,
   createFileInDirectory,
   moveFileAcrossDevices,
@@ -633,6 +634,38 @@ async function overwriteInPlace(
     throw new Error(`Refusing to write: not a regular file: ${filePath}`);
   }
   await overwriteFileInDirectory(filePath, content, expected);
+}
+
+/**
+ * Append `content` to the file at `filePath`, exactly as given: no newline is
+ * added before or after it (#1208). A file that does not exist yet is created
+ * with `content`, the way write_file creates one.
+ *
+ * Security: the same path as writeFileContent. Exclusive creation never
+ * follows a symlink; an existing entry must be a regular file, and is appended
+ * to through a handle checked to be that very file (see appendFileInDirectory
+ * in pinned-directory.ts), so nothing swapped in after validation is written
+ * through.
+ */
+export async function appendFileContent(
+  filePath: string,
+  content: string,
+): Promise<void> {
+  try {
+    // O_APPEND here too: another append can reach the file between its
+    // creation and this write, and must not be overwritten.
+    await createFileInDirectory(filePath, content, true);
+    return;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+      throw error;
+    }
+  }
+  const expected = await fs.lstat(filePath, { bigint: true });
+  if (!expected.isFile()) {
+    throw new Error(`Refusing to append: not a regular file: ${filePath}`);
+  }
+  await appendFileInDirectory(filePath, content, expected);
 }
 
 /** Create a directory and any missing parents (see pinned-directory.ts). */
