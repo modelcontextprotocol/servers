@@ -142,23 +142,15 @@ jobs:
         working-directory: src/${{ matrix.package }}
         run: uv sync --locked --all-extras --dev
 
-      # fetch's tests pin readabilipy's Readability.js path, which needs Node
-      # and readabilipy's JavaScript dependencies. readabilipy >= 0.3.0 ships
-      # only their package.json and runs `npm install` on first use, but on
-      # Windows its subprocess call cannot find npm (npm.cmd), so it falls back
-      # to the pure-Python extractor. Install them here, as an operator would.
+      # fetch's tests pin the Readability.js path, which needs Node and npm.
+      # readabilipy >= 0.3.0 ships only its JavaScript's package.json, and the
+      # server installs the dependencies on first use, resolving npm through
+      # PATH so Windows' npm.cmd is found (#5313). Nothing is pre-installed
+      # here, so this leg proves that install works on Windows.
       - uses: actions/setup-node@v7
         if: matrix.package == 'fetch'
         with:
           node-version: 24
-
-      - name: Install readabilipy's JavaScript dependencies
-        if: matrix.package == 'fetch'
-        working-directory: src/fetch
-        shell: bash
-        run: |
-          jsdir=$(uv run --frozen python -c "import os, readabilipy; print(os.path.join(os.path.dirname(readabilipy.__file__), 'javascript'))")
-          cd "$jsdir" && npm install --no-audit --no-fund
 
       - name: Run pytest
         working-directory: src/${{ matrix.package }}

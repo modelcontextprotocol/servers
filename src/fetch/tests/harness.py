@@ -27,7 +27,6 @@ from unittest.mock import patch
 import anyio
 import httpx
 import pytest
-import readabilipy.simple_json
 from mcp import ClientSession
 from mcp.shared.memory import create_client_server_memory_streams
 from mcp.shared.message import SessionMessage
@@ -40,6 +39,7 @@ from mcp.types import (
 )
 
 import mcp_server_fetch.server as server_module
+from mcp_server_fetch import readability_js
 
 Responder = Union[httpx.Response, Callable[[httpx.Request], httpx.Response]]
 
@@ -132,31 +132,35 @@ async def connect(
 
 @pytest.fixture
 def node_readability() -> None:
-    """Require the Readability.js path that readabilipy takes when Node is on PATH.
+    """Require the Readability.js path the server takes when Node is on PATH.
 
-    readabilipy silently falls back to a pure-Python extractor without Node,
-    and the two produce different Markdown, so each HTML test names the mode
-    it pins. Node is a prerequisite of this repository's gate, so a missing
-    Node fails the test rather than skipping it.
+    The server silently falls back to readabilipy's pure-Python extractor
+    without Node, and the two produce different Markdown, so each HTML test
+    names the mode it pins. Node is a prerequisite of this repository's gate,
+    so a missing Node fails the test rather than skipping it.
     """
-    if not readabilipy.simple_json.have_node():
-        pytest.fail("Node.js >= 10 must be on PATH for the Readability.js path")
+    if readability_js.node_path() is None:
+        pytest.fail(
+            f"Node.js >= {readability_js.MIN_NODE_MAJOR} (and npm, or readabilipy's "
+            "JavaScript dependencies) must be on PATH for the Readability.js path"
+        )
 
 
 @pytest.fixture
 def python_readability(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Force readabilipy's pure-Python fallback, as on a machine without Node."""
-    monkeypatch.setattr(readabilipy.simple_json, "have_node", lambda: False)
+    """Force the pure-Python fallback, as on a machine without Node."""
+    monkeypatch.setattr(readability_js, "node_path", lambda: None)
 
 
 @pytest.fixture(autouse=True)
 def private_tempdir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Give each test its own ``tempfile.gettempdir()``.
 
-    readabilipy's Readability.js path writes its input and output to fixed
+    readabilipy 0.2's Readability.js path wrote its input and output to fixed
     names (``full.html``, ``article.json``) in the shared temp directory, so
     two test runs at once (parallel gate runs in separate worktrees, say) read
-    each other's pages.
+    each other's pages. The server's own runner uses a fresh directory per
+    page, so this now only keeps each test's temporary files to itself.
     """
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
 
