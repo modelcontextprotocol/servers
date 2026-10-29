@@ -705,6 +705,26 @@ describe("memory tools over the protocol", () => {
         relations: [],
       });
     });
+
+    it("stores and reports an observation repeated in one call once", async () => {
+      const result = await call(client, "add_observations", {
+        observations: [
+          { entityName: "Alice", contents: ["plays chess", "plays chess"] },
+        ],
+      });
+      const expected = [
+        { entityName: "Alice", addedObservations: ["plays chess"] },
+      ];
+      expect(result.isError).toBeUndefined();
+      expect(result.structuredContent).toEqual({ results: expected });
+      expect(await readGraph()).toEqual({
+        entities: [
+          { ...alice, observations: [...alice.observations, "plays chess"] },
+          bob,
+        ],
+        relations: [],
+      });
+    });
   });
 
   describe("delete_entities", () => {
