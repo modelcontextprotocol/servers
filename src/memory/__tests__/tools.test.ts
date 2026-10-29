@@ -68,10 +68,12 @@ const statusOutputSchema = {
   additionalProperties: false,
 };
 
+// create_entities, create_relations and add_observations skip what is already
+// stored, so repeating a call with the same arguments changes nothing (#5153).
 const writeAnnotations = {
   readOnlyHint: false,
   destructiveHint: false,
-  idempotentHint: false,
+  idempotentHint: true,
   openWorldHint: false,
 };
 const deleteAnnotations = {
@@ -390,6 +392,30 @@ describe("memory tools over the protocol", () => {
     it("lists the nine tools with their schemas and annotations", async () => {
       const { tools } = await client.listTools();
       expect(tools).toEqual(expectedTools);
+    });
+
+    // The idempotentHint the three write tools declare: a repeat of the same
+    // call leaves the graph as the first call left it (#5153).
+    it("changes nothing when a write tool is repeated with the same arguments (#5153)", async () => {
+      const calls: [string, Record<string, unknown>][] = [
+        ["create_entities", { entities: [alice, bob] }],
+        ["create_relations", { relations: [aliceKnowsBob] }],
+        [
+          "add_observations",
+          { observations: [{ entityName: "Bob", contents: ["plays chess"] }] },
+        ],
+      ];
+      for (const [name, args] of calls) {
+        expect((await call(client, name, args)).isError).toBeUndefined();
+      }
+      // Compare around each repeat on its own, so a later repeat cannot mask
+      // a change an earlier one made.
+      for (const [name, args] of calls) {
+        const before = await readGraph();
+        const repeat = await call(client, name, args);
+        expect(repeat.isError).toBeUndefined();
+        expect(await readGraph()).toEqual(before);
+      }
     });
 
     it("offers no prompts", async () => {
