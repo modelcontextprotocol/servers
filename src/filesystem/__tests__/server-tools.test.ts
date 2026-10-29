@@ -94,14 +94,20 @@ describe("server identity and tool list", () => {
     expect(tools.map((t) => t.name)).toEqual(TOOL_NAMES);
   });
 
-  // #3402: the read-only tools carry no idempotentHint or destructiveHint.
-  // When that issue is fixed, this table is the test to change.
+  // #3402: every tool sets all four hints explicitly, the read-only ones
+  // included (idempotent, never destructive), so a client never falls back
+  // to the spec's defaults (destructive, not idempotent, open world).
   it("pins each tool's title and annotations (#3402)", async () => {
     const { tools } = await client.listTools();
     const table = Object.fromEntries(
       tools.map((t) => [t.name, { title: t.title, ...t.annotations }]),
     );
-    const readOnly = { readOnlyHint: true, openWorldHint: false };
+    const readOnly = {
+      readOnlyHint: true,
+      idempotentHint: true,
+      destructiveHint: false,
+      openWorldHint: false,
+    };
     expect(table).toEqual({
       read_file: { title: "Read File (Deprecated)", ...readOnly },
       read_text_file: { title: "Read Text File", ...readOnly },
