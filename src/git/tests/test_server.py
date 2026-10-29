@@ -268,6 +268,38 @@ def test_git_diff(test_repository):
     assert "feature changes" in result
 
 
+def test_git_diff_range_with_omitted_endpoint_means_head(test_repository):
+    """`a..` and `..b` default the missing endpoint to HEAD, as git does."""
+    default_branch = test_repository.active_branch.name
+    test_repository.git.checkout("-b", "feature-range")
+    file_path = Path(test_repository.working_dir) / "test.txt"
+    file_path.write_text("range changes")
+    test_repository.index.add(["test.txt"])
+    test_repository.index.commit("range commit")
+
+    assert git_diff(test_repository, f"{default_branch}..") == git_diff(
+        test_repository, f"{default_branch}..HEAD"
+    )
+    assert "range changes" in git_diff(test_repository, f"{default_branch}..")
+    assert git_diff(test_repository, "..HEAD") == ""
+
+
+def test_git_diff_single_revision_containing_dots_is_not_split(test_repository):
+    """A revision that resolves whole is used whole, even with '..' inside it."""
+    test_repository.index.commit("fix..bug")
+
+    # ':/fix..bug' names the commit whose message matches, not a range.
+    assert git_diff(test_repository, ":/fix..bug") == ""
+
+
+@pytest.mark.parametrize("target", ["HEAD..feature..x", "...."])
+def test_git_diff_rejects_malformed_ranges(test_repository, target):
+    """Only the first '..' or '...' splits; anything left must still resolve."""
+    test_repository.git.branch("feature")
+    with pytest.raises(BadName):
+        git_diff(test_repository, target)
+
+
 # A non-ASCII name, and the octal escape git prints for its first character
 # under its default core.quotepath=true (#5129).
 NON_ASCII_FILENAME = "日本語.txt"
