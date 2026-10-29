@@ -587,8 +587,15 @@ export function createServer(
     {
       title: "Edit File",
       description:
-        "Make line-based edits to a text file. Each edit replaces exact line sequences " +
-        "with new content. Returns a git-style diff showing the changes made. " +
+        "Make line-based edits to a text file. Edits apply in order, each to the " +
+        "result of the ones before it, and each replaces the first match of its " +
+        "oldText with newText. oldText must match the file's text exactly, except " +
+        "that line endings (LF or CRLF) never matter and, when there is no exact " +
+        "match, a run of whole lines matches if each line is equal once leading and " +
+        "trailing whitespace is ignored (newText then takes the file's indentation). " +
+        "Whitespace inside a line must match. If any edit has no match, nothing is " +
+        "written and the error shows the closest lines of the file, numbered, to " +
+        "copy oldText from. Returns a git-style diff showing the changes made. " +
         "Only works within allowed directories.",
       inputSchema: jsonSchema2020(EditFileArgsSchema.shape),
       outputSchema: jsonSchema2020({ content: z.string() }),
