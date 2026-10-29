@@ -707,23 +707,50 @@ export class KnowledgeGraphManager {
     });
   }
 
-  async readGraph(): Promise<KnowledgeGraph> {
-    return this.loadGraph();
+  // With no options, the whole graph, as the knowledge-graph resource serves
+  // it. entityTypes keeps only entities of those types, and the relations
+  // that touch one of them; observationLimit caps each entity's observations
+  // (see limitObservations).
+  async readGraph(options: ReadGraphOptions = {}): Promise<ReadGraphResult> {
+    const graph = await this.loadGraph();
+    const { entityTypes, observationLimit } = options;
+    if (entityTypes === undefined) {
+      return {
+        entities: limitObservations(graph.entities, observationLimit),
+        relations: graph.relations,
+      };
+    }
+    const entities = graph.entities.filter((e) =>
+      entityTypes.includes(e.entityType),
+    );
+    const names = new Set(entities.map((e) => e.name));
+    return {
+      entities: limitObservations(entities, observationLimit),
+      relations: graph.relations.filter(
+        (r) => names.has(r.from) || names.has(r.to),
+      ),
+    };
   }
 
-  // Very basic search function
-  async searchNodes(query: string): Promise<KnowledgeGraph> {
+  // Very basic search function. limit keeps the first matches in stored
+  // order; observationLimit caps each entity's observations.
+  async searchNodes(
+    query: string,
+    options: SearchNodesOptions = {},
+  ): Promise<ReadGraphResult> {
     const graph = await this.loadGraph();
 
     // Filter entities
-    const filteredEntities = graph.entities.filter(
-      (e) =>
-        e.name.toLowerCase().includes(query.toLowerCase()) ||
-        e.entityType.toLowerCase().includes(query.toLowerCase()) ||
-        e.observations.some((o) =>
-          o.toLowerCase().includes(query.toLowerCase()),
-        ),
-    );
+    const filteredEntities = graph.entities
+      .filter(
+        (e) =>
+          e.name.toLowerCase().includes(query.toLowerCase()) ||
+          e.entityType.toLowerCase().includes(query.toLowerCase()) ||
+          e.observations.some((o) =>
+            o.toLowerCase().includes(query.toLowerCase()),
+          ),
+      )
+      .slice(0, options.limit);
 
     // Create a Set of filtered entity names for quick lookup
     const filteredEntityNames = new Set(filteredEntities.map((e) => e.name));
@@ -734,15 +761,16 @@ export class KnowledgeGraphManager {
       (r) => filteredEntityNames.has(r.from) || filteredEntityNames.has(r.to),
     );
 
-    const filteredGraph: KnowledgeGraph = {
-      entities: filteredEntities,
+    return {
+      entities: limitObservations(filteredEntities, options.observationLimit),
       relations: filteredRelations,
     };
-
-    return filteredGraph;
   }
 
-  async openNodes(names: string[]): Promise<KnowledgeGraph> {
+  async openNodes(
+    names: string[],
+    options: OpenNodesOptions = {},
+  ): Promise<ReadGraphResult> {
     const graph = await this.loadGraph();
 
     // Filter entities
@@ -761,13 +789,57 @@ export class KnowledgeGraphManager {
       (r) => filteredEntityNames.has(r.from) || filteredEntityNames.has(r.to),
     );
 
-    const filteredGraph: KnowledgeGraph = {
-      entities: filteredEntities,
+    return {
+      entities: limitObservations(filteredEntities, options.observationLimit),
       relations: filteredRelations,
     };
-
-    return filteredGraph;
   }
+}
+
+// Options of the read tools (#3953), all optional, so a call without them
+// returns what it always has. They let a client read a large graph in
+// pieces: an overview of names, types and observation counts first
+// (observationLimit 0), then the entities it needs in full.
+export interface OpenNodesOptions {
+  observationLimit?: number;
+}
+
+export interface ReadGraphOptions extends OpenNodesOptions {
+  entityTypes?: string[];
+}
+
+export interface SearchNodesOptions extends OpenNodesOptions {
+  limit?: number;
+}
+
+// An entity as a read tool returns it. observationCount is set only when
+// observationLimit was given, so a count above observations.length tells the
+// caller that observations were left out.
+export interface ReadEntity extends Entity {
+  observationCount?: number;
+}
+
+export interface ReadGraphResult {
+  entities: ReadEntity[];
+  relations: Relation[];
+}
+
+// Keep each entity's first observationLimit observations, in the order they
+// were added, and record how many it holds. Without a limit the entities are
+// returned as they are.
+function limitObservations(
+  entities: Entity[],
+  observationLimit: number | undefined,
+): ReadEntity[] {
+  if (observationLimit === undefined) {
+    return entities;
+  }
+  return entities.map((e) => ({
+    name: e.name,
+    entityType: e.entityType,
+    observations: e.observations.slice(0, observationLimit),
+    observationCount: e.observations.length,
+  }));
 }
 
 // Zod schemas for entities and relations
@@ -795,6 +867,47 @@ export const SearchNodesQuerySchema = z
   .describe(
     "The search query to match against entity names, types, and observation content",
   );
+
+// The read tools' optional inputs (#3953). Their descriptions carry the
+// guidance on when to use them, so the tool descriptions need not.
+const ObservationLimitSchema = z
+  .number()
+  .int()
+  .min(0)
+  .optional()
+  .describe(
+    "Return at most this many observations per entity (the first ones, in the order they were added) and add each entity's total as observationCount. Use 0 for names, types and counts only: a cheap overview of a large graph, after which open_nodes reads the entities you need in full. Omit to return every observation.",
+  );
+
+const ReadGraphEntityTypesSchema = z
+  .array(z.string())
+  .min(1)
+  .optional()
+  .describe(
+    "Return only entities whose entityType is one of these (exact match), and only the relations that touch one of them. Omit to return every entity.",
+  );
+
+const SearchNodesLimitSchema = z
+  .number()
+  .int()
+  .min(1)
+  .optional()
+  .describe(
+    "Return at most this many matching entities (the first matches, in stored order), with the relations that touch them. Omit to return every match.",
+  );
+
+// An entity in a read tool's result: observationCount appears only when the
+// call gave observationLimit.
+const ReadEntitySchema = EntitySchema.extend({
+  observationCount: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe(
+      "How many observations the entity holds in total; present only when observationLimit was given",
+    ),
+});
 
 // Build a memory server over the graph file at memoryFilePath: the nine
 // tools, the knowledge-graph resource and its subscriptions. main() serves the
@@ -1092,10 +1205,14 @@ export function createServer(
     "read_graph",
     {
       title: "Read Graph",
-      description: "Read the entire knowledge graph",
-      inputSchema: z.object({}),
+      description:
+        "Read the entire knowledge graph: every entity with its observations, and every relation. The result grows with the graph, so use this only when you need everything; prefer search_nodes to find entities by keyword and open_nodes to read entities whose names you know.",
+      inputSchema: z.object({
+        entityTypes: ReadGraphEntityTypesSchema,
+        observationLimit: ObservationLimitSchema,
+      }),
       outputSchema: z.object({
-        entities: z.array(EntitySchema),
+        entities: z.array(ReadEntitySchema),
         relations: z.array(RelationSchema),
       }),
       annotations: {
@@ -1105,8 +1222,11 @@ export function createServer(
         openWorldHint: false,
       },
     },
-    async () => {
-      const graph = await knowledgeGraphManager.readGraph();
+    async ({ entityTypes, observationLimit }) => {
+      const graph = await knowledgeGraphManager.readGraph({
+        entityTypes,
+        observationLimit,
+      });
       return {
         content: [
           { type: "text" as const, text: JSON.stringify(graph, null, 2) },
@@ -1125,9 +1245,11 @@ export function createServer(
         "Search the knowledge graph for entities whose name, type or observations contain the query (case-insensitive). Use this when you have a keyword, a topic or part of a name but not the exact entity names. Prefer open_nodes when you already know the exact names, and use read_graph only when you need the whole graph. Returns the matching entities and every relation that touches one of them.",
       inputSchema: z.object({
         query: SearchNodesQuerySchema,
+        limit: SearchNodesLimitSchema,
+        observationLimit: ObservationLimitSchema,
       }),
       outputSchema: z.object({
-        entities: z.array(EntitySchema),
+        entities: z.array(ReadEntitySchema),
         relations: z.array(RelationSchema),
       }),
       annotations: {
@@ -1137,8 +1259,11 @@ export function createServer(
         openWorldHint: false,
       },
     },
-    async ({ query }) => {
-      const graph = await knowledgeGraphManager.searchNodes(query);
+    async ({ query, limit, observationLimit }) => {
+      const graph = await knowledgeGraphManager.searchNodes(query, {
+        limit,
+        observationLimit,
+      });
       return {
         content: [
           { type: "text" as const, text: JSON.stringify(graph, null, 2) },
@@ -1159,9 +1284,10 @@ export function createServer(
         names: z
           .array(z.string())
           .describe("An array of entity names to retrieve"),
+        observationLimit: ObservationLimitSchema,
       }),
       outputSchema: z.object({
-        entities: z.array(EntitySchema),
+        entities: z.array(ReadEntitySchema),
         relations: z.array(RelationSchema),
       }),
       annotations: {
@@ -1171,8 +1297,10 @@ export function createServer(
         openWorldHint: false,
       },
     },
-    async ({ names }) => {
-      const graph = await knowledgeGraphManager.openNodes(names);
+    async ({ names, observationLimit }) => {
+      const graph = await knowledgeGraphManager.openNodes(names, {
+        observationLimit,
+      });
       return {
         content: [
           { type: "text" as const, text: JSON.stringify(graph, null, 2) },
