@@ -817,9 +817,9 @@ export function createServer(
     {
       title: "Search Files",
       description:
-        "Recursively search for files and directories matching a pattern. " +
-        "The patterns should be glob-style patterns that match paths relative to the working directory. " +
-        "Use pattern like '*.ext' to match files in current directory, and '**/*.ext' to match files in all subdirectories. " +
+        "Find files and directories by NAME, not by content: this tool never reads or searches inside files. " +
+        "It walks the tree under 'path' and matches a glob pattern against each entry's path relative to 'path' (case-sensitive). " +
+        "Use '*.ext' to match entries directly under 'path', and '**/*.ext' or '**/name' to match at any depth. " +
         "Returns full paths to all matching items. Great for finding files when you don't know their exact location. " +
         "Only searches within allowed directories.",
       inputSchema: jsonSchema2020(SearchFilesArgsSchema.shape),
