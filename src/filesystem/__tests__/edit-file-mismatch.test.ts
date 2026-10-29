@@ -193,6 +193,18 @@ describe("describeEditMismatch", () => {
     expect(message).not.toContain("without the line-number prefixes");
   });
 
+  it("never starts the closest text after the file's terminal newline", () => {
+    const message = describeEditMismatch(
+      "function f() {\nreturn value;\n}\n",
+      "\nreturn vaLue;",
+      0,
+      1,
+    );
+    expect(message).toContain("(lines 1-3 of 3):");
+    expect(message).not.toContain("runs past the end");
+    expect(message).toContain("oldText line 1 against file line 1");
+  });
+
   it("caps the quoted region at 30 lines", () => {
     const content = lines(50).join("\n");
     const oldText = [...lines(39), "line 40 changed"].join("\n");

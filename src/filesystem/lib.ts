@@ -822,11 +822,12 @@ export function describeEditMismatch(
 
   // Every starting line is scored, including those near the end where fewer
   // lines than oldText has remain, so a near match at the end of the file is
-  // still found. The earliest start wins a tie.
+  // still found. The earliest start wins a tie. A start is always a real
+  // line, never the empty element after a terminal newline.
   const fileGrams = fileLines.map(lineGrams);
   let best = 0;
   let bestScore = 0;
-  for (let i = 0; i < fileLines.length; i++) {
+  for (let i = 0; i < lineCount; i++) {
     const width = Math.min(oldLines.length, fileLines.length - i);
     let score = 0;
     for (let j = 0; j < width; j++) {
