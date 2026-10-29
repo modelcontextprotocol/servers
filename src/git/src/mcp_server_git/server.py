@@ -575,15 +575,44 @@ def redact_url(url: str) -> str:
     return f"{scheme}://{kept}@{url[match.end() :]}"
 
 
+# The config values `git remote -v` builds its URLs from: each remote's
+# `url` and `pushurl`, and the `insteadOf` / `pushInsteadOf` rewrites.
+_REMOTE_URL_KEYS = r"^(remote\..*\.(url|pushurl)|url\..*\.(insteadof|pushinsteadof))$"
+
+
+def _remote_url_has_newline(repo: git.Repo) -> bool:
+    """Whether a value `git remote -v` prints from holds a newline.
+
+    Such a URL is split across lines of `git remote -v`, and a fragment can
+    look like a whole line (`https://alice:SECRET (fetch)`) with its
+    credential's `@` on the next one, so no line parser can redact it. Read
+    the raw values NUL-separated (`-z`: `<key>\\n<value>\\0`), where a newline
+    cannot hide. `with_exceptions=False` because `--get-regexp` exits 1 when
+    nothing matches; a real failure leaves the output empty, and the
+    `git remote -v` that follows reports it.
+    """
+    entries = repo.git.config(
+        "-z", "--get-regexp", _REMOTE_URL_KEYS, with_exceptions=False
+    )
+    return any("\n" in entry.partition("\n")[2] for entry in entries.split("\0"))
+
+
 def git_remote(repo: git.Repo) -> str:
     """The repository's remotes with their fetch and push URLs, as `git remote -v`.
 
-    Each line is `<name>\t<url> (fetch|push)`, a partial clone's fetch line
+    Each line is `<name>\\t<url> (fetch|push)`, a partial clone's fetch line
     followed by its promisor filter (` [blob:none]`); the URL goes through
     `redact_url` so no credential reaches the client. Lines are split on
-    '\n' alone, the only separator git prints, not on every separator
-    `str.splitlines` knows, which would cut a URL holding U+2028 in two.
+    '\\n' alone, the only separator git prints, not on every separator
+    `str.splitlines` knows, which would cut a URL holding U+2028 in two. A
+    URL holding a newline itself is refused (`_remote_url_has_newline`).
     """
+    if _remote_url_has_newline(repo):
+        raise ValueError(
+            "A configured remote URL contains a newline, so the remotes cannot "
+            "be listed without risking a credential in it; git refuses such "
+            "URLs as well"
+        )
     output = _git_text(repo, "remote", "-v").rstrip("\n")
     if not output:
         return "No remotes configured"

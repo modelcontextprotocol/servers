@@ -170,6 +170,25 @@ async def test_partial_clone_filter_is_kept(repo: git.Repo):
     )
 
 
+@pytest.mark.parametrize(
+    "key",
+    ["remote.origin.url", "remote.origin.pushurl", "url.https://x/.insteadOf"],
+)
+async def test_newline_in_a_url_refuses_to_list(repo: git.Repo, key: str):
+    # Copilot review on #5373: with a newline after ` (fetch)`, the fragment
+    # before it reads as a whole line with no '@', so a line parser would
+    # return `https://alice:SECRET` unredacted.
+    repo.create_remote("origin", "https://example.com/r.git")
+    repo.git.config(key, "https://alice:SECRET (fetch)\nrest@example.com/r.git")
+    result = await call_remote(None, repo)
+    assert result == tool_error(
+        "git_remote",
+        "A configured remote URL contains a newline, so the remotes cannot be "
+        "listed without risking a credential in it; git refuses such URLs as well",
+    )
+    assert "SECRET" not in result["content"][0]["text"]
+
+
 async def test_remote_helper_url_is_redacted(repo: git.Repo):
     repo.git.remote("add", "origin", "https::https://alice:token@example.com/r.git")
     assert await call_remote(None, repo) == text_result(
