@@ -16,6 +16,7 @@ longer installs readabilipy's JavaScript for them).
 from __future__ import annotations
 
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -58,14 +59,22 @@ def html(body: str) -> httpx.Response:
 
 @pytest.fixture
 def bindir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """An empty directory that is the first entry on PATH, ahead of system tools.
+    """An empty directory that is the only place the runner looks for node and npm.
 
-    The real Node.js and npm (in /usr/local/bin and the like) are left off, so
-    only the fakes a test writes here are found.
+    The fake scripts' own utilities (sleep, cat, mkdir) still come from the
+    system directories on PATH, but the runner's lookup sees this directory
+    alone, so a real Node.js or npm installed anywhere (/usr/bin included, as
+    a distribution installs it) is never found or run.
     """
     path = tmp_path / "bin"
     path.mkdir()
     monkeypatch.setenv("PATH", os.pathsep.join([str(path), "/usr/bin", "/bin"]))
+    which = shutil.which  # the real one, before the module's is replaced
+
+    def only_bindir(name: str) -> str | None:
+        return which(name, path=str(path))
+
+    monkeypatch.setattr(readability_js.shutil, "which", only_bindir)
     return path
 
 
