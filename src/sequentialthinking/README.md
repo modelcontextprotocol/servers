@@ -134,6 +134,8 @@ On Windows, use `cmd /c` to launch `npx`:
 
 To disable logging of thought information set env var: `DISABLE_THOUGHT_LOGGING` to `true`.
 
+To bound memory use, the server retains at most `MAX_THOUGHT_HISTORY` thoughts per connection (a positive integer; default `1000`). Past the cap the oldest thought is dropped, from its branch too, so `thoughtHistoryLength` in the result stops at the cap and a branch whose thoughts have all been dropped is no longer listed in `branches`.
+
 ### Usage with VS Code
 
 For quick installation, click one of the installation buttons below...
