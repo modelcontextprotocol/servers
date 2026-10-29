@@ -833,7 +833,8 @@ export async function tailFile(
   const stats = await fs.stat(filePath);
   const fileSize = stats.size;
 
-  if (fileSize === 0) return "";
+  // Zero lines is an empty result; slice(-0) below would return every line.
+  if (fileSize === 0 || numLines === 0) return "";
 
   // Open file for reading
   const fileHandle = await fs.open(filePath, "r");
