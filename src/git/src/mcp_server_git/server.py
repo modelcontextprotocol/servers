@@ -531,11 +531,13 @@ _URL_USERINFO = re.compile(
 # after the `::` is a URL of its own, and is redacted as one.
 _REMOTE_HELPER = re.compile(r"^(?P<transport>[A-Za-z][A-Za-z0-9+.-]*)::")
 
-# One line of `git remote -v`: `<name>\t<url> (fetch|push)`. `.` matches
-# everything but '\n', so a URL holding another line separator (U+2028, say)
-# stays whole.
+# One line of `git remote -v`: `<name>\t<url> (fetch|push)`, and on a
+# partial clone's fetch line the promisor filter after it (` [blob:none]`).
+# `.` matches everything but '\n', so a URL holding another line separator
+# (U+2028, say) stays whole.
 _REMOTE_LINE = re.compile(
-    r"^(?P<name>[^\t]*)\t(?P<url>.*) \((?P<direction>fetch|push)\)$"
+    r"^(?P<name>[^\t]*)\t(?P<url>.*) \((?P<direction>fetch|push)\)"
+    r"(?P<filter> \[.*\])?$"
 )
 
 # Schemes whose username is an account name rather than a secret, so it is kept
@@ -576,7 +578,8 @@ def redact_url(url: str) -> str:
 def git_remote(repo: git.Repo) -> str:
     """The repository's remotes with their fetch and push URLs, as `git remote -v`.
 
-    Each line is `<name>\t<url> (fetch|push)`; the URL goes through
+    Each line is `<name>\t<url> (fetch|push)`, a partial clone's fetch line
+    followed by its promisor filter (` [blob:none]`); the URL goes through
     `redact_url` so no credential reaches the client. Lines are split on
     '\n' alone, the only separator git prints, not on every separator
     `str.splitlines` knows, which would cut a URL holding U+2028 in two.
@@ -593,7 +596,9 @@ def git_remote(repo: git.Repo) -> str:
             lines.append(REDACTED)
             continue
         url = redact_url(match["url"])
-        lines.append(f"{match['name']}\t{url} ({match['direction']})")
+        lines.append(
+            f"{match['name']}\t{url} ({match['direction']}){match['filter'] or ''}"
+        )
     return "\n".join(lines)
 
 

@@ -157,6 +157,19 @@ async def test_line_separator_in_password_is_not_split(repo: git.Repo):
     assert "token" not in result["content"][0]["text"]
 
 
+async def test_partial_clone_filter_is_kept(repo: git.Repo):
+    # A promisor remote's fetch line ends in its filter (Copilot review on
+    # #5373); the line still parses, and only the URL is redacted.
+    repo.create_remote("origin", "https://alice:token@example.com/r.git")
+    with repo.config_writer() as config:
+        config.set_value('remote "origin"', "promisor", "true")
+        config.set_value('remote "origin"', "partialclonefilter", "blob:none")
+    assert await call_remote(None, repo) == text_result(
+        "origin\thttps://<redacted>@example.com/r.git (fetch) [blob:none]\n"
+        "origin\thttps://<redacted>@example.com/r.git (push)"
+    )
+
+
 async def test_remote_helper_url_is_redacted(repo: git.Repo):
     repo.git.remote("add", "origin", "https::https://alice:token@example.com/r.git")
     assert await call_remote(None, repo) == text_result(
