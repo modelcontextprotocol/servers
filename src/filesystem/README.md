@@ -26,6 +26,18 @@ mcp-server-filesystem /path/to/dir1 /path/to/dir2
 
 This is the only method that works on every protocol version, so it is the one to use.
 
+### Read-only Mode
+Add `--read-only` to serve only the tools that cannot change the filesystem:
+```bash
+mcp-server-filesystem --read-only /path/to/dir1 /path/to/dir2
+```
+
+The server then registers only the tools annotated `readOnlyHint: true` in the [Tool annotations](#tool-annotations-mcp-hints) table, the ones that read and list. Every tool not annotated `readOnlyHint: true`, that is every tool that writes (such as `write_file` and `edit_file`), is left out, so a client never lists it and a call to it fails as an unknown tool. A tool added later follows the same rule through its annotation. The server enforces this, whatever the client is configured to allow, and it works the same with `npx` as with Docker. It applies on both protocol eras, and to directories that come from a client's Roots.
+
+The flag may appear anywhere among the arguments. `--` ends the options, so a directory literally named `--read-only` can be given after it.
+
+Read-only mode covers every allowed directory. To make only some of them read-only, run two servers: one with `--read-only` for the directories to protect, and one without it for the rest. That separation holds only while the writable server keeps its command-line directories: a 2025-era client that supports Roots replaces them (see Method 2), so it could expose a protected directory to the writable server. Where that matters, make the protected directories read-only at the operating-system level as well, with file permissions or, with Docker, a bind mount's `ro` flag.
+
 ### Method 2: MCP Roots (Deprecated, 2025-era clients only)
 A client that connects with a 2025-era protocol version (the `initialize` handshake) and supports [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots) can dynamically update the Allowed directories.
 
