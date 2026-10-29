@@ -34,6 +34,7 @@ import {
   readdirWithTimeout,
   createEntryBudget,
 } from "./lib.js";
+import { registerFileResources } from "./file-resources.js";
 import { SERVER_VERSION } from "./version.js";
 
 // The JSON Schema dialect every advertised tool schema declares (#4841). The
@@ -1060,6 +1061,17 @@ export function createServer(
       };
     },
   );
+
+  // Files as resources (#297): reads see the same allow-list, roots barrier
+  // and 2026-07-28 no-directories error as the tools above.
+  registerFileResources(server, {
+    allowedDirectories: () => allowedDirectories,
+    rootsSettled: () => barrier.settled,
+    unavailableReason: () =>
+      options.era === "modern" && allowedDirectories.length === 0
+        ? NO_ALLOWED_DIRECTORIES_MODERN_ERROR
+        : undefined,
+  });
 
   // Updates allowed directories based on MCP client roots, unless a newer
   // refresh started after this one's `generation` was taken (#5097).
