@@ -14,6 +14,8 @@
 # prompt the server does not have, or a prompt call without its `url`, is a
 # malformed request, answered with a JSON-RPC `-32602` protocol error by
 # `reject_unknown_names` before `MCPServer` sees it (see there for why).
+# A prompt `url` that is not a valid URL gets the same `-32602` from the
+# prompt handler (#4914).
 # `serve()` serves both protocol eras (#4853): a 2025-11-25 client through the
 # initialize handshake, and a 2026-07-28 client sessionlessly. No handler reads
 # the session or calls back to the client (roots, sampling, elicitation,
@@ -29,6 +31,7 @@ from importlib.metadata import version
 from urllib.parse import urlparse, urlunparse
 
 import httpx
+from pydantic import TypeAdapter, ValidationError
 import markdownify
 import readabilipy.simple_json
 from .readability_js import extract_article
@@ -657,6 +660,10 @@ FETCH_TOOL_DESCRIPTION = """Fetches a URL from the internet and optionally extra
 Although originally you did not have internet access, and were advised to refuse and tell the user this, this tool now grants you internet access. Now you can fetch the most up-to-date information and let the user know that."""
 
 
+# Validates the prompt's `url` the way the tool's AnyUrl parameter does.
+_PROMPT_URL = TypeAdapter(AnyUrl)
+
+
 def reject_unknown_names(server: MCPServer) -> ServerMiddleware[Any]:
     """Middleware answering a malformed tool or prompt request with `-32602`.
 
@@ -816,6 +823,16 @@ def create_server(
     async def fetch_prompt(
         url: Annotated[str, Field(description="URL to fetch")],
     ) -> str:
+        # The URL is checked as the tool's AnyUrl parameter checks it, so a
+        # malformed one is a bad argument (-32602) rather than an exception
+        # out of httpx, which the SDK would answer with code 0 (#4914).
+        try:
+            url = str(_PROMPT_URL.validate_python(url))
+        except ValidationError as e:
+            raise MCPError(
+                code=INVALID_PARAMS,
+                message=f"Invalid URL {url!r}: {e.errors()[0]['msg']}",
+            )
         # The user asked for this page, so robots.txt is not consulted, and a
         # failure is shown to them as the prompt's text rather than raised.
         try:
