@@ -107,6 +107,32 @@ async function pathExists(filePath: string): Promise<boolean> {
   }
 }
 
+// The startup warning for a memory file inside a node_modules tree, or
+// undefined for any other path. npx and npm install the server under
+// node_modules, so the default memory.jsonl beside dist/index.js lands there,
+// and npm treats that tree as its own: a reinstall, an update or a cleared npx
+// cache can delete the file and the graph in it (#4117). The default is not
+// moved, since that would strand every existing graph; the warning says how to
+// choose a durable path instead. Only node_modules is matched, not the server's
+// directory as such: the Docker setup mounts a volume over /app/dist, and a
+// source checkout's dist survives a rebuild, so there the default is durable.
+export function memoryFileLocationWarning(
+  memoryFilePath: string,
+): string | undefined {
+  // Both separators, so a Windows path is matched on any platform.
+  const segments = path.resolve(memoryFilePath).split(/[\\/]/);
+  if (!segments.includes("node_modules")) {
+    return undefined;
+  }
+  return (
+    `WARNING: the memory file ${memoryFilePath} is inside a node_modules directory, ` +
+    "which npm manages: reinstalling or updating the server, or clearing the npx cache, " +
+    "can delete it and the knowledge graph it holds. Set MEMORY_FILE_PATH to an absolute " +
+    "path outside node_modules, in a directory that exists (for example ~/memory.jsonl), " +
+    "and move this file there to keep the graph."
+  );
+}
+
 // We are storing our memory using entities, relations, and observations in a graph structure
 export interface Entity {
   name: string;
@@ -1373,6 +1399,10 @@ export function registerKnowledgeGraphSubscriptions(
 // including one that stops the transport from starting, is reported on stderr.
 export async function main(transport?: Transport): Promise<StdioServerHandle> {
   const memoryFilePath = await ensureMemoryFilePath();
+  const locationWarning = memoryFileLocationWarning(memoryFilePath);
+  if (locationWarning) {
+    console.error(locationWarning);
+  }
   const handle = serveStdio(({ era }) => createServer(memoryFilePath, era), {
     transport,
     // serveStdio reports a transport that fails, including one that cannot
