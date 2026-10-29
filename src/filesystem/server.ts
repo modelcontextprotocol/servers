@@ -14,6 +14,10 @@ import { z } from "zod";
 import { minimatch } from "minimatch";
 import { getValidRootDirectories } from "./roots-utils.js";
 import {
+  confineRootsToDirectories,
+  describeAllowedDirectories,
+} from "./allowed-directories.js";
+import {
   formatSize,
   validatePath,
   getFileStats,
@@ -208,6 +212,19 @@ export interface ServerOptions {
    * Roots (#4992). The stdio entry point exits the process from here.
    */
   onCannotOperate?: (error: Error) => void;
+  /**
+   * Serve only the tools that cannot change the filesystem (#632, #1160):
+   * every tool whose annotations do not declare `readOnlyHint: true` is left
+   * out of the server, so clients never see it and cannot call it.
+   */
+  readOnly?: boolean;
+  /**
+   * Confine the client's Roots to the command-line directories (#3133): on a
+   * 2025-era connection a root may narrow them but never widen them, and a
+   * root outside every one of them is ignored. Has no effect when the server
+   * was started with no command-line directories.
+   */
+  confineRoots?: boolean;
 }
 
 /**
@@ -281,6 +298,25 @@ export function createServer(
       }
       return handler(...args);
     }) as never)) as typeof server.registerTool;
+  // Read-only mode (#632, #1160) withholds every tool that does not declare
+  // itself read-only. Keying on the annotation rather than on a list of write
+  // tools fails closed: a new tool is withheld unless its registration says
+  // `readOnlyHint: true`, the hint the repository already requires to be set
+  // truthfully, so a new write tool needs no change here. A withheld tool is
+  // registered and then removed, before any client connects, so it is absent
+  // from tools/list and a call to it is answered as an unknown tool.
+  if (options.readOnly) {
+    const registerReadWrite = server.registerTool.bind(server);
+    server.registerTool = ((
+      name: string,
+      config: Parameters<typeof registerReadWrite>[1],
+      handler: Parameters<typeof registerReadWrite>[2],
+    ) => {
+      const tool = registerReadWrite(name, config, handler);
+      if (config.annotations?.readOnlyHint !== true) tool.remove();
+      return tool;
+    }) as typeof server.registerTool;
+  }
 
   // Tool registrations
 
@@ -1031,13 +1067,14 @@ export function createServer(
     requestedRoots: Root[],
     generation: number,
   ) {
-    const validatedRootDirs = await getValidRootDirectories(requestedRoots);
+    const validRootDirs = await getValidRootDirectories(requestedRoots);
     if (generation !== rootsGeneration) {
       console.error(
         "Discarded a stale roots/list answer: a newer roots update has started",
       );
       return;
     }
+    const validatedRootDirs = confineRoots(validRootDirs);
     if (validatedRootDirs.length > 0) {
       allowedDirectories = [...validatedRootDirs];
       rootsInForce = true;
@@ -1052,6 +1089,46 @@ export function createServer(
     } else {
       console.error("No valid root directories provided by client");
     }
+    logAllowedDirectories();
+  }
+
+  // Log the allowed directories now in force and where they came from (#4912).
+  function logAllowedDirectories(): void {
+    console.error(
+      describeAllowedDirectories(
+        allowedDirectories,
+        rootsInForce
+          ? {
+              from: "roots",
+              replacedCommandLine: initialAllowedDirectories.length > 0,
+              confined: confining,
+            }
+          : { from: "command-line" },
+      ),
+    );
+  }
+
+  // True when the client's Roots are kept inside the command-line directories
+  // (#3133). With none given there is nothing to confine them to.
+  const confining =
+    options.confineRoots === true && initialAllowedDirectories.length > 0;
+
+  // The client's valid roots as the server will apply them: unchanged, or,
+  // with --confine-roots, cut down to their overlap with the command-line
+  // directories. A root outside all of them is dropped like an invalid one,
+  // so roots that are all outside leave the state as invalid roots would.
+  function confineRoots(validRootDirs: string[]): string[] {
+    if (!confining) return validRootDirs;
+    const { confined, ignored } = confineRootsToDirectories(
+      validRootDirs,
+      initialAllowedDirectories,
+    );
+    if (ignored.length > 0) {
+      console.error(
+        `Ignored client roots outside the command-line directories (--confine-roots): ${ignored.join(", ")}`,
+      );
+    }
+    return confined;
   }
 
   // Handles dynamic roots updates during runtime, when client sends "roots/list_changed" notification, server fetches the updated roots and replaces all allowed directories with the new roots.
@@ -1110,6 +1187,7 @@ export function createServer(
           "Failed to request initial roots from client:",
           error instanceof Error ? error.message : String(error),
         );
+        logAllowedDirectories();
       }
     } else {
       if (allowedDirectories.length > 0) {
@@ -1117,6 +1195,7 @@ export function createServer(
           "Client does not support MCP Roots, using allowed directories set from server args:",
           allowedDirectories,
         );
+        logAllowedDirectories();
       } else {
         // Nothing could ever be allowed in this session, so fail visibly
         // rather than serve every call with "Access denied" (#4992): log the

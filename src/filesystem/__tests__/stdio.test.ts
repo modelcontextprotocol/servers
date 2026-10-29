@@ -129,7 +129,7 @@ describe("startup", () => {
   it("prints usage, and waits for roots, when started with no directories", async () => {
     await session.start([]);
     expect(stderrText()).toContain(
-      "Usage: mcp-server-filesystem [allowed-directory] [additional-directories...]",
+      "Usage: mcp-server-filesystem [--read-only] [--confine-roots] [allowed-directory] [additional-directories...]",
     );
     expect(stderrText()).toContain(
       "At least one directory must be provided by EITHER method for the server to operate.",
