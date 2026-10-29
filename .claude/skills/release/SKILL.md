@@ -599,8 +599,8 @@ added to the draft by hand:
 
 - **Every advisory this release fixes**, as `--advisory GHSA-xxxx-yyyy-zzzz`,
   once each: the `[GHSA-…]` cards on the board for the milestone's work
-  (`security-advisory`). Its fix shipped from a private fork with no public
-  issue, so its reporters are no issue's author. A draft advisory works.
+  (`security-advisory`). Its issue is converted from the card by a
+  maintainer, so its reporters are no issue's author. A draft advisory works.
 - **Every outside contributor credited on one of the milestone's issues**, as
   `--thank "@login (#PR), <what it prototyped>, for #ISSUE"`, once per line
   of the prototype paragraph. The preview lists each candidate (below).

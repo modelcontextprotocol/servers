@@ -38,11 +38,12 @@
 // Two kinds of credit never come from an issue's author, and were once pasted
 // in by hand, which is how v2.0.0 published without its Thanks (#5250):
 //
-// * An advisory's fix ships from its private fork with no public issue, so
-//   each `--advisory GHSA-…` is read for its credits (a draft works: notes are
-//   drafted before advisories publish). Declined credits, bots and
-//   maintainers are dropped; a credit still pending acceptance is listed and
-//   flagged, since the reporter may yet decline it.
+// * An advisory's issue is converted from its board card by a maintainer,
+//   never filed by its reporter, so each `--advisory GHSA-…` is read for its
+//   credits (a draft works: notes are drafted before advisories publish).
+//   Declined credits, bots and maintainers are dropped; a credit still
+//   pending acceptance is listed and flagged, since the reporter may yet
+//   decline it.
 // * An outside PR is closed and its author credited on an issue (Harvest), so
 //   each `--thank "@login (#ref), <what>"` is a line of the prototype
 //   paragraph. Which issues carry such a credit is a reading, not a lookup,
