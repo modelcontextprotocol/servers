@@ -16,6 +16,7 @@ import {
   CallToolResult,
   LoggingLevel,
 } from "@modelcontextprotocol/server";
+import { TOOL_ICONS } from "../server/icons.js";
 
 /** Every logging level, from least to most severe. */
 export const LOGGING_LEVELS: LoggingLevel[] = [
@@ -39,6 +40,7 @@ const config = {
     "are sent, and none if it names no level; a 2025-era client gets those at or above the level it set " +
     "with logging/setLevel. Deprecated: logging is deprecated as of protocol version 2026-07-28.",
   inputSchema: {},
+  icons: TOOL_ICONS,
   annotations: {
     readOnlyHint: true,
     destructiveHint: false,

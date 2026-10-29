@@ -4,6 +4,7 @@ import {
   CallToolResult,
   ContentBlock,
 } from "@modelcontextprotocol/server";
+import { TOOL_ICONS } from "../server/icons.js";
 
 // Tool input schema
 const GetStructuredContentInputSchema = {
@@ -27,6 +28,7 @@ const config = {
     "Returns structured content along with an output schema for client data validation",
   inputSchema: GetStructuredContentInputSchema,
   outputSchema: GetStructuredContentOutputSchema,
+  icons: TOOL_ICONS,
   annotations: {
     readOnlyHint: true,
     destructiveHint: false,

@@ -24,6 +24,7 @@ import {
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import type { ServerContext } from "../server/context.js";
+import { TOOL_ICONS } from "../server/icons.js";
 
 // Tool input schema
 const TriggerUrlElicitationSchema = z.object({
@@ -65,6 +66,7 @@ const config = {
     "to handle URL elicitation via the error response. Set errorPath=true to use the error path. " +
     "On protocol version 2026-07-28 the server instead returns the URL elicitation in-band (input_required).",
   inputSchema: TriggerUrlElicitationSchema,
+  icons: TOOL_ICONS,
   annotations: {
     readOnlyHint: false,
     destructiveHint: false,

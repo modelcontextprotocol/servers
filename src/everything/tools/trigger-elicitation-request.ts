@@ -17,6 +17,7 @@ import {
   inputResponse,
   type InputRequiredResult,
 } from "@modelcontextprotocol/server";
+import { TOOL_ICONS } from "../server/icons.js";
 
 // Tool configuration
 const name = "trigger-elicitation-request";
@@ -24,6 +25,7 @@ const config = {
   title: "Trigger Elicitation Request Tool",
   description: "Trigger a Request from the Server for User Elicitation",
   inputSchema: {},
+  icons: TOOL_ICONS,
   annotations: {
     readOnlyHint: false,
     destructiveHint: false,

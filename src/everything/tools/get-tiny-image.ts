@@ -1,4 +1,5 @@
 import { McpServer, CallToolResult } from "@modelcontextprotocol/server";
+import { TOOL_ICONS } from "../server/icons.js";
 
 // A tiny encoded MCP logo image
 export const MCP_TINY_IMAGE =
@@ -10,6 +11,7 @@ const config = {
   title: "Get Tiny Image Tool",
   description: "Returns a tiny MCP logo image.",
   inputSchema: {},
+  icons: TOOL_ICONS,
   annotations: {
     readOnlyHint: true,
     destructiveHint: false,

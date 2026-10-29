@@ -20,6 +20,7 @@ import {
   ResourceTemplate,
   type ResourceLink,
 } from "@modelcontextprotocol/server";
+import { RESOURCE_TEMPLATE_ICONS } from "../server/icons.js";
 
 /** How long a minted resource stays readable, in milliseconds. */
 export const MINTED_RESOURCE_TTL_MS = 10 * 60_000;
@@ -124,6 +125,7 @@ export function registerMintedResources(server: McpServer): void {
     "Minted Resource",
     new ResourceTemplate(mintedUriTemplate, { list: undefined }),
     {
+      icons: RESOURCE_TEMPLATE_ICONS,
       description:
         "A resource a tool created for this client, such as gzip-file-as-resource's output. Readable for ten minutes at the URI the tool returned.",
     },
