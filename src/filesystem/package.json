@@ -36,7 +36,6 @@
   "dependencies": {
     "@modelcontextprotocol/server": "^2.3.1",
     "diff": "^8.0.3",
-    "glob": "^13.0.6",
     "minimatch": "^10.0.1",
     "zod": "^4.2.0"
   },
