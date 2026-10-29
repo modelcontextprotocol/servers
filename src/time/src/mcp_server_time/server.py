@@ -230,9 +230,9 @@ def create_server(local_tz: str) -> MCPServer:
         timezone: Annotated[
             str,
             Field(
-                description=f"IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Use '{local_tz}' as local timezone if no timezone provided by the user."
+                description=f"IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Optional: defaults to the server's local timezone, '{local_tz}', when omitted."
             ),
-        ],
+        ] = local_tz,
     ) -> TimeResult:
         require("timezone", timezone)
         return time_server.get_current_time(timezone)
@@ -243,21 +243,24 @@ def create_server(local_tz: str) -> MCPServer:
         annotations=READ_ONLY,
     )
     def convert_time(
+        # Keyword-only, so the required `time` can keep its place between the
+        # two optional timezones and the schema keeps its property order.
+        *,
         source_timezone: Annotated[
             str,
             Field(
-                description=f"Source IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Use '{local_tz}' as local timezone if no source timezone provided by the user."
+                description=f"Source IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Optional: defaults to the server's local timezone, '{local_tz}', when omitted."
             ),
-        ],
+        ] = local_tz,
         time: Annotated[
             str, Field(description="Time to convert in 24-hour format (HH:MM)")
         ],
         target_timezone: Annotated[
             str,
             Field(
-                description=f"Target IANA timezone name (e.g., 'Asia/Tokyo', 'America/San_Francisco'). Use '{local_tz}' as local timezone if no target timezone provided by the user."
+                description=f"Target IANA timezone name (e.g., 'Asia/Tokyo', 'America/San_Francisco'). Optional: defaults to the server's local timezone, '{local_tz}', when omitted."
             ),
-        ],
+        ] = local_tz,
     ) -> TimeConversionResult:
         require("source_timezone", source_timezone)
         require("target_timezone", target_timezone)
