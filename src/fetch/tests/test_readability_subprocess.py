@@ -425,6 +425,56 @@ def test_kill_tree_uses_taskkill_on_windows(monkeypatch: pytest.MonkeyPatch) -> 
     assert killed == [True]
 
 
+def test_kill_tree_kills_the_child_when_taskkill_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    killed: list[bool] = []
+    timeouts: list[Any] = []
+
+    class Proc:
+        pid = 4242
+
+        def kill(self) -> None:
+            killed.append(True)
+
+    def run(argv: list[str], **kwargs: Any) -> None:
+        timeouts.append(kwargs.get("timeout"))
+        raise OSError("taskkill is blocked")
+
+    monkeypatch.setattr(readability_js.sys, "platform", "win32")
+    monkeypatch.setattr(readability_js.subprocess, "run", run)
+    readability_js._kill_tree(cast("subprocess.Popen[str]", Proc()))
+    assert timeouts == [readability_js.KILL_TIMEOUT_SECONDS]
+    assert killed == [True]
+
+
+@posix_only
+def test_timeout_returns_while_a_detached_helper_holds_the_pipes(
+    bindir: Path, jsdir: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # A helper that leaves the process group (its own session) survives the
+    # group kill and keeps stdout and stderr open; the run must still end.
+    install(jsdir)
+    pid = tmp_path / "helper.pid"
+    helper = (
+        "import os, time; os.setsid(); "
+        f"open({str(pid)!r}, 'w').write(str(os.getpid())); time.sleep(3600)"
+    )
+    tool(bindir, "node", NODE_VERSION + f'"{sys.executable}" -c "{helper}" &\nwait\n')
+    monkeypatch.setattr(readability_js, "EXTRACT_TIMEOUT_SECONDS", 1.0)
+    started = time.monotonic()
+    try:
+        assert readability_js.extract_article(ARTICLE) is None
+        assert (
+            time.monotonic() - started < 1.0 + readability_js.KILL_TIMEOUT_SECONDS + 3
+        )
+    finally:
+        deadline = time.monotonic() + 5
+        while not pid.exists() and time.monotonic() < deadline:  # pragma: no cover
+            time.sleep(0.05)
+        os.kill(int(pid.read_text()), 9)
+
+
 @posix_only
 def test_kill_tree_tolerates_a_group_already_gone(
     monkeypatch: pytest.MonkeyPatch,

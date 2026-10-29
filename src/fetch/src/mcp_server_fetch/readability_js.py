@@ -53,6 +53,9 @@ EXTRACT_TIMEOUT_SECONDS = 30.0
 INSTALL_TIMEOUT_SECONDS = 120.0
 # How long `node -v` may take.
 VERSION_TIMEOUT_SECONDS = 10.0
+# How long cleanup after a timeout may wait: for `taskkill`, and for the
+# killed child to be reaped.
+KILL_TIMEOUT_SECONDS = 5.0
 # readabilipy's `package.json` declares `"engines": {"node": ">=14.0.0"}`.
 MIN_NODE_MAJOR = 14
 # What `ExtractArticle.js` requires; all three present means installed.
@@ -83,13 +86,19 @@ def _forward(output: str) -> None:
 def _kill_tree(proc: subprocess.Popen[str]) -> None:
     """Kill ``proc`` and everything it started (npm runs node, `npm.cmd` runs cmd)."""
     if sys.platform == "win32":
-        subprocess.run(
-            ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=KILL_TIMEOUT_SECONDS,
+            )
+        except (OSError, subprocess.SubprocessError):
+            # taskkill could not start or did not finish: the direct child
+            # is still killed below.
+            pass
     else:
         try:
             # start_new_session made the child a process-group leader.
@@ -126,7 +135,13 @@ def _run(
         stdout, stderr = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
         _kill_tree(proc)
-        proc.communicate()
+        # Reap the child, but do not drain its pipes: a descendant that left
+        # its process group (or survived taskkill) can hold them open forever.
+        # The pipes close when `proc` is collected.
+        try:
+            proc.wait(timeout=KILL_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            pass
         _log(f"{Path(argv[0]).name} did not finish within {timeout:g} s and was killed")
         return None
     return subprocess.CompletedProcess(argv, proc.returncode, stdout, stderr)
