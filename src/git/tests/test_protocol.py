@@ -104,6 +104,7 @@ async def test_list_tools_names_in_order():
         "git_log",
         "git_create_branch",
         "git_checkout",
+        "git_merge",
         "git_show",
         "git_branch",
     ]

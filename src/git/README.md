@@ -84,14 +84,22 @@ Please note that mcp-server-git is currently in early development. The functiona
      - `repo_path` (string): Path to Git repository
      - `branch_name` (string): Name of branch to checkout
    - Returns: Confirmation of branch switch, or `HEAD is now detached at <short sha>` when `branch_name` is not a branch (a sha, tag or other revision)
-11. `git_show`
+11. `git_merge`
+   - Merges a branch into the current branch, or changes nothing
+   - Inputs:
+     - `repo_path` (string): Path to Git repository
+     - `source_branch` (string): Branch, tag or commit to merge into the current branch (check out the branch to merge into first with `git_checkout`)
+     - `fast_forward_only` (boolean, optional): Only fast-forward, failing if the branches have diverged (default `true`). `false` lets Git create a merge commit when they have
+   - Returns: `Fast-forwarded`, `Merged ... with merge commit <short sha>`, or `Already up to date`
+   - Refuses a detached HEAD, a working tree with uncommitted changes, a merge already in progress, and a merge that would overwrite an ignored local file. A merge that stops on conflicts is aborted (`git merge --abort`) and the error names the conflicting files, so the repository is left as it was
+12. `git_show`
    - Shows the contents of a commit, or of a file or directory at a revision
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `revision` (string): The revision (commit hash, branch name, tag) or object spec (`HEAD:path/to/file`) to show
    - Returns: Contents of the specified commit, file content, or directory listing
 
-12. `git_branch`
+13. `git_branch`
    - List Git branches
    - Inputs:
      - `repo_path` (string): Path to the Git repository.
@@ -135,7 +143,7 @@ python -m mcp_server_git
 ## Configuration
 
 > [!IMPORTANT]
-> **Without `--repository`, the server reads and writes any Git repository the server process can reach.** Each tool call names its own `repo_path`, and that holds for the tools that change a repository too (`git_add`, `git_commit`, `git_reset`, `git_create_branch`, `git_checkout`). `--repository` is the only confinement the server offers: it never asks the client for Roots, in either protocol era. Set `--repository` whenever the server is used with prompts or content that are not fully trusted. It admits the whole enclosing repository, not only the directory you name, as the next paragraph describes.
+> **Without `--repository`, the server reads and writes any Git repository the server process can reach.** Each tool call names its own `repo_path`, and that holds for the tools that change a repository too (`git_add`, `git_commit`, `git_reset`, `git_create_branch`, `git_checkout`, `git_merge`). `--repository` is the only confinement the server offers: it never asks the client for Roots, in either protocol era. Set `--repository` whenever the server is used with prompts or content that are not fully trusted. It admits the whole enclosing repository, not only the directory you name, as the next paragraph describes.
 
 `--repository` (`-r`) accepts any path inside a Git working tree. At startup the server walks up to the enclosing repository root, the way `git rev-parse --show-toplevel` does, so `--repository .` works when a shared config is launched from any subdirectory of the repository. A path inside the repository therefore allows tool calls anywhere in that repository, not only under the subdirectory given. A path that does not exist, or is not inside a Git repository, is logged as a one-line error at startup.
 
