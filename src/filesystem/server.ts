@@ -13,6 +13,7 @@ import { pathToFileURL } from "url";
 import { z } from "zod";
 import { minimatch } from "minimatch";
 import { getValidRootDirectories } from "./roots-utils.js";
+import { describeAllowedDirectories } from "./allowed-directories.js";
 import {
   formatSize,
   validatePath,
@@ -1096,6 +1097,22 @@ export function createServer(
     } else {
       console.error("No valid root directories provided by client");
     }
+    logAllowedDirectories();
+  }
+
+  // Log the allowed directories now in force and where they came from (#4912).
+  function logAllowedDirectories(): void {
+    console.error(
+      describeAllowedDirectories(
+        allowedDirectories,
+        rootsInForce
+          ? {
+              from: "roots",
+              replacedCommandLine: initialAllowedDirectories.length > 0,
+            }
+          : { from: "command-line" },
+      ),
+    );
   }
 
   // Handles dynamic roots updates during runtime, when client sends "roots/list_changed" notification, server fetches the updated roots and replaces all allowed directories with the new roots.
@@ -1154,6 +1171,7 @@ export function createServer(
           "Failed to request initial roots from client:",
           error instanceof Error ? error.message : String(error),
         );
+        logAllowedDirectories();
       }
     } else {
       if (allowedDirectories.length > 0) {
@@ -1161,6 +1179,7 @@ export function createServer(
           "Client does not support MCP Roots, using allowed directories set from server args:",
           allowedDirectories,
         );
+        logAllowedDirectories();
       } else {
         // Nothing could ever be allowed in this session, so fail visibly
         // rather than serve every call with "Access denied" (#4992): log the
