@@ -114,7 +114,7 @@ Example:
 
 - **search_nodes**
   - Search for nodes based on query
-  - Input: `query` (string)
+  - Input: `query` (string, at most 2048 characters; a longer query is rejected)
   - Searches across:
     - Entity names
     - Entity types
