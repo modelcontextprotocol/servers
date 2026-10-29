@@ -22,6 +22,7 @@ import {
   appendFileContent,
   createDirectory,
   moveFile,
+  copyFile,
   searchFilesWithValidation,
   applyFileEdits,
   tailFile,
@@ -130,6 +131,13 @@ const DirectoryTreeArgsSchema = z.object({
 const MoveFileArgsSchema = z.object({
   source: z.string(),
   destination: z.string(),
+});
+
+const CopyFileArgsSchema = z.object({
+  source: z.string().describe("The file to copy"),
+  destination: z
+    .string()
+    .describe("Where to create the copy; nothing may exist there yet"),
 });
 
 const SearchFilesArgsSchema = z.object({
@@ -846,6 +854,42 @@ export function createServer(
       const contentBlock = { type: "text" as const, text };
       return {
         content: [contentBlock],
+        structuredContent: { content: text },
+      };
+    },
+  );
+
+  server.registerTool(
+    "copy_file",
+    {
+      title: "Copy File",
+      description:
+        "Copy a file to a new location, without reading its content into the conversation. " +
+        "Copies one regular file, keeping its permissions and modification time; directories " +
+        "are not copied. If the destination exists, the operation will fail: it never " +
+        "overwrites. Both source and destination must be within allowed directories.",
+      inputSchema: jsonSchema2020(CopyFileArgsSchema.shape),
+      outputSchema: jsonSchema2020({ content: z.string() }),
+      annotations: {
+        readOnlyHint: false,
+        idempotentHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
+    },
+    async (args: z.infer<typeof CopyFileArgsSchema>) => {
+      const validSourcePath = await validatePath(
+        args.source,
+        allowedDirectories,
+      );
+      const validDestPath = await validatePath(
+        args.destination,
+        allowedDirectories,
+      );
+      await copyFile(validSourcePath, validDestPath);
+      const text = `Successfully copied ${args.source} to ${args.destination}`;
+      return {
+        content: [{ type: "text" as const, text }],
         structuredContent: { content: text },
       };
     },

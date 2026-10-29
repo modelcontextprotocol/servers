@@ -11,6 +11,7 @@ import {
   createDirectoryInPlace,
   createFileInDirectory,
   moveFileAcrossDevices,
+  copyFileInDirectory,
   overwriteFileInDirectory,
   renameIntoDirectory,
 } from "./pinned-directory.js";
@@ -696,6 +697,29 @@ export async function moveFile(
         }
         await moveFileAcrossDevices(sourcePath, destinationPath);
       }
+      return;
+    }
+    throw error;
+  }
+  throw new Error(`Destination already exists: ${destinationPath}`);
+}
+
+/**
+ * Copy the regular file at `sourcePath` to `destinationPath` (#519). Like
+ * move_file, it never overwrites: anything at the destination (a file, a
+ * directory or a symlink, which lstat sees rather than follows) fails it, and
+ * the exclusive create in copyFileInDirectory refuses one that appears in
+ * between. Directories are not copied.
+ */
+export async function copyFile(
+  sourcePath: string,
+  destinationPath: string,
+): Promise<void> {
+  try {
+    await fs.lstat(destinationPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      await copyFileInDirectory(sourcePath, destinationPath);
       return;
     }
     throw error;
