@@ -314,7 +314,7 @@ describe("symlinks", () => {
         ).toBe("x");
       });
 
-      it("refuses to write under a respelled dangling symlink, reporting a missing parent", async () => {
+      it("refuses to write under a respelled dangling symlink, naming it as broken (#5191)", async () => {
         await fs.symlink(
           path.join(outside, "not-yet"),
           path.join(dir, "dangling"),
@@ -324,22 +324,49 @@ describe("symlinks", () => {
           content: "x",
         });
         expect(textOf(result)).toBe(
-          `Parent directory does not exist: ${path.join(dir, "DANGLING")}`,
+          `Broken symlink: ${path.join(dir, "DANGLING")} points to a target that does not exist`,
         );
         await expect(fs.stat(path.join(outside, "not-yet"))).rejects.toThrow();
       });
     },
   );
 
-  it("refuses to write through a dangling symlink, reporting a missing parent", async () => {
+  // #5191: the refusal is right, and the message names the symlink rather
+  // than reporting its parent, which exists, as missing.
+  it("refuses to write through a dangling symlink, naming it as broken (#5191)", async () => {
     const link = path.join(dir, "dangling");
     await fs.symlink(path.join(outside, "not-yet"), link);
     const result = await call(client, "write_file", {
       path: link,
       content: "x",
     });
-    expect(textOf(result)).toBe(`Parent directory does not exist: ${dir}`);
+    expect(textOf(result)).toBe(
+      `Broken symlink: ${link} points to a target that does not exist`,
+    );
     await expect(fs.stat(path.join(outside, "not-yet"))).rejects.toThrow();
+  });
+
+  it("refuses to read a dangling symlink, naming it as broken (#5191)", async () => {
+    const link = path.join(dir, "dangling");
+    await fs.symlink(path.join(dir, "gone.txt"), link);
+    const result = await read(link);
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toBe(
+      `Broken symlink: ${link} points to a target that does not exist`,
+    );
+  });
+
+  it("names a dangling symlink in the middle of a path as broken (#5191)", async () => {
+    const link = path.join(dir, "dangling-dir");
+    await fs.symlink(path.join(dir, "gone"), link);
+    const result = await call(client, "write_file", {
+      path: path.join(link, "f.txt"),
+      content: "x",
+    });
+    expect(textOf(result)).toBe(
+      `Broken symlink: ${link} points to a target that does not exist`,
+    );
+    await expect(fs.stat(path.join(dir, "gone"))).rejects.toThrow();
   });
 
   it("reports a realpath failure other than ENOENT as is", async () => {
