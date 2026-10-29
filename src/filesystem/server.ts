@@ -51,10 +51,14 @@ const ReadTextFileArgsSchema = z.object({
   path: z.string(),
   tail: z
     .number()
+    .int()
+    .min(0)
     .optional()
     .describe("If provided, returns only the last N lines of the file"),
   head: z
     .number()
+    .int()
+    .min(0)
     .optional()
     .describe("If provided, returns only the first N lines of the file"),
 });
@@ -259,16 +263,18 @@ export function createServer(
   ) => {
     const validPath = await validatePath(args.path, allowedDirectories);
 
-    if (args.head && args.tail) {
+    // Compared against undefined, not tested for truthiness: a count of 0
+    // asks for zero lines, not for the whole file (#5184).
+    if (args.head !== undefined && args.tail !== undefined) {
       throw new Error(
         "Cannot specify both head and tail parameters simultaneously",
       );
     }
 
     let content: string;
-    if (args.tail) {
+    if (args.tail !== undefined) {
       content = await tailFile(validPath, args.tail);
-    } else if (args.head) {
+    } else if (args.head !== undefined) {
       content = await headFile(validPath, args.head);
     } else {
       content = await readFileContent(validPath);
@@ -314,10 +320,14 @@ export function createServer(
         path: z.string(),
         tail: z
           .number()
+          .int()
+          .min(0)
           .optional()
           .describe("If provided, returns only the last N lines of the file"),
         head: z
           .number()
+          .int()
+          .min(0)
           .optional()
           .describe("If provided, returns only the first N lines of the file"),
       }),
