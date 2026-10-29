@@ -806,12 +806,12 @@ describe("prompts/list", () => {
           "_meta": undefined,
           "arguments": [
             {
-              "description": "Type of resource to fetch",
+              "description": "Type of resource to fetch. Must be "Text" or "Blob".",
               "name": "resourceType",
               "required": true,
             },
             {
-              "description": "ID of the text resource to fetch",
+              "description": "ID of the resource to fetch. Must be a positive integer (1 or greater).",
               "name": "resourceId",
               "required": true,
             },

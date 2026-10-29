@@ -26,7 +26,13 @@ export const RESOURCE_TYPES: string[] = [
  * The completion logic matches the input against available resource types.
  */
 export const resourceTypeCompleter = completable(
-  z.string().describe("Type of resource to fetch"),
+  // Prompt arguments carry no JSON Schema, only a description, so the
+  // description is the only place a client can learn the allowed values (#3985)
+  z
+    .string()
+    .describe(
+      `Type of resource to fetch. Must be "${RESOURCE_TYPE_TEXT}" or "${RESOURCE_TYPE_BLOB}".`,
+    ),
   (value: string) => {
     return RESOURCE_TYPES.filter((t) => t.startsWith(value));
   },
@@ -49,7 +55,11 @@ export const resourceTypeCompleter = completable(
  * This helps validate and suggest appropriate resource IDs.
  */
 export const resourceIdForPromptCompleter = completable(
-  z.string().describe("ID of the text resource to fetch"),
+  z
+    .string()
+    .describe(
+      "ID of the resource to fetch. Must be a positive integer (1 or greater).",
+    ),
   (value: string) => {
     const resourceId = Number(value);
     return Number.isInteger(resourceId) && resourceId > 0 ? [value] : [];
