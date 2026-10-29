@@ -1,5 +1,45 @@
 # @modelcontextprotocol/server-filesystem
 
+## 2.2.0
+
+### Minor Changes
+
+- [#5395](https://github.com/modelcontextprotocol/servers/pull/5395) [`99ba0c6`](https://github.com/modelcontextprotocol/servers/commit/99ba0c60a1b61556f8f30a03e0bf68328ad9331f) [@cliffhall](https://github.com/cliffhall) - Add a `--confine-roots` command-line flag. With it, a 2025-era client's Roots can narrow the command-line directories but never replace or widen them: a root inside a command-line directory is allowed, a root containing one is narrowed to it, and a root outside all of them is ignored and logged. Without the flag, Roots replace the command-line directories as before.
+
+- [#5359](https://github.com/modelcontextprotocol/servers/pull/5359) [`ea2997b`](https://github.com/modelcontextprotocol/servers/commit/ea2997b807b157978c0e18760433c9fedb8a20d4) [@cliffhall](https://github.com/cliffhall) - Add a `--read-only` command-line flag. With it the server registers only the tools annotated `readOnlyHint: true`, so every tool that writes (such as `write_file` and `edit_file`) is not listed and cannot be called, on both protocol eras and whether the directories come from the command line or a client's Roots. `--` now ends the options, so a directory named like an option can still be given after it.
+
+- [#5376](https://github.com/modelcontextprotocol/servers/pull/5376) [`af8a01b`](https://github.com/modelcontextprotocol/servers/commit/af8a01b598ba5d8037c574a7ef77f2a7bf98c444) [@cliffhall](https://github.com/cliffhall) - Add an `append_file` tool that appends text to the end of a file, exactly as given, creating the file if it does not exist ([#1208](https://github.com/modelcontextprotocol/servers/issues/1208)).
+
+- [#5385](https://github.com/modelcontextprotocol/servers/pull/5385) [`65e68d3`](https://github.com/modelcontextprotocol/servers/commit/65e68d3f382b8e097e16d665808d28c3f13b6f71) [@cliffhall](https://github.com/cliffhall) - Add a `copy_file` tool that copies one regular file to a new location, keeping its permissions and modification time, and never overwrites an existing destination ([#519](https://github.com/modelcontextprotocol/servers/issues/519)).
+
+- [#5388](https://github.com/modelcontextprotocol/servers/pull/5388) [`3a2e1fd`](https://github.com/modelcontextprotocol/servers/commit/3a2e1fde2252749df82773e7accc5d1976d20313) [@cliffhall](https://github.com/cliffhall) - Add an optional `depth` parameter to `directory_tree` that limits how many levels the tree descends; omitted, the whole tree is returned as before ([#1077](https://github.com/modelcontextprotocol/servers/issues/1077)).
+
+- [#5368](https://github.com/modelcontextprotocol/servers/pull/5368) [`3f173d6`](https://github.com/modelcontextprotocol/servers/commit/3f173d6f674cb1e33d45ae724dfc334e1e3a6e73) [@cliffhall](https://github.com/cliffhall) - Expose files in the allowed directories as MCP resources through a `file://{+path}` resource template, so a client can read a file with `resources/read` (text or a base64 blob by MIME type), confined to the allowed directories exactly as the tools are. `resources/list` stays empty, so the server never enumerates the disk.
+
+### Patch Changes
+
+- [#5390](https://github.com/modelcontextprotocol/servers/pull/5390) [`6017ed3`](https://github.com/modelcontextprotocol/servers/commit/6017ed304d0df3e23415182c408ee05fc0b523b9) [@cliffhall](https://github.com/cliffhall) - Log the effective allowed directories to stderr, with their source, at startup and whenever they change: from the command line, or from the client's Roots (saying whether those replaced the command-line directories), or none, with why every path is now refused. Previously the server logged only a count of valid Roots.
+
+- [#5380](https://github.com/modelcontextprotocol/servers/pull/5380) [`d665e43`](https://github.com/modelcontextprotocol/servers/commit/d665e43ee75484889c6910f5fa356b530badbbbf) [@cliffhall](https://github.com/cliffhall) - Report a dangling symlink as a broken symlink. A request through a symlink whose target does not exist is still refused, but the error now names the symlink instead of saying its parent directory, which exists, does not.
+
+- [#5379](https://github.com/modelcontextprotocol/servers/pull/5379) [`6575d87`](https://github.com/modelcontextprotocol/servers/commit/6575d8705e95160b3dbfe380da8c0c5e01b170e0) [@cliffhall](https://github.com/cliffhall) - `edit_file`: when an edit's `oldText` matches nowhere, the error now names which edit failed, states the matching rules, and quotes the closest lines of the file with line numbers, plus the first differing line JSON-quoted so a whitespace difference is visible. The tool description now states the matching rules too. What matches is unchanged.
+
+- [#5384](https://github.com/modelcontextprotocol/servers/pull/5384) [`eed581e`](https://github.com/modelcontextprotocol/servers/commit/eed581eda6d76eac3229bb73b3555cc1bc18edc6) [@cliffhall](https://github.com/cliffhall) - Expand `~\` to the home directory on Windows, in command-line directories, request paths and client Roots alike, as `~/` already is. On POSIX a backslash is a filename character, so `~\name` there still names a literal file.
+
+- [#5377](https://github.com/modelcontextprotocol/servers/pull/5377) [`fbddfb0`](https://github.com/modelcontextprotocol/servers/commit/fbddfb02d8fe8d9fefb29f3e468241c40a490359) [@cliffhall](https://github.com/cliffhall) - `read_text_file` (and the deprecated `read_file`) now treats `head: 0` or `tail: 0` as a request for zero lines and returns empty text, instead of the whole file. `head` and `tail` accept only non-negative integers, and `head` with `tail` is rejected even when either is 0.
+
+- [#5353](https://github.com/modelcontextprotocol/servers/pull/5353) [`1a7b9f9`](https://github.com/modelcontextprotocol/servers/commit/1a7b9f975e0390183d18280bf898cea53e631cf3) [@cliffhall](https://github.com/cliffhall) - Every read-only tool (`read_file`, `read_text_file`, `read_media_file`, `read_multiple_files`, `list_directory`, `list_directory_with_sizes`, `directory_tree`, `search_files`, `get_file_info` and `list_allowed_directories`) now also sets `idempotentHint: true` and `destructiveHint: false`, so all four tool annotation hints are explicit on every tool and a client never falls back to the spec's defaults (destructive, not idempotent).
+
+- [#5383](https://github.com/modelcontextprotocol/servers/pull/5383) [`22ce3e5`](https://github.com/modelcontextprotocol/servers/commit/22ce3e52148f95bfb991dbfd84d9bcaecb4678f7) [@cliffhall](https://github.com/cliffhall) - Keep an allowed directory's name exactly as the file system spells it. A command-line directory, or a client Root's realpath, whose name ends in a space or a quote was trimmed, so the server allowed the sibling directory without that suffix (and refused the directory that was actually given).
+
+- [#5351](https://github.com/modelcontextprotocol/servers/pull/5351) [`13c781a`](https://github.com/modelcontextprotocol/servers/commit/13c781a79411fb04efbd540505cfe0a207f580a1) [@cliffhall](https://github.com/cliffhall) - Drop the unused `glob` runtime dependency: nothing in the server imported it (pattern matching goes through `minimatch`), so installing the server no longer downloads `glob` and its own dependencies.
+
+- [#5378](https://github.com/modelcontextprotocol/servers/pull/5378) [`9192ea3`](https://github.com/modelcontextprotocol/servers/commit/9192ea3655cbe4cda51f42c33749008867d298c7) [@cliffhall](https://github.com/cliffhall) - `list_directory_with_sizes` no longer reports an entry it could not stat (unreadable, a dangling symlink, removed mid-listing, or a symlink leaving the allowed directories) as `0 B`. Such an entry is shown with size `unknown`, sorts last by size, and is left out of the combined size, which notes how many files it excludes.
+
+- [#5367](https://github.com/modelcontextprotocol/servers/pull/5367) [`4441e23`](https://github.com/modelcontextprotocol/servers/commit/4441e23c4c9e9c6d415b0ef5abb79c00e31f08ce) [@cliffhall](https://github.com/cliffhall) - The `search_files` description now says plainly that it finds files and directories by name, not by content, and that its glob is matched case-sensitively against each entry's path relative to `path` (not the working directory), so a model no longer reaches for it to grep file contents.
+
+- [#5355](https://github.com/modelcontextprotocol/servers/pull/5355) [`135a925`](https://github.com/modelcontextprotocol/servers/commit/135a925c04f37ef3b80d87cddd812c964b485853) [@cliffhall](https://github.com/cliffhall) - `search_files` no longer drops a subdirectory it cannot read without saying so. It still returns the matches it found, and now follows them with a note that the search is incomplete, listing each unreadable directory and its error code. Paths outside the allowed directories are still skipped silently, and an unreadable starting directory is still an error.
+
 ## 2.1.0
 
 ### Minor Changes

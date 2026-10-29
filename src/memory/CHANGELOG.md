@@ -1,5 +1,21 @@
 # @modelcontextprotocol/server-memory
 
+## 2.1.0
+
+### Minor Changes
+
+- [#5394](https://github.com/modelcontextprotocol/servers/pull/5394) [`27148ef`](https://github.com/modelcontextprotocol/servers/commit/27148ef87d8836a0ca138b807866967cca04ca7a) [@cliffhall](https://github.com/cliffhall) - Add optional lightweight read modes, so a large graph need not be returned whole: `observationLimit` on `read_graph`, `search_nodes` and `open_nodes` caps the observations returned per entity and adds each entity's total as `observationCount` (`0` gives an overview of names, types and counts), `entityTypes` on `read_graph` keeps only entities of those types, and `limit` on `search_nodes` caps the number of matches. Calls without them return what they always have. The `read_graph` description now says when to use it rather than `search_nodes` or `open_nodes`.
+
+### Patch Changes
+
+- [#5362](https://github.com/modelcontextprotocol/servers/pull/5362) [`3a412f5`](https://github.com/modelcontextprotocol/servers/commit/3a412f57262e9ecada94dd7d44fc5367c5e64c80) [@cliffhall](https://github.com/cliffhall) - Warn on stderr at startup when the memory file is inside a `node_modules` directory, where reinstalling or updating the server, or clearing the npx cache, can delete it, and recommend in the README setting `MEMORY_FILE_PATH` to an absolute path you own. The default path is unchanged.
+
+- [#5349](https://github.com/modelcontextprotocol/servers/pull/5349) [`d7ebd6f`](https://github.com/modelcontextprotocol/servers/commit/d7ebd6fbce355230b0ab1c383da07d23f90368d8) [@cliffhall](https://github.com/cliffhall) - `create_entities`, `create_relations` and `add_observations` now declare `idempotentHint: true`. Each already skips what is stored, so repeating a call with the same arguments has no additional effect on the graph, as with the delete tools.
+
+- [#5357](https://github.com/modelcontextprotocol/servers/pull/5357) [`01062fc`](https://github.com/modelcontextprotocol/servers/commit/01062fc80b9c70355a6216d10c564cf9459e2680) [@cliffhall](https://github.com/cliffhall) - `add_observations` stores an observation repeated within one call once, and reports it once in `addedObservations`, instead of storing it twice.
+
+- [#5393](https://github.com/modelcontextprotocol/servers/pull/5393) [`942d8f1`](https://github.com/modelcontextprotocol/servers/commit/942d8f155e44242a34aa89f6943f2c21eac3047b) [@cliffhall](https://github.com/cliffhall) - The `search_nodes` and `open_nodes` tool descriptions now say when to use each one and which sibling read tool to prefer instead, so a model looks an entity up by name with `open_nodes`, searches by keyword with `search_nodes`, and leaves `read_graph` for when it needs the whole graph.
+
 ## 2.0.1
 
 ### Patch Changes
