@@ -908,6 +908,10 @@ describe("createDirectoryInPlace", () => {
         execFileSync("hdiutil", ["detach", mount, "-quiet"]);
       }
     },
+    // hdiutil create, attach and detach together take about 1.5 s on an idle
+    // machine and can pass vitest's 5 s default under load (#5314). A
+    // timeout sized for them, never a retry, which would hide a real failure.
+    30_000,
   );
 
   it("reports a failure to enter a directory other than a missing one as is", () => {
