@@ -32,7 +32,7 @@ Add `--read-only` to serve only the tools that cannot change the filesystem:
 mcp-server-filesystem --read-only /path/to/dir1 /path/to/dir2
 ```
 
-The server then registers only the tools annotated `readOnlyHint: true` (see [Tool annotations](#tool-annotations-mcp-hints)): `read_text_file`, `read_media_file`, `read_multiple_files`, `list_directory`, `list_directory_with_sizes`, `directory_tree`, `search_files`, `get_file_info`, `list_allowed_directories` and the deprecated `read_file`. Every write tool (`write_file`, `edit_file`, `create_directory`, `move_file`) is left out, so a client never lists it and a call to it fails as an unknown tool. The server enforces this, whatever the client is configured to allow, and it works the same with `npx` as with Docker. It applies on both protocol eras, and to directories that come from a client's Roots.
+The server then registers only the tools annotated `readOnlyHint: true` in the [Tool annotations](#tool-annotations-mcp-hints) table, the ones that read and list. Every tool not annotated `readOnlyHint: true`, that is every tool that writes (such as `write_file` and `edit_file`), is left out, so a client never lists it and a call to it fails as an unknown tool. A tool added later follows the same rule through its annotation. The server enforces this, whatever the client is configured to allow, and it works the same with `npx` as with Docker. It applies on both protocol eras, and to directories that come from a client's Roots.
 
 The flag may appear anywhere among the arguments. `--` ends the options, so a directory literally named `--read-only` can be given after it.
 
