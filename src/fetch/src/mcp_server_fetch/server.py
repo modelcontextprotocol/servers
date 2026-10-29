@@ -23,7 +23,7 @@ import asyncio
 import ipaddress
 import os
 import socket
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from typing import Annotated, Any, Tuple
 from importlib.metadata import version
 from urllib.parse import urlparse, urlunparse
@@ -33,6 +33,7 @@ import markdownify
 import readabilipy.simple_json
 from .readability_js import extract_article
 from bs4 import BeautifulSoup, Tag
+from .allowlist import normalize_allowed_hosts, refuse_unlisted_destination
 from mcp.server import MCPServer, ServerRequestContext
 from mcp.server.context import CallNext, HandlerResult, ServerMiddleware
 from mcp.server.mcpserver.exceptions import ToolError
@@ -479,6 +480,7 @@ async def check_may_autonomously_fetch_url(
     user_agent: str,
     proxy_url: str | None = None,
     allow_private_ips: bool = False,
+    allowed_hosts: tuple[str, ...] = (),
 ) -> None:
     """
     Check if the URL can be fetched by the user agent according to the robots.txt file.
@@ -489,8 +491,12 @@ async def check_may_autonomously_fetch_url(
     robot_txt_url = get_robots_txt_url(url)
 
     async with make_client(proxy_url) as client:
+        hooks: list[Callable[[httpx.Request], Awaitable[None]]] = []
+        if allowed_hosts:
+            hooks.append(refuse_unlisted_destination(allowed_hosts))
         if not allow_private_ips:
-            client.event_hooks = {"request": [_refuse_private_destination]}
+            hooks.append(_refuse_private_destination)
+        client.event_hooks = {"request": hooks}
         try:
             response = await client.get(
                 robot_txt_url,
@@ -543,6 +549,7 @@ async def fetch_url(
     force_raw: bool = False,
     proxy_url: str | None = None,
     allow_private_ips: bool = False,
+    allowed_hosts: tuple[str, ...] = (),
     check_robots_txt: bool = False,
     use_readability_js: bool = True,
 ) -> Tuple[str, str]:
@@ -564,11 +571,13 @@ async def fetch_url(
             seen_first_request = True
             return
         await check_may_autonomously_fetch_url(
-            str(request.url), user_agent, proxy_url, allow_private_ips
+            str(request.url), user_agent, proxy_url, allow_private_ips, allowed_hosts
         )
 
     async with make_client(proxy_url) as client:
         hooks: list[Callable[[httpx.Request], Awaitable[None]]] = []
+        if allowed_hosts:
+            hooks.append(refuse_unlisted_destination(allowed_hosts))
         if not allow_private_ips:
             hooks.append(_refuse_private_destination)
         if check_robots_txt:
@@ -660,6 +669,7 @@ def create_server(
     ignore_robots_txt: bool = False,
     proxy_url: str | None = None,
     allow_private_ips: bool = False,
+    allowed_hosts: Sequence[str] | None = None,
     use_readability_js: bool = True,
 ) -> MCPServer:
     """Build the fetch server: the `fetch` tool, the `fetch` prompt, and the guard.
@@ -669,6 +679,7 @@ def create_server(
     if proxy_url:
         proxy_url = normalize_proxy_url(proxy_url)
     normalize_proxy_env()
+    allowed = normalize_allowed_hosts(allowed_hosts)
     user_agent_autonomous = custom_user_agent or DEFAULT_USER_AGENT_AUTONOMOUS
     user_agent_manual = custom_user_agent or DEFAULT_USER_AGENT_MANUAL
 
@@ -729,7 +740,7 @@ def create_server(
 
         if not ignore_robots_txt:
             await check_may_autonomously_fetch_url(
-                page_url, user_agent_autonomous, proxy_url, allow_private_ips
+                page_url, user_agent_autonomous, proxy_url, allow_private_ips, allowed
             )
 
         content, prefix = await fetch_url(
@@ -738,6 +749,7 @@ def create_server(
             force_raw=raw,
             proxy_url=proxy_url,
             allow_private_ips=allow_private_ips,
+            allowed_hosts=allowed,
             check_robots_txt=not ignore_robots_txt,
             use_readability_js=use_readability_js,
         )
@@ -771,6 +783,7 @@ def create_server(
                 user_agent_manual,
                 proxy_url=proxy_url,
                 allow_private_ips=allow_private_ips,
+                allowed_hosts=allowed,
                 use_readability_js=use_readability_js,
             )
         except ToolError as e:
@@ -785,6 +798,7 @@ async def serve(
     ignore_robots_txt: bool = False,
     proxy_url: str | None = None,
     allow_private_ips: bool = False,
+    allowed_hosts: Sequence[str] | None = None,
     use_readability_js: bool = True,
 ) -> None:
     """Run the fetch MCP server over stdio.
@@ -793,6 +807,10 @@ async def serve(
         custom_user_agent: Optional custom User-Agent string to use for requests
         ignore_robots_txt: Whether to ignore robots.txt restrictions
         proxy_url: Optional proxy URL to use for requests
+        allowed_hosts: When given, the only hosts the server may fetch from:
+            exact hosts, or ``*.example.com`` for any subdomain of it, checked
+            in addition to the private-address guard. Empty or None allows
+            every host
         allow_private_ips: Allow fetching private, loopback and link-local
             addresses, which are refused by default
         use_readability_js: Extract HTML with Readability.js under Node.js
@@ -804,6 +822,7 @@ async def serve(
         ignore_robots_txt,
         proxy_url,
         allow_private_ips,
+        allowed_hosts,
         use_readability_js,
     )
     # Both eras (#4853): the SDK's dual-era loop lets the client's first
