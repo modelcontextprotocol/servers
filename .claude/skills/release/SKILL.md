@@ -256,10 +256,24 @@ gh workflow run prepare-python-release.yml --repo modelcontextprotocol/servers \
 It opens a PR that starts with `Closes #N`, on a branch named
 `v2/chore/<N>-python-calver-<date>`, labeled `v2`, and dispatches the
 TypeScript, Python and DCO workflows on that branch, as the Version Packages
-workflow does (not the Everything diff, whose paths it never touches). Wait
-for its three `(dispatched)` statuses to pass, check that each stamped package really
-changed, and a maintainer merges it.
+workflow does (not the Everything diff, whose paths it never touches).
 No PR means no Python server has a shipped change since its last stamp.
+
+Then, on the PR:
+
+1. **Link it to the release issue.** Its `Closes #N` is only a
+   cross-reference on `v2/main`, and the workflow makes no API call, so link
+   it with the `addCloseIssueReferences` mutation from `/pr-flow` (step 6)
+   and read it back: `closingIssuesReferences` must list `#N`. On `v2/main`
+   it closes nothing at merge. Find the PR by its branch:
+
+   ```sh
+   gh pr list --repo modelcontextprotocol/servers --base v2/main \
+     --json number,headRefName,url \
+     | jq --arg p "v2/chore/$N-python-calver-" '.[] | select(.headRefName | startswith($p))'
+   ```
+2. **Wait for its three `(dispatched)` statuses to pass**, check that each
+   stamped package really changed, and a maintainer merges it.
 
 ⚠️ GitHub only dispatches a workflow that exists on the default branch. Until
 the first milestone merge carries this one to `main`, do it by hand, which is
@@ -274,7 +288,9 @@ node scripts/prepare-python-release.mjs     # prints "name: old -> new" per stam
 git commit -s -am "chore: stamp Python CalVer versions for $(date -u +%Y.%-m.%-d)"
 ```
 
-then open the PR through `/pr-flow`, body starting `Closes #N`.
+then open the PR through `/pr-flow`, body starting `Closes #N`. Its step 6
+links the PR to the release issue and reads the link back, as step 1 above
+does for the workflow's PR: do not skip it.
 
 ## 3. The merge PR: `v2/main` → `main`
 
