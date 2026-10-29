@@ -10,9 +10,11 @@
 // `npm run test:scripts`.
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 import {
   ADVISORY_LEAD_IN,
+  MAX_BUFFER,
   MIXED_LEAD_IN,
   REPO,
   THANKS_LEAD_IN,
@@ -20,6 +22,7 @@ import {
   bucket,
   closingKeywordIssues,
   dirsTouched,
+  filesOf,
   formatKnownIssues,
   formatPackages,
   formatThanks,
@@ -279,6 +282,31 @@ test("bucket: one, several and no servers; unpublished and empty fall to Reposit
   assert.deepEqual(
     bucket([e(1)], pkgs, new Map([[1, ["git"]]])).map((s) => s.heading),
     ["## g 2", "## t 2"],
+  );
+});
+
+test("a gh reply over Node's 1 MiB default gets through without ENOBUFS (#5339)", () => {
+  // The real spawnSync, with "gh" swapped for a node that prints 2 MiB of
+  // file names, so the options run() passes are what decide the outcome.
+  const lines = 128 * 1024;
+  const spawn = (_cmd, _args, opts) =>
+    spawnSync(
+      process.execPath,
+      ["-e", `process.stdout.write("src/everything/f.ts\\n".repeat(${lines}))`],
+      opts,
+    );
+  assert.ok(MAX_BUFFER > lines * 20);
+  const files = filesOf(spawn, 1);
+  assert.equal(files.length, lines);
+  assert.equal(files[0], "src/everything/f.ts");
+});
+
+test("a genuine spawn error is still rethrown", () => {
+  const spawn = (_cmd, args, opts) =>
+    spawnSync("/nonexistent/gh-5339", args, opts);
+  assert.throws(
+    () => filesOf(spawn, 1),
+    (err) => err.code === "ENOENT",
   );
 });
 
