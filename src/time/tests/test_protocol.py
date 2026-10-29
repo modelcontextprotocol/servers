@@ -257,9 +257,41 @@ def expected_tools(local_tz: str) -> list[dict[str, Any]]:
                     "source": {"$ref": "#/$defs/TimeResult"},
                     "target": {"$ref": "#/$defs/TimeResult"},
                     "time_difference": {"title": "Time Difference", "type": "string"},
+                    "later_occurrence": {
+                        "anyOf": [
+                            {"$ref": "#/$defs/LaterOccurrence"},
+                            {"type": "null"},
+                        ],
+                        "default": None,
+                        "description": (
+                            "Set only when the source time occurs twice on this "
+                            "date because a clock change repeats it (a DST "
+                            "fall-back): the same conversion at its second "
+                            "occurrence. source and target are the first."
+                        ),
+                    },
                 },
                 "required": ["source", "target", "time_difference"],
-                "$defs": {"TimeResult": TIME_RESULT_SCHEMA},
+                "$defs": {
+                    "LaterOccurrence": {
+                        "type": "object",
+                        "title": "LaterOccurrence",
+                        "description": (
+                            "The second reading of an ambiguous source time (#5196)."
+                        ),
+                        "properties": {
+                            "note": {"title": "Note", "type": "string"},
+                            "source": {"$ref": "#/$defs/TimeResult"},
+                            "target": {"$ref": "#/$defs/TimeResult"},
+                            "time_difference": {
+                                "title": "Time Difference",
+                                "type": "string",
+                            },
+                        },
+                        "required": ["note", "source", "target", "time_difference"],
+                    },
+                    "TimeResult": TIME_RESULT_SCHEMA,
+                },
             },
             "annotations": READ_ONLY_ANNOTATIONS,
         },
@@ -660,6 +692,8 @@ async def test_convert_time_wire_result() -> None:
             "is_dst": False,
         },
         "time_difference": "+8.0h",
+        # Only an ambiguous source time sets it (#5196).
+        "later_occurrence": None,
     }
     assert result == {
         "content": [{"type": "text", "text": json.dumps(expected, indent=2)}],
@@ -856,8 +890,10 @@ async def test_convert_time_into_a_nonexistent_local_time() -> None:
 
 
 async def test_convert_time_at_an_ambiguous_local_time() -> None:
-    # 01:30 on 2024-11-03 happens twice in New York. fold=0 picks the first
-    # occurrence, still on EDT.
+    # 01:30 on 2024-11-03 happens twice in New York: first on EDT, then, after
+    # the clocks go back at 02:00, on EST. source and target are the first
+    # occurrence; later_occurrence carries the second, with a note saying the
+    # time is ambiguous rather than presenting one answer as certain (#5196).
     async with connected() as session:
         with frozen_at("2024-11-03 12:00:00+00:00"):
             result = await call_json(
@@ -877,6 +913,122 @@ async def test_convert_time_at_an_ambiguous_local_time() -> None:
     }
     assert result["target"]["datetime"] == "2024-11-03T05:30:00+00:00"
     assert result["time_difference"] == "+4.0h"
+    assert result["later_occurrence"] == {
+        "note": (
+            "01:30 occurs twice in America/New_York on 2024-11-03 because a "
+            "clock change repeats it: first at 2024-11-03T01:30:00-04:00, then "
+            "at 2024-11-03T01:30:00-05:00. source and target are the first "
+            "occurrence; this is the second."
+        ),
+        "source": {
+            "timezone": "America/New_York",
+            "datetime": "2024-11-03T01:30:00-05:00",
+            "day_of_week": "Sunday",
+            "is_dst": False,
+        },
+        "target": {
+            "timezone": "UTC",
+            "datetime": "2024-11-03T06:30:00+00:00",
+            "day_of_week": "Sunday",
+            "is_dst": False,
+        },
+        "time_difference": "+5.0h",
+    }
+
+
+async def test_convert_time_ambiguity_is_in_the_structured_result() -> None:
+    # The structured content carries the same later_occurrence as the text.
+    async with connected() as session:
+        with frozen_at("2024-10-27 12:00:00+00:00"):
+            result = await call(
+                session,
+                "convert_time",
+                {
+                    "source_timezone": "Europe/Warsaw",
+                    "time": "02:30",
+                    "target_timezone": "UTC",
+                },
+            )
+    structured = result["structuredContent"]
+    assert structured == json.loads(result["content"][0]["text"])
+    assert structured["source"]["datetime"] == "2024-10-27T02:30:00+02:00"
+    assert structured["target"]["datetime"] == "2024-10-27T00:30:00+00:00"
+    later = structured["later_occurrence"]
+    assert later["source"]["datetime"] == "2024-10-27T02:30:00+01:00"
+    assert later["target"]["datetime"] == "2024-10-27T01:30:00+00:00"
+    assert later["time_difference"] == "-1.0h"
+
+
+@pytest.mark.parametrize(
+    "instant,source,time,target,later_target,later_difference",
+    [
+        # Lord Howe Island moves its clocks back by only 30 minutes (02:00 ->
+        # 01:30), so 01:45 repeats with a fractional difference.
+        (
+            "2024-04-07 00:00:00+00:00",
+            "Australia/Lord_Howe",
+            "01:45",
+            "UTC",
+            "2024-04-06T15:15:00+00:00",
+            "-10.5h",
+        ),
+        # The target's own zone does not matter: only the source is ambiguous.
+        (
+            "2024-11-03 12:00:00+00:00",
+            "America/New_York",
+            "01:00",
+            "Asia/Kolkata",
+            "2024-11-03T11:30:00+05:30",
+            "+10.5h",
+        ),
+    ],
+)
+async def test_convert_time_later_occurrence_in_other_zones(
+    instant: str,
+    source: str,
+    time: str,
+    target: str,
+    later_target: str,
+    later_difference: str,
+) -> None:
+    async with connected() as session:
+        with frozen_at(instant):
+            result = await call_json(
+                session,
+                "convert_time",
+                {"source_timezone": source, "time": time, "target_timezone": target},
+            )
+    later = result["later_occurrence"]
+    assert later["note"].startswith(f"{time} occurs twice in {source} on ")
+    assert later["source"]["timezone"] == source
+    assert later["target"]["datetime"] == later_target
+    assert later["time_difference"] == later_difference
+
+
+@pytest.mark.parametrize(
+    "instant,source,time",
+    [
+        # The hour after the repeated one, on the fall-back day itself.
+        ("2024-11-03 12:00:00+00:00", "America/New_York", "02:00"),
+        # The hour before it, also on the fall-back day.
+        ("2024-11-03 12:00:00+00:00", "America/New_York", "00:59"),
+        # The same wall time on an ordinary day.
+        ("2024-11-10 12:00:00+00:00", "America/New_York", "01:30"),
+        # The same date in a zone with no clock change.
+        ("2024-11-03 12:00:00+00:00", "UTC", "01:30"),
+    ],
+)
+async def test_convert_time_unambiguous_time_has_no_later_occurrence(
+    instant: str, source: str, time: str
+) -> None:
+    async with connected() as session:
+        with frozen_at(instant):
+            result = await call_json(
+                session,
+                "convert_time",
+                {"source_timezone": source, "time": time, "target_timezone": "UTC"},
+            )
+    assert result["later_occurrence"] is None
 
 
 async def test_convert_time_difference_uses_offsets_at_the_converted_instant() -> None:
