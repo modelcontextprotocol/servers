@@ -1,5 +1,19 @@
 # @modelcontextprotocol/server-sequential-thinking
 
+## 2.1.0
+
+### Minor Changes
+
+- [#5397](https://github.com/modelcontextprotocol/servers/pull/5397) [`93f89b1`](https://github.com/modelcontextprotocol/servers/commit/93f89b1ecb1443714b28cdb542969363bb932fcb) [@cliffhall](https://github.com/cliffhall) - Bound the thought history each connection keeps: at most `MAX_THOUGHT_HISTORY` thoughts (default 1000) are retained, the oldest dropped first and from its branch too, so a long-lived connection no longer grows memory without bound.
+
+### Patch Changes
+
+- [#5361](https://github.com/modelcontextprotocol/servers/pull/5361) [`9a1cdf3`](https://github.com/modelcontextprotocol/servers/commit/9a1cdf38348b3ee0752e48ea61295889a11b63b0) [@cliffhall](https://github.com/cliffhall) - Draw a multi-line thought one row per line in the stderr thought box, sized to the longest line, instead of as one broken row ([#5205](https://github.com/modelcontextprotocol/servers/issues/5205))
+
+- [#5352](https://github.com/modelcontextprotocol/servers/pull/5352) [`59b7f9d`](https://github.com/modelcontextprotocol/servers/commit/59b7f9d15150217217997f6b523cf8afeca1e0f9) [@cliffhall](https://github.com/cliffhall) - Remove the unused `yargs` dependency (and `@types/yargs`), so installing the server no longer pulls in yargs and its transitive packages.
+
+- [#5374](https://github.com/modelcontextprotocol/servers/pull/5374) [`c4d0cc4`](https://github.com/modelcontextprotocol/servers/commit/c4d0cc4e0041f72f9f05c6eb16fe818753f9aeac) [@cliffhall](https://github.com/cliffhall) - Trim the `sequentialthinking` tool description from 2,781 to 1,009 characters (about 566 to 198 tokens), so it fits the 1,024-character cap OpenAI and Azure OpenAI put on tool descriptions ([#799](https://github.com/modelcontextprotocol/servers/issues/799)). The "Key features" and "Parameters explained" sections are gone: each parameter is still described by the input schema, which is unchanged, and the guidance those field descriptions do not carry is kept ([#4507](https://github.com/modelcontextprotocol/servers/issues/4507)).
+
 ## 2.0.0
 
 ### Major Changes

@@ -1,5 +1,19 @@
 # @modelcontextprotocol/server-everything
 
+## 2.2.0
+
+### Minor Changes
+
+- [#5389](https://github.com/modelcontextprotocol/servers/pull/5389) [`35bed66`](https://github.com/modelcontextprotocol/servers/commit/35bed663e06c5985aafc04c8483baff8cad341e6) [@cliffhall](https://github.com/cliffhall) - Add light- and dark-themed icons (SEP-973) to the server info and to every tool, prompt, resource and resource template, in both protocol eras.
+
+- [#5365](https://github.com/modelcontextprotocol/servers/pull/5365) [`3f867a0`](https://github.com/modelcontextprotocol/servers/commit/3f867a0f70ad5427abe45b7cabc620449c70bb30) [@cliffhall](https://github.com/cliffhall) - Add a resource collection example: reading `demo://resource/collection/summer-specials`, or the `demo://resource/collection/by-category/{category}` template, returns several contents in one `resources/read`, each under its item's own `demo://resource/collection/item/{itemId}` URI, which reads back on its own. Both templates complete their variable.
+
+### Patch Changes
+
+- [#5396](https://github.com/modelcontextprotocol/servers/pull/5396) [`25b4a5d`](https://github.com/modelcontextprotocol/servers/commit/25b4a5dc32911b2054f8a9351aa4058ebd552cd0) [@cliffhall](https://github.com/cliffhall) - `trigger-long-running-operation` now honors cancellation in both protocol eras: a cancelled call clears its pending timer and sends no further progress, so it no longer delays stdio shutdown ([#1124](https://github.com/modelcontextprotocol/servers/issues/1124), [#4846](https://github.com/modelcontextprotocol/servers/issues/4846)).
+
+- [#5350](https://github.com/modelcontextprotocol/servers/pull/5350) [`4b54ad6`](https://github.com/modelcontextprotocol/servers/commit/4b54ad6e330f295d9c7b8701bd52a9fa36095c7e) [@cliffhall](https://github.com/cliffhall) - `resource-prompt` now names the values its arguments accept in `prompts/list`: `resourceType` must be "Text" or "Blob", and `resourceId` must be a positive integer. Prompt arguments carry no schema, so clients had no way to learn these before calling the prompt.
+
 ## 2.1.0
 
 ### Minor Changes
