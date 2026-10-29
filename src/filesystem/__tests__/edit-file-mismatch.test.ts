@@ -169,6 +169,30 @@ describe("describeEditMismatch", () => {
     );
   });
 
+  it("reports an extra blank line at the end of the file at its own line", () => {
+    const message = describeEditMismatch("alpha\n", "alpha\n\n", 0, 1);
+    expect(message).toContain("(lines 1-1 of 1):\n1: alpha");
+    expect(message).toContain(
+      'oldText line 2 ("") runs past the end of the file, which ends at line 1.',
+    );
+  });
+
+  it("cuts a long file line, in the region and in the difference", () => {
+    const long = "x".repeat(1_000_000);
+    const message = describeEditMismatch(`${long}\n`, "xxxx yyyy", 0, 1);
+    expect(message.length).toBeLessThan(2_000);
+    expect(message).toContain(
+      `1: ${"x".repeat(500)} [... cut: the line has 1000000 characters]`,
+    );
+    expect(message).toContain(
+      `  file:    "${"x".repeat(500)} [... cut: the line has 1000000 characters]"`,
+    );
+    expect(message).toContain(
+      "Some lines above were cut. Read the file to copy oldText from it exactly.",
+    );
+    expect(message).not.toContain("without the line-number prefixes");
+  });
+
   it("caps the quoted region at 30 lines", () => {
     const content = lines(50).join("\n");
     const oldText = [...lines(39), "line 40 changed"].join("\n");

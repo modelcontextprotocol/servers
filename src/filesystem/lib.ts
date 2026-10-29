@@ -739,6 +739,9 @@ function reindentLine(
 const MISMATCH_WORK_LIMIT = 10_000_000;
 const MISMATCH_CONTEXT_LINES = 2;
 const MISMATCH_MAX_REGION_LINES = 30;
+// A quoted file line is cut at this many characters, so a long line (minified
+// code, one-line JSON) cannot blow the error up to the size of the file.
+const MISMATCH_MAX_LINE_CHARS = 500;
 
 interface LineGrams {
   grams: Map<string, number>;
@@ -852,9 +855,18 @@ export function describeEditMismatch(
     best + oldLines.length + MISMATCH_CONTEXT_LINES,
     start + MISMATCH_MAX_REGION_LINES,
   );
+  let clipped = false;
+  const clip = (line: string): string => {
+    if (line.length <= MISMATCH_MAX_LINE_CHARS) return line;
+    clipped = true;
+    return (
+      line.slice(0, MISMATCH_MAX_LINE_CHARS) +
+      ` [... cut: the line has ${line.length} characters]`
+    );
+  };
   const numbered = fileLines
     .slice(start, end)
-    .map((line, k) => `${start + k + 1}: ${line}`);
+    .map((line, k) => `${start + k + 1}: ${clip(line)}`);
   const after = editIndex > 0 ? ", after the earlier edits in this call" : "";
   parts.push(
     `Closest text in the file (lines ${start + 1}-${end} of ` +
@@ -868,22 +880,24 @@ export function describeEditMismatch(
     0,
     oldLines.findIndex(
       (line, j) =>
-        best + j >= fileLines.length ||
-        line.trim() !== fileLines[best + j].trim(),
+        best + j >= lineCount || line.trim() !== fileLines[best + j].trim(),
     ),
   );
   parts.push(
     best + differs >= lineCount
-      ? `oldText line ${differs + 1} (${JSON.stringify(oldLines[differs])}) ` +
+      ? `oldText line ${differs + 1} (${JSON.stringify(clip(oldLines[differs]))}) ` +
           `runs past the end of the file, which ends at line ${lineCount}.`
       : `First difference, oldText line ${differs + 1} against file line ` +
           `${best + differs + 1}:\n` +
-          `  oldText: ${JSON.stringify(oldLines[differs])}\n` +
-          `  file:    ${JSON.stringify(fileLines[best + differs])}`,
+          `  oldText: ${JSON.stringify(clip(oldLines[differs]))}\n` +
+          `  file:    ${JSON.stringify(clip(fileLines[best + differs]))}`,
   );
   parts.push(
-    "Retry with oldText copied exactly from the file, without the " +
-      "line-number prefixes.",
+    clipped
+      ? "Some lines above were cut. Read the file to copy oldText from it " +
+          "exactly."
+      : "Retry with oldText copied exactly from the file, without the " +
+          "line-number prefixes.",
   );
   return parts.join("\n\n");
 }
