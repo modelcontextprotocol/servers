@@ -31,6 +31,7 @@ from urllib.parse import urlparse, urlunparse
 import httpx
 import markdownify
 import readabilipy.simple_json
+from .readability_js import extract_article
 from bs4 import BeautifulSoup, Tag
 from mcp.server import MCPServer, ServerRequestContext
 from mcp.server.context import CallNext, HandlerResult, ServerMiddleware
@@ -168,11 +169,15 @@ async def _refuse_private_destination(request: httpx.Request) -> None:
             )
 
 
-def _readability_content(html: str, use_readability_js: bool) -> str:
-    """readabilipy's simplified HTML for ``html``, or "" when it has none."""
+def _readability_content(html: str) -> str:
+    """readabilipy's pure-Python simplified HTML for ``html``, or "" when it has none.
+
+    Readability.js is not run through readabilipy (see `readability_js`), so
+    this only ever asks it for its pure-Python extractor, which starts no process.
+    """
     try:
         ret = readabilipy.simple_json.simple_json_from_html_string(
-            html, use_readability=use_readability_js
+            html, use_readability=False
         )
     except IndexError:
         # readabilipy's pure-Python extractor wraps its simplified tree with
@@ -266,8 +271,12 @@ def _recover_hidden_content(html: str, content: str) -> str:
             if not _hiding_declaration(d)
         ]
         tag["style"] = ";".join(style)
-    recovered = _readability_content(str(soup), use_readability_js=True)
-    if _text_length(BeautifulSoup(recovered, "html.parser")) > extracted:
+    recovered = extract_article(str(soup))
+    # None: this second run failed or timed out, so keep the first result.
+    if (
+        recovered is not None
+        and _text_length(BeautifulSoup(recovered, "html.parser")) > extracted
+    ):
         return recovered
     return content
 
@@ -277,19 +286,26 @@ def extract_content_from_html(html: str, use_readability_js: bool = True) -> str
 
     Args:
         html: Raw HTML content to process
-        use_readability_js: Ask readabilipy for Readability.js, which it runs
-            under Node when Node is on PATH. False always uses its pure-Python
-            extractor, so no Node (or npm) process is started (#4199).
+        use_readability_js: Use Readability.js under Node.js when Node.js is
+            on PATH (`readability_js`), falling back to readabilipy's
+            pure-Python extractor when it is unavailable, fails or times out.
+            False always uses the pure-Python extractor, so no Node.js (or
+            npm) process is started (#4199).
+
+    Synchronous and possibly slow (a Node.js subprocess, up to its timeout):
+    `fetch_url` runs it in a worker thread, off the event loop (#5306).
 
     Returns:
         Simplified markdown version of the content
     """
     failed = "<error>Page failed to be simplified from HTML</error>"
-    content_html = _readability_content(html, use_readability_js)
-    if use_readability_js:
+    content_html = extract_article(html) if use_readability_js else None
+    if content_html is not None:
         # Only Readability.js drops hidden elements; the pure-Python extractor
         # keeps them, so its result never needs recovering.
         content_html = _recover_hidden_content(html, content_html)
+    else:
+        content_html = _readability_content(html)
     if not content_html:
         return failed
     content = markdownify.markdownify(
@@ -582,7 +598,10 @@ async def fetch_url(
     )
 
     if is_page_html and not force_raw:
-        return extract_content_from_html(page_raw, use_readability_js), ""
+        content = await asyncio.to_thread(
+            extract_content_from_html, page_raw, use_readability_js
+        )
+        return content, ""
 
     # A response with no Content-Type would otherwise leave an empty slot here.
     declared_type = content_type or "(not declared)"
@@ -774,8 +793,9 @@ async def serve(
         proxy_url: Optional proxy URL to use for requests
         allow_private_ips: Allow fetching private, loopback and link-local
             addresses, which are refused by default
-        use_readability_js: Extract HTML with Readability.js under Node when
-            Node is on PATH; False always uses the pure-Python extractor
+        use_readability_js: Extract HTML with Readability.js under Node.js
+            when Node.js is on PATH (falling back to the pure-Python extractor
+            when it cannot run); False always uses the pure-Python extractor
     """
     server = create_server(
         custom_user_agent,

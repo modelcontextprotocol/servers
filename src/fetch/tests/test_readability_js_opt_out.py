@@ -1,15 +1,14 @@
 """Tests for ``--no-readability-js`` (#4199): an operator opt-out from Node.js.
 
-readabilipy runs Mozilla's Readability.js under Node whenever Node is on PATH
-(and readabilipy 0.3 may first run ``npm install``), in a subprocess with no
-timeout. A Node or npm that hangs, or a deployment that must not start them,
-had no remedy short of editing the installed package. With the flag the
-server asks readabilipy for its pure-Python extractor, which never probes for
-Node at all.
+The server runs Mozilla's Readability.js under Node whenever Node is on PATH
+(and may first run ``npm install``, see ``readability_js``). A deployment that
+must not start them can opt out: with the flag the server uses readabilipy's
+pure-Python extractor and never probes for Node at all.
 
-The opt-out tests replace readabilipy's ``subprocess`` module with one that
-fails on any use, so they prove no process is started rather than inferring
-it from the Markdown that comes back. The default-path test needs Node on PATH,
+The opt-out tests replace the ``subprocess`` module of both the server's
+Readability.js runner and readabilipy with one that fails on any use, so they
+prove no process is started rather than inferring it from the Markdown that
+comes back. The default-path test needs Node on PATH,
 like the repository's other Readability.js tests.
 """
 
@@ -25,6 +24,8 @@ import readabilipy.simple_json
 from mcp.types import CallToolResult
 
 import mcp_server_fetch
+import mcp_server_fetch.server as server_module
+from mcp_server_fetch import readability_js
 
 from .harness import FakeWeb, connect
 
@@ -38,16 +39,20 @@ enough words to count as the main content of the page.</p>
 
 
 class NoProcesses:
-    """Stands in for readabilipy's ``subprocess`` module: any use fails the test."""
+    """Stands in for a ``subprocess`` module: any use fails the test."""
 
     def __getattr__(self, name: str) -> Any:
-        raise AssertionError(f"readabilipy used subprocess.{name}")
+        raise AssertionError(f"a process was started: subprocess.{name}")
 
 
 @pytest.fixture
 def no_processes(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Both readabilipy's Node probe (`have_node`) and its Readability.js call
-    # go through this module attribute, as does 0.3's `npm install`.
+    # The server's Node probe, its `npm install` and its Readability.js run
+    # all go through `readability_js.subprocess`; readabilipy's own Node path
+    # (which the server no longer takes) goes through its module's. The probe
+    # cache is cleared so a probe made by an earlier test cannot hide one.
+    monkeypatch.setattr(readability_js, "_probed", False)
+    monkeypatch.setattr(readability_js, "subprocess", NoProcesses())
     monkeypatch.setattr(readabilipy.simple_json, "subprocess", NoProcesses())
 
 
@@ -65,10 +70,8 @@ def html(body: str) -> httpx.Response:
 
 def test_no_processes_fixture_catches_the_node_probe(no_processes: None) -> None:
     # The guard the opt-out tests rely on does fire on the default path.
-    with pytest.raises(AssertionError, match="readabilipy used subprocess.run"):
-        readabilipy.simple_json.simple_json_from_html_string(
-            ARTICLE, use_readability=True
-        )
+    with pytest.raises(AssertionError, match="a process was started: subprocess"):
+        server_module.extract_content_from_html(ARTICLE)
 
 
 def test_flag_is_passed_to_serve(monkeypatch: pytest.MonkeyPatch) -> None:
