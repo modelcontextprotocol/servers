@@ -298,10 +298,16 @@ export async function appendFileInDirectory(
   content: string,
   expected: EntryIdentity,
 ): Promise<void> {
-  // O_RDWR rather than O_WRONLY, for the FIFO reason given above.
+  // O_WRONLY, so a write-only file (a 0222 log) can be appended to: append
+  // never reads. O_NONBLOCK keeps a FIFO swapped in from blocking the open
+  // (it fails with ENXIO without a reader; a regular file ignores the flag;
+  // it is undefined on Windows, where the lstat identity checks stand in).
   const { fd, opened } = openInDirectory(
     filePath,
-    fs.constants.O_RDWR | fs.constants.O_APPEND | noFollow(),
+    fs.constants.O_WRONLY |
+      fs.constants.O_APPEND |
+      (fs.constants.O_NONBLOCK ?? 0) |
+      noFollow(),
     onWindows(),
   );
   try {

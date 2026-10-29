@@ -143,6 +143,42 @@ describe("append_file", () => {
     expect(await fs.readFile(link, "utf-8")).toBe("base+more");
   });
 
+  it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+    "appends to a write-only file, which it never reads",
+    async () => {
+      const file = path.join(dir, "write-only.log");
+      await fs.writeFile(file, "a");
+      await fs.chmod(file, 0o222);
+      try {
+        const result = await call(client, "append_file", {
+          path: file,
+          content: "b",
+        });
+        expect(result.isError, textOf(result)).toBeFalsy();
+      } finally {
+        await fs.chmod(file, 0o644);
+      }
+      expect(await fs.readFile(file, "utf-8")).toBe("ab");
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "refuses a FIFO without blocking",
+    async () => {
+      const fifo = path.join(dir, "pipe");
+      const { execFileSync } = await import("child_process");
+      execFileSync("mkfifo", [fifo]);
+      const result = await call(client, "append_file", {
+        path: fifo,
+        content: "x",
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toBe(
+        `Refusing to append: not a regular file: ${fifo}`,
+      );
+    },
+  );
+
   it("refuses a path outside the allowed directories", async () => {
     const outside = await makeTempDir("mcp-fs-append-outside-");
     try {
