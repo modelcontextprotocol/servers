@@ -24,6 +24,7 @@ The markdown of an HTML page opens with the page's title as a `#` heading (its `
     - `max_length` (integer, optional): Maximum number of characters to return (default: 5000)
     - `start_index` (integer, optional): Start content from this character index (default: 0)
     - `raw` (boolean, optional): Get raw content without markdown conversion (default: false)
+    - `timeout_ms` (integer, optional): HTTP request timeout for this call, in milliseconds, from 100 to 600000 (default: the server's timeout, 30000 unless configured; see [Customization - Timeout](#customization---timeout))
     - Annotations: `readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`, `openWorldHint: true` (it only reads, and it reaches arbitrary hosts on the internet)
 
 ### Prompts
@@ -236,6 +237,25 @@ ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotoc
 ```
 
 This can be customized by adding the argument `--user-agent=YourUserAgent` to the `args` list in the configuration.
+
+### Customization - Timeout
+
+The HTTP request for the page waits up to 30 seconds (30000 ms) by default: to connect, and then for each read of the
+response. It bounds each of those separately, not the whole download, so a large page that keeps arriving is not cut
+off. A request that times out fails with a tool error saying how long it waited.
+
+The timeout can be set at three levels, the most specific winning:
+
+1. The `fetch` tool's `timeout_ms` argument, for one call (for example `120000` for a large download, or `5000` to
+   fail fast).
+2. The argument `--timeout-ms=60000` in the `args` list in the configuration, for every call.
+3. The `FETCH_TIMEOUT_MS` environment variable (for example `"env": {"FETCH_TIMEOUT_MS": "60000"}` in the
+   configuration), for every call when `--timeout-ms` is not given.
+
+The server-wide value also applies to the `fetch` prompt, and is the default the tool advertises for `timeout_ms`.
+Every level takes a whole number of milliseconds from 100 to 600000 (10 minutes); the server refuses to start with a
+value outside that range, and the tool refuses such a `timeout_ms`. This is the HTTP request timeout only: the
+robots.txt check before an autonomous fetch keeps its own 5-second timeout, and HTML extraction is not covered.
 
 ### Customization - Proxy
 
