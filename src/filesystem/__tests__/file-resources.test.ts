@@ -25,6 +25,7 @@ import {
   fileResourceContents,
   registerFileResources,
 } from "../file-resources.js";
+import { FsTimeoutError } from "../lib.js";
 import { connect, makeTempDir, quietStderr } from "./helpers.js";
 
 let allowed: string;
@@ -186,6 +187,30 @@ describe("resources/read", () => {
       expect(error.message).toContain("Invalid file URI");
     },
   );
+
+  it("reports a failure while resolving the path as an internal error", async () => {
+    const file = path.join(allowed, "unlucky.txt");
+    await fs.writeFile(file, "x");
+    const client = await connectTo([allowed]);
+    vi.spyOn(fs, "realpath").mockRejectedValueOnce(
+      Object.assign(new Error("i/o error"), { code: "EIO" }),
+    );
+    const error = await readError(client, uriOf(file));
+    expect(error.code).toBe(-32603);
+    expect(error.message).toContain("Failed to resolve");
+  });
+
+  it("reports a path resolution timeout as an internal error", async () => {
+    const file = path.join(allowed, "slow.txt");
+    await fs.writeFile(file, "x");
+    const client = await connectTo([allowed]);
+    vi.spyOn(fs, "realpath").mockRejectedValueOnce(
+      new FsTimeoutError("realpath", file),
+    );
+    const error = await readError(client, uriOf(file));
+    expect(error.code).toBe(-32603);
+    expect(error.message).toContain("timed out");
+  });
 
   it("reports any other read failure as an internal error", async () => {
     const file = path.join(allowed, "locked.txt");

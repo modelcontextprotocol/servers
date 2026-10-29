@@ -28,7 +28,7 @@ import {
   ResourceTemplate,
 } from "@modelcontextprotocol/server";
 import type { ReadResourceResult } from "@modelcontextprotocol/server";
-import { validatePath } from "./lib.js";
+import { FsTimeoutError, validatePath } from "./lib.js";
 
 /** The URI template every file resource matches (RFC 6570 reserved expansion). */
 export const FILE_RESOURCE_TEMPLATE = "file://{+path}";
@@ -127,6 +127,19 @@ function isMissingPathError(error: unknown): boolean {
   return false;
 }
 
+/**
+ * Whether `error` is the filesystem failing (an errno error, or a call that
+ * timed out) rather than validatePath refusing the path, which it does with a
+ * plain Error and no errno code.
+ */
+function isOperationalError(error: unknown): boolean {
+  return (
+    error instanceof FsTimeoutError ||
+    (error instanceof Error &&
+      (error as NodeJS.ErrnoException).code !== undefined)
+  );
+}
+
 export interface FileResourceContext {
   /** The directories reads are confined to, read at the moment of each read. */
   allowedDirectories: () => readonly string[];
@@ -193,6 +206,14 @@ export function registerFileResources(
         // recognise it by the URI in the error data.
         if (isMissingPathError(error)) {
           throw new ResourceNotFoundError(uri.href, (error as Error).message);
+        }
+        // The filesystem failed while resolving the path (an I/O error, a
+        // timeout): the request was fine, so it is the server's error.
+        if (isOperationalError(error)) {
+          throw new ProtocolError(
+            ProtocolErrorCode.InternalError,
+            `Failed to resolve ${uri.href}: ${(error as Error).message}`,
+          );
         }
         // Outside the allowed directories, or a symlink out of them: the
         // message says which, as the tools do.
