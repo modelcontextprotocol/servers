@@ -141,6 +141,43 @@ python -m mcp_server_git
 
 A tool call's `repo_path` must be inside that repository, and so must the directories Git then uses for it: a repository nested inside whose `.git` file, `commondir` or `core.worktree` points outside is refused. A linked worktree can still be the `--repository`, though its Git directory lives under the main repository's `.git`.
 
+### Commit identity
+
+`git_commit` has no identity setting of its own. It takes the author and the committer from the same places `git commit` does, in this order:
+
+1. The server process's environment: `GIT_AUTHOR_NAME` and `GIT_AUTHOR_EMAIL` for the author, `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL` for the committer. The author and the committer are resolved separately, so set all four (usually to the same name and email).
+2. `user.name` and `user.email` from Git config: the repository's `.git/config`, then `~/.gitconfig`, then `$XDG_CONFIG_HOME/git/config` (by default `~/.config/git/config`), then `/etc/gitconfig`.
+
+Unlike `git commit`, the server does not refuse to commit when neither is set. It falls back to the operating-system user and host name, so a commit made in a container is recorded as something like `root <root@3f2a1b9c8d7e>`. A local install usually finds your own `~/.gitconfig`; a Docker container has none, so give it an identity explicitly.
+
+For a local command (`uvx`, `python -m mcp_server_git`), add an `env` block to the server's entry in your client configuration:
+
+```json
+"mcpServers": {
+  "git": {
+    "command": "uvx",
+    "args": ["mcp-server-git", "--repository", "path/to/git/repo"],
+    "env": {
+      "GIT_AUTHOR_NAME": "Your Name",
+      "GIT_AUTHOR_EMAIL": "you@example.com",
+      "GIT_COMMITTER_NAME": "Your Name",
+      "GIT_COMMITTER_EMAIL": "you@example.com"
+    }
+  }
+}
+```
+
+For Docker, pass the variables to `docker run` with `-e`, as the Docker examples below do. Alternatively, mount your gitconfig read-only in place of the four `-e` pairs. The image runs as `root`, so it goes at `/root/.gitconfig`:
+
+```json
+"args": [
+  "run", "--rm", "-i",
+  "--mount", "type=bind,src=/Users/username/.gitconfig,dst=/root/.gitconfig,readonly",
+  "--mount", "type=bind,src=/Users/username,dst=/Users/username",
+  "mcp/git"
+]
+```
+
 ### Usage with Claude Desktop
 
 Add this to your `claude_desktop_config.json`:
@@ -162,12 +199,21 @@ Add this to your `claude_desktop_config.json`:
 <summary>Using docker</summary>
 
 * Note: replace '/Users/username' with a path that you want to be accessible by this tool
+* Note: the `-e` lines set the identity `git_commit` records; see [Commit identity](#commit-identity)
 
 ```json
 "mcpServers": {
   "git": {
     "command": "docker",
-    "args": ["run", "--rm", "-i", "--mount", "type=bind,src=/Users/username,dst=/Users/username", "mcp/git"]
+    "args": [
+      "run", "--rm", "-i",
+      "-e", "GIT_AUTHOR_NAME=Your Name",
+      "-e", "GIT_AUTHOR_EMAIL=you@example.com",
+      "-e", "GIT_COMMITTER_NAME=Your Name",
+      "-e", "GIT_COMMITTER_EMAIL=you@example.com",
+      "--mount", "type=bind,src=/Users/username,dst=/Users/username",
+      "mcp/git"
+    ]
   }
 }
 ```
@@ -343,6 +389,10 @@ There are two ways to try your changes in a client:
         "run",
         "--rm",
         "-i",
+        "-e", "GIT_AUTHOR_NAME=Your Name",
+        "-e", "GIT_AUTHOR_EMAIL=you@example.com",
+        "-e", "GIT_COMMITTER_NAME=Your Name",
+        "-e", "GIT_COMMITTER_EMAIL=you@example.com",
         "--mount", "type=bind,src=/Users/username/Desktop,dst=/projects/Desktop",
         "--mount", "type=bind,src=/path/to/other/allowed/dir,dst=/projects/other/allowed/dir,ro",
         "--mount", "type=bind,src=/path/to/file.txt,dst=/projects/path/to/file.txt",
