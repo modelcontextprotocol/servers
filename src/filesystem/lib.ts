@@ -28,6 +28,12 @@ interface FileInfo {
 
 export interface SearchOptions {
   excludePatterns?: string[];
+  /**
+   * Called for each subdirectory below the starting path that could not be
+   * read (EACCES, say). The walk skips it and goes on, so the matches it
+   * returns are partial; this is how the caller finds out (#5189).
+   */
+  onUnreadable?: (directory: string, error: unknown) => void;
 }
 
 export interface SearchResult {
@@ -931,12 +937,25 @@ export async function searchFilesWithValidation(
   allowedDirectories: readonly string[],
   options: SearchOptions = {},
 ): Promise<string[]> {
-  const { excludePatterns = [] } = options;
+  const { excludePatterns = [], onUnreadable } = options;
   const results: string[] = [];
   const visit = createEntryBudget("search_files", rootPath);
 
   async function search(currentPath: string) {
-    const entries = await readdirWithTimeout(currentPath);
+    let entries: Dirent[];
+    try {
+      entries = await readdirWithTimeout(currentPath);
+    } catch (error) {
+      // The starting path failing is the request failing, and a timeout ends
+      // the whole search (see FsTimeoutError). A subdirectory that cannot be
+      // read is skipped, but reported to the caller, so the result never reads
+      // as complete when it is not (#5189).
+      if (currentPath === rootPath || error instanceof FsTimeoutError) {
+        throw error;
+      }
+      onUnreadable?.(currentPath, error);
+      return;
+    }
 
     for (const entry of entries) {
       const fullPath = path.join(currentPath, entry.name);
@@ -952,28 +971,26 @@ export async function searchFilesWithValidation(
 
       visit();
 
+      // Only validation is guarded: an entry refused by validatePath (outside
+      // the allowed directories, a dangling link) is skipped silently. A
+      // timeout still ends the whole search rather than returning partial
+      // results as if they were complete.
       try {
         await validatePath(fullPath, allowedDirectories);
-
-        // Use glob matching for the search pattern
-        if (minimatch(relativePath, pattern, { dot: true })) {
-          results.push(fullPath);
-        }
-
-        if (entry.isDirectory()) {
-          await search(fullPath);
-        }
       } catch (error) {
-        // A timeout or the entry cap ends the whole search with its error
-        // rather than returning partial results as if they were complete; any
-        // other failure (an entry refused or unreadable) skips that entry.
-        if (
-          error instanceof FsTimeoutError ||
-          error instanceof WalkLimitError
-        ) {
+        if (error instanceof FsTimeoutError) {
           throw error;
         }
         continue;
+      }
+
+      // Use glob matching for the search pattern
+      if (minimatch(relativePath, pattern, { dot: true })) {
+        results.push(fullPath);
+      }
+
+      if (entry.isDirectory()) {
+        await search(fullPath);
       }
     }
   }
