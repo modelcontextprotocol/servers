@@ -12,6 +12,7 @@
 import { McpServer, CallToolResult } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import type { ServerContext } from "../server/context.js";
+import { TOOL_ICONS } from "../server/icons.js";
 
 // Tool input schema
 const TriggerResourceUpdateSchema = z.object({
@@ -31,6 +32,7 @@ const config = {
     "delivered on each subscriptions/listen stream whose resourceSubscriptions name the URI; a 2025-era " +
     "client receives it once it has called resources/subscribe for the URI.",
   inputSchema: TriggerResourceUpdateSchema,
+  icons: TOOL_ICONS,
   annotations: {
     readOnlyHint: true,
     destructiveHint: false,

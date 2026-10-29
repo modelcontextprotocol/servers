@@ -28,6 +28,7 @@ import {
   type TaskInputResponses,
   type TaskState,
 } from "../server/tasks.js";
+import { TOOL_ICONS } from "../server/icons.js";
 
 // Tool input schema
 const SimulateResearchQuerySchema = z.object({
@@ -70,6 +71,7 @@ const config = {
     "If 'ambiguous' is true and the client supports elicitation, the task pauses with status " +
     "input_required until the client answers its clarification request with tasks/update.",
   inputSchema: SimulateResearchQuerySchema,
+  icons: TOOL_ICONS,
   annotations: {
     // Each call creates a task in the process-wide task store.
     readOnlyHint: false,

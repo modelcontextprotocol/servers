@@ -269,3 +269,18 @@ export async function connectRaw(capabilities: Json): Promise<RawSession> {
     },
   };
 }
+
+/**
+ * A list's entries without their `icons`, for a snapshot of the rest. The
+ * icons are long `data:` URIs, one pair per primitive kind, and icons.test.ts
+ * asserts on them for every list in both eras.
+ */
+export function withoutIcons<T extends { icons?: unknown }>(
+  entries: T[],
+): Omit<T, "icons">[] {
+  return entries.map((entry) => {
+    const rest: Omit<T, "icons"> & { icons?: unknown } = { ...entry };
+    delete rest.icons;
+    return rest;
+  });
+}

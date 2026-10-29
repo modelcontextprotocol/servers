@@ -37,6 +37,7 @@ src/everything
      ├── server
      │   ├── index.ts
      │   ├── context.ts
+     │   ├── icons.ts
      │   ├── logging.ts
      │   ├── roots.ts
      │   └── tasks.ts
@@ -155,6 +156,8 @@ src/everything
   - Exposes `{ server, cleanup }` to the chosen transport. Cleanup stops any running intervals in the server when the connection ends.
 - `context.ts`
   - The per-instance context features receive: the era, the change publisher, the 2025-era subscriptions and a cleanup registry.
+- `icons.ts`
+  - The light- and dark-themed icon pairs (SEP-973) attached to the server info and to every tool, prompt, resource and resource template, one pair per kind, as inline SVG `data:` URIs.
 - `logging.ts`
   - Implements simulated logging (2025 era). Periodically sends randomized log messages at various levels to the connected client. Started/stopped on demand via a dedicated tool.
 - `roots.ts`

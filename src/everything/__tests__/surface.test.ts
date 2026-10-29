@@ -13,6 +13,7 @@ import {
   connect,
   ofMethod,
   type Session,
+  withoutIcons,
 } from "./harness.js";
 
 let session: Session | undefined;
@@ -754,13 +755,12 @@ describe("prompts/list", () => {
   it("lists the four prompts with their arguments", async () => {
     session = await connect();
     const { prompts } = await session.client.listPrompts();
-    expect(prompts).toMatchInlineSnapshot(`
+    expect(withoutIcons(prompts)).toMatchInlineSnapshot(`
       [
         {
           "_meta": undefined,
           "arguments": undefined,
           "description": "A prompt with no arguments",
-          "icons": undefined,
           "name": "simple-prompt",
           "title": "Simple Prompt",
         },
@@ -779,7 +779,6 @@ describe("prompts/list", () => {
             },
           ],
           "description": "A prompt with two arguments, one required and one optional",
-          "icons": undefined,
           "name": "args-prompt",
           "title": "Arguments Prompt",
         },
@@ -798,7 +797,6 @@ describe("prompts/list", () => {
             },
           ],
           "description": "First argument choice narrows values for second argument.",
-          "icons": undefined,
           "name": "completable-prompt",
           "title": "Team Management",
         },
@@ -817,7 +815,6 @@ describe("prompts/list", () => {
             },
           ],
           "description": "A prompt that includes an embedded resource reference",
-          "icons": undefined,
           "name": "resource-prompt",
           "title": "Resource Prompt",
         },
@@ -830,7 +827,7 @@ describe("resources/list and resources/templates/list", () => {
   it("lists one static resource per file in docs/, and the summer-specials collection", async () => {
     session = await connect();
     const { resources } = await session.client.listResources();
-    expect(resources).toMatchInlineSnapshot(`
+    expect(withoutIcons(resources)).toMatchInlineSnapshot(`
       [
         {
           "description": "Static document file exposed from /docs: architecture.md",
@@ -888,7 +885,7 @@ describe("resources/list and resources/templates/list", () => {
   it("lists the dynamic text and blob templates, and the collection templates", async () => {
     session = await connect();
     const { resourceTemplates } = await session.client.listResourceTemplates();
-    expect(resourceTemplates).toMatchInlineSnapshot(`
+    expect(withoutIcons(resourceTemplates)).toMatchInlineSnapshot(`
       [
         {
           "description": "Plaintext dynamic resource fabricated from the {resourceId} variable, which must be an integer.",
