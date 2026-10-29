@@ -250,21 +250,22 @@ The mapping for filesystem tools is:
 
 | Tool                        | readOnlyHint | idempotentHint | destructiveHint | Notes                                            |
 |-----------------------------|--------------|----------------|-----------------|--------------------------------------------------|
-| `read_text_file`            | `true`       | –              | –               | Pure read                                       |
-| `read_media_file`           | `true`       | –              | –               | Pure read                                       |
-| `read_multiple_files`       | `true`       | –              | –               | Pure read                                       |
-| `list_directory`            | `true`       | –              | –               | Pure read                                       |
-| `list_directory_with_sizes` | `true`       | –              | –               | Pure read                                       |
-| `directory_tree`            | `true`       | –              | –               | Pure read                                       |
-| `search_files`              | `true`       | –              | –               | Pure read                                       |
-| `get_file_info`             | `true`       | –              | –               | Pure read                                       |
-| `list_allowed_directories`  | `true`       | –              | –               | Pure read                                       |
+| `read_file`                 | `true`       | `true`         | `false`         | Deprecated alias of `read_text_file`            |
+| `read_text_file`            | `true`       | `true`         | `false`         | Pure read                                       |
+| `read_media_file`           | `true`       | `true`         | `false`         | Pure read                                       |
+| `read_multiple_files`       | `true`       | `true`         | `false`         | Pure read                                       |
+| `list_directory`            | `true`       | `true`         | `false`         | Pure read                                       |
+| `list_directory_with_sizes` | `true`       | `true`         | `false`         | Pure read                                       |
+| `directory_tree`            | `true`       | `true`         | `false`         | Pure read                                       |
+| `search_files`              | `true`       | `true`         | `false`         | Pure read                                       |
+| `get_file_info`             | `true`       | `true`         | `false`         | Pure read                                       |
+| `list_allowed_directories`  | `true`       | `true`         | `false`         | Pure read                                       |
 | `create_directory`          | `false`      | `true`         | `false`         | Re‑creating the same dir is a no‑op             |
 | `write_file`                | `false`      | `true`         | `true`          | Overwrites existing files                       |
 | `edit_file`                 | `false`      | `false`        | `true`          | Re‑applying edits can fail or double‑apply      |
 | `move_file`                 | `false`      | `false`        | `true`          | Deletes source file                             |
 
-> Note: `idempotentHint` and `destructiveHint` are meaningful only when `readOnlyHint` is `false`, as defined by the MCP spec. Every tool also sets `openWorldHint: false` — this server only accesses the local filesystem within its allowed directories, never an open or external world.
+> Note: the MCP spec gives `idempotentHint` and `destructiveHint` meaning only when `readOnlyHint` is `false`, but every tool sets them anyway, so a client that reads them without checking `readOnlyHint` first still sees the truth: a read can be repeated safely and changes nothing. Every tool also sets `openWorldHint: false` — this server only accesses the local filesystem within its allowed directories, never an open or external world.
 
 ## Requirements
 

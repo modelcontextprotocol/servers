@@ -288,7 +288,12 @@ export function createServer(
         "Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.",
       inputSchema: jsonSchema2020(ReadTextFileArgsSchema.shape),
       outputSchema: jsonSchema2020({ content: z.string() }),
-      annotations: { readOnlyHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
     },
     readTextFileHandler,
   );
@@ -317,7 +322,12 @@ export function createServer(
           .describe("If provided, returns only the first N lines of the file"),
       }),
       outputSchema: jsonSchema2020({ content: z.string() }),
-      annotations: { readOnlyHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
     },
     readTextFileHandler,
   );
@@ -351,7 +361,12 @@ export function createServer(
           ]),
         ),
       }),
-      annotations: { readOnlyHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
     },
     async (args: z.infer<typeof ReadMediaFileArgsSchema>) => {
       const validPath = await validatePath(args.path, allowedDirectories);
@@ -407,7 +422,12 @@ export function createServer(
         "the entire operation. Only works within allowed directories.",
       inputSchema: jsonSchema2020(ReadMultipleFilesArgsSchema.shape),
       outputSchema: jsonSchema2020({ content: z.string() }),
-      annotations: { readOnlyHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
     },
     async (args: z.infer<typeof ReadMultipleFilesArgsSchema>) => {
       const results = await Promise.all(
@@ -526,7 +546,12 @@ export function createServer(
         "finding specific files within a directory. Only works within allowed directories.",
       inputSchema: jsonSchema2020(ListDirectoryArgsSchema.shape),
       outputSchema: jsonSchema2020({ content: z.string() }),
-      annotations: { readOnlyHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
     },
     async (args: z.infer<typeof ListDirectoryArgsSchema>) => {
       const validPath = await validatePath(args.path, allowedDirectories);
@@ -555,7 +580,12 @@ export function createServer(
         "finding specific files within a directory. Only works within allowed directories.",
       inputSchema: jsonSchema2020(ListDirectoryWithSizesArgsSchema.shape),
       outputSchema: jsonSchema2020({ content: z.string() }),
-      annotations: { readOnlyHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
     },
     async (args: z.infer<typeof ListDirectoryWithSizesArgsSchema>) => {
       const validPath = await validatePath(args.path, allowedDirectories);
@@ -642,7 +672,12 @@ export function createServer(
         "The output is formatted with 2-space indentation for readability. Only works within allowed directories.",
       inputSchema: jsonSchema2020(DirectoryTreeArgsSchema.shape),
       outputSchema: jsonSchema2020({ content: z.string() }),
-      annotations: { readOnlyHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
     },
     async (args: z.infer<typeof DirectoryTreeArgsSchema>) => {
       interface TreeEntry {
@@ -759,7 +794,12 @@ export function createServer(
         "Only searches within allowed directories.",
       inputSchema: jsonSchema2020(SearchFilesArgsSchema.shape),
       outputSchema: jsonSchema2020({ content: z.string() }),
-      annotations: { readOnlyHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
     },
     async (args: z.infer<typeof SearchFilesArgsSchema>) => {
       const validPath = await validatePath(args.path, allowedDirectories);
@@ -788,7 +828,12 @@ export function createServer(
         "without reading the actual content. Only works within allowed directories.",
       inputSchema: jsonSchema2020(GetFileInfoArgsSchema.shape),
       outputSchema: jsonSchema2020({ content: z.string() }),
-      annotations: { readOnlyHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
     },
     async (args: z.infer<typeof GetFileInfoArgsSchema>) => {
       const validPath = await validatePath(args.path, allowedDirectories);
@@ -814,7 +859,12 @@ export function createServer(
         "before trying to access files.",
       inputSchema: jsonSchema2020({}),
       outputSchema: jsonSchema2020({ content: z.string() }),
-      annotations: { readOnlyHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
     },
     async () => {
       const text = `Allowed directories:\n${allowedDirectories.join("\n")}`;
