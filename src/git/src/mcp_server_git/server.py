@@ -1,8 +1,9 @@
 # The git MCP server: tools that read and change a Git repository through
-# GitPython. Repository confinement (`--repository`, `validate_repo_path` on the
-# path given, `validate_opened_repo` on the directories git then uses) and the
-# flag-injection guards live beside the handlers because every tool call must
-# pass them before any git command runs.
+# GitPython, and prompts that embed a repository's changes in a message for the
+# model (#5195). Repository confinement (`--repository`, `validate_repo_path` on
+# the path given, `validate_opened_repo` on the directories git then uses) and
+# the flag-injection guards live beside the handlers because every tool call and
+# prompt must pass them before any git command runs.
 #
 # Built on the MCP Python SDK's high-level `MCPServer` (#5174), the API these
 # reference servers are meant to teach: each tool is a typed function, and the
@@ -861,6 +862,93 @@ TIMESTAMP_FORMATS = (
 )
 
 
+class GitPrompts(str, Enum):
+    COMMIT_MESSAGE = "git_commit_message"
+    SUMMARIZE_CHANGES = "git_summarize_changes"
+
+
+def _fenced(text: str, info: str = "diff") -> str:
+    """`text` in a Markdown code fence longer than any backtick run inside it.
+
+    A diff can itself hold a ``` line (a Markdown file's code block), which
+    would close a fixed three-backtick fence early.
+    """
+    # One pass for the longest run: growing the fence and searching again for
+    # each extra backtick is quadratic in a long run, under the git lock.
+    longest = run = 0
+    for char in text:
+        run = run + 1 if char == "`" else 0
+        longest = max(longest, run)
+    fence = "`" * max(3, longest + 1)
+    body = text.rstrip("\n")
+    return f"{fence}{info}\n{body}\n{fence}"
+
+
+def commit_message_prompt(repo: git.Repo) -> str:
+    """The git_commit_message prompt's text: the staged diff and the request."""
+    diff = git_diff_staged(repo)
+    if not diff.strip():
+        return (
+            "There are no staged changes in this repository, so there is nothing "
+            "to write a commit message for. Tell the user to stage changes first "
+            "(git_add); git_status shows what is modified or untracked."
+        )
+    return (
+        "Write a commit message for the staged changes below. Start with an "
+        "imperative subject line of at most 72 characters, then a blank line and "
+        "a short body explaining what changed and why, only if the subject alone "
+        "does not say enough. Follow the repository's existing convention if "
+        "its history shows one (git_log).\n\n"
+        f"Staged changes:\n{_fenced(diff)}"
+    )
+
+
+def summarize_changes_prompt(repo: git.Repo, target: str | None = None) -> str:
+    """The git_summarize_changes prompt's text: the changes and the request."""
+    if target:
+        # git_diff applies the flag-injection guard and resolves the target.
+        diff = git_diff(repo, target)
+        scope = f"compared with `{target}`"
+        changes = f"Diff against {target}:\n{_fenced(diff)}" if diff.strip() else ""
+    else:
+        staged = git_diff_staged(repo)
+        unstaged = git_diff_unstaged(repo)
+        scope = "in the working tree"
+        parts = [f"Status:\n{_fenced(git_status(repo), 'text')}"]
+        if staged.strip():
+            parts.append(f"Staged changes:\n{_fenced(staged)}")
+        if unstaged.strip():
+            parts.append(f"Unstaged changes:\n{_fenced(unstaged)}")
+        # The porcelain status is empty only on a clean tree; an untracked file
+        # alone leaves both diffs empty but is still a change to summarize.
+        clean = not repo.git.status("--porcelain").strip()
+        changes = "" if clean else "\n\n".join(parts)
+    if not changes:
+        return f"There are no changes {scope} to summarize. Tell the user so."
+    return (
+        f"Summarize the changes {scope} below for a reviewer, in plain "
+        "language. Group related changes, explain the intent behind them rather "
+        "than restating each line, and point out anything that looks unfinished "
+        "or risky.\n\n"
+        f"{changes}"
+    )
+
+
+@contextmanager
+def reported_as_invalid_params() -> Iterator[None]:
+    """Turn an anticipated failure in a prompt into a JSON-RPC -32602 error.
+
+    `prompts/get` has no `isError` result: the spec's error handling for it is
+    a JSON-RPC error, and a repository path, target or guard the request named
+    is an invalid argument. Without this, MCPServer hides the message behind
+    "Error rendering prompt" (code 0 or -32603, depending on the era).
+    """
+    try:
+        yield
+    except ANTICIPATED_ERRORS as e:
+        raise MCPError(code=INVALID_PARAMS, message=str(e)) from e
+
+
 def create_server(repository: Path | None) -> MCPServer:
     """The git server, confined to `repository` when one is given."""
 
@@ -900,6 +988,43 @@ def create_server(repository: Path | None) -> MCPServer:
             repo.close()
             raise
         return repo
+
+    # Prompts (#5195): each embeds what the repository holds now in one user
+    # message, through the same `open_repo` (and so the same confinement) and
+    # the same guarded helpers as the tools, under the same lock.
+    @server.prompt(
+        name=GitPrompts.COMMIT_MESSAGE.value,
+        title="Draft a commit message",
+        description="Asks the model for a commit message for the staged changes",
+    )
+    def commit_message(
+        repo_path: Annotated[str, Field(description="The path to the Git repository.")],
+    ) -> str:
+        with _GIT_LOCK, reported_as_invalid_params(), open_repo(repo_path) as repo:
+            return commit_message_prompt(repo)
+
+    @server.prompt(
+        name=GitPrompts.SUMMARIZE_CHANGES.value,
+        title="Summarize changes",
+        description=(
+            "Asks the model to summarize the working tree's staged and unstaged "
+            "changes, or the diff against a branch or commit"
+        ),
+    )
+    def summarize_changes(
+        repo_path: Annotated[str, Field(description="The path to the Git repository.")],
+        target: Annotated[
+            Optional[str],
+            Field(
+                description=(
+                    "Branch or commit to diff against. Defaults to the working "
+                    "tree's staged and unstaged changes"
+                )
+            ),
+        ] = None,
+    ) -> str:
+        with _GIT_LOCK, reported_as_invalid_params(), open_repo(repo_path) as repo:
+            return summarize_changes_prompt(repo, target)
 
     @server.tool(
         name=GitTools.STATUS.value,
