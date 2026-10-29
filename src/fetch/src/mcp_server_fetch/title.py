@@ -39,12 +39,18 @@ def _normalized(text: str) -> str:
     return f" {' '.join(words)} " if words else ""
 
 
+def _starts_tag(char: str) -> bool:
+    return char.isascii() and (char.isalpha() or char in "/!?")
+
+
 def _visible(line: str) -> str:
     """The text a reader sees on one Markdown line.
 
     A link's destination (`](...)`) and an HTML tag (an autolink's URL
     included) are dropped; a code span's contents are kept, tag-like text
-    and all. One pass, so a long line with an unterminated `](`, `<` or
+    and all. As in CommonMark, a `<` starts a tag only before a letter, `/`,
+    `!` or `?` (so "x < 5 and y > 3" is text), and a backslash-escaped
+    character is text. One pass, so a long line with an unterminated `](`, `<` or
     backtick costs linear time: each closer is searched for forward from
     where it is needed, and once a search for one fails it is never repeated.
     """
@@ -52,12 +58,18 @@ def _visible(line: str) -> str:
     missing: set[str] = set()
     i, end = 0, len(line)
     while i < end:
+        if line[i] == "\\" and i + 1 < end:
+            out.append(line[i + 1])
+            i += 2
+            continue
         for opener, closer, keep in (
             ("`", "`", True),
             ("<", ">", False),
             ("](", ")", False),
         ):
             if closer in missing or not line.startswith(opener, i):
+                continue
+            if opener == "<" and not _starts_tag(line[i + 1 : i + 2]):
                 continue
             j = line.find(closer, i + len(opener))
             if j == -1:

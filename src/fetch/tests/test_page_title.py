@@ -183,7 +183,20 @@ def test_code_span_contents_count_as_visible() -> None:
     )
 
 
-@pytest.mark.parametrize("opener", ["](", "<", "`"])
+@pytest.mark.parametrize(
+    ("title_html", "content"),
+    [
+        # A "<" before a space is text, not a tag.
+        ("Comparing x &lt; 5 and y &gt; 3", "# Comparing x < 5 and y > 3\n\nBody."),
+        # Backslash-escaped brackets are text too.
+        ("Using &lt;T&gt;", "# Using \\<T\\>\n\nBody."),
+    ],
+)
+def test_literal_angle_brackets_count_as_visible(title_html: str, content: str) -> None:
+    assert with_page_title(f"<title>{title_html}</title>", content) == content
+
+
+@pytest.mark.parametrize("opener", ["](", "<a", "`", "\\"])
 def test_unterminated_markup_on_a_long_first_line(opener: str) -> None:
     # Linear in the line's length: a quadratic scan of 200,000 openers would
     # not finish in the test's time. The title is not on the line, so it is added.
