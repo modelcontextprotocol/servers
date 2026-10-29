@@ -436,6 +436,30 @@
         "idempotentHint": true,
         "openWorldHint": false
       }
+    },
+    {
+      "name": "git_remote",
+      "description": "Lists the repository's remotes with their fetch and push URLs, like `git remote -v`. Credentials embedded in a URL are shown as <redacted>",
+      "inputSchema": {
+        "properties": {
+          "repo_path": {
+            "description": "The path to the Git repository.",
+            "title": "Repo Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repo_path"
+        ],
+        "type": "object",
+        "title": "remoteArguments"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
     }
   ]
 }

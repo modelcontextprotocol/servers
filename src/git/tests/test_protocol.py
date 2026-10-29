@@ -107,6 +107,7 @@ async def test_list_tools_names_in_order():
         "git_merge",
         "git_show",
         "git_branch",
+        "git_remote",
     ]
 
 
