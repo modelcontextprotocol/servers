@@ -13,6 +13,8 @@ This MCP server attempts to exercise all the features of the MCP protocol. It is
 
 A complete list of the registered MCP primitives and other protocol features demonstrated can be found in the [Server Features](docs/features.md) document.
 
+The resource collections (`demo://resource/collection/summer-specials`, and the `by-category/{category}` and `item/{itemId}` templates beside it) show a single `resources/read` returning several contents, each under its own URI: reading a collection returns one content per item, and each item's URI can be read on its own.
+
 The `get-env` tool returns the server's environment variables, but masks the value of any credential-like name (a `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `CREDENTIAL`, `AUTH` or `COOKIE` segment, such as `OPENAI_API_KEY`) as `"<redacted>"`. To see every value unmasked while debugging, start the server with `GET_ENV_INCLUDE_SECRETS=1` (or `true`). Leave it unset otherwise: with it set, every credential in the server's environment reaches the model's context.
 
 ## Protocol versions
