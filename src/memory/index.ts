@@ -633,7 +633,9 @@ export class KnowledgeGraphManager {
         if (!entity) {
           throw new Error(`Entity with name ${o.entityName} not found`);
         }
-        const newObservations = o.contents.filter(
+        // A Set keeps the first occurrence of each string, so a repeat within
+        // one call is stored and reported once (#5201).
+        const newObservations = [...new Set(o.contents)].filter(
           (content) => !entity.observations.includes(content),
         );
         entity.observations.push(...newObservations);
