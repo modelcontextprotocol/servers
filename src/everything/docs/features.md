@@ -47,7 +47,7 @@ Each feature below is marked **both**, **2026-07-28** or **2025-era**. Roots, sa
 - `trigger-elicitation-request-async` (tools/trigger-elicitation-request-async.ts), **2026-07-28**: Runs as a task whose `input_required` status carries a form elicitation; the client answers with `tasks/update` and the task completes with a summary. Needs a client that declares the tasks extension and form-mode elicitation.
 - `trigger-list-changed` (tools/trigger-list-changed.ts), **both**: Sends `notifications/<list>/list_changed` for `tools`, `prompts` or `resources`: on 2026-07-28 to each `subscriptions/listen` stream that asked for that list, on a 2025-era connection unsolicited.
 - `trigger-log-messages` (tools/trigger-log-messages.ts), **both**, deprecated: Sends one log message at each level during the call. A 2026-07-28 request gets those at or above the level its `_meta` names (none if it names none); a 2025-era client those at or above its `logging/setLevel` level.
-- `trigger-long-running-operation` (tools/trigger-long-running-operation.ts), **both**: Simulates a multi-step operation over a given `duration` and number of `steps`; reports progress via `notifications/progress` when a `progressToken` is provided by the client.
+- `trigger-long-running-operation` (tools/trigger-long-running-operation.ts), **both**: Simulates a multi-step operation over a given `duration` and number of `steps`; reports progress via `notifications/progress` when a `progressToken` is provided by the client. Honors cancellation: a cancelled call clears its timer and sends no further progress.
 - `trigger-multi-step-elicitation` (tools/trigger-multi-step-elicitation.ts), **both**: Asks for a name, then for a favorite color addressed by that name, carrying the first answer to the second round in `requestState`. The state is HMAC-signed and expires after ten minutes; a tampered or expired one is refused with `-32602`. A blank name or a color that is not a choice is asked again. Needs form-mode elicitation.
 - `trigger-resource-update` (tools/trigger-resource-update.ts), **both**: Sends `notifications/resources/updated` for a URI: on 2026-07-28 to each listen stream whose `resourceSubscriptions` name it, on a 2025-era connection once the client has subscribed to it.
 - `trigger-sampling-request` (tools/trigger-sampling-request.ts), **both**, deprecated: Asks the client's LLM for a completion with a multi-round-trip request, using the provided `prompt` and `maxTokens`; returns the LLM's response payload. Needs client capability `sampling`.
@@ -70,14 +70,19 @@ On a 2025-era connection the tools that need a client capability are registered 
 - Static Documents: `demo://resource/static/document/<filename>` (serves files from `src/everything/docs/` as static file-based resources; a 2026-07-28 read carries a one-hour public cache hint)
 - Session Scoped, **2025-era**: `demo://resource/session/<name>` (per-session resources registered dynamically; available only for the lifetime of the session)
 - Minted, **2026-07-28**: `demo://resource/minted/<id>/<name>` (resources a tool created, under a server-minted id; readable by any client that has the URI, for ten minutes; the process keeps at most 100 of them and 64 MiB of content, dropping the oldest first)
+- Collections: `demo://resource/collection/summer-specials`, `demo://resource/collection/by-category/{category}` and `demo://resource/collection/item/{itemId}` (resources/collections.ts; one `resources/read` of a collection returns several contents, one per item, each under its item's own URI, which reads back on its own; `category` and `itemId` complete)
 
-A read of a resource that does not exist (an unknown URI, a template id that is not a positive integer, an expired minted resource) is answered with `-32602` and the URI in the error's `data`.
+A read of a resource that does not exist (an unknown URI, a template id that is not a positive integer, a collection category or item that is not in the catalog, an expired minted resource) is answered with `-32602` and the URI in the error's `data`.
 
 ## Resource Subscriptions and Notifications
 
 - **2026-07-28**: a client opens a `subscriptions/listen` stream whose filter names the notifications it wants (`toolsListChanged`, `promptsListChanged`, `resourcesListChanged`, and `resourceSubscriptions` for per-resource updates). `trigger-list-changed` and `trigger-resource-update` publish onto those streams; over Streamable HTTP, through the handler's subscription bus, so a change made in one request reaches streams other requests opened.
 - **2025-era**: clients subscribe and unsubscribe to resource URIs with `resources/subscribe` and `resources/unsubscribe`. `toggle-subscriber-updates` starts or stops a per-connection interval that emits `notifications/resources/updated { uri }` for the URIs that connection subscribed to, and `trigger-resource-update` sends one on demand. List changes arrive unsolicited.
 - Each client's subscriptions belong to the server instance serving its connection, so concurrent clients are independent.
+
+## Icons
+
+**Both.** The server demonstrates icons with light and dark themes (SEP-973). Its `serverInfo` (in `initialize` and in `server/discover`) and every entry of `tools/list`, `prompts/list`, `resources/list` and `resources/templates/list` carry an `icons` array of two scalable SVG icons, one with `theme: "light"` (drawn for a light background) and one with `theme: "dark"`. Each kind has its own glyph: a server rack, a wrench for tools, a speech bubble for prompts, a document for resources, and a document with braces for templates. The icons are inline `data:` URIs, so a client fetches nothing; they are defined in `server/icons.ts`.
 
 ## Logging
 

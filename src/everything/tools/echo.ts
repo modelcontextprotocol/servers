@@ -1,5 +1,6 @@
 import { McpServer, CallToolResult } from "@modelcontextprotocol/server";
 import { z } from "zod";
+import { TOOL_ICONS } from "../server/icons.js";
 
 // Tool input schema
 export const EchoSchema = z.object({
@@ -12,6 +13,7 @@ const config = {
   title: "Echo Tool",
   description: "Echoes back the input string",
   inputSchema: EchoSchema,
+  icons: TOOL_ICONS,
   annotations: {
     readOnlyHint: true,
     destructiveHint: false,

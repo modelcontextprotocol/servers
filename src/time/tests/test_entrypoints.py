@@ -113,7 +113,11 @@ async def test_console_script_boots_over_stdio() -> None:
     assert init.model_dump(by_alias=True, mode="json")["serverInfo"]["name"] == (
         "mcp-time"
     )
-    assert [tool.name for tool in tools.tools] == ["get_current_time", "convert_time"]
+    assert [tool.name for tool in tools.tools] == [
+        "get_current_time",
+        "convert_time",
+        "get_time_ago",
+    ]
     assert result.model_dump(by_alias=True, mode="json")["isError"] is False
 
 

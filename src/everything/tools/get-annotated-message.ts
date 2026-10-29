@@ -1,6 +1,7 @@
 import { McpServer, CallToolResult } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { MCP_TINY_IMAGE } from "./get-tiny-image.js";
+import { TOOL_ICONS } from "../server/icons.js";
 
 // Tool input schema
 const GetAnnotatedMessageSchema = z.object({
@@ -20,6 +21,7 @@ const config = {
   description:
     "Demonstrates how annotations can be used to provide metadata about content.",
   inputSchema: GetAnnotatedMessageSchema,
+  icons: TOOL_ICONS,
   annotations: {
     readOnlyHint: true, // This tool only returns data, no side effects
     destructiveHint: false, // Does not delete or modify anything

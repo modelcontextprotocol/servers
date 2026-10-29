@@ -205,12 +205,12 @@ def expected_tools(local_tz: str) -> list[dict[str, Any]]:
                         "title": "Timezone",
                         "description": (
                             "IANA timezone name (e.g., 'America/New_York', "
-                            f"'Europe/London'). Use '{local_tz}' as local timezone "
-                            "if no timezone provided by the user."
+                            "'Europe/London'). Optional: defaults to the "
+                            f"server's local timezone, '{local_tz}', when omitted."
                         ),
+                        "default": local_tz,
                     }
                 },
-                "required": ["timezone"],
             },
             "outputSchema": TIME_RESULT_SCHEMA,
             "annotations": READ_ONLY_ANNOTATIONS,
@@ -227,9 +227,10 @@ def expected_tools(local_tz: str) -> list[dict[str, Any]]:
                         "title": "Source Timezone",
                         "description": (
                             "Source IANA timezone name (e.g., 'America/New_York', "
-                            f"'Europe/London'). Use '{local_tz}' as local timezone "
-                            "if no source timezone provided by the user."
+                            "'Europe/London'). Optional: defaults to the "
+                            f"server's local timezone, '{local_tz}', when omitted."
                         ),
+                        "default": local_tz,
                     },
                     "time": {
                         "type": "string",
@@ -241,12 +242,13 @@ def expected_tools(local_tz: str) -> list[dict[str, Any]]:
                         "title": "Target Timezone",
                         "description": (
                             "Target IANA timezone name (e.g., 'Asia/Tokyo', "
-                            f"'America/San_Francisco'). Use '{local_tz}' as local "
-                            "timezone if no target timezone provided by the user."
+                            "'America/San_Francisco'). Optional: defaults to the "
+                            f"server's local timezone, '{local_tz}', when omitted."
                         ),
+                        "default": local_tz,
                     },
                 },
-                "required": ["source_timezone", "time", "target_timezone"],
+                "required": ["time"],
             },
             "outputSchema": {
                 "type": "object",
@@ -255,10 +257,77 @@ def expected_tools(local_tz: str) -> list[dict[str, Any]]:
                     "source": {"$ref": "#/$defs/TimeResult"},
                     "target": {"$ref": "#/$defs/TimeResult"},
                     "time_difference": {"title": "Time Difference", "type": "string"},
+                    "later_occurrence": {
+                        "anyOf": [
+                            {"$ref": "#/$defs/LaterOccurrence"},
+                            {"type": "null"},
+                        ],
+                        "default": None,
+                        "description": (
+                            "Set only when the source time occurs twice on this "
+                            "date because a clock change repeats it (a DST "
+                            "fall-back): the same conversion at its second "
+                            "occurrence. source and target are the first."
+                        ),
+                    },
                 },
                 "required": ["source", "target", "time_difference"],
-                "$defs": {"TimeResult": TIME_RESULT_SCHEMA},
+                "$defs": {
+                    "LaterOccurrence": {
+                        "type": "object",
+                        "title": "LaterOccurrence",
+                        "description": (
+                            "The second reading of an ambiguous source time (#5196)."
+                        ),
+                        "properties": {
+                            "note": {"title": "Note", "type": "string"},
+                            "source": {"$ref": "#/$defs/TimeResult"},
+                            "target": {"$ref": "#/$defs/TimeResult"},
+                            "time_difference": {
+                                "title": "Time Difference",
+                                "type": "string",
+                            },
+                        },
+                        "required": ["note", "source", "target", "time_difference"],
+                    },
+                    "TimeResult": TIME_RESULT_SCHEMA,
+                },
             },
+            "annotations": READ_ONLY_ANNOTATIONS,
+        },
+        {
+            "name": "get_time_ago",
+            "description": (
+                "Get the time a given number of days, hours, minutes and seconds "
+                "ago in a specific timezone"
+            ),
+            "inputSchema": {
+                "type": "object",
+                "title": "get_time_agoArguments",
+                "properties": {
+                    "timezone": {
+                        "type": "string",
+                        "title": "Timezone",
+                        "default": local_tz,
+                        "description": (
+                            "IANA timezone name (e.g., 'America/New_York', "
+                            "'Europe/London'). Optional: defaults to the server's "
+                            f"local timezone, '{local_tz}', when omitted."
+                        ),
+                    },
+                    **{
+                        f"{unit}_ago": {
+                            "type": "integer",
+                            "title": f"{unit.capitalize()} Ago",
+                            "default": 0,
+                            "minimum": 0,
+                            "description": f"Whole {unit} before now",
+                        }
+                        for unit in ("days", "hours", "minutes", "seconds")
+                    },
+                },
+            },
+            "outputSchema": TIME_RESULT_SCHEMA,
             "annotations": READ_ONLY_ANNOTATIONS,
         },
     ]
@@ -512,9 +581,9 @@ async def test_get_current_time_ignores_extra_arguments() -> None:
     assert result["datetime"] == "2024-01-01T12:00:00+00:00"
 
 
-async def test_get_current_time_does_not_default_to_the_local_timezone() -> None:
-    # The local timezone only appears in the schema descriptions; the server
-    # never substitutes it for an empty argument.
+async def test_get_current_time_does_not_default_an_empty_timezone() -> None:
+    # Only an omitted timezone takes the local default (#2853). An explicitly
+    # empty one is a mistake, reported as missing rather than guessed at.
     async with connected("Europe/Warsaw") as session:
         result = await call(session, "get_current_time", {"timezone": ""})
     assert result == tool_error(
@@ -522,11 +591,70 @@ async def test_get_current_time_does_not_default_to_the_local_timezone() -> None
     )
 
 
+async def test_get_current_time_defaults_to_the_local_timezone() -> None:
+    # An omitted timezone is the server's local one (#2853): the
+    # --local-timezone override here.
+    async with connected("Asia/Kolkata") as session:
+        with frozen_at("2024-01-01 12:00:00+00:00"):
+            result = await call_json(session, "get_current_time", {})
+    assert result == {
+        "timezone": "Asia/Kolkata",
+        "datetime": "2024-01-01T17:30:00+05:30",
+        "day_of_week": "Monday",
+        "is_dst": False,
+    }
+
+
+async def test_get_current_time_defaults_to_the_detected_local_timezone() -> None:
+    # With no --local-timezone, the default is the detected zone, the same one
+    # the argument's description names.
+    with patch("mcp_server_time.server.get_localzone_name", return_value="Asia/Tokyo"):
+        async with connected(None) as session:
+            with frozen_at("2024-01-01 12:00:00+00:00"):
+                result = await call_json(session, "get_current_time", {})
+    assert result["timezone"] == "Asia/Tokyo"
+    assert result["datetime"] == "2024-01-01T21:00:00+09:00"
+
+
+@pytest.mark.parametrize(
+    "arguments,source,target",
+    [
+        # Either timezone, or both, may be omitted (#2853); each omitted one
+        # is the local timezone, Europe/Warsaw here.
+        (
+            {"time": "12:00", "target_timezone": "Asia/Tokyo"},
+            ("Europe/Warsaw", "2024-01-01T12:00:00+01:00"),
+            ("Asia/Tokyo", "2024-01-01T20:00:00+09:00"),
+        ),
+        (
+            {"source_timezone": "Asia/Tokyo", "time": "12:00"},
+            ("Asia/Tokyo", "2024-01-01T12:00:00+09:00"),
+            ("Europe/Warsaw", "2024-01-01T04:00:00+01:00"),
+        ),
+        (
+            {"time": "12:00"},
+            ("Europe/Warsaw", "2024-01-01T12:00:00+01:00"),
+            ("Europe/Warsaw", "2024-01-01T12:00:00+01:00"),
+        ),
+    ],
+)
+async def test_convert_time_defaults_omitted_timezones_to_the_local_timezone(
+    arguments: dict[str, Any],
+    source: tuple[str, str],
+    target: tuple[str, str],
+) -> None:
+    async with connected("Europe/Warsaw") as session:
+        with frozen_at("2024-01-01 06:00:00+00:00"):
+            result = await call_json(session, "convert_time", arguments)
+    assert (result["source"]["timezone"], result["source"]["datetime"]) == source
+    assert (result["target"]["timezone"], result["target"]["datetime"]) == target
+
+
 @pytest.mark.parametrize(
     "arguments,needles",
     [
         # Rejected by MCPServer against the tool's signature, before it runs.
-        ({}, ["timezone\n  Field required [type=missing"]),
+        # An omitted timezone is not an error: it defaults (#2853).
         ({"timezone": 5}, ["timezone\n  Input should be a valid string"]),
         ({"timezone": None}, ["timezone\n  Input should be a valid string"]),
     ],
@@ -599,6 +727,8 @@ async def test_convert_time_wire_result() -> None:
             "is_dst": False,
         },
         "time_difference": "+8.0h",
+        # Only an ambiguous source time sets it (#5196).
+        "later_occurrence": None,
     }
     assert result == {
         "content": [{"type": "text", "text": json.dumps(expected, indent=2)}],
@@ -795,8 +925,10 @@ async def test_convert_time_into_a_nonexistent_local_time() -> None:
 
 
 async def test_convert_time_at_an_ambiguous_local_time() -> None:
-    # 01:30 on 2024-11-03 happens twice in New York. fold=0 picks the first
-    # occurrence, still on EDT.
+    # 01:30 on 2024-11-03 happens twice in New York: first on EDT, then, after
+    # the clocks go back at 02:00, on EST. source and target are the first
+    # occurrence; later_occurrence carries the second, with a note saying the
+    # time is ambiguous rather than presenting one answer as certain (#5196).
     async with connected() as session:
         with frozen_at("2024-11-03 12:00:00+00:00"):
             result = await call_json(
@@ -816,6 +948,122 @@ async def test_convert_time_at_an_ambiguous_local_time() -> None:
     }
     assert result["target"]["datetime"] == "2024-11-03T05:30:00+00:00"
     assert result["time_difference"] == "+4.0h"
+    assert result["later_occurrence"] == {
+        "note": (
+            "01:30 occurs twice in America/New_York on 2024-11-03 because a "
+            "clock change repeats it: first at 2024-11-03T01:30:00-04:00, then "
+            "at 2024-11-03T01:30:00-05:00. source and target are the first "
+            "occurrence; this is the second."
+        ),
+        "source": {
+            "timezone": "America/New_York",
+            "datetime": "2024-11-03T01:30:00-05:00",
+            "day_of_week": "Sunday",
+            "is_dst": False,
+        },
+        "target": {
+            "timezone": "UTC",
+            "datetime": "2024-11-03T06:30:00+00:00",
+            "day_of_week": "Sunday",
+            "is_dst": False,
+        },
+        "time_difference": "+5.0h",
+    }
+
+
+async def test_convert_time_ambiguity_is_in_the_structured_result() -> None:
+    # The structured content carries the same later_occurrence as the text.
+    async with connected() as session:
+        with frozen_at("2024-10-27 12:00:00+00:00"):
+            result = await call(
+                session,
+                "convert_time",
+                {
+                    "source_timezone": "Europe/Warsaw",
+                    "time": "02:30",
+                    "target_timezone": "UTC",
+                },
+            )
+    structured = result["structuredContent"]
+    assert structured == json.loads(result["content"][0]["text"])
+    assert structured["source"]["datetime"] == "2024-10-27T02:30:00+02:00"
+    assert structured["target"]["datetime"] == "2024-10-27T00:30:00+00:00"
+    later = structured["later_occurrence"]
+    assert later["source"]["datetime"] == "2024-10-27T02:30:00+01:00"
+    assert later["target"]["datetime"] == "2024-10-27T01:30:00+00:00"
+    assert later["time_difference"] == "-1.0h"
+
+
+@pytest.mark.parametrize(
+    "instant,source,time,target,later_target,later_difference",
+    [
+        # Lord Howe Island moves its clocks back by only 30 minutes (02:00 ->
+        # 01:30), so 01:45 repeats with a fractional difference.
+        (
+            "2024-04-07 00:00:00+00:00",
+            "Australia/Lord_Howe",
+            "01:45",
+            "UTC",
+            "2024-04-06T15:15:00+00:00",
+            "-10.5h",
+        ),
+        # The target's own zone does not matter: only the source is ambiguous.
+        (
+            "2024-11-03 12:00:00+00:00",
+            "America/New_York",
+            "01:00",
+            "Asia/Kolkata",
+            "2024-11-03T11:30:00+05:30",
+            "+10.5h",
+        ),
+    ],
+)
+async def test_convert_time_later_occurrence_in_other_zones(
+    instant: str,
+    source: str,
+    time: str,
+    target: str,
+    later_target: str,
+    later_difference: str,
+) -> None:
+    async with connected() as session:
+        with frozen_at(instant):
+            result = await call_json(
+                session,
+                "convert_time",
+                {"source_timezone": source, "time": time, "target_timezone": target},
+            )
+    later = result["later_occurrence"]
+    assert later["note"].startswith(f"{time} occurs twice in {source} on ")
+    assert later["source"]["timezone"] == source
+    assert later["target"]["datetime"] == later_target
+    assert later["time_difference"] == later_difference
+
+
+@pytest.mark.parametrize(
+    "instant,source,time",
+    [
+        # The hour after the repeated one, on the fall-back day itself.
+        ("2024-11-03 12:00:00+00:00", "America/New_York", "02:00"),
+        # The hour before it, also on the fall-back day.
+        ("2024-11-03 12:00:00+00:00", "America/New_York", "00:59"),
+        # The same wall time on an ordinary day.
+        ("2024-11-10 12:00:00+00:00", "America/New_York", "01:30"),
+        # The same date in a zone with no clock change.
+        ("2024-11-03 12:00:00+00:00", "UTC", "01:30"),
+    ],
+)
+async def test_convert_time_unambiguous_time_has_no_later_occurrence(
+    instant: str, source: str, time: str
+) -> None:
+    async with connected() as session:
+        with frozen_at(instant):
+            result = await call_json(
+                session,
+                "convert_time",
+                {"source_timezone": source, "time": time, "target_timezone": "UTC"},
+            )
+    assert result["later_occurrence"] is None
 
 
 async def test_convert_time_difference_uses_offsets_at_the_converted_instant() -> None:
@@ -867,13 +1115,14 @@ async def test_convert_time_ignores_extra_arguments() -> None:
     "arguments,needles",
     [
         # Rejected by MCPServer against the tool's signature, before it runs.
+        # `time` stays required; the timezones default when omitted (#2853).
         (
-            {"source_timezone": "UTC", "time": "12:00"},
-            ["target_timezone\n  Field required [type=missing"],
+            {"source_timezone": "UTC", "target_timezone": "UTC"},
+            ["time\n  Field required [type=missing"],
         ),
         (
-            {"time": "12:00", "target_timezone": "UTC"},
-            ["source_timezone\n  Field required [type=missing"],
+            {"source_timezone": 5, "time": "12:00"},
+            ["source_timezone\n  Input should be a valid string"],
         ),
         (
             {"source_timezone": "UTC", "time": 1200, "target_timezone": "UTC"},
@@ -947,6 +1196,164 @@ async def test_convert_time_checks_timezones_before_the_time_string() -> None:
     assert result == tool_error(
         "convert_time", "Invalid timezone: 'No time zone found with key Bad/Zone'"
     )
+
+
+# ---------------------------------------------------------------------------
+# tools/call get_time_ago
+# ---------------------------------------------------------------------------
+
+
+async def test_get_time_ago_wire_result() -> None:
+    # The issue's own example (#2710): two and a half hours ago.
+    async with connected() as session:
+        with frozen_at("2024-01-01 12:00:00+00:00"):
+            result = await call(
+                session,
+                "get_time_ago",
+                {"timezone": "UTC", "hours_ago": 2, "minutes_ago": 30},
+            )
+    expected = {
+        "timezone": "UTC",
+        "datetime": "2024-01-01T09:30:00+00:00",
+        "day_of_week": "Monday",
+        "is_dst": False,
+    }
+    assert result == {
+        "content": [{"type": "text", "text": json.dumps(expected, indent=2)}],
+        "structuredContent": expected,
+        "isError": False,
+    }
+
+
+@pytest.mark.parametrize(
+    "arguments,expected",
+    [
+        # No offset at all is now.
+        ({}, "2024-01-01T12:00:00+00:00"),
+        ({"seconds_ago": 1}, "2024-01-01T11:59:59+00:00"),
+        ({"minutes_ago": 90}, "2024-01-01T10:30:00+00:00"),
+        # Every unit at once, crossing back into the previous year.
+        (
+            {"days_ago": 1, "hours_ago": 2, "minutes_ago": 3, "seconds_ago": 4},
+            "2023-12-31T09:56:56+00:00",
+        ),
+        # 2023 is not a leap year: 365 days back is the same date.
+        ({"days_ago": 365}, "2023-01-01T12:00:00+00:00"),
+    ],
+)
+async def test_get_time_ago_offsets(arguments: dict[str, Any], expected: str) -> None:
+    async with connected() as session:
+        with frozen_at("2024-01-01 12:00:00+00:00"):
+            result = await call_json(
+                session, "get_time_ago", {"timezone": "UTC", **arguments}
+            )
+    assert result["datetime"] == expected
+
+
+async def test_get_time_ago_defaults_to_the_local_timezone() -> None:
+    # An omitted timezone is the server's local timezone, as the schema's
+    # `default` says.
+    async with connected("Europe/Warsaw") as session:
+        with frozen_at("2024-01-01 12:00:00+00:00"):
+            result = await call_json(session, "get_time_ago", {"hours_ago": 1})
+    assert result == {
+        "timezone": "Europe/Warsaw",
+        "datetime": "2024-01-01T12:00:00+01:00",
+        "day_of_week": "Monday",
+        "is_dst": False,
+    }
+
+
+@pytest.mark.parametrize(
+    "arguments,expected,is_dst",
+    [
+        # 03:30 CEST on the spring-forward day is 01:30 UTC; two real hours
+        # back is 23:30 UTC, 00:30 CET. Subtracting from the wall clock would
+        # wrongly give 01:30.
+        ({"hours_ago": 2}, "2024-03-31T00:30:00+01:00", False),
+        # A day ago is 24 elapsed hours, 01:30 UTC the day before, so across
+        # the change the wall clock reads 02:30 CET, not 03:30.
+        ({"days_ago": 1}, "2024-03-30T02:30:00+01:00", False),
+        ({"minutes_ago": 30}, "2024-03-31T03:00:00+02:00", True),
+    ],
+)
+async def test_get_time_ago_counts_elapsed_time_across_a_clock_change(
+    arguments: dict[str, Any], expected: str, is_dst: bool
+) -> None:
+    async with connected() as session:
+        with frozen_at("2024-03-31 01:30:00+00:00"):
+            result = await call_json(
+                session, "get_time_ago", {"timezone": "Europe/Warsaw", **arguments}
+            )
+    assert (result["datetime"], result["is_dst"]) == (expected, is_dst)
+
+
+async def test_get_time_ago_echoes_the_requested_name_not_a_canonical_one() -> None:
+    async with connected() as session:
+        with frozen_at("2024-01-01 12:00:00+00:00"):
+            result = await call_json(
+                session, "get_time_ago", {"timezone": "US/Eastern", "days_ago": 1}
+            )
+    assert result["timezone"] == "US/Eastern"
+    assert result["datetime"] == "2023-12-31T07:00:00-05:00"
+    assert result["day_of_week"] == "Sunday"
+
+
+@pytest.mark.parametrize(
+    "arguments,needles",
+    [
+        # Rejected by MCPServer against the tool's signature, before it runs.
+        (
+            {"hours_ago": -1},
+            ["hours_ago\n  Input should be greater than or equal to 0"],
+        ),
+        # The offsets are strict integers: no fraction, numeric string or
+        # boolean is coerced into a different cutoff.
+        ({"days_ago": 1.5}, ["days_ago\n  Input should be a valid integer"]),
+        ({"hours_ago": "2"}, ["hours_ago\n  Input should be a valid integer"]),
+        ({"hours_ago": True}, ["hours_ago\n  Input should be a valid integer"]),
+        ({"minutes_ago": "ten"}, ["minutes_ago\n  Input should be a valid integer"]),
+        ({"seconds_ago": None}, ["seconds_ago\n  Input should be a valid integer"]),
+        ({"timezone": None}, ["timezone\n  Input should be a valid string"]),
+    ],
+)
+async def test_get_time_ago_argument_validation(
+    arguments: dict[str, Any], needles: list[str]
+) -> None:
+    async with connected() as session:
+        result = await call(session, "get_time_ago", arguments)
+    assert_validation_error(result, "get_time_ago", *needles)
+
+
+@pytest.mark.parametrize(
+    "arguments,message",
+    [
+        # Raised by the tool as a ToolError.
+        ({"timezone": ""}, "Missing required argument: timezone"),
+        (
+            {"timezone": "europe/warsaw"},
+            "Invalid timezone: 'No time zone found with key europe/warsaw'",
+        ),
+        # Past what timedelta can hold, and past year 1.
+        (
+            {"days_ago": 10**10},
+            "Time offset out of range: the result would be before year 1",
+        ),
+        (
+            {"days_ago": 999_999_999},
+            "Time offset out of range: the result would be before year 1",
+        ),
+        # The timezone is checked before the offset.
+        (
+            {"timezone": "Bad/Zone", "days_ago": 10**10},
+            "Invalid timezone: 'No time zone found with key Bad/Zone'",
+        ),
+    ],
+)
+async def test_get_time_ago_errors(arguments: dict[str, Any], message: str) -> None:
+    async with connected() as session:
+        result = await call(session, "get_time_ago", arguments)
+    assert result == tool_error("get_time_ago", message)
 
 
 # ---------------------------------------------------------------------------

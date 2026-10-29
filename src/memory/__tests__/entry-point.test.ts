@@ -1,5 +1,6 @@
 // Tests for the memory server's startup path (#4854): main() run in-process
-// over an in-memory transport, so its MEMORY_FILE_PATH handling is covered,
+// over an in-memory transport, so its MEMORY_FILE_PATH handling and its
+// warning for a graph file inside node_modules (#4117) are covered,
 // and isMainModule(), the guard that keeps importing index.ts from starting a
 // stdio server. The bin itself is exercised over real stdio by
 // stdio-smoke.test.ts.
@@ -52,8 +53,31 @@ describe("main", () => {
       expect(errorSpy).toHaveBeenCalledWith(
         "Knowledge Graph MCP Server running on stdio",
       );
+      // A file outside node_modules draws no location warning (#4117).
+      expect(errorSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining("node_modules"),
+      );
     } finally {
       await client.close();
+      await server.close();
+    }
+  });
+
+  it("warns on stderr when the graph file is inside node_modules (#4117)", async () => {
+    const installDir = path.join(dir, "node_modules", "server-memory", "dist");
+    await fs.mkdir(installDir, { recursive: true });
+    const graphPath = path.join(installDir, "memory.jsonl");
+    process.env.MEMORY_FILE_PATH = graphPath;
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const server = await main(InMemoryTransport.createLinkedPair()[1]);
+    try {
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /^WARNING: the memory file .*memory\.jsonl is inside a node_modules directory/,
+        ),
+      );
+    } finally {
       await server.close();
     }
   });

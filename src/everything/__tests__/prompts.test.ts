@@ -5,7 +5,11 @@
  * `{resourceId}` variable.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { connect, textOf, type Session } from "./harness.js";
+import { connect, connectModern, textOf, type Session } from "./harness.js";
+import {
+  RESOURCE_TYPE_BLOB,
+  RESOURCE_TYPE_TEXT,
+} from "../resources/templates.js";
 
 let session: Session;
 
@@ -233,5 +237,50 @@ describe("completion/complete for resource templates", () => {
       argument: { name: "resourceId", value },
     });
     expect(completion.values).toEqual(expected);
+  });
+});
+
+/**
+ * Prompt arguments carry no JSON Schema over the wire, only a name, a
+ * description and `required`, so the description is the one place a client
+ * can learn what an argument accepts (#3985). Checked in both eras, since each
+ * is served by its own code path.
+ */
+describe.each([
+  ["2025-era", connect],
+  ["2026-07-28", connectModern],
+])("prompts/list argument descriptions (%s)", (_era, open) => {
+  let listed: Session;
+
+  beforeEach(async () => {
+    listed = await open();
+  });
+
+  afterEach(async () => {
+    await listed.close();
+  });
+
+  it("describes every argument of every prompt", async () => {
+    const { prompts } = await listed.client.listPrompts();
+    const undescribed = prompts.flatMap((prompt) =>
+      (prompt.arguments ?? [])
+        .filter((argument) => !argument.description?.trim())
+        .map((argument) => `${prompt.name}.${argument.name}`),
+    );
+    expect(undescribed).toEqual([]);
+  });
+
+  it("names resource-prompt's allowed values in its argument descriptions", async () => {
+    const { prompts } = await listed.client.listPrompts();
+    const prompt = prompts.find((p) => p.name === "resource-prompt");
+    const descriptionOf = (name: string) =>
+      prompt?.arguments?.find((argument) => argument.name === name)
+        ?.description;
+    expect(descriptionOf("resourceType")).toBe(
+      `Type of resource to fetch. Must be "${RESOURCE_TYPE_TEXT}" or "${RESOURCE_TYPE_BLOB}".`,
+    );
+    expect(descriptionOf("resourceId")).toBe(
+      "ID of the resource to fetch. Must be a positive integer (1 or greater).",
+    );
   });
 });

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { McpServer, completable } from "@modelcontextprotocol/server";
+import { PROMPT_ICONS } from "../server/icons.js";
 
 /**
  * Register a prompt with completable arguments
@@ -45,6 +46,7 @@ export const registerPromptWithCompletions = (server: McpServer) => {
     "completable-prompt",
     {
       title: "Team Management",
+      icons: PROMPT_ICONS,
       description: "First argument choice narrows values for second argument.",
       argsSchema: promptArgsSchema,
     },

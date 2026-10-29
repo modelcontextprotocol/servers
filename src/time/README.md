@@ -11,14 +11,21 @@ Requires MCP Python SDK 2.x (`mcp>=2.3,<3`).
 ### Available Tools
 
 - `get_current_time` - Get current time in a specific timezone or system timezone.
-  - Required arguments:
-    - `timezone` (string): IANA timezone name (e.g., 'America/New_York', 'Europe/London')
+  - Optional arguments:
+    - `timezone` (string): IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Defaults to the server's local timezone.
 
 - `convert_time` - Convert time between timezones.
   - Required arguments:
-    - `source_timezone` (string): Source IANA timezone name
     - `time` (string): Time in 24-hour format (HH:MM)
-    - `target_timezone` (string): Target IANA timezone name
+  - Optional arguments:
+    - `source_timezone` (string): Source IANA timezone name. Defaults to the server's local timezone.
+    - `target_timezone` (string): Target IANA timezone name. Defaults to the server's local timezone.
+
+- `get_time_ago` - Get the time a given number of days, hours, minutes and seconds ago in a specific timezone, for questions such as "what happened in the last 5 hours?".
+  - Optional arguments:
+    - `timezone` (string): IANA timezone name; defaults to the server's local timezone
+    - `days_ago`, `hours_ago`, `minutes_ago`, `seconds_ago` (non-negative JSON integers, default 0; a fraction, numeric string or boolean is rejected): how far back to go. They add up, so two and a half hours ago is `hours_ago: 2, minutes_ago: 30`.
+  - The offset is elapsed time, counted back from the current instant, so across a daylight-saving change "a day ago" is exactly 24 hours ago and its wall-clock reading can differ from now by an hour. An offset reaching before year 1 is an error.
 
 A timezone name, here and in `--local-timezone`, must be an exact IANA key, case included: `Europe/Warsaw` is accepted and `europe/warsaw` is rejected on every platform, including macOS, whose case-insensitive filesystem would otherwise resolve it.
 
@@ -31,6 +38,7 @@ The server speaks both eras of the Model Context Protocol over stdio, with nothi
 The server is built on the SDK's high-level `MCPServer`. Each tool declares an `outputSchema` and returns its result twice: as `structuredContent`, and as the same object in indented JSON in a text block, for a client that does not read structured output.
 
 - **A tool failure is an `isError` result** whose text the model can read and act on, prefixed `Error executing tool <name>: `. That covers an unknown or non-exact timezone (`Invalid timezone: ...`), an empty timezone (`Missing required argument: <argument>`), a time not in `HH:MM` 24-hour form, a wall-clock time skipped by a clock change, and an argument missing or of the wrong type (the SDK's validation message).
+- **An ambiguous time is reported, not guessed.** On the day a clock change repeats a wall-clock time (a DST fall-back, such as 01:30 on 2024-11-03 in `America/New_York`), `convert_time` returns its first occurrence in `source` and `target`, and the second in `later_occurrence`: a `note` saying the time occurs twice, with that occurrence's own `source`, `target` and `time_difference`. For any other time `later_occurrence` is `null`.
 - **An unknown tool name is a JSON-RPC `-32602` error** (`Unknown tool: <name>`), not an `isError` result, as both protocol versions specify.
 - The server registers no prompts or resources. Their list methods answer with empty lists.
 
@@ -208,7 +216,7 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 
 ### Customization - System Timezone
 
-By default, the server automatically detects your system's timezone. You can override this by adding the argument `--local-timezone` to the `args` list in the configuration.
+By default, the server automatically detects your system's timezone. You can override this by adding the argument `--local-timezone` to the `args` list in the configuration. This local timezone is also what a tool uses for a timezone argument the call omits, and each tool's input schema names it as that argument's `default`. An explicitly empty timezone is still an error.
 
 Example:
 ```json
@@ -267,7 +275,29 @@ Response (`structuredContent`, and the same JSON as text):
     "day_of_week": "Tuesday",
     "is_dst": false
   },
-  "time_difference": "+14.0h"
+  "time_difference": "+14.0h",
+  "later_occurrence": null
+}
+```
+
+3. Get a past time:
+```json
+{
+  "name": "get_time_ago",
+  "arguments": {
+    "timezone": "Europe/Warsaw",
+    "hours_ago": 2,
+    "minutes_ago": 30
+  }
+}
+```
+Response (`structuredContent`, and the same JSON as text):
+```json
+{
+  "timezone": "Europe/Warsaw",
+  "datetime": "2024-01-01T10:30:00+01:00",
+  "day_of_week": "Monday",
+  "is_dst": false
 }
 ```
 
@@ -288,10 +318,11 @@ npx @modelcontextprotocol/inspector uv run mcp-server-time
 
 ## Examples of Questions for Claude
 
-1. "What time is it now?" (will use system timezone)
+1. "What time is it now?" (the timezone can be omitted: the server uses its local timezone)
 2. "What time is it in Tokyo?"
 3. "When it's 4 PM in New York, what time is it in London?"
 4. "Convert 9:30 AM Tokyo time to New York time"
+5. "What time was it two and a half hours ago?"
 
 ## Development
 
