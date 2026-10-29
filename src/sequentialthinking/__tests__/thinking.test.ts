@@ -4,7 +4,8 @@
 // in-process client and reads only the result's text and structuredContent.
 // Includes the #4813 regression tests: a branchId that names an
 // Object.prototype key is an ordinary branch, and a failed call leaves the
-// state unchanged.
+// state unchanged; and the #2912 tests: the history is capped at
+// MAX_THOUGHT_HISTORY, evicting the oldest thought from its branch too.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
@@ -14,6 +15,30 @@ import {
   thought,
   type Connected,
 } from "./helpers.js";
+import { DEFAULT_MAX_THOUGHT_HISTORY } from "../lib.js";
+
+/**
+ * Connect to a server built under MAX_THOUGHT_HISTORY=`value` (`undefined` =
+ * unset). The cap is read once, when the server is built, so the variable is
+ * restored as soon as the connection is up.
+ */
+async function connectCapped(value: string | undefined): Promise<Connected> {
+  const previous = process.env.MAX_THOUGHT_HISTORY;
+  if (value === undefined) {
+    delete process.env.MAX_THOUGHT_HISTORY;
+  } else {
+    process.env.MAX_THOUGHT_HISTORY = value;
+  }
+  try {
+    return await connect();
+  } finally {
+    if (previous === undefined) {
+      delete process.env.MAX_THOUGHT_HISTORY;
+    } else {
+      process.env.MAX_THOUGHT_HISTORY = previous;
+    }
+  }
+}
 
 describe("sequentialthinking thought processing", () => {
   let conn: Connected;
@@ -391,5 +416,137 @@ describe("sequentialthinking thought processing", () => {
           .branches,
       ).toEqual([]);
     });
+  });
+
+  // #2912: a server lives as long as its connection, so the history it keeps
+  // is capped, oldest thought first, and the branches shrink with it.
+  describe("#2912: bounded thought history", () => {
+    let capped: Connected | undefined;
+
+    afterEach(async () => {
+      await capped?.close();
+      capped = undefined;
+      vi.restoreAllMocks();
+    });
+
+    it(`retains at most ${DEFAULT_MAX_THOUGHT_HISTORY} thoughts by default`, async () => {
+      capped = await connectCapped(undefined);
+      let length = 0;
+      for (let n = 1; n <= DEFAULT_MAX_THOUGHT_HISTORY + 5; n++) {
+        length = parseOk(
+          await capped.think(thought({ thoughtNumber: n })),
+        ).thoughtHistoryLength;
+        expect(length).toBe(Math.min(n, DEFAULT_MAX_THOUGHT_HISTORY));
+      }
+      expect(length).toBe(DEFAULT_MAX_THOUGHT_HISTORY);
+    });
+
+    it("stops thoughtHistoryLength at MAX_THOUGHT_HISTORY", async () => {
+      capped = await connectCapped("3");
+      const lengths: number[] = [];
+      for (let n = 1; n <= 6; n++) {
+        lengths.push(
+          parseOk(await capped.think(thought({ thoughtNumber: n })))
+            .thoughtHistoryLength,
+        );
+      }
+      expect(lengths).toEqual([1, 2, 3, 3, 3, 3]);
+    });
+
+    it("drops a branch once all of its thoughts are evicted", async () => {
+      capped = await connectCapped("2");
+      await capped.think(thought({ branchFromThought: 1, branchId: "alt" }));
+      expect(
+        parseOk(await capped.think(thought({ thoughtNumber: 2 }))).branches,
+      ).toEqual(["alt"]);
+      expect(
+        parseOk(await capped.think(thought({ thoughtNumber: 3 }))),
+      ).toMatchObject({ branches: [], thoughtHistoryLength: 2 });
+    });
+
+    it("keeps a branch while any of its thoughts is retained", async () => {
+      capped = await connectCapped("2");
+      await capped.think(thought({ branchFromThought: 1, branchId: "alt" }));
+      await capped.think(
+        thought({ thoughtNumber: 2, branchFromThought: 1, branchId: "alt" }),
+      );
+      // Evicts the first "alt" thought; the second is still retained.
+      expect(
+        parseOk(await capped.think(thought({ thoughtNumber: 3 }))),
+      ).toMatchObject({ branches: ["alt"], thoughtHistoryLength: 2 });
+      // Evicts the second; nothing on "alt" is left.
+      expect(
+        parseOk(await capped.think(thought({ thoughtNumber: 4 }))).branches,
+      ).toEqual([]);
+    });
+
+    it("lists a branch recreated after eviction as newly seen", async () => {
+      capped = await connectCapped("3");
+      await capped.think(thought({ branchFromThought: 1, branchId: "a" }));
+      await capped.think(
+        thought({ thoughtNumber: 2, branchFromThought: 1, branchId: "b" }),
+      );
+      await capped.think(
+        thought({ thoughtNumber: 3, branchFromThought: 1, branchId: "b" }),
+      );
+      // Evicts the only "a" thought.
+      expect(
+        parseOk(await capped.think(thought({ thoughtNumber: 4 }))).branches,
+      ).toEqual(["b"]);
+      // "a" is recorded again, after "b"; the first "b" thought is evicted.
+      expect(
+        parseOk(
+          await capped.think(
+            thought({ thoughtNumber: 5, branchFromThought: 1, branchId: "a" }),
+          ),
+        ).branches,
+      ).toEqual(["b", "a"]);
+    });
+
+    it("evicts a branch whose id names an Object.prototype key", async () => {
+      capped = await connectCapped("1");
+      await capped.think(
+        thought({ branchFromThought: 1, branchId: "__proto__" }),
+      );
+      expect(
+        parseOk(await capped.think(thought({ thoughtNumber: 2 }))),
+      ).toMatchObject({ branches: [], thoughtHistoryLength: 1 });
+    });
+
+    it("accepts a value padded with whitespace", async () => {
+      capped = await connectCapped(" 1 ");
+      await capped.think(thought());
+      expect(
+        parseOk(await capped.think(thought({ thoughtNumber: 2 })))
+          .thoughtHistoryLength,
+      ).toBe(1);
+    });
+
+    it("uses the default for an empty value, without a warning", async () => {
+      const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+      capped = await connectCapped("");
+      await capped.think(thought());
+      expect(
+        parseOk(await capped.think(thought({ thoughtNumber: 2 })))
+          .thoughtHistoryLength,
+      ).toBe(2);
+      expect(errors).not.toHaveBeenCalled();
+    });
+
+    it.each(["0", "-1", "1.5", "abc", "1e3", "99999999999999999999"])(
+      "reports %j on stderr and keeps the default cap",
+      async (value) => {
+        const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+        capped = await connectCapped(value);
+        expect(errors).toHaveBeenCalledWith(
+          `MAX_THOUGHT_HISTORY must be a positive integer, got "${value}"; using ${DEFAULT_MAX_THOUGHT_HISTORY}`,
+        );
+        await capped.think(thought());
+        expect(
+          parseOk(await capped.think(thought({ thoughtNumber: 2 })))
+            .thoughtHistoryLength,
+        ).toBe(2);
+      },
+    );
   });
 });
