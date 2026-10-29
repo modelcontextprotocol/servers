@@ -42,6 +42,10 @@ The markdown of an HTML page opens with the page's title as a `#` heading (its `
 
 The server is built on the MCP Python SDK's high-level `MCPServer`: the tool and the prompt are decorated functions, and their type hints and field descriptions are the input schema and the prompt's arguments.
 
+### Content negotiation
+
+The tool and the prompt ask for markdown first, with the request header `Accept: text/markdown, text/html;q=0.9, */*;q=0.8`. A site that serves markdown through content negotiation sends it directly, and a `text/markdown` response is returned as-is: it is not simplified and carries no raw-content notice. A site that ignores the header sends what it always did, and HTML is simplified to markdown as before. A `raw` fetch keeps the default `Accept: */*`, so it gets whatever the site serves by default (for a web page, its HTML), unsimplified; a markdown response it receives anyway is returned as-is too.
+
 ### Protocol versions
 
 The server speaks both eras of the Model Context Protocol over stdio, with nothing to configure: a **2026-07-28** client (discovered with `server/discover`, no session) and a **2025-11-25** client (the `initialize` handshake). The client's first request decides which. Tools and prompts behave the same in both. Methods the 2026-07-28 specification removes, such as `ping`, are answered only on a 2025-11-25 connection.
