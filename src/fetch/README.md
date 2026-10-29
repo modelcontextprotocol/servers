@@ -15,6 +15,8 @@ Requires MCP Python SDK 2.x (`mcp>=2.3,<3`).
 
 The fetch tool will truncate the response, but by using the `start_index` argument, you can specify where to start the content extraction. This lets models read a webpage in chunks, until they find the information they need.
 
+The markdown of an HTML page opens with the page's title as a `#` heading (its `og:title`, else its `<h1>` when the `<title>` holds it, else its `<title>` or `<h1>`), because the extraction drops a heading that repeats the title. It is not added when the markdown already opens with it, to a raw result, or to a page that failed to simplify.
+
 ### Available Tools
 
 - `fetch` - Fetches a URL from the internet and extracts its contents as markdown.
