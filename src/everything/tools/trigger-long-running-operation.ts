@@ -1,3 +1,4 @@
+import { setTimeout as sleep } from "node:timers/promises";
 import { z } from "zod";
 import { McpServer, CallToolResult } from "@modelcontextprotocol/server";
 
@@ -36,6 +37,11 @@ const config = {
  * At the end of the operation, the tool returns a message indicating the completion of the
  * operation, including the total duration and steps.
  *
+ * The operation watches the request's abort signal, which the SDK fires when the client
+ * sends `notifications/cancelled` or the connection closes, in either protocol era. On
+ * cancellation it clears its pending timer and stops without sending further progress, so
+ * a cancelled operation never holds the process open (#1124, #4846).
+ *
  * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
 export const registerTriggerLongRunningOperationTool = (server: McpServer) => {
@@ -47,11 +53,24 @@ export const registerTriggerLongRunningOperationTool = (server: McpServer) => {
       const { duration, steps } = validatedArgs;
       const stepDuration = duration / steps;
       const progressToken = ctx.mcpReq._meta?.progressToken;
+      const signal = ctx.mcpReq.signal;
 
       for (let i = 1; i < steps + 1; i++) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, stepDuration * 1000),
-        );
+        try {
+          // Rejects at once, clearing its timer, when the request is cancelled.
+          await sleep(stepDuration * 1000, undefined, { signal });
+        } catch {
+          // The SDK drops the response to a cancelled request, so this result
+          // never reaches the client; returning simply ends the handler.
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Long running operation cancelled after ${i - 1} of ${steps} steps.`,
+              },
+            ],
+          };
+        }
 
         if (progressToken !== undefined) {
           await server.server.notification(
