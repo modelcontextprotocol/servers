@@ -20,13 +20,27 @@ from bs4 import BeautifulSoup, Tag
 # nothing. A title on top of it would make the failure read as content.
 _FAILURE_PREFIX = "<error>"
 
-# Markdown heading markers, emphasis, escapes, Sphinx's "¶" permalink and any
-# other punctuation are ignored when comparing a heading with the title.
-_NOT_WORD = re.compile(r"[\W_]+")
+# Titles are compared word by word: case, Markdown heading markers, emphasis,
+# escapes, Sphinx's "¶" permalink and other punctuation are ignored, but word
+# boundaries are kept, so "Rust" does not match "Trust".
+_WORD = re.compile(r"[^\W_]+")
+# What a reader does not see on a Markdown line: a link's destination and any
+# HTML tag (an autolink's URL included). A title found only there is not shown.
+_LINK_DESTINATION = re.compile(r"\]\([^)]*\)")
+_HTML_TAG = re.compile(r"<[^>]*>")
 
 
 def _normalized(text: str) -> str:
-    return _NOT_WORD.sub("", text).casefold()
+    """``text`` as its casefolded words, one space apart, padded with spaces.
+
+    The padding makes ``in`` a whole-word, whole-phrase containment test.
+    """
+    words = _WORD.findall(text.casefold())
+    return f" {' '.join(words)} " if words else ""
+
+
+def _visible(line: str) -> str:
+    return _HTML_TAG.sub(" ", _LINK_DESTINATION.sub("]", line))
 
 
 def _collapsed(text: str) -> str:
@@ -76,7 +90,7 @@ def _opens_with_title(content: str, title: str) -> bool:
     docs") to the page's own heading ("What's new").
     """
     first = next((line for line in content.splitlines() if line.strip()), "")
-    line, wanted = _normalized(first), _normalized(title)
+    line, wanted = _normalized(_visible(first)), _normalized(title)
     if not line or not wanted:
         return False
     if wanted in line:

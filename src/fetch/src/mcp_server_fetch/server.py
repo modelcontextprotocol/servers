@@ -603,7 +603,7 @@ async def fetch_url(
         content = await asyncio.to_thread(
             extract_content_from_html, page_raw, use_readability_js
         )
-        return with_page_title(page_raw, content), ""
+        return await asyncio.to_thread(with_page_title, page_raw, content), ""
 
     # A response with no Content-Type would otherwise leave an empty slot here.
     declared_type = content_type or "(not declared)"

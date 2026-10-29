@@ -136,6 +136,17 @@ def test_page_title(html: str, expected: str | None) -> None:
         ("Title\n\nBody.", "# Title Here\n\nTitle\n\nBody."),
         # A first line of punctuation only cannot match.
         ("---\n\nBody.", "# Title Here\n\n---\n\nBody."),
+        # The title only in a link destination or tag is not shown: added.
+        (
+            "[Source](https://example.com/title-here)\n",
+            "# Title Here\n\n[Source](https://example.com/title-here)\n",
+        ),
+        (
+            "<a href='title-here'>x</a>\n",
+            "# Title Here\n\n<a href='title-here'>x</a>\n",
+        ),
+        # The title as a link's visible text is shown: not added.
+        ("[Title Here](https://example.com)\n", "[Title Here](https://example.com)\n"),
         # Empty content still gains the title.
         ("", "# Title Here\n\n"),
     ],
@@ -148,6 +159,20 @@ def test_with_page_title_leaves_untitled_page_and_failure_alone() -> None:
     assert with_page_title("<p>x</p>", "Body.") == "Body."
     failure = "<error>Page failed to be simplified from HTML</error>"
     assert with_page_title("<title>T</title>", failure) == failure
+
+
+@pytest.mark.parametrize(
+    ("title", "content"),
+    [
+        # Matching is by whole words, in both directions.
+        ("Rust", "Trust the compiler."),
+        ("Go", "Algorithms make this possible."),
+        ("Rust Guide", "# Rust Gui\n"),
+    ],
+)
+def test_partial_words_do_not_match(title: str, content: str) -> None:
+    html = f"<title>{title}</title>"
+    assert with_page_title(html, content) == f"# {title}\n\n{content}"
 
 
 def test_title_with_no_word_characters_is_not_matched() -> None:
