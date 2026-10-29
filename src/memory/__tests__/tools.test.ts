@@ -60,6 +60,39 @@ const graphOutputSchema = {
   additionalProperties: false,
 };
 
+// The read tools' output (#3953): an entity may also carry observationCount.
+const readGraphOutputSchema = {
+  ...graphOutputSchema,
+  properties: {
+    ...graphOutputSchema.properties,
+    entities: {
+      type: "array",
+      items: {
+        ...entityItem(true),
+        properties: {
+          ...entityItem(true).properties,
+          observationCount: {
+            type: "integer",
+            minimum: 0,
+            maximum: Number.MAX_SAFE_INTEGER,
+            description:
+              "How many observations the entity holds in total; present only when observationLimit was given",
+          },
+        },
+      },
+    },
+  },
+};
+
+// The observationLimit input every read tool takes (#3953).
+const observationLimitInput = {
+  type: "integer",
+  minimum: 0,
+  maximum: Number.MAX_SAFE_INTEGER,
+  description:
+    "Return at most this many observations per entity (the first ones, in the order they were added) and add each entity's total as observationCount. Use 0 for names, types and counts only: a cheap overview of a large graph, after which open_nodes reads the entities you need in full. Omit to return every observation.",
+};
+
 const statusOutputSchema = {
   type: "object",
   properties: { success: { type: "boolean" }, message: { type: "string" } },
@@ -272,13 +305,23 @@ const expectedTools = [
   {
     name: "read_graph",
     title: "Read Graph",
-    description: "Read the entire knowledge graph",
+    description:
+      "Read the entire knowledge graph: every entity with its observations, and every relation. The result grows with the graph, so use this only when you need everything; prefer search_nodes to find entities by keyword and open_nodes to read entities whose names you know.",
     inputSchema: {
       type: "object",
-      properties: {},
+      properties: {
+        entityTypes: {
+          type: "array",
+          items: { type: "string" },
+          minItems: 1,
+          description:
+            "Return only entities whose entityType is one of these (exact match), and only the relations that touch one of them. Omit to return every entity.",
+        },
+        observationLimit: observationLimitInput,
+      },
       $schema: JSON_SCHEMA_2020_12,
     },
-    outputSchema: graphOutputSchema,
+    outputSchema: readGraphOutputSchema,
     annotations: readAnnotations,
     execution,
   },
@@ -296,11 +339,19 @@ const expectedTools = [
           description:
             "The search query to match against entity names, types, and observation content",
         },
+        limit: {
+          type: "integer",
+          minimum: 1,
+          maximum: Number.MAX_SAFE_INTEGER,
+          description:
+            "Return at most this many matching entities (the first matches, in stored order), with the relations that touch them. Omit to return every match.",
+        },
+        observationLimit: observationLimitInput,
       },
       required: ["query"],
       $schema: JSON_SCHEMA_2020_12,
     },
-    outputSchema: graphOutputSchema,
+    outputSchema: readGraphOutputSchema,
     annotations: readAnnotations,
     execution,
   },
@@ -317,11 +368,12 @@ const expectedTools = [
           items: { type: "string" },
           description: "An array of entity names to retrieve",
         },
+        observationLimit: observationLimitInput,
       },
       required: ["names"],
       $schema: JSON_SCHEMA_2020_12,
     },
-    outputSchema: graphOutputSchema,
+    outputSchema: readGraphOutputSchema,
     annotations: readAnnotations,
     execution,
   },

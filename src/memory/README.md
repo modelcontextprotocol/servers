@@ -109,8 +109,11 @@ Example:
 
 - **read_graph**
   - Read the entire knowledge graph
-  - No input required
+  - Optional input:
+    - `entityTypes` (string[], at least one): return only entities of these types, and the relations that touch one of them
+    - `observationLimit` (integer, 0 or more): see below
   - Returns complete graph structure with all entities and relations
+  - With `observationLimit`, each entity carries at most that many observations (the first ones, in the order they were added) and an `observationCount` with its total. `observationLimit: 0` returns names, types and counts only: a cheap overview of a large graph, from which `open_nodes` reads the entities you need in full
 
 - **search_nodes**
   - Search for nodes based on query
@@ -120,6 +123,9 @@ Example:
     - Entity types
     - Observation content
   - Returns matching entities and their relations
+  - Optional input:
+    - `limit` (integer, 1 or more): return at most this many matches (the first, in stored order), with the relations that touch them
+    - `observationLimit` (integer, 0 or more): as for `read_graph`
 
 - **open_nodes**
   - Retrieve specific nodes by name
@@ -128,6 +134,7 @@ Example:
     - Requested entities
     - Relations between requested entities
   - Silently skips non-existent nodes
+  - Optional input: `observationLimit` (integer, 0 or more), as for `read_graph`
 
 ### Resources
 
