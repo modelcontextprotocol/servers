@@ -26,15 +26,18 @@ things safe to say in public about the backlog are **aggregate counts** (how
 many are in each state). A branch named after the bug, or a commit message that
 describes it, discloses it as surely as an issue would.
 
-Related: `/board-ops` holds the board IDs and the draft-card recipes, and
-`/issue-create` gives public tracking its labels and milestone **after
-publication**, never merely after the release (step 6).
+Related: `/board-ops` holds the board IDs and the draft-card recipes,
+`/issue-create` gives the converted issue its labels and milestone (step 5),
+and `/pr-flow` opens the public PR that brings the fix to `v2/main` (step 5).
 
-⚠️ **The PR flow does not apply to the fix itself.** It needs a public issue
-and a public PR against `v2/main`, which is the disclosure this flow exists to
-delay. The fix is reviewed inside the private fork (step 4), and `AGENTS.md`
-records that fork PR as an exception to its PR rules (no public issue link, no
-labels, tracked by the draft card).
+⚠️ **The fix is written and reviewed in the private fork, then merged through
+an opaque public PR.** The fork's PR (step 4) links no public issue, carries no
+labels and is tracked by the draft card; it is never merged. When the fix is
+ready to merge, the card converts to an issue that keeps its opaque title, and
+a public PR from the same opaque branch closes it (step 5). That PR follows
+`/pr-flow` except that **nothing in it describes the vulnerability** and it
+gets **no Copilot review**. `AGENTS.md` records both PRs as an exception to
+its PR rules.
 
 ## The flow
 
@@ -44,8 +47,8 @@ labels, tracked by the draft card).
 | 2 | **Verify the claim**: which server, and does the code belong to it or to an SDK? | Judgment |
 | 3 | Valid and ours → **accept** (`triage` → `draft`); otherwise close with a reason | **Human only** |
 | 4 | Create the **private fork**, fix and review there | Mechanical |
-| 5 | Merge to `v2/main`, milestone merge, **release**, close the fork's PR, then **publish** | **Human only** (closing the fork's PR is mechanical) |
-| 6 | **After publication**, convert the draft card into a public issue | Mechanical |
+| 5 | Close to the release: **convert the card** to an opaque issue, open the opaque **public PR**, merge it, close the fork's PR; then milestone merge, **release**, **publish** | **Human only** for merging, releasing and publishing (converting, the PR and closing the fork's PR are mechanical) |
+| 6 | **After publication**, give the issue its public title and the advisory link | Mechanical |
 
 There is **one release line**. Every fix lands on `v2/main` and ships through
 the next milestone merge to `main` and a release, as any other change does
@@ -197,7 +200,8 @@ moves the advisory `triage` → `draft`. The API shows it as `state` and
 normally assigning a milestone, and a draft card cannot carry one, so for an
 advisory draft **accepting the advisory is the approval**. `AGENTS.md` records
 this as the advisory exemption to its `Incoming` ⇔ milestone rule. The milestone
-arrives with the public issue in step 6, where the ordinary rule resumes.
+arrives when the card converts to an issue in step 5, where the ordinary rule
+resumes.
 
 **Invalid, out of scope, a duplicate, or an SDK's → close** with a comment
 saying which, and why; for an SDK's, say where it was routed. A reporter who is
@@ -249,8 +253,10 @@ any other change: a regression test that fails before the fix, and the gate
 under **Before pushing**. Name the branch
 `v2/fix/<ghsa-id>` (lowercase, **no descriptive slug**, since a branch name
 outlives the fork once merged), and keep commit messages equally opaque until
-publication. **The fork's PR targets `v2/main`**, never `main`: check its base
-before anyone merges it.
+publication. **The fork's PR targets `v2/main`**, never `main`, so the diff
+reviewed there is the diff that lands. It is where the review happens; it is
+**not merged**. The same branch is pushed to this repository and merged
+through a public PR (step 5), and the fork's PR is then closed.
 
 ⚠️ **Move the card as the work moves.** `In Progress` when the fix is started,
 `In Review` when the fork's PR is open. The fork is invisible to everyone not on
@@ -290,8 +296,10 @@ body nobody will read again.
   already accepted, and asking for the work approves it. Otherwise it goes in
   `Incoming`. Score its Priority with step 1's table, using the severity of the
   residual exposure rather than the advisory's.
-- **Say in the fix PR's body what the fix leaves open**, and link the
-  follow-up. The advisory's text must say it too when it is published (step 5).
+- **Say in the fork PR's body what the fix leaves open**, and name the
+  follow-up card. The public PR (step 5) says nothing about it, since
+  describing the gap describes the vulnerability. The advisory's text must say
+  it too when it is published (step 5).
 
 Create it with `/board-ops`'s draft-card recipe, using the follow-up title in
 place of `[$GHSA]`.
@@ -308,35 +316,111 @@ of three cases:
 - It is non-security work outside the advisory's scope, which gets a public
   issue **after publication**, like any other finding.
 
-### 5. Merge, release, publish (human only)
+### 5. Bring the fix to `v2/main`, release, publish
 
 Publish **after** the fix has shipped in a release, never before: publishing
 discloses the vulnerability, and doing it while users have no upgrade hands out
 a working exploit. **Shipped** means the fixed version of that server is on npm
 or PyPI.
 
-⚠️ **The patch stops being secret at MERGE, not at publish.** Merging the fork
-puts an ordinary public commit on `v2/main`, readable by anyone, and it then
-travels through the milestone merge to `main` before `release.yml` publishes it.
-The time between merge and publish is not a period of secrecy; it is a period
-of **exposure to anyone reading commits**, so keep it short: merge close to the
-release, and publish as soon as the release is out.
+⚠️ **The patch stops being secret when its branch reaches this repository, not
+at publish.** Pushing the fork's branch here (below) makes its commits readable
+by anyone, the public PR shows the diff, and the merge then travels through the
+milestone merge to `main` before `release.yml` publishes it. The time between
+that push and the publish is not a period of secrecy; it is a period of
+**exposure to anyone reading commits**, so keep it short: start this step close
+to the release, merge as soon as CI passes, and publish as soon as the release
+is out.
 
 The release itself is a maintainer action (`release.yml` runs only when a
 maintainer publishes a GitHub Release, behind the `release` environment's
 approval; see [`RELEASING.md`](../../../RELEASING.md)). Say which server needs a release and
 stop there.
 
-⚠️ **Publishing is irreversible and human-only.** It makes the advisory public,
-with no undo. Same rule as accepting: recommend, never perform.
+⚠️ **Merging, releasing and publishing are human-only.** Publishing is also
+irreversible: it makes the advisory public, with no undo. Same rule as
+accepting: recommend, never perform. Converting the card, opening the public
+PR and closing the fork's PR are mechanical.
+
+#### Convert the card to an opaque issue
+
+When the fix's review in the fork is done and the release is near, convert the
+draft card to an issue, so the public PR has an issue to close and a card that
+tracks it.
+
+⚠️ **Convert the draft; do not file a new issue.** "Convert to issue" creates a
+**new** issue from the draft card, and there is no way to point an existing card
+at an issue filed separately, so filing by hand and then converting produces two
+issues and two cards.
+
+1. **Keep the opaque title**, `[GHSA-xxxx-yyyy-zzzz]`, and the
+   link-and-triage body (step 1). The issue takes the card's title and body,
+   and the advisory is still private, so no summary may appear yet (step 6
+   adds it). The advisory link in the body opens only for people on the
+   advisory.
+2. **Convert the draft card to an issue** in `modelcontextprotocol/servers`
+   (the card keeps its place and its field values). The recipe is in
+   `/board-ops`.
+3. Apply the labels and milestone from `/issue-create` (steps 1 and 2): `v2`,
+   one type label (normally `bug`), the server's scope label, and the milestone
+   of the release the fix will ship in. **Skip its board step**: the converted
+   card is already on #43.
+
+A **follow-up card stays a draft** here: its write-up describes the gap, so it
+converts only after publication (step 6).
+
+#### Open the public PR
+
+Push the fork's branch to this repository under the **same opaque name**,
+`v2/fix/<ghsa-id>`, and open the PR with `/pr-flow` steps 4 and 6. The fork has
+no CI, so run the gate on exactly what you push:
+
+```sh
+GHSA=<GHSA_ID>
+BRANCH="v2/fix/$(tr '[:upper:]' '[:lower:]' <<<"$GHSA")"
+FORK=$(gh api repos/modelcontextprotocol/servers/security-advisories/$GHSA \
+  --jq '.private_fork.full_name // empty') || FORK=
+[ -n "$FORK" ] || echo "no private fork for $GHSA (or the lookup failed)" >&2
+WT="../$(basename "$PWD")-${BRANCH#v2/fix/}"
+git fetch origin v2/main
+# The push runs only after the gate exits 0, from the worktree holding the fork's head.
+[ -n "$FORK" ] && git fetch "https://github.com/$FORK.git" "$BRANCH" \
+  && git worktree add --detach "$WT" FETCH_HEAD \
+  && cd "$WT" && npm install && npm run local:gate \
+  && git push origin "HEAD:refs/heads/$BRANCH"
+```
+
+If the branch no longer merges cleanly onto `origin/v2/main`, resolve that in
+the fork, where the review is, before pushing.
+
+- **Title**: `fix(<server>): GHSA-xxxx-yyyy-zzzz`, and nothing more.
+- **Body**: `Closes #<N>` (the converted issue) on the first line, then
+  `/pr-flow`'s sections, **describing no part of the vulnerability**: what it
+  is ("the fix for GHSA-xxxx-yyyy-zzzz, reviewed in the advisory's private
+  fork; details stay with the advisory until it is published"), the gate's
+  result, and each checklist item answered. Client evidence stays with the
+  advisory; say so under **How Has This Been Tested?** rather than recording
+  scenarios that describe the attack.
+- Label it `v2`, link it with `addCloseIssueReferences` and read the link back
+  (`/pr-flow` step 6), and move the card to **In Review** if it is not there
+  already.
+- ⚠️ **No Copilot review: skip `/pr-flow` steps 7 to 9.** Review comments on a
+  public PR are public, and a reviewer's findings would describe the
+  vulnerability. The review happened in the fork. Do not request one.
+
+#### Merge it, then close the issue
+
+A maintainer merges it once CI passes. Then close the issue by hand and move
+its card to **Done** (`/pr-flow` step 10), as for any PR into `v2/main`:
+`Done` means the work shipped, and it has.
 
 #### Close the fork's PR once its fix is on `v2/main`
 
 **GitHub will not publish an advisory while its private fork has an open pull
 request.** The advisory page says "you must merge or close outstanding pull
 requests" and **Publish advisory** stays disabled. The fix reaches `v2/main`
-through a PR in this repository, so the fork's own PR is left open with
-nothing still to merge, and blocks publication until someone closes it.
+through the public PR above, so the fork's own PR is left open with nothing
+still to merge, and blocks publication until someone closes it.
 
 Closing it is mechanical and reversible (a PR can be reopened), and it neither
 closes nor publishes the advisory. Close a PR **only once its head is on
@@ -381,9 +465,10 @@ fork, so check each of these first:
 - **Nothing that matters lives only in the fork.** Publishing deletes it.
   Review findings worth keeping, a residual-exposure note, a follow-up's
   write-up: copy each onto the advisory (if it belongs in what is published) or
-  onto the draft card that tracks it (a follow-up's write-up goes in **its
-  follow-up card's** `## Write-up` section, where step 6 reads it), within step
-  4's confidentiality limits, before the button is pressed.
+  onto the follow-up draft card that tracks it (a follow-up's write-up goes in
+  **its follow-up card's** `## Write-up` section, where step 6 reads it), within
+  step 4's confidentiality limits, before the button is pressed. Never onto the
+  converted issue, which is public.
 
 - **The affected product**: ecosystem (`npm` or `pip`) and package name, as
   published (`@modelcontextprotocol/server-filesystem`, `mcp-server-git`).
@@ -402,33 +487,25 @@ fork, so check each of these first:
   platforms or cases are still exposed, so a user who upgrades does not believe
   they are fully covered.
 
-### 6. After publication, convert the card into public tracking
+### 6. After publication, give the issue its public title
 
-**The trigger is publication, not the release.** The release ships the fix
-while the advisory can still be private, and a public issue opened in that gap
+**The trigger is publication, not the merge or the release.** Both happen while
+the advisory can still be private, and a summary added to the issue in that gap
 describes a vulnerability the advisory has not disclosed yet.
 
-⚠️ **Convert the draft; do not file a new issue.** "Convert to issue" creates a
-**new** issue from the draft card, and there is no way to point an existing card
-at an issue filed separately, so filing by hand and then converting produces two
-issues and two cards.
+1. **Retitle the issue** `[GHSA-xxxx-yyyy-zzzz] - <published summary>`. Only
+   now, with the advisory public, may the summary appear.
+2. **Replace the body's triage lines** with a link to the now-public advisory.
 
-1. **Give the card its public title first**, `[GHSA-xxxx-yyyy-zzzz] - <published
-   summary>` (edit the draft's title on the card), since the issue takes the
-   card's title. Only now, with the advisory public, may the summary appear.
-2. **Convert the draft card to an issue** in `modelcontextprotocol/servers`
-   (the card keeps its place and its field values). The recipe is in
-   `/board-ops`.
-3. Apply the labels and milestone from `/issue-create` (steps 1 and 2): `v2`,
-   one type label (normally `bug`), the server's scope label, and the milestone
-   of the release the fix shipped in. **Skip its board step**: the converted
-   card is already on #43.
-4. Replace the body's triage lines with a link to the now-public advisory, and
-   **close** the issue: the work shipped before the issue existed.
-5. Move the card to **`Done`**, which is right here because the fix shipped.
+```sh
+gh issue edit <N> --repo modelcontextprotocol/servers \
+  --title "[GHSA-xxxx-yyyy-zzzz] - <published summary>" --body-file <file>
+```
 
-**A follow-up card converts at the same time, but stays open**, because its
-work has not shipped:
+The issue is already closed and its card in `Done` (step 5); neither changes.
+
+**A follow-up card converts now, and stays open**, because its work has not
+shipped:
 
 1. Retitle it `[GHSA-xxxx-yyyy-zzzz follow-up] - <summary>`.
 2. Convert it.

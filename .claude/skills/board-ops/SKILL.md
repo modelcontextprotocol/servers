@@ -299,8 +299,10 @@ fi
 # Then the two chained item-edit calls from "Add a card and set its fields".
 ```
 
-**Convert** it to an issue only after the advisory is **published**. The web UI
-has "Convert to issue" on the card; the API equivalent is:
+**Convert** it to an issue when its fix is ready to merge, keeping its opaque
+title; a follow-up card converts only after the advisory is **published**. When
+each happens, and what the issue gets, is the `/security-advisory` flow. The web
+UI has "Convert to issue" on the card; the API equivalent is:
 
 ```sh
 REPO_ID=$(gh api repos/modelcontextprotocol/servers --jq .node_id) || REPO_ID=
