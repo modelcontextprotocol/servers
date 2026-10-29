@@ -19,7 +19,11 @@ import {
   StdioServerTransport,
   type StdioServerHandle,
 } from "@modelcontextprotocol/server/stdio";
-import { normalizePath, expandHome, realpathWithRetry } from "./path-utils.js";
+import {
+  normalizePathFormat,
+  expandHome,
+  realpathWithRetry,
+} from "./path-utils.js";
 import { createServer } from "./server.js";
 
 /**
@@ -39,12 +43,18 @@ export async function resolveAllowedDirectories(
       args.map(async (dir) => {
         const expanded = expandHome(dir);
         const absolute = path.resolve(expanded);
-        const normalizedOriginal = normalizePath(absolute);
+        // normalizePathFormat, not normalizePath, for both forms: a trailing
+        // space or quote is part of a POSIX filename, so trimming it would
+        // allow the sibling that lacks it (#5320). Trimming after
+        // path.resolve could only ever remove a trailing character, never
+        // shell-quoting leftovers at the start, so the argument is taken
+        // exactly as the shell passed it.
+        const normalizedOriginal = normalizePathFormat(absolute);
         try {
           // Security: Resolve symlinks in allowed directories during startup
           // This ensures we know the real paths and can validate against them later
           const resolved = await realpathWithRetry(absolute);
-          const normalizedResolved = normalizePath(resolved);
+          const normalizedResolved = normalizePathFormat(resolved);
           // Return both original and resolved paths if they differ
           // This allows matching against either /tmp or /private/tmp on macOS
           if (normalizedOriginal !== normalizedResolved) {
