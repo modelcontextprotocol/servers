@@ -126,6 +126,25 @@ Roots is deprecated in 2026-07-28, and this server never asks a client for Roots
 - **A tool that fails** returns a result with `isError: true` whose text is `Error executing tool <name>: <message>`, so the model can read it and correct the call. This covers git errors (an unknown revision, a failed command), a `repo_path` that is not a repository or is outside `--repository`, the flag-injection guards, and arguments that do not match the tool's input schema.
 - **An unknown tool name** is a protocol error, JSON-RPC `-32602` (`Unknown tool: <name>`), as the specification requires in both eras. Before 2.0.0 it was an `isError` result.
 
+### Prompts
+
+Beside its tools, the server offers two prompts, which a client typically shows the user as slash commands. Each reads the repository when it is requested and returns one user message that embeds the changes, ready to send to the model. They open the repository the way the tools do, so `--repository` confines them too, and the same flag-injection guards apply. They behave the same in both protocol eras.
+
+1. `git_commit_message`
+   - Asks the model for a commit message for the staged changes
+   - Arguments:
+     - `repo_path` (string, required): Path to the Git repository
+   - Returns: A message embedding the staged diff and asking for a commit message, or one saying nothing is staged
+
+2. `git_summarize_changes`
+   - Asks the model to summarize the working tree's changes, or the diff against a branch or commit
+   - Arguments:
+     - `repo_path` (string, required): Path to the Git repository
+     - `target` (string, optional): Branch or commit to diff against. Without it, the working tree's status and its staged and unstaged diffs are summarized
+   - Returns: A message embedding those changes and asking for a summary, or one saying there are none
+
+A prompt request that fails (a `repo_path` that is not a repository or is outside `--repository`, an unknown `target`, a `target` starting with `-`) is a JSON-RPC `-32602` error carrying the message a tool would report, since `prompts/get` has no `isError` result.
+
 ## Installation
 
 ### Using uv (recommended)
