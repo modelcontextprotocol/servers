@@ -35,12 +35,12 @@ Please note that mcp-server-git is currently in early development. The functiona
    - Returns: Diff output of staged changes
 
 4. `git_diff`
-   - Shows differences between branches or commits
+   - Shows differences between branches or commits, or across a revision range
    - Inputs:
      - `repo_path` (string): Path to Git repository
-     - `target` (string): Target branch or commit to compare with
+     - `target` (string): Target branch or commit to compare with, or a revision range: `a..b` (from `a` to `b`) or `a...b` (from the merge base of `a` and `b` to `b`). An omitted endpoint means `HEAD`; each endpoint must resolve and cannot start with `-`
      - `context_lines` (number, optional): Number of context lines to show (default: 3)
-   - Returns: Diff output comparing current state with target
+   - Returns: Diff output comparing the working tree with target, or the two endpoints of a range with each other
 
 5. `git_commit`
    - Records changes to the repository

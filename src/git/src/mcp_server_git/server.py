@@ -117,6 +117,37 @@ def git_diff_staged(repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES) 
     return _git_text(repo, "diff", f"--unified={context_lines}", "--cached")
 
 
+def _validate_diff_target(repo: git.Repo, target: str) -> None:
+    """Check that git_diff's target is one revision, or a range of two (#5194).
+
+    `rev_parse` resolves a single revision, so it rejects `main..feature` and
+    `main...feature` as a whole although `git diff` accepts them. The target is
+    tried whole first, because one revision may itself contain `..` (the
+    commit-message search `:/fix..bug`). Only when that fails is it split at
+    its first `..` or `...`, and each endpoint is held to the single-revision
+    rules: no leading '-', and it must resolve. An empty endpoint means HEAD,
+    as in git; both empty (`..`) is not a range.
+    """
+    try:
+        repo.rev_parse(target)
+        return
+    except (ODBError, ValueError, KeyError):
+        # BadName (an ODBError) for an unknown name; ValueError and KeyError
+        # for a spec GitPython cannot apply. Re-raise unless it is a range.
+        start = target.find("..")
+        if start == -1 or target in ("..", "..."):
+            raise
+    end = start + 3 if target.startswith("...", start) else start + 2
+    for endpoint in (target[:start], target[end:]):
+        # The same flag-injection guard the whole target gets in git_diff.
+        if endpoint.startswith("-"):
+            raise FlagInjectionError(
+                f"Invalid target: '{target}' - range endpoint '{endpoint}' "
+                "cannot start with '-'"
+            )
+        repo.rev_parse(endpoint or "HEAD")  # BadName names the bad endpoint
+
+
 def git_diff(
     repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_LINES
 ) -> str:
@@ -124,7 +155,8 @@ def git_diff(
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
     if target.startswith("-"):
         raise FlagInjectionError(f"Invalid target: '{target}' - cannot start with '-'")
-    repo.rev_parse(target)  # Validates target is a real git ref, throws BadName if not
+    # Validates target is a real revision or range, throws BadName if not
+    _validate_diff_target(repo, target)
     return _git_text(repo, "diff", f"--unified={context_lines}", target)
 
 
@@ -672,7 +704,7 @@ def create_server(repository: Path | None) -> MCPServer:
 
     @server.tool(
         name=GitTools.DIFF.value,
-        description="Shows differences between branches or commits",
+        description="Shows differences between branches or commits, or across a revision range (main..feature, main...feature)",
         annotations=READ_ONLY,
         structured_output=False,
     )
