@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // The stdio entry point of the filesystem server (the package's bin). It
-// resolves the allowed directories named on the command line and serves
+// parses the command line (its options, such as --read-only, and the allowed
+// directories), resolves the allowed directories and serves
 // createServer() on stdio through the SDK's serveStdio entry, which answers
 // 2026-07-28 clients (server/discover, no handshake) and 2025-era clients
 // (initialize, then Roots) from the same factory (#4852). Everything runs inside
@@ -19,8 +20,13 @@ import {
   StdioServerTransport,
   type StdioServerHandle,
 } from "@modelcontextprotocol/server/stdio";
-import { normalizePath, expandHome, realpathWithRetry } from "./path-utils.js";
+import {
+  normalizePathFormat,
+  expandHome,
+  realpathWithRetry,
+} from "./path-utils.js";
 import { createServer } from "./server.js";
+import { describeAllowedDirectories } from "./allowed-directories.js";
 
 /**
  * Resolve the allowed directories given on the command line, warning about and
@@ -39,12 +45,18 @@ export async function resolveAllowedDirectories(
       args.map(async (dir) => {
         const expanded = expandHome(dir);
         const absolute = path.resolve(expanded);
-        const normalizedOriginal = normalizePath(absolute);
+        // normalizePathFormat, not normalizePath, for both forms: a trailing
+        // space or quote is part of a POSIX filename, so trimming it would
+        // allow the sibling that lacks it (#5320). Trimming after
+        // path.resolve could only ever remove a trailing character, never
+        // shell-quoting leftovers at the start, so the argument is taken
+        // exactly as the shell passed it.
+        const normalizedOriginal = normalizePathFormat(absolute);
         try {
           // Security: Resolve symlinks in allowed directories during startup
           // This ensures we know the real paths and can validate against them later
           const resolved = await realpathWithRetry(absolute);
-          const normalizedResolved = normalizePath(resolved);
+          const normalizedResolved = normalizePathFormat(resolved);
           // Return both original and resolved paths if they differ
           // This allows matching against either /tmp or /private/tmp on macOS
           if (normalizedOriginal !== normalizedResolved) {
@@ -84,6 +96,43 @@ export async function resolveAllowedDirectories(
   return accessibleDirectories;
 }
 
+/** What the command line asks for: the directories, and the options. */
+export interface ParsedArgs {
+  /** The allowed directories, as given (resolveAllowedDirectories resolves them). */
+  directories: string[];
+  /** `--read-only`: serve only the tools that cannot change anything (#632). */
+  readOnly: boolean;
+  /** `--confine-roots`: keep a client's Roots inside the directories (#3133). */
+  confineRoots: boolean;
+}
+
+/**
+ * Split the command line into options and allowed directories. An option may
+ * appear anywhere; `--` ends the options, so a directory whose name is an
+ * option's can still be given after it. Any other argument is a directory, as
+ * every argument was before options existed.
+ */
+export function parseArgs(args: string[]): ParsedArgs {
+  const parsed: ParsedArgs = {
+    directories: [],
+    readOnly: false,
+    confineRoots: false,
+  };
+  let options = true;
+  for (const arg of args) {
+    if (options && arg === "--") {
+      options = false;
+    } else if (options && arg === "--read-only") {
+      parsed.readOnly = true;
+    } else if (options && arg === "--confine-roots") {
+      parsed.confineRoots = true;
+    } else {
+      parsed.directories.push(arg);
+    }
+  }
+  return parsed;
+}
+
 /**
  * Serve the server over stdio with the allowed directories in `args`. The
  * first message the client sends picks the connection's protocol era, and the
@@ -95,9 +144,10 @@ export async function main(
   stdin: Readable = process.stdin,
   stdout: Writable = process.stdout,
 ): Promise<StdioServerHandle> {
-  if (args.length === 0) {
+  const { directories, readOnly, confineRoots } = parseArgs(args);
+  if (directories.length === 0) {
     console.error(
-      "Usage: mcp-server-filesystem [allowed-directory] [additional-directories...]",
+      "Usage: mcp-server-filesystem [--read-only] [--confine-roots] [allowed-directory] [additional-directories...]",
     );
     console.error("Note: Allowed directories can be provided via:");
     console.error("  1. Command-line arguments (shown above)");
@@ -109,7 +159,7 @@ export async function main(
     );
   }
 
-  const allowedDirectories = await resolveAllowedDirectories(args);
+  const allowedDirectories = await resolveAllowedDirectories(directories);
   // With no directories and a 2025-era client without Roots, the server
   // closes the connection after initialize (#4992); exit non-zero so the
   // failure shows.
@@ -117,6 +167,8 @@ export async function main(
     ({ era }) =>
       createServer(allowedDirectories, {
         era,
+        readOnly,
+        confineRoots,
         onCannotOperate: () => process.exit(1),
       }),
     {
@@ -131,9 +183,25 @@ export async function main(
     },
   );
   console.error("Secure MCP Filesystem Server running on stdio");
+  if (readOnly) {
+    console.error(
+      "Read-only mode: only tools that cannot change the filesystem are served",
+    );
+  }
+  if (confineRoots && allowedDirectories.length === 0) {
+    console.error(
+      "Warning: --confine-roots has no effect without command-line directories; a client's Roots will set the allowed directories",
+    );
+  }
   if (allowedDirectories.length === 0) {
     console.error(
       "Started without allowed directories - waiting for a 2025-era client to provide roots via MCP protocol",
+    );
+  } else {
+    // The directories in force until a 2025-era client's Roots replace them;
+    // on 2026-07-28 they are final (#4912).
+    console.error(
+      describeAllowedDirectories(allowedDirectories, { from: "command-line" }),
     );
   }
   return handle;

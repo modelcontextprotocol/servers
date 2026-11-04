@@ -1,6 +1,6 @@
 {
   "name": "@modelcontextprotocol/server-filesystem",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "MCP server for filesystem access",
   "license": "SEE LICENSE IN LICENSE",
   "mcpName": "io.github.modelcontextprotocol/server-filesystem",
@@ -36,8 +36,7 @@
   "dependencies": {
     "@modelcontextprotocol/server": "^2.3.1",
     "diff": "^8.0.3",
-    "glob": "^13.0.6",
-    "minimatch": "^10.0.1",
+    "minimatch": "^11.0.4",
     "zod": "^4.2.0"
   },
   "devDependencies": {

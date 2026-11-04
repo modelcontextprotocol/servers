@@ -13,6 +13,10 @@ This MCP server attempts to exercise all the features of the MCP protocol. It is
 
 A complete list of the registered MCP primitives and other protocol features demonstrated can be found in the [Server Features](docs/features.md) document.
 
+The resource collections (`demo://resource/collection/summer-specials`, and the `by-category/{category}` and `item/{itemId}` templates beside it) show a single `resources/read` returning several contents, each under its own URI: reading a collection returns one content per item, and each item's URI can be read on its own.
+
+The server info and every tool, prompt, resource and resource template carry a pair of [icons](docs/features.md#icons), one for a light theme and one for a dark theme, so a client can show the variant that suits its own background.
+
 The `get-env` tool returns the server's environment variables, but masks the value of any credential-like name (a `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `CREDENTIAL`, `AUTH` or `COOKIE` segment, such as `OPENAI_API_KEY`) as `"<redacted>"`. To see every value unmasked while debugging, start the server with `GET_ENV_INCLUDE_SECRETS=1` (or `true`). Leave it unset otherwise: with it set, every credential in the server's environment reaches the model's context.
 
 ## Protocol versions
@@ -166,6 +170,32 @@ npx @modelcontextprotocol/server-everything streamableHttp
 ```shell
 npx @modelcontextprotocol/server-everything sse
 ```
+
+## Running with Docker
+
+This repository publishes no image; build one from the repository root (the build context):
+
+```shell
+docker build -f src/everything/Dockerfile -t mcp/everything .
+```
+
+The `mcp/everything` image on Docker Hub is built by Docker, not by this repository, and can lag behind it.
+
+### Run over stdio (the default)
+
+```shell
+docker run -i --rm mcp/everything
+```
+
+`-i` keeps stdin open, which the stdio transport reads. This is the command an MCP client configuration launches.
+
+### Run the Streamable HTTP server
+
+```shell
+docker run --rm -p 127.0.0.1:3001:3001 mcp/everything streamableHttp
+```
+
+The endpoint is `http://localhost:3001/mcp`. The server listens on port 3001 on every interface inside the container; `127.0.0.1:` publishes it on the host's loopback only. To use another port, set `PORT` and publish that one (`-e PORT=8080 -p 127.0.0.1:8080:8080`). The localhost-only `Origin` check described above applies inside the container too. `docker stop` ends the server cleanly.
 
 ## License
 

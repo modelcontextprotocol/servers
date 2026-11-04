@@ -109,17 +109,23 @@ Example:
 
 - **read_graph**
   - Read the entire knowledge graph
-  - No input required
+  - Optional input:
+    - `entityTypes` (string[], at least one): return only entities of these types, and the relations that touch one of them
+    - `observationLimit` (integer, 0 or more): see below
   - Returns complete graph structure with all entities and relations
+  - With `observationLimit`, each entity carries at most that many observations (the first ones, in the order they were added) and an `observationCount` with its total. `observationLimit: 0` returns names, types and counts only: a cheap overview of a large graph, from which `open_nodes` reads the entities you need in full
 
 - **search_nodes**
   - Search for nodes based on query
-  - Input: `query` (string)
+  - Input: `query` (string, at most 2048 characters; a longer query is rejected)
   - Searches across:
     - Entity names
     - Entity types
     - Observation content
   - Returns matching entities and their relations
+  - Optional input:
+    - `limit` (integer, 1 or more): return at most this many matches (the first, in stored order), with the relations that touch them
+    - `observationLimit` (integer, 0 or more): as for `read_graph`
 
 - **open_nodes**
   - Retrieve specific nodes by name
@@ -128,6 +134,7 @@ Example:
     - Requested entities
     - Relations between requested entities
   - Silently skips non-existent nodes
+  - Optional input: `observationLimit` (integer, 0 or more), as for `read_graph`
 
 ### Resources
 
@@ -240,9 +247,19 @@ On Windows, use:
 }
 ```
 
-- `MEMORY_FILE_PATH`: Path to the memory storage JSONL file (default: `memory.jsonl` in the server directory)
+- `MEMORY_FILE_PATH`: Path to the memory storage JSONL file (default: `memory.jsonl` in the server directory). A leading `~` expands to your home directory; a relative path resolves against the server directory. Set it to an absolute path you own; see [Choosing where the graph is stored](#choosing-where-the-graph-is-stored).
 
 When `MEMORY_FILE_PATH` is not set and the server directory still holds a legacy `memory.json` but no `memory.jsonl`, the server renames `memory.json` to `memory.jsonl` at startup. If that rename fails, the server exits with an error naming both paths and the cause, rather than starting on an empty graph; fix the cause (a permission problem, say) and restart, or set `MEMORY_FILE_PATH` to choose a file explicitly.
+
+#### Choosing where the graph is stored
+
+**Set `MEMORY_FILE_PATH` to an absolute path you own**, such as `~/memory.jsonl`, as in the configuration above. The default `memory.jsonl` sits in the server's own directory, next to its code. Under `npx` or an npm install, that directory is inside a `node_modules` tree, which npm manages as its own: reinstalling or updating the server, or clearing the npx cache, can delete the file and the knowledge graph in it. A relative `MEMORY_FILE_PATH` resolves against that same directory, so it has the same problem.
+
+- When the memory file it resolves is inside a `node_modules` directory, the server prints a warning on stderr at startup naming the file; most clients show a server's stderr in its log. Move the file to the new path when you set the variable, or the server starts on an empty graph.
+- The directory must already exist: the server creates the memory file, not the directories above it.
+- The default stays where it is so that existing graphs keep loading. The [Docker](#docker) setup above keeps it in a named volume mounted over `/app/dist`, so the graph there survives restarts and draws no warning.
+
+Saves are atomic. Every write tool writes the whole graph to a temporary file in the same directory and renames it over the memory file, so a server stopped or killed mid-save leaves the previous graph intact rather than a half-written file. The file's permission bits are kept across the rename. Writes from several processes are serialized by a lock, described next.
 
 #### Sharing one memory file between clients
 

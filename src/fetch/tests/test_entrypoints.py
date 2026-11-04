@@ -31,7 +31,7 @@ def run_main(monkeypatch: pytest.MonkeyPatch, *argv: str) -> AsyncMock:
 
 def test_main_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     serve = run_main(monkeypatch)
-    serve.assert_awaited_once_with(None, False, None, False, True)
+    serve.assert_awaited_once_with(None, False, None, False, None, True)
 
 
 def test_main_passes_every_flag(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -45,7 +45,7 @@ def test_main_passes_every_flag(monkeypatch: pytest.MonkeyPatch) -> None:
         "--allow-private-ips",
     )
     serve.assert_awaited_once_with(
-        "MyBot/1.0", True, "http://proxy.example.com:8080", True, True
+        "MyBot/1.0", True, "http://proxy.example.com:8080", True, None, True
     )
 
 
@@ -90,7 +90,7 @@ def test_package_init_run_as_main_calls_main(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(mcp_server_fetch.server, "serve", serve)
     monkeypatch.setattr(sys, "argv", ["mcp-server-fetch"])
     runpy.run_module("mcp_server_fetch.__init__", run_name="__main__")
-    serve.assert_awaited_once_with(None, False, None, False, True)
+    serve.assert_awaited_once_with(None, False, None, False, None, True)
 
 
 def console_script() -> Path:

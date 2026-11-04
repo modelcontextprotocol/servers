@@ -5,7 +5,9 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import {
+  GH_MAX_BUFFER,
   SWEEP_LABELS,
   cell,
   currentMilestone,
@@ -174,6 +176,34 @@ test("gh throws on a spawn error, and passes stdin only when given", () => {
   gh(spawn, ["api", "y"], "body");
   assert.equal(calls[0].input, undefined);
   assert.equal(calls[1].input, "body");
+});
+
+// The real spawnSync, with "gh" swapped for a node that writes `bytes` of
+// stdout, so the options gh() passes are the ones that decide the outcome.
+const bigReply = (bytes) => (_cmd, _args, opts) =>
+  spawnSync(
+    process.execPath,
+    ["-e", `process.stdout.write("x".repeat(${bytes}))`],
+    opts,
+  );
+
+test("gh reads a reply over Node's 1 MiB default without ENOBUFS (#5339)", () => {
+  const bytes = 2 * 1024 * 1024;
+  assert.ok(GH_MAX_BUFFER > bytes);
+  const result = gh(bigReply(bytes), ["api", "x"]);
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout.length, bytes);
+});
+
+test("gh still rethrows a genuine spawn error from the real spawnSync", () => {
+  assert.throws(
+    () =>
+      gh(
+        (_cmd, args, opts) => spawnSync("/nonexistent/gh-5339", args, opts),
+        ["api", "x"],
+      ),
+    (err) => err.code === "ENOENT",
+  );
 });
 
 test("currentMilestone reads open milestones and fails loudly", () => {

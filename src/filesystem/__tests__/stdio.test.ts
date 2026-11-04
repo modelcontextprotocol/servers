@@ -129,7 +129,7 @@ describe("startup", () => {
   it("prints usage, and waits for roots, when started with no directories", async () => {
     await session.start([]);
     expect(stderrText()).toContain(
-      "Usage: mcp-server-filesystem [allowed-directory] [additional-directories...]",
+      "Usage: mcp-server-filesystem [--read-only] [--confine-roots] [allowed-directory] [additional-directories...]",
     );
     expect(stderrText()).toContain(
       "At least one directory must be provided by EITHER method for the server to operate.",
@@ -224,7 +224,13 @@ describe("the stdio transport", () => {
     session.send(7, "tools/list");
     const response = await session.response(7);
     expect(response.error).toBeUndefined();
-    expect(response.result?.tools).toHaveLength(14);
+    // Not a count: a test that pins the number breaks on every new tool;
+    // server-tools.test.ts pins the full list.
+    expect(response.result?.tools).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "list_allowed_directories" }),
+      ]),
+    );
   });
 
   // #4206: a malformed line is reported to the transport's onerror (unset,
@@ -248,7 +254,11 @@ describe("the stdio transport", () => {
       message: "Method not found",
     });
     session.send(3, "tools/list");
-    expect((await session.response(3)).result?.tools).toHaveLength(14);
+    expect((await session.response(3)).result?.tools).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "list_allowed_directories" }),
+      ]),
+    );
   });
 });
 
@@ -273,5 +283,78 @@ describe("isEntryPoint", () => {
     expect(isEntryPoint(import.meta.filename, moduleUrl)).toBe(false);
     expect(isEntryPoint(path.join(dir, "missing.js"), moduleUrl)).toBe(false);
     expect(isEntryPoint(undefined, moduleUrl)).toBe(false);
+  });
+});
+
+// #5320: a command-line directory whose name ends in a space or quote is
+// allowed under that exact name. Trimming it, in its given form or its
+// realpath, names the sibling without the suffix and allows that instead.
+// Windows refuses or strips these characters in names, so POSIX only.
+describe.skipIf(process.platform === "win32").each([
+  ["a space", " "],
+  ["a single quote", "'"],
+  ["a double quote", '"'],
+])("an allowed directory whose name ends in %s (#5320)", (_, suffix) => {
+  let allowed: string;
+  let sibling: string;
+
+  beforeEach(async () => {
+    allowed = path.join(dir, `project${suffix}`);
+    sibling = path.join(dir, "project");
+    await fs.mkdir(allowed);
+    await fs.mkdir(sibling);
+    await fs.writeFile(path.join(allowed, "mine.txt"), "allowed");
+    await fs.writeFile(path.join(sibling, "secret.txt"), "not allowed");
+  });
+
+  async function readOver(args: string[], file: string) {
+    await session.start(args);
+    await session.initialize();
+    session.send(2, "tools/call", {
+      name: "list_allowed_directories",
+      arguments: {},
+    });
+    session.send(3, "tools/call", {
+      name: "read_text_file",
+      arguments: { path: file },
+    });
+    return {
+      listed: (await session.response(2)).result?.structuredContent,
+      read: (await session.response(3)).result,
+    };
+  }
+
+  it("lists it untrimmed and refuses the sibling, given directly", async () => {
+    const { listed, read } = await readOver(
+      [allowed],
+      path.join(sibling, "secret.txt"),
+    );
+    expect(listed).toEqual({ content: `Allowed directories:\n${allowed}` });
+    expect(read?.isError).toBe(true);
+    expect(JSON.stringify(read?.content)).toMatch(
+      /Access denied - path outside allowed directories/,
+    );
+  });
+
+  it("keeps the realpath untrimmed and refuses the sibling, given through a symlink", async () => {
+    const link = path.join(dir, "link");
+    await fs.symlink(allowed, link);
+    const { listed, read } = await readOver(
+      [link],
+      path.join(sibling, "secret.txt"),
+    );
+    expect(listed).toEqual({
+      content: `Allowed directories:\n${link}\n${allowed}`,
+    });
+    expect(read?.isError).toBe(true);
+    expect(JSON.stringify(read?.content)).toMatch(
+      /Access denied - path outside allowed directories/,
+    );
+  });
+
+  it("still reads the allowed directory's own file", async () => {
+    const { read } = await readOver([allowed], path.join(allowed, "mine.txt"));
+    expect(read?.isError).toBeFalsy();
+    expect(read?.structuredContent).toEqual({ content: "allowed" });
   });
 });

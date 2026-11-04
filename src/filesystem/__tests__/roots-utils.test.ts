@@ -13,6 +13,7 @@ import {
   mkdirSync,
   writeFileSync,
   realpathSync,
+  symlinkSync,
 } from "fs";
 import { homedir, tmpdir } from "os";
 import { join } from "path";
@@ -139,3 +140,35 @@ describe("getValidRootDirectories", () => {
     });
   });
 });
+
+// #5320: a Root's realpath is kept as the file system spells it. Trimming a
+// trailing space or quote from it names the sibling without the suffix.
+// Windows refuses or strips these characters in names, so POSIX only.
+describe.skipIf(process.platform === "win32")(
+  "getValidRootDirectories: a realpath ending in a space or quote (#5320)",
+  () => {
+    let base: string;
+
+    beforeEach(() => {
+      base = realpathSync.native(mkdtempSync(join(tmpdir(), "mcp-fs-5320-")));
+    });
+
+    afterEach(() => {
+      rmSync(base, { recursive: true, force: true });
+    });
+
+    it.each([" ", "'", '"'])(
+      "keeps the resolved form untrimmed when it ends in %j",
+      async (suffix) => {
+        const target = join(base, `real${suffix}`);
+        mkdirSync(target);
+        mkdirSync(join(base, "real"));
+        const link = join(base, "link");
+        symlinkSync(target, link);
+        expect(
+          await getValidRootDirectories([{ uri: pathToFileURL(link).href }]),
+        ).toEqual([link, target]);
+      },
+    );
+  },
+);

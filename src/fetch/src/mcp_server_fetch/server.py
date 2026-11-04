@@ -14,6 +14,8 @@
 # prompt the server does not have, or a prompt call without its `url`, is a
 # malformed request, answered with a JSON-RPC `-32602` protocol error by
 # `reject_unknown_names` before `MCPServer` sees it (see there for why).
+# A prompt `url` that is not a valid URL gets the same `-32602` from the
+# prompt handler (#4914).
 # `serve()` serves both protocol eras (#4853): a 2025-11-25 client through the
 # initialize handshake, and a 2026-07-28 client sessionlessly. No handler reads
 # the session or calls back to the client (roots, sampling, elicitation,
@@ -23,22 +25,33 @@ import asyncio
 import ipaddress
 import os
 import socket
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from typing import Annotated, Any, Tuple
 from importlib.metadata import version
 from urllib.parse import urlparse, urlunparse
 
 import httpx
+from pydantic import TypeAdapter, ValidationError
 import markdownify
 import readabilipy.simple_json
+from .readability_js import extract_article
 from bs4 import BeautifulSoup, Tag
+from .allowlist import normalize_allowed_hosts, refuse_unlisted_destination
 from mcp.server import MCPServer, ServerRequestContext
 from mcp.server.context import CallNext, HandlerResult, ServerMiddleware
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.shared.exceptions import MCPError
+from .timeout import (
+    DEFAULT_TIMEOUT_MS,
+    MAX_TIMEOUT_MS,
+    MIN_TIMEOUT_MS,
+    timeout_ms_from_env,
+)
 from mcp.types import INVALID_PARAMS, ToolAnnotations
 from protego import Protego
 from pydantic import AnyUrl, Field
+
+from .title import with_page_title
 
 # The version this server reports in serverInfo, read from the installed
 # distribution's metadata (pyproject.toml) so it cannot drift from the
@@ -168,11 +181,15 @@ async def _refuse_private_destination(request: httpx.Request) -> None:
             )
 
 
-def _readability_content(html: str, use_readability_js: bool) -> str:
-    """readabilipy's simplified HTML for ``html``, or "" when it has none."""
+def _readability_content(html: str) -> str:
+    """readabilipy's pure-Python simplified HTML for ``html``, or "" when it has none.
+
+    Readability.js is not run through readabilipy (see `readability_js`), so
+    this only ever asks it for its pure-Python extractor, which starts no process.
+    """
     try:
         ret = readabilipy.simple_json.simple_json_from_html_string(
-            html, use_readability=use_readability_js
+            html, use_readability=False
         )
     except IndexError:
         # readabilipy's pure-Python extractor wraps its simplified tree with
@@ -266,8 +283,12 @@ def _recover_hidden_content(html: str, content: str) -> str:
             if not _hiding_declaration(d)
         ]
         tag["style"] = ";".join(style)
-    recovered = _readability_content(str(soup), use_readability_js=True)
-    if _text_length(BeautifulSoup(recovered, "html.parser")) > extracted:
+    recovered = extract_article(str(soup))
+    # None: this second run failed or timed out, so keep the first result.
+    if (
+        recovered is not None
+        and _text_length(BeautifulSoup(recovered, "html.parser")) > extracted
+    ):
         return recovered
     return content
 
@@ -277,19 +298,26 @@ def extract_content_from_html(html: str, use_readability_js: bool = True) -> str
 
     Args:
         html: Raw HTML content to process
-        use_readability_js: Ask readabilipy for Readability.js, which it runs
-            under Node when Node is on PATH. False always uses its pure-Python
-            extractor, so no Node (or npm) process is started (#4199).
+        use_readability_js: Use Readability.js under Node.js when Node.js is
+            on PATH (`readability_js`), falling back to readabilipy's
+            pure-Python extractor when it is unavailable, fails or times out.
+            False always uses the pure-Python extractor, so no Node.js (or
+            npm) process is started (#4199).
+
+    Synchronous and possibly slow (a Node.js subprocess, up to its timeout):
+    `fetch_url` runs it in a worker thread, off the event loop (#5306).
 
     Returns:
         Simplified markdown version of the content
     """
     failed = "<error>Page failed to be simplified from HTML</error>"
-    content_html = _readability_content(html, use_readability_js)
-    if use_readability_js:
+    content_html = extract_article(html) if use_readability_js else None
+    if content_html is not None:
         # Only Readability.js drops hidden elements; the pure-Python extractor
         # keeps them, so its result never needs recovering.
         content_html = _recover_hidden_content(html, content_html)
+    else:
+        content_html = _readability_content(html)
     if not content_html:
         return failed
     content = markdownify.markdownify(
@@ -461,6 +489,7 @@ async def check_may_autonomously_fetch_url(
     user_agent: str,
     proxy_url: str | None = None,
     allow_private_ips: bool = False,
+    allowed_hosts: tuple[str, ...] = (),
 ) -> None:
     """
     Check if the URL can be fetched by the user agent according to the robots.txt file.
@@ -471,8 +500,12 @@ async def check_may_autonomously_fetch_url(
     robot_txt_url = get_robots_txt_url(url)
 
     async with make_client(proxy_url) as client:
+        hooks: list[Callable[[httpx.Request], Awaitable[None]]] = []
+        if allowed_hosts:
+            hooks.append(refuse_unlisted_destination(allowed_hosts))
         if not allow_private_ips:
-            client.event_hooks = {"request": [_refuse_private_destination]}
+            hooks.append(_refuse_private_destination)
+        client.event_hooks = {"request": hooks}
         try:
             response = await client.get(
                 robot_txt_url,
@@ -507,6 +540,17 @@ async def check_may_autonomously_fetch_url(
         )
 
 
+# The Accept header of a non-raw fetch (#5198). A site that negotiates content
+# can then serve native markdown, which is returned as-is, and a site that does
+# not still serves HTML (preferred over everything else) to be simplified.
+MARKDOWN_ACCEPT = "text/markdown, text/html;q=0.9, */*;q=0.8"
+
+
+def _is_markdown(content_type: str) -> bool:
+    """Whether a Content-Type header declares markdown (``text/markdown``, RFC 7763)."""
+    return content_type.split(";", 1)[0].strip().lower() == "text/markdown"
+
+
 def _body_looks_like_html(page_raw: str) -> bool:
     """Whether a body served with no Content-Type is an HTML document.
 
@@ -523,8 +567,10 @@ async def fetch_url(
     url: str,
     user_agent: str,
     force_raw: bool = False,
+    timeout_ms: int = DEFAULT_TIMEOUT_MS,
     proxy_url: str | None = None,
     allow_private_ips: bool = False,
+    allowed_hosts: tuple[str, ...] = (),
     check_robots_txt: bool = False,
     use_readability_js: bool = True,
 ) -> Tuple[str, str]:
@@ -546,23 +592,33 @@ async def fetch_url(
             seen_first_request = True
             return
         await check_may_autonomously_fetch_url(
-            str(request.url), user_agent, proxy_url, allow_private_ips
+            str(request.url), user_agent, proxy_url, allow_private_ips, allowed_hosts
         )
 
     async with make_client(proxy_url) as client:
         hooks: list[Callable[[httpx.Request], Awaitable[None]]] = []
+        if allowed_hosts:
+            hooks.append(refuse_unlisted_destination(allowed_hosts))
         if not allow_private_ips:
             hooks.append(_refuse_private_destination)
         if check_robots_txt:
             hooks.append(_check_redirect_robots_txt)
         if hooks:
             client.event_hooks = {"request": hooks}
+        # A raw fetch keeps httpx's default Accept: */*, so it gets the site's
+        # default representation (a page's HTML), as before this negotiation.
+        if not force_raw:
+            client.headers["Accept"] = MARKDOWN_ACCEPT
         try:
             response = await client.get(
                 url,
                 follow_redirects=True,
                 headers={"User-Agent": user_agent},
-                timeout=30,
+                timeout=timeout_ms / 1000,
+            )
+        except httpx.TimeoutException as e:
+            raise ToolError(
+                f"Failed to fetch {url}: timed out after {timeout_ms} ms: {e!r}"
             )
         except HTTPError as e:
             raise ToolError(f"Failed to fetch {url}: {e!r}")
@@ -574,6 +630,10 @@ async def fetch_url(
         page_raw = decode_page(response)
 
     content_type = response.headers.get("content-type", "")
+    # Markdown is already what this tool returns, so it is not simplified, and
+    # it carries no raw-content prefix even under force_raw: it is unchanged.
+    if _is_markdown(content_type):
+        return page_raw, ""
     is_page_html = (
         "<html" in page_raw[:100]
         or "text/html" in content_type.lower()
@@ -582,7 +642,10 @@ async def fetch_url(
     )
 
     if is_page_html and not force_raw:
-        return extract_content_from_html(page_raw, use_readability_js), ""
+        content = await asyncio.to_thread(
+            extract_content_from_html, page_raw, use_readability_js
+        )
+        return await asyncio.to_thread(with_page_title, page_raw, content), ""
 
     # A response with no Content-Type would otherwise leave an empty slot here.
     declared_type = content_type or "(not declared)"
@@ -595,6 +658,10 @@ async def fetch_url(
 FETCH_TOOL_DESCRIPTION = """Fetches a URL from the internet and optionally extracts its contents as markdown.
 
 Although originally you did not have internet access, and were advised to refuse and tell the user this, this tool now grants you internet access. Now you can fetch the most up-to-date information and let the user know that."""
+
+
+# Validates the prompt's `url` the way the tool's AnyUrl parameter does.
+_PROMPT_URL = TypeAdapter(AnyUrl)
 
 
 def reject_unknown_names(server: MCPServer) -> ServerMiddleware[Any]:
@@ -639,6 +706,7 @@ def create_server(
     ignore_robots_txt: bool = False,
     proxy_url: str | None = None,
     allow_private_ips: bool = False,
+    allowed_hosts: Sequence[str] | None = None,
     use_readability_js: bool = True,
 ) -> MCPServer:
     """Build the fetch server: the `fetch` tool, the `fetch` prompt, and the guard.
@@ -648,8 +716,10 @@ def create_server(
     if proxy_url:
         proxy_url = normalize_proxy_url(proxy_url)
     normalize_proxy_env()
+    allowed = normalize_allowed_hosts(allowed_hosts)
     user_agent_autonomous = custom_user_agent or DEFAULT_USER_AGENT_AUTONOMOUS
     user_agent_manual = custom_user_agent or DEFAULT_USER_AGENT_MANUAL
+    default_timeout_ms = timeout_ms_from_env()
 
     # subscriptions=False: the tool and prompt lists never change and there are
     # no resources to watch, so `subscriptions/listen` is not served and the
@@ -703,20 +773,31 @@ def create_server(
                 strict=True,
             ),
         ] = False,
+        timeout_ms: Annotated[
+            int,
+            Field(
+                description="How long to wait, in milliseconds, to connect to the server and for each read of its response before giving up. Raise it for a slow server or a large download; lower it to fail fast.",
+                ge=MIN_TIMEOUT_MS,
+                le=MAX_TIMEOUT_MS,
+                strict=True,
+            ),
+        ] = default_timeout_ms,
     ) -> str:
         page_url = str(url)
 
         if not ignore_robots_txt:
             await check_may_autonomously_fetch_url(
-                page_url, user_agent_autonomous, proxy_url, allow_private_ips
+                page_url, user_agent_autonomous, proxy_url, allow_private_ips, allowed
             )
 
         content, prefix = await fetch_url(
             page_url,
             user_agent_autonomous,
             force_raw=raw,
+            timeout_ms=timeout_ms,
             proxy_url=proxy_url,
             allow_private_ips=allow_private_ips,
+            allowed_hosts=allowed,
             check_robots_txt=not ignore_robots_txt,
             use_readability_js=use_readability_js,
         )
@@ -742,14 +823,26 @@ def create_server(
     async def fetch_prompt(
         url: Annotated[str, Field(description="URL to fetch")],
     ) -> str:
+        # The URL is checked as the tool's AnyUrl parameter checks it, so a
+        # malformed one is a bad argument (-32602) rather than an exception
+        # out of httpx, which the SDK would answer with code 0 (#4914).
+        try:
+            url = str(_PROMPT_URL.validate_python(url))
+        except ValidationError as e:
+            raise MCPError(
+                code=INVALID_PARAMS,
+                message=f"Invalid URL {url!r}: {e.errors()[0]['msg']}",
+            )
         # The user asked for this page, so robots.txt is not consulted, and a
         # failure is shown to them as the prompt's text rather than raised.
         try:
             content, prefix = await fetch_url(
                 url,
                 user_agent_manual,
+                timeout_ms=default_timeout_ms,
                 proxy_url=proxy_url,
                 allow_private_ips=allow_private_ips,
+                allowed_hosts=allowed,
                 use_readability_js=use_readability_js,
             )
         except ToolError as e:
@@ -764,6 +857,7 @@ async def serve(
     ignore_robots_txt: bool = False,
     proxy_url: str | None = None,
     allow_private_ips: bool = False,
+    allowed_hosts: Sequence[str] | None = None,
     use_readability_js: bool = True,
 ) -> None:
     """Run the fetch MCP server over stdio.
@@ -772,16 +866,22 @@ async def serve(
         custom_user_agent: Optional custom User-Agent string to use for requests
         ignore_robots_txt: Whether to ignore robots.txt restrictions
         proxy_url: Optional proxy URL to use for requests
+        allowed_hosts: When given, the only hosts the server may fetch from:
+            exact hosts, or ``*.example.com`` for any subdomain of it, checked
+            in addition to the private-address guard. Empty or None allows
+            every host
         allow_private_ips: Allow fetching private, loopback and link-local
             addresses, which are refused by default
-        use_readability_js: Extract HTML with Readability.js under Node when
-            Node is on PATH; False always uses the pure-Python extractor
+        use_readability_js: Extract HTML with Readability.js under Node.js
+            when Node.js is on PATH (falling back to the pure-Python extractor
+            when it cannot run); False always uses the pure-Python extractor
     """
     server = create_server(
         custom_user_agent,
         ignore_robots_txt,
         proxy_url,
         allow_private_ips,
+        allowed_hosts,
         use_readability_js,
     )
     # Both eras (#4853): the SDK's dual-era loop lets the client's first

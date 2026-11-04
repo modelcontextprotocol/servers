@@ -229,10 +229,15 @@ function openInDirectory(
   });
 }
 
-/** Create `filePath`, which must not exist, and write `content` to it. */
+/**
+ * Create `filePath`, which must not exist, and write `content` to it. With
+ * `append`, the descriptor is opened O_APPEND, so an append that lands on the
+ * new file before this write does is kept rather than overwritten (#1208).
+ */
 export async function createFileInDirectory(
   filePath: string,
   content: string,
+  append: boolean = false,
 ): Promise<void> {
   // O_EXCL: an existing file or symlink fails with EEXIST, never followed.
   const { fd } = openInDirectory(
@@ -240,6 +245,7 @@ export async function createFileInDirectory(
     fs.constants.O_WRONLY |
       fs.constants.O_CREAT |
       fs.constants.O_EXCL |
+      (append ? fs.constants.O_APPEND : 0) |
       noFollow(),
     false,
   );
@@ -274,6 +280,42 @@ export async function overwriteFileInDirectory(
       );
     }
     await ftruncate(fd);
+    await writeAll(fd, content);
+  } finally {
+    await close(fd);
+  }
+}
+
+/**
+ * Append `content` to the end of the regular file at `filePath`, which must be
+ * the file `expected` (its BigInt lstat) describes, through a single
+ * descriptor (#1208). The same checks as overwriteFileInDirectory guard the
+ * open; O_APPEND makes every write land at the file's end as it is at that
+ * moment, so a concurrent append is never overwritten.
+ */
+export async function appendFileInDirectory(
+  filePath: string,
+  content: string,
+  expected: EntryIdentity,
+): Promise<void> {
+  // O_WRONLY, so a write-only file (a 0222 log) can be appended to: append
+  // never reads. O_NONBLOCK keeps a FIFO swapped in from blocking the open
+  // (it fails with ENXIO without a reader; a regular file ignores the flag;
+  // it is undefined on Windows, where the lstat identity checks stand in).
+  const { fd, opened } = openInDirectory(
+    filePath,
+    fs.constants.O_WRONLY |
+      fs.constants.O_APPEND |
+      (fs.constants.O_NONBLOCK ?? 0) |
+      noFollow(),
+    onWindows(),
+  );
+  try {
+    if (!opened.isFile() || !isSameEntry(expected, opened)) {
+      throw new Error(
+        `Refusing to append: ${filePath} was replaced while it was being opened`,
+      );
+    }
     await writeAll(fd, content);
   } finally {
     await close(fd);
@@ -347,9 +389,13 @@ function keepModeAndTimes(fd: number, source: fs.BigIntStats): Promise<void> {
  * Open the regular file at `sourcePath` for reading, relative to its anchored
  * directory. A directory, a symlink or anything else that is not a regular
  * file is refused: a symlink is not followed or recreated, since its target
- * could name anything, and a directory is not copied recursively.
+ * could name anything, and a directory is not copied recursively. `operation`
+ * names the caller in those refusals: a cross-device move, or copy_file.
  */
-function openSourceInDirectory(sourcePath: string): {
+function openSourceInDirectory(
+  sourcePath: string,
+  operation: "move" | "copy",
+): {
   fd: number;
   opened: fs.BigIntStats;
 } {
@@ -358,13 +404,18 @@ function openSourceInDirectory(sourcePath: string): {
     const found = fs.lstatSync(name, { bigint: true });
     if (found.isDirectory()) {
       throw new Error(
-        `Cannot move a directory across filesystems: ${sourcePath}. ` +
-          "Create the directory at the destination and move its files one at a time.",
+        operation === "move"
+          ? `Cannot move a directory across filesystems: ${sourcePath}. ` +
+              "Create the directory at the destination and move its files one at a time."
+          : `Cannot copy a directory: ${sourcePath}. copy_file copies one regular file; ` +
+              "create the directory at the destination and copy its files one at a time.",
       );
     }
     if (!found.isFile()) {
       throw new Error(
-        `Cannot move across filesystems: not a regular file: ${sourcePath}`,
+        operation === "move"
+          ? `Cannot move across filesystems: not a regular file: ${sourcePath}`
+          : `Cannot copy: not a regular file: ${sourcePath}`,
       );
     }
     const fd = fs.openSync(name, readFlags());
@@ -372,7 +423,7 @@ function openSourceInDirectory(sourcePath: string): {
       const opened = fs.fstatSync(fd, { bigint: true });
       if (!opened.isFile() || !isSameEntry(found, opened)) {
         throw new Error(
-          `Refusing to move: ${sourcePath} was replaced while it was being opened`,
+          `Refusing to ${operation}: ${sourcePath} was replaced while it was being opened`,
         );
       }
       return { fd, opened };
@@ -511,7 +562,7 @@ export async function moveFileAcrossDevices(
   sourcePath: string,
   destinationPath: string,
 ): Promise<void> {
-  const { fd, opened: source } = openSourceInDirectory(sourcePath);
+  const { fd, opened: source } = openSourceInDirectory(sourcePath, "move");
   // Set once the copy is complete; until then copyIntoNewFile cleans up.
   let created: EntryIdentity | undefined;
   try {
@@ -528,6 +579,37 @@ export async function moveFileAcrossDevices(
     );
     removeFromDirectory(sourcePath, source, source);
   } catch (error) {
+    if (created) {
+      discardCopy(destinationPath, created);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Copy the regular file at `sourcePath` to `destinationPath`, which must not
+ * exist (#519): the copy half of the cross-device move above, with the same
+ * checks. The source is opened relative to its anchored directory and must be
+ * a regular file; the destination is created exclusively relative to its own,
+ * owner-only until it is complete, and then takes the source's permissions and
+ * times. A copy that fails is removed. The source is never changed.
+ */
+export async function copyFileInDirectory(
+  sourcePath: string,
+  destinationPath: string,
+): Promise<void> {
+  const { fd, opened: source } = openSourceInDirectory(sourcePath, "copy");
+  // Set once the copy is complete; until then copyIntoNewFile cleans up.
+  let created: EntryIdentity | undefined;
+  try {
+    try {
+      created = await copyIntoNewFile(fd, source, destinationPath);
+    } finally {
+      await close(fd);
+    }
+  } catch (error) {
+    // A failure after the copy completed (closing the source) still fails
+    // the call, so the copy goes too, as the move's does.
     if (created) {
       discardCopy(destinationPath, created);
     }

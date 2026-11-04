@@ -46,6 +46,7 @@ import {
   type ServerContext,
 } from "./context.js";
 import { SERVER_VERSION } from "../version.js";
+import { SERVER_ICONS } from "./icons.js";
 
 /** What the factory is asked to build. */
 export type ServerOptions = {
@@ -127,6 +128,7 @@ export const createServer = (
     {
       name: "mcp-servers/everything",
       title: "Everything Reference Server",
+      icons: SERVER_ICONS,
       version: SERVER_VERSION,
     },
     {

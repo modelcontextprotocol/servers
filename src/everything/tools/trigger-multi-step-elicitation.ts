@@ -26,6 +26,7 @@ import {
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { roundStateCodec, type RoundState } from "../server/index.js";
+import { TOOL_ICONS } from "../server/icons.js";
 
 // Tool configuration
 const name = "trigger-multi-step-elicitation";
@@ -37,6 +38,7 @@ const config = {
     "(input_required) and requestState on protocol version 2026-07-28; 2025-era clients get the same " +
     "flow as elicitation requests.",
   inputSchema: {},
+  icons: TOOL_ICONS,
   annotations: {
     readOnlyHint: false,
     destructiveHint: false,

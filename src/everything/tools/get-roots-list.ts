@@ -14,6 +14,7 @@ import {
   inputResponse,
   type InputRequiredResult,
 } from "@modelcontextprotocol/server";
+import { TOOL_ICONS } from "../server/icons.js";
 
 // Tool configuration
 const name = "get-roots-list";
@@ -23,6 +24,7 @@ const config = {
     "Lists the current MCP roots provided by the client. Demonstrates the roots protocol capability even though this server doesn't access files. " +
     "Deprecated: Roots is deprecated as of protocol version 2026-07-28. The server asks for the roots with a multi-round-trip request on every protocol version.",
   inputSchema: {},
+  icons: TOOL_ICONS,
   annotations: {
     readOnlyHint: true,
     destructiveHint: false,

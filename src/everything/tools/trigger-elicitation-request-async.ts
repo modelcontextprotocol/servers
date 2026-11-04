@@ -18,6 +18,7 @@ import {
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { createTask, type TaskState } from "../server/tasks.js";
+import { TOOL_ICONS } from "../server/icons.js";
 
 // Tool configuration
 const name = "trigger-elicitation-request-async";
@@ -28,6 +29,7 @@ const config = {
     "the user's input: the task waits in status input_required, carrying an elicitation request, until the " +
     "client answers it with tasks/update, then completes with a summary of the answer.",
   inputSchema: {},
+  icons: TOOL_ICONS,
   annotations: {
     readOnlyHint: false,
     destructiveHint: false,

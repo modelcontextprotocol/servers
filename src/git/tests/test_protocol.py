@@ -37,8 +37,9 @@ from conftest import connect, make_repo, text_result, tool_error, wire
 
 SNAPSHOTS = Path(__file__).parent / "snapshots"
 
-# What the server advertises in either era. MCPServer serves empty prompt and
-# resource lists, so both appear; nothing ever changes, so no listChanged.
+# What the server advertises in either era. MCPServer serves prompt and
+# resource lists (the git prompts, #5195; no resources), so both appear;
+# nothing ever changes, so no listChanged.
 CAPABILITIES = {
     "prompts": {"listChanged": False},
     "resources": {"listChanged": False, "subscribe": False},
@@ -78,8 +79,8 @@ async def test_initialize_reports_package_version_as_server_version(repo: git.Re
         "version": version("mcp-server-git"),
     }
     assert version("mcp") != version("mcp-server-git")
-    # MCPServer (#5174) always serves prompts/list and resources/list (empty
-    # here), so it advertises both capabilities beside tools.
+    # MCPServer (#5174) always serves prompts/list and resources/list (the
+    # resource list is empty here), so it advertises both beside tools.
     assert init["capabilities"] == CAPABILITIES
 
 
@@ -104,8 +105,10 @@ async def test_list_tools_names_in_order():
         "git_log",
         "git_create_branch",
         "git_checkout",
+        "git_merge",
         "git_show",
         "git_branch",
+        "git_remote",
     ]
 
 
@@ -314,6 +317,58 @@ async def test_git_diff_rejects_flag_injection(repo: git.Repo):
     ) == tool_error(
         "git_diff", "Invalid target: '--output=/tmp/evil' - cannot start with '-'"
     )
+
+
+def _diverge(repo: git.Repo) -> None:
+    """Give `main` and a new `feature` branch one commit each past their base."""
+    root = root_of(repo)
+    repo.git.checkout("-b", "feature")
+    (root / "feature.txt").write_text("FEATURE\n", newline="\n")
+    repo.index.add(["feature.txt"])
+    repo.index.commit("feature commit")
+    repo.git.checkout("main")
+    (root / "main.txt").write_text("MAIN\n", newline="\n")
+    repo.index.add(["main.txt"])
+    repo.index.commit("main commit")
+
+
+@pytest.mark.parametrize("target", ["main..feature", "main...feature"])
+async def test_git_diff_accepts_revision_range(repo: git.Repo, target: str):
+    """A range reaches `git diff` as given (#5194); rev_parse refuses it whole."""
+    _diverge(repo)
+    result = await call(
+        None, "git_diff", {"repo_path": str(root_of(repo)), "target": target}
+    )
+    assert result == text_result(
+        f"Diff with {target}:\n" + repo.git.diff("--unified=3", target)
+    )
+    text = result["content"][0]["text"]
+    assert "+FEATURE" in text
+    # Two dots compare the tips, so main's own commit shows as removed; three
+    # dots start from the merge base, so it does not appear at all.
+    assert ("-MAIN" in text) is (target == "main..feature")
+
+
+@pytest.mark.parametrize(
+    ("target", "message"),
+    [
+        ("main..nope", "Ref 'nope' did not resolve to an object"),
+        ("nope...main", "Ref 'nope' did not resolve to an object"),
+        (
+            "main..-output=/tmp/evil",
+            "Invalid target: 'main..-output=/tmp/evil' - range endpoint "
+            "'-output=/tmp/evil' cannot start with '-'",
+        ),
+        ("..", "Ref '..' did not resolve to an object"),
+    ],
+)
+async def test_git_diff_range_endpoints_are_validated(
+    repo: git.Repo, target: str, message: str
+):
+    """Each endpoint gets the single-target checks: it resolves, no leading '-'."""
+    assert await call(
+        None, "git_diff", {"repo_path": str(root_of(repo)), "target": target}
+    ) == tool_error("git_diff", message)
 
 
 async def test_git_diff_of_non_utf8_content_is_a_normal_result(repo: git.Repo):

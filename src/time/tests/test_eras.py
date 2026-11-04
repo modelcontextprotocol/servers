@@ -104,7 +104,11 @@ async def test_tools_list_is_the_same_in_both_eras() -> None:
         again = tool_wire((await client.list_tools()).tools)
     async with connect("legacy") as client:
         legacy = tool_wire((await client.list_tools()).tools)
-    assert [t["name"] for t in modern] == ["get_current_time", "convert_time"]
+    assert [t["name"] for t in modern] == [
+        "get_current_time",
+        "convert_time",
+        "get_time_ago",
+    ]
     assert modern == again == legacy
 
 

@@ -3,6 +3,8 @@
 // Windows-only branches of path-utils.ts and path-validation.ts run here:
 // drive roots, bare drive letters, backslash conversion and UNC shares.
 
+import { promises as fsp, type Stats } from "fs";
+import os from "os";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.mock("path", async () => {
@@ -10,7 +12,8 @@ vi.mock("path", async () => {
   return { ...actual.win32, default: actual.win32 };
 });
 
-const { normalizePath } = await import("../path-utils.js");
+const { normalizePath, expandHome } = await import("../path-utils.js");
+const { getValidRootDirectories } = await import("../roots-utils.js");
 const { isPathWithinAllowedDirectories } =
   await import("../path-validation.js");
 
@@ -139,5 +142,45 @@ describe("isPathWithinAllowedDirectories on win32", () => {
         "\\\\server\\share\\sub",
       ]),
     ).toBe(false);
+  });
+});
+
+// Windows users write a home-relative path with a backslash (#5180). The
+// home directory is stubbed to a Windows spelling, since the host's is POSIX.
+describe("~\\ on win32", () => {
+  const home = "C:\\Users\\me";
+
+  it("expands ~\\ to the home directory, as ~/ is", () => {
+    const spy = vi.spyOn(os, "homedir").mockReturnValue(home);
+    try {
+      expect(expandHome("~\\projects")).toBe("C:\\Users\\me\\projects");
+      expect(expandHome("~\\projects")).toBe(expandHome("~/projects"));
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("leaves a ~ that does not start a segment alone", () => {
+    expect(expandHome("~user\\projects")).toBe("~user\\projects");
+    expect(expandHome("C:\\~\\x")).toBe("C:\\~\\x");
+  });
+
+  it("expands a ~\\ client Root through the same expandHome", async () => {
+    const spies = [
+      vi.spyOn(os, "homedir").mockReturnValue(home),
+      // The directory does not exist on this host: realpath and stat answer
+      // as Windows would for an existing directory.
+      vi.spyOn(fsp, "realpath").mockImplementation(async (p) => String(p)),
+      vi
+        .spyOn(fsp, "stat")
+        .mockResolvedValue({ isDirectory: () => true } as Stats),
+    ];
+    try {
+      expect(await getValidRootDirectories([{ uri: "~\\projects" }])).toEqual([
+        "C:\\Users\\me\\projects",
+      ]);
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+    }
   });
 });

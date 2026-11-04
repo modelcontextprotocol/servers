@@ -38,11 +38,12 @@
 // Two kinds of credit never come from an issue's author, and were once pasted
 // in by hand, which is how v2.0.0 published without its Thanks (#5250):
 //
-// * An advisory's fix ships from its private fork with no public issue, so
-//   each `--advisory GHSA-…` is read for its credits (a draft works: notes are
-//   drafted before advisories publish). Declined credits, bots and
-//   maintainers are dropped; a credit still pending acceptance is listed and
-//   flagged, since the reporter may yet decline it.
+// * An advisory's issue is converted from its board card by a maintainer,
+//   never filed by its reporter, so each `--advisory GHSA-…` is read for its
+//   credits (a draft works: notes are drafted before advisories publish).
+//   Declined credits, bots and maintainers are dropped; a credit still
+//   pending acceptance is listed and flagged, since the reporter may yet
+//   decline it.
 // * An outside PR is closed and its author credited on an issue (Harvest), so
 //   each `--thank "@login (#ref), <what>"` is a line of the prototype
 //   paragraph. Which issues carry such a credit is a reading, not a lookup,
@@ -68,6 +69,13 @@ import { parseArgs } from "node:util";
 import { readProject } from "./prepare-python-release.mjs";
 
 export const REPO = "modelcontextprotocol/servers";
+
+// The most stdout `run()` reads from one call. Node's default is 1 MiB, and
+// past it `spawnSync` throws ENOBUFS before any notes are produced: the tree
+// under `src/` at v2.2.0's merge commit came back at 1,087,532 bytes (#5339),
+// and it only grows. 256 MiB is far past any reply this script reads while
+// still bounding a runaway one.
+export const MAX_BUFFER = 256 * 1024 * 1024;
 const [OWNER, NAME] = REPO.split("/");
 
 // What `collaborators/{user}/permission` reports in its `permission` field.
@@ -183,7 +191,11 @@ export function parseNotesArgs(argv) {
  * @param {string} [input]
  */
 function run(spawn, cmd, args, input) {
-  const result = spawn(cmd, args, { encoding: "utf8", input });
+  const result = spawn(cmd, args, {
+    encoding: "utf8",
+    input,
+    maxBuffer: MAX_BUFFER,
+  });
   if (result.error) {
     throw result.error;
   }

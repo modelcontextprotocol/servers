@@ -12,6 +12,7 @@
 import { McpServer, CallToolResult } from "@modelcontextprotocol/server";
 import { beginSimulatedResourceUpdates } from "../resources/subscriptions.js";
 import type { ServerContext } from "../server/context.js";
+import { TOOL_ICONS } from "../server/icons.js";
 
 // Tool configuration
 const name = "toggle-subscriber-updates";
@@ -22,6 +23,7 @@ const config = {
     "since protocol version 2026-07-28 removes resources/subscribe; use trigger-resource-update with a " +
     "subscriptions/listen stream instead.",
   inputSchema: {},
+  icons: TOOL_ICONS,
   annotations: {
     readOnlyHint: false,
     destructiveHint: false,

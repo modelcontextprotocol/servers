@@ -13,6 +13,7 @@ import {
   connect,
   ofMethod,
   type Session,
+  withoutIcons,
 } from "./harness.js";
 
 let session: Session | undefined;
@@ -754,13 +755,12 @@ describe("prompts/list", () => {
   it("lists the four prompts with their arguments", async () => {
     session = await connect();
     const { prompts } = await session.client.listPrompts();
-    expect(prompts).toMatchInlineSnapshot(`
+    expect(withoutIcons(prompts)).toMatchInlineSnapshot(`
       [
         {
           "_meta": undefined,
           "arguments": undefined,
           "description": "A prompt with no arguments",
-          "icons": undefined,
           "name": "simple-prompt",
           "title": "Simple Prompt",
         },
@@ -779,7 +779,6 @@ describe("prompts/list", () => {
             },
           ],
           "description": "A prompt with two arguments, one required and one optional",
-          "icons": undefined,
           "name": "args-prompt",
           "title": "Arguments Prompt",
         },
@@ -798,7 +797,6 @@ describe("prompts/list", () => {
             },
           ],
           "description": "First argument choice narrows values for second argument.",
-          "icons": undefined,
           "name": "completable-prompt",
           "title": "Team Management",
         },
@@ -806,18 +804,17 @@ describe("prompts/list", () => {
           "_meta": undefined,
           "arguments": [
             {
-              "description": "Type of resource to fetch",
+              "description": "Type of resource to fetch. Must be "Text" or "Blob".",
               "name": "resourceType",
               "required": true,
             },
             {
-              "description": "ID of the text resource to fetch",
+              "description": "ID of the resource to fetch. Must be a positive integer (1 or greater).",
               "name": "resourceId",
               "required": true,
             },
           ],
           "description": "A prompt that includes an embedded resource reference",
-          "icons": undefined,
           "name": "resource-prompt",
           "title": "Resource Prompt",
         },
@@ -827,10 +824,10 @@ describe("prompts/list", () => {
 });
 
 describe("resources/list and resources/templates/list", () => {
-  it("lists one static resource per file in docs/", async () => {
+  it("lists one static resource per file in docs/, and the summer-specials collection", async () => {
     session = await connect();
     const { resources } = await session.client.listResources();
-    expect(resources).toMatchInlineSnapshot(`
+    expect(withoutIcons(resources)).toMatchInlineSnapshot(`
       [
         {
           "description": "Static document file exposed from /docs: architecture.md",
@@ -874,14 +871,21 @@ describe("resources/list and resources/templates/list", () => {
           "name": "structure.md",
           "uri": "demo://resource/static/document/structure.md",
         },
+        {
+          "description": "A resource collection: one read returns every item in the catalog as a separate content, each under its own demo://resource/collection/item/{itemId} URI.",
+          "mimeType": "application/json",
+          "name": "summer-specials",
+          "title": "Summer Specials Collection",
+          "uri": "demo://resource/collection/summer-specials",
+        },
       ]
     `);
   });
 
-  it("lists the dynamic text and blob templates", async () => {
+  it("lists the dynamic text and blob templates, and the collection templates", async () => {
     session = await connect();
     const { resourceTemplates } = await session.client.listResourceTemplates();
-    expect(resourceTemplates).toMatchInlineSnapshot(`
+    expect(withoutIcons(resourceTemplates)).toMatchInlineSnapshot(`
       [
         {
           "description": "Plaintext dynamic resource fabricated from the {resourceId} variable, which must be an integer.",
@@ -894,6 +898,20 @@ describe("resources/list and resources/templates/list", () => {
           "mimeType": "application/octet-stream",
           "name": "Dynamic Blob Resource",
           "uriTemplate": "demo://resource/dynamic/blob/{resourceId}",
+        },
+        {
+          "description": "A resource collection filtered by the {category} variable (accessories, footwear, skincare): one read returns each item in that category as a separate content, under its own URI.",
+          "mimeType": "application/json",
+          "name": "collection-by-category",
+          "title": "Collection by Category",
+          "uriTemplate": "demo://resource/collection/by-category/{category}",
+        },
+        {
+          "description": "One item of the resource collections, selected by the {itemId} variable (1 to 5). The collections return their items under these URIs.",
+          "mimeType": "application/json",
+          "name": "collection-item",
+          "title": "Collection Item",
+          "uriTemplate": "demo://resource/collection/item/{itemId}",
         },
       ]
     `);

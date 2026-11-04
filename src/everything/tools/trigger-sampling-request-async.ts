@@ -19,6 +19,7 @@ import {
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { createTask, type TaskState } from "../server/tasks.js";
+import { TOOL_ICONS } from "../server/icons.js";
 
 // Tool input schema
 const TriggerSamplingRequestAsyncSchema = z.object({
@@ -50,6 +51,7 @@ const config = {
     "answers it with tasks/update, then completes with the result. Deprecated: Sampling is deprecated as of " +
     "protocol version 2026-07-28.",
   inputSchema: TriggerSamplingRequestAsyncSchema,
+  icons: TOOL_ICONS,
   annotations: {
     readOnlyHint: false,
     destructiveHint: false,

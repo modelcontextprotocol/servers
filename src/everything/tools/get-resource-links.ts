@@ -6,6 +6,7 @@ import {
   blobResourceUri,
   blobResource,
 } from "../resources/templates.js";
+import { TOOL_ICONS } from "../server/icons.js";
 
 // Tool input schema
 const GetResourceLinksSchema = z.object({
@@ -24,6 +25,7 @@ const config = {
   description:
     "Returns up to ten resource links that reference different types of resources",
   inputSchema: GetResourceLinksSchema,
+  icons: TOOL_ICONS,
   annotations: {
     readOnlyHint: true,
     destructiveHint: false,

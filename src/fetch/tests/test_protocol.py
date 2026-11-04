@@ -15,7 +15,6 @@ read as an endorsement of the behavior.
 
 from __future__ import annotations
 
-import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from importlib.metadata import version
@@ -186,6 +185,15 @@ async def test_list_tools_wire_shape(web: FakeWeb) -> None:
                 "description": "Get the actual HTML content of the requested page, without simplification.",
                 "title": "Raw",
                 "type": "boolean",
+            },
+            # #4448: the server-wide timeout is the advertised default.
+            "timeout_ms": {
+                "default": 30000,
+                "description": "How long to wait, in milliseconds, to connect to the server and for each read of its response before giving up. Raise it for a slow server or a large download; lower it to fail fast.",
+                "maximum": 600000,
+                "minimum": 100,
+                "title": "Timeout Ms",
+                "type": "integer",
             },
         },
         "required": ["url"],
@@ -999,9 +1007,10 @@ async def test_guard_uses_the_real_resolver() -> None:
     )
 
 
-async def test_timeouts_are_hard_coded(web: FakeWeb) -> None:
-    # Characterizes #4448: the page fetch uses a fixed 30s timeout and the
-    # robots.txt fetch uses httpx's 5s default; neither is configurable.
+async def test_default_timeouts(web: FakeWeb) -> None:
+    # With nothing configured the page fetch waits 30s and the robots.txt
+    # fetch uses httpx's 5s default. Only the page timeout is configurable
+    # (#4448; tests/test_timeout.py).
     web.add(ROBOTS, plain("", status=404))
     web.add(PAGE, plain("ok"))
     async with connect() as (session, _):
@@ -1181,26 +1190,6 @@ async def test_get_prompt_with_unknown_name_is_a_jsonrpc_error(
         "message": "Unknown prompt: nope",
     }
     assert web.requests == []
-
-
-async def test_get_prompt_does_not_validate_the_url(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # The prompt passes the raw string to httpx; an unusable URL comes back as
-    # a "Failed to fetch" prompt message rather than a validation error.
-    # No `web` fixture: the real transport rejects the URL before any I/O.
-    # Proxy variables are cleared so the real client cannot pick up one from
-    # the environment and send the request through it.
-    for name in list(os.environ):
-        if name.lower() in ("http_proxy", "https_proxy", "all_proxy"):
-            monkeypatch.delenv(name)
-    async with connect() as (session, _):
-        result = await session.get_prompt("fetch", {"url": "not a url"})
-    data = wire(result)
-    assert data["description"] == PROMPT_DESCRIPTION
-    assert data["messages"][0]["content"]["text"].startswith(
-        "Failed to fetch not a url: UnsupportedProtocol("
-    )
 
 
 # ---------------------------------------------------------------------------

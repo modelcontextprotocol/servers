@@ -40,6 +40,7 @@ SERVER_VERSION = version("mcp-server-time")
 class TimeTools(str, Enum):
     GET_CURRENT_TIME = "get_current_time"
     CONVERT_TIME = "convert_time"
+    GET_TIME_AGO = "get_time_ago"
 
 
 class TimeResult(BaseModel):
@@ -53,6 +54,26 @@ class TimeConversionResult(BaseModel):
     source: TimeResult
     target: TimeResult
     time_difference: str
+    later_occurrence: "LaterOccurrence | None" = Field(
+        default=None,
+        description=(
+            "Set only when the source time occurs twice on this date because "
+            "a clock change repeats it (a DST fall-back): the same conversion "
+            "at its second occurrence. source and target are the first."
+        ),
+    )
+
+
+class LaterOccurrence(BaseModel):
+    """The second reading of an ambiguous source time (#5196)."""
+
+    note: str
+    source: TimeResult
+    target: TimeResult
+    time_difference: str
+
+
+TimeConversionResult.model_rebuild()
 
 
 class TimeConversionInput(BaseModel):
@@ -115,6 +136,37 @@ class TimeServer:
             is_dst=bool(current_time.dst()),
         )
 
+    def get_time_ago(
+        self,
+        timezone_name: str,
+        days: int = 0,
+        hours: int = 0,
+        minutes: int = 0,
+        seconds: int = 0,
+    ) -> TimeResult:
+        """Get the time an elapsed span before now, in specified timezone.
+
+        The span is subtracted from the current instant in UTC, not from the
+        local wall clock, so "5 hours ago" across a clock change is the instant
+        five real hours back (#2710). An offset that reaches past what
+        `datetime` can hold is a `ToolError`, not an `OverflowError`.
+        """
+        timezone = get_zoneinfo(timezone_name)
+        try:
+            span = timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
+            past_time = (datetime.now(ZoneInfo("UTC")) - span).astimezone(timezone)
+        except OverflowError:
+            raise ToolError(
+                "Time offset out of range: the result would be before year 1"
+            )
+
+        return TimeResult(
+            timezone=timezone_name,
+            datetime=past_time.isoformat(timespec="seconds"),
+            day_of_week=past_time.strftime("%A"),
+            is_dst=bool(past_time.dst()),
+        )
+
     def convert_time(
         self, source_tz: str, time_str: str, target_tz: str
     ) -> TimeConversionResult:
@@ -146,31 +198,63 @@ class TimeServer:
                 f"{source_time.date().isoformat()} (skipped by a clock change)"
             )
 
-        target_time = source_time.astimezone(target_timezone)
-        source_offset = source_time.utcoffset() or timedelta()
-        target_offset = target_time.utcoffset() or timedelta()
-        hours_difference = (target_offset - source_offset).total_seconds() / 3600
+        def convert(at: datetime) -> tuple[TimeResult, TimeResult, str]:
+            """`at` as a source and target `TimeResult`, and their difference."""
+            target_time = at.astimezone(target_timezone)
+            source_offset = at.utcoffset() or timedelta()
+            target_offset = target_time.utcoffset() or timedelta()
+            hours_difference = (target_offset - source_offset).total_seconds() / 3600
 
-        if hours_difference.is_integer():
-            time_diff_str = f"{hours_difference:+.1f}h"
-        else:
-            # For fractional hours like Nepal's UTC+5:45
-            time_diff_str = f"{hours_difference:+.2f}".rstrip("0").rstrip(".") + "h"
+            if hours_difference.is_integer():
+                time_diff_str = f"{hours_difference:+.1f}h"
+            else:
+                # For fractional hours like Nepal's UTC+5:45
+                time_diff_str = f"{hours_difference:+.2f}".rstrip("0").rstrip(".") + "h"
+
+            return (
+                TimeResult(
+                    timezone=source_tz,
+                    datetime=at.isoformat(timespec="seconds"),
+                    day_of_week=at.strftime("%A"),
+                    is_dst=bool(at.dst()),
+                ),
+                TimeResult(
+                    timezone=target_tz,
+                    datetime=target_time.isoformat(timespec="seconds"),
+                    day_of_week=target_time.strftime("%A"),
+                    is_dst=bool(target_time.dst()),
+                ),
+                time_diff_str,
+            )
+
+        source, target, time_difference = convert(source_time)
+
+        # A wall-clock time a clock change repeats (e.g. 01:30 on a DST
+        # fall-back day) has two instants. The datetime above is the first
+        # (fold=0); fold=1 is the second, at a different UTC offset. Report
+        # both rather than presenting the first as the only answer (#5196).
+        later_occurrence = None
+        later_time = source_time.replace(fold=1)
+        if later_time.utcoffset() != source_time.utcoffset():
+            later_source, later_target, later_difference = convert(later_time)
+            later_occurrence = LaterOccurrence(
+                note=(
+                    f"{time_str} occurs twice in {source_tz} on "
+                    f"{source_time.date().isoformat()} because a clock change "
+                    f"repeats it: first at {source.datetime}, then at "
+                    f"{later_source.datetime}. source and target are the first "
+                    "occurrence; this is the second."
+                ),
+                source=later_source,
+                target=later_target,
+                time_difference=later_difference,
+            )
 
         return TimeConversionResult(
-            source=TimeResult(
-                timezone=source_tz,
-                datetime=source_time.isoformat(timespec="seconds"),
-                day_of_week=source_time.strftime("%A"),
-                is_dst=bool(source_time.dst()),
-            ),
-            target=TimeResult(
-                timezone=target_tz,
-                datetime=target_time.isoformat(timespec="seconds"),
-                day_of_week=target_time.strftime("%A"),
-                is_dst=bool(target_time.dst()),
-            ),
-            time_difference=time_diff_str,
+            source=source,
+            target=target,
+            time_difference=time_difference,
+            later_occurrence=later_occurrence,
         )
 
 
@@ -230,9 +314,9 @@ def create_server(local_tz: str) -> MCPServer:
         timezone: Annotated[
             str,
             Field(
-                description=f"IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Use '{local_tz}' as local timezone if no timezone provided by the user."
+                description=f"IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Optional: defaults to the server's local timezone, '{local_tz}', when omitted."
             ),
-        ],
+        ] = local_tz,
     ) -> TimeResult:
         require("timezone", timezone)
         return time_server.get_current_time(timezone)
@@ -243,25 +327,61 @@ def create_server(local_tz: str) -> MCPServer:
         annotations=READ_ONLY,
     )
     def convert_time(
+        # Keyword-only, so the required `time` can keep its place between the
+        # two optional timezones and the schema keeps its property order.
+        *,
         source_timezone: Annotated[
             str,
             Field(
-                description=f"Source IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Use '{local_tz}' as local timezone if no source timezone provided by the user."
+                description=f"Source IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Optional: defaults to the server's local timezone, '{local_tz}', when omitted."
             ),
-        ],
+        ] = local_tz,
         time: Annotated[
             str, Field(description="Time to convert in 24-hour format (HH:MM)")
         ],
         target_timezone: Annotated[
             str,
             Field(
-                description=f"Target IANA timezone name (e.g., 'Asia/Tokyo', 'America/San_Francisco'). Use '{local_tz}' as local timezone if no target timezone provided by the user."
+                description=f"Target IANA timezone name (e.g., 'Asia/Tokyo', 'America/San_Francisco'). Optional: defaults to the server's local timezone, '{local_tz}', when omitted."
             ),
-        ],
+        ] = local_tz,
     ) -> TimeConversionResult:
         require("source_timezone", source_timezone)
         require("target_timezone", target_timezone)
         return time_server.convert_time(source_timezone, time, target_timezone)
+
+    @server.tool(
+        name=TimeTools.GET_TIME_AGO.value,
+        description=(
+            "Get the time a given number of days, hours, minutes and seconds "
+            "ago in a specific timezone"
+        ),
+        annotations=READ_ONLY,
+    )
+    def get_time_ago(
+        timezone: Annotated[
+            str,
+            Field(
+                description=f"IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Optional: defaults to the server's local timezone, '{local_tz}', when omitted."
+            ),
+        ] = local_tz,
+        days_ago: Annotated[
+            int, Field(description="Whole days before now", ge=0, strict=True)
+        ] = 0,
+        hours_ago: Annotated[
+            int, Field(description="Whole hours before now", ge=0, strict=True)
+        ] = 0,
+        minutes_ago: Annotated[
+            int, Field(description="Whole minutes before now", ge=0, strict=True)
+        ] = 0,
+        seconds_ago: Annotated[
+            int, Field(description="Whole seconds before now", ge=0, strict=True)
+        ] = 0,
+    ) -> TimeResult:
+        require("timezone", timezone)
+        return time_server.get_time_ago(
+            timezone, days_ago, hours_ago, minutes_ago, seconds_ago
+        )
 
     return server
 

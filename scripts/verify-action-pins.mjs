@@ -18,14 +18,13 @@
 //
 //   1. can mint an OIDC token or push a package: `id-token: write` or
 //      `packages: write` (or `write-all`), in its own `permissions:` or, absent
-//      one, the workflow's. Here that is `release.yml`'s two publish jobs and
-//      `claude.yml`;
+//      one, the workflow's. Here that is `release.yml`'s two publish jobs;
 //   2. is handed any secret other than `GITHUB_TOKEN`, its own or through the
 //      workflow-level `env:`, in any spelling of the expression (`secrets.X`,
 //      `secrets['X']`, `secrets[matrix.name]`), or as a reusable-workflow
 //      call's `secrets: inherit` (a `secrets:` mapping is read like any other
 //      expression, so one passing only `GITHUB_TOKEN` does not count). Here
-//      that is `claude.yml` again, for `ANTHROPIC_API_KEY`; or
+//      that is `sdk-watch.yml`'s `analyze` and `post`, for `ANTHROPIC_API_KEY`; or
 //   3. uploads an artifact that a credentialed job downloads and has anywhere
 //      in its transitive `needs` (an artifact is scoped to the run, so a job
 //      can download from any job that finished before it), so every producer

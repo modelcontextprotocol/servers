@@ -212,8 +212,9 @@ A privately reported vulnerability is tracked by a draft board card titled
 with the bare advisory id, `[GHSA-xxxx-yyyy-zzzz]`, because a public issue
 would disclose it before a fix exists. The `security-advisory` skill covers
 checking whether the code is this repository's or the SDK's underneath, the
-private fork the fix is built in, and turning the card into public tracking
-once the advisory is published. **Accepting, closing and publishing an
+private fork the fix is built in, converting the card to an issue with the
+same opaque title so an opaque public PR can bring the fix to `v2/main`, and
+giving that issue its public title once the advisory is published. **Accepting, closing and publishing an
 advisory, and replying to its reporter, are human-only acts**, never automated
 or bulk-applied.
 

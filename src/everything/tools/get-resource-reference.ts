@@ -9,6 +9,7 @@ import {
   RESOURCE_TYPE_TEXT,
   RESOURCE_TYPES,
 } from "../resources/templates.js";
+import { TOOL_ICONS } from "../server/icons.js";
 
 // Tool input schema
 const GetResourceReferenceSchema = z.object({
@@ -27,6 +28,7 @@ const config = {
   title: "Get Resource Reference Tool",
   description: "Returns a resource reference that can be used by MCP clients",
   inputSchema: GetResourceReferenceSchema,
+  icons: TOOL_ICONS,
   annotations: {
     readOnlyHint: true,
     destructiveHint: false,

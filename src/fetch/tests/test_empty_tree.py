@@ -73,7 +73,9 @@ def html(body: str) -> httpx.Response:
 @pytest.mark.parametrize("page", [SPA_SHELL, "<html><body></body></html>", ""])
 def test_emulation_reproduces_the_reported_crash(page: str) -> None:
     with pytest.raises(IndexError, match="list index out of range"):
-        readabilipy.simple_json.simple_json_from_html_string(page, use_readability=True)
+        readabilipy.simple_json.simple_json_from_html_string(
+            page, use_readability=False
+        )
 
 
 @pytest.mark.usefixtures("python_readability", "bs4_413_append")

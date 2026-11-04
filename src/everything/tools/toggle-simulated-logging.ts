@@ -12,6 +12,7 @@
 import { McpServer, CallToolResult } from "@modelcontextprotocol/server";
 import { beginSimulatedLogging } from "../server/logging.js";
 import type { ServerContext } from "../server/context.js";
+import { TOOL_ICONS } from "../server/icons.js";
 
 // Tool configuration
 const name = "toggle-simulated-logging";
@@ -22,6 +23,7 @@ const config = {
     "protocol version 2026-07-28 removes logging/setLevel; use trigger-log-messages with a per-request " +
     "log level instead.",
   inputSchema: {},
+  icons: TOOL_ICONS,
   annotations: {
     readOnlyHint: false,
     destructiveHint: false,

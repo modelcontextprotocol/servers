@@ -48,6 +48,14 @@ export const AUTOMATION_LOGIN = "github-actions";
 /** Labels on every sweep issue. `chore` and `dependencies` need write access. */
 export const SWEEP_LABELS = ["v2", "chore", "dependencies"];
 
+/**
+ * The most stdout `gh()` reads from one call. Node's default is 1 MiB, and
+ * past it `spawnSync` throws ENOBUFS. The alert listing is the reply that can
+ * cross it: each Dependabot alert is about 7 KB of JSON, so some 150 open
+ * alerts overflow the default and abort the sweep (#5339).
+ */
+export const GH_MAX_BUFFER = 256 * 1024 * 1024;
+
 /** The two labels the trust rule reads; `v2` is applied by an issue form. */
 const TRUST_LABELS = ["chore", "dependencies"];
 
@@ -223,6 +231,7 @@ export function isDryRun(argv = process.argv.slice(2)) {
 export function gh(spawn, args, input) {
   const result = spawn("gh", args, {
     encoding: "utf8",
+    maxBuffer: GH_MAX_BUFFER,
     ...(input === undefined ? {} : { input }),
   });
   if (result.error) throw result.error;

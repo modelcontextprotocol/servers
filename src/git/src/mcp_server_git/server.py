@@ -1,8 +1,9 @@
 # The git MCP server: tools that read and change a Git repository through
-# GitPython. Repository confinement (`--repository`, `validate_repo_path` on the
-# path given, `validate_opened_repo` on the directories git then uses) and the
-# flag-injection guards live beside the handlers because every tool call must
-# pass them before any git command runs.
+# GitPython, and prompts that embed a repository's changes in a message for the
+# model (#5195). Repository confinement (`--repository`, `validate_repo_path` on
+# the path given, `validate_opened_repo` on the directories git then uses) and
+# the flag-injection guards live beside the handlers because every tool call and
+# prompt must pass them before any git command runs.
 #
 # Built on the MCP Python SDK's high-level `MCPServer` (#5174), the API these
 # reference servers are meant to teach: each tool is a typed function, and the
@@ -18,6 +19,7 @@
 # logging), so nothing differs between them.
 
 import logging
+import re
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -69,9 +71,11 @@ class GitTools(str, Enum):
     LOG = "git_log"
     CREATE_BRANCH = "git_create_branch"
     CHECKOUT = "git_checkout"
+    MERGE = "git_merge"
     SHOW = "git_show"
 
     BRANCH = "git_branch"
+    REMOTE = "git_remote"
 
 
 def _git_text(repo: git.Repo, command: str, *args: str) -> str:
@@ -117,6 +121,37 @@ def git_diff_staged(repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES) 
     return _git_text(repo, "diff", f"--unified={context_lines}", "--cached")
 
 
+def _validate_diff_target(repo: git.Repo, target: str) -> None:
+    """Check that git_diff's target is one revision, or a range of two (#5194).
+
+    `rev_parse` resolves a single revision, so it rejects `main..feature` and
+    `main...feature` as a whole although `git diff` accepts them. The target is
+    tried whole first, because one revision may itself contain `..` (the
+    commit-message search `:/fix..bug`). Only when that fails is it split at
+    its first `..` or `...`, and each endpoint is held to the single-revision
+    rules: no leading '-', and it must resolve. An empty endpoint means HEAD,
+    as in git; both empty (`..`) is not a range.
+    """
+    try:
+        repo.rev_parse(target)
+        return
+    except (ODBError, ValueError, KeyError):
+        # BadName (an ODBError) for an unknown name; ValueError and KeyError
+        # for a spec GitPython cannot apply. Re-raise unless it is a range.
+        start = target.find("..")
+        if start == -1 or target in ("..", "..."):
+            raise
+    end = start + 3 if target.startswith("...", start) else start + 2
+    for endpoint in (target[:start], target[end:]):
+        # The same flag-injection guard the whole target gets in git_diff.
+        if endpoint.startswith("-"):
+            raise FlagInjectionError(
+                f"Invalid target: '{target}' - range endpoint '{endpoint}' "
+                "cannot start with '-'"
+            )
+        repo.rev_parse(endpoint or "HEAD")  # BadName names the bad endpoint
+
+
 def git_diff(
     repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_LINES
 ) -> str:
@@ -124,7 +159,8 @@ def git_diff(
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
     if target.startswith("-"):
         raise FlagInjectionError(f"Invalid target: '{target}' - cannot start with '-'")
-    repo.rev_parse(target)  # Validates target is a real git ref, throws BadName if not
+    # Validates target is a real revision or range, throws BadName if not
+    _validate_diff_target(repo, target)
     return _git_text(repo, "diff", f"--unified={context_lines}", target)
 
 
@@ -345,6 +381,124 @@ def git_checkout(repo: git.Repo, branch_name: str) -> str:
     return f"Switched to branch '{repo.active_branch.name}'"
 
 
+def _git_stderr(error: git.GitCommandError) -> str:
+    """Git's own message from a failed command, without GitPython's framing.
+
+    GitPython formats `stderr` as `\n  stderr: '<message>'`.
+    """
+    message = str(error.stderr).strip().removeprefix("stderr: '").removesuffix("'")
+    return message or str(error)
+
+
+def _merge_failure(repo: git.Repo, error: git.GitCommandError, what: str) -> str:
+    """Why `git merge` failed, after undoing whatever it left behind.
+
+    A merge that stops on conflicts, or fails to write its merge commit,
+    leaves MERGE_HEAD and a half-merged index and working tree. The tool
+    required a clean tree before merging, so `git merge --abort` restores
+    exactly the state the call started from. `what` names the merge, as
+    "Merge of '<source>' into '<target>'".
+    """
+    unchanged = "The merge was aborted and the repository is unchanged."
+    if not (Path(repo.git_dir) / "MERGE_HEAD").exists():
+        # Git refused before changing anything.
+        return f"{what} failed. {unchanged} Git reported:\n{_git_stderr(error)}"
+    # Through _git_text, so a non-ASCII name prints as written, not as
+    # core.quotepath's octal escapes.
+    conflicts = _git_text(repo, "diff", "--name-only", "--diff-filter=U").splitlines()
+    repo.git.merge("--abort")
+    if conflicts:
+        return (
+            f"{what} stopped on conflicts in: {', '.join(conflicts)}. {unchanged} "
+            "Resolve the conflicts by hand."
+        )
+    return f"{what} failed. {unchanged} Git reported:\n{_git_stderr(error)}"
+
+
+def git_merge(
+    repo: git.Repo, source_branch: str, fast_forward_only: bool = True
+) -> str:
+    """Merge `source_branch` into the current branch, or change nothing.
+
+    Conservative by design (#659): the merge goes into the branch HEAD is on,
+    never another, and it starts only from a clean working tree, so a merge
+    that stops on conflicts is aborted and the repository is left as it was.
+    The conflicts are reported for the caller to resolve by hand. By default
+    only a fast-forward is allowed; `fast_forward_only=False` lets git create
+    a merge commit when the branches have diverged.
+    """
+    # Defense in depth: reject sources starting with '-' to prevent flag
+    # injection, even if a malicious ref with that name exists.
+    if source_branch.startswith("-"):
+        raise FlagInjectionError(
+            f"Invalid source branch: '{source_branch}' - cannot start with '-'"
+        )
+    if repo.head.is_detached:
+        raise ValueError(
+            "HEAD is detached; check out the branch to merge into first (git_checkout)"
+        )
+    target = repo.active_branch.name
+    if not repo.head.is_valid():
+        raise ValueError(f"Branch '{target}' has no commits yet; nothing to merge into")
+    if (Path(repo.git_dir) / "MERGE_HEAD").exists():
+        raise ValueError(
+            "A merge is already in progress; conclude it with git_commit first"
+        )
+    if repo.is_dirty():
+        raise ValueError(
+            f"Cannot merge into '{target}': the working tree has uncommitted "
+            "changes. Commit or discard them first, so a failed merge can be "
+            "undone cleanly."
+        )
+    # Resolves the revision (BadName if unknown) and requires a commit.
+    source = repo.commit(source_branch)
+    head = repo.head.commit
+    if repo.is_ancestor(source, head):
+        return f"Already up to date: '{target}' already contains '{source_branch}'"
+    fast_forward = repo.is_ancestor(head, source)
+    if fast_forward_only and not fast_forward:
+        raise ValueError(
+            f"Cannot fast-forward '{target}' to '{source_branch}': the branches "
+            "have diverged. Nothing was changed. Pass fast_forward_only=false "
+            "to create a merge commit."
+        )
+    # The flags pin the outcome this tool describes, whatever the user's
+    # config says (merge.ff, branch.<name>.mergeOptions): --ff/--ff-only
+    # choose fast-forwarding, --commit and --no-squash make a merge that
+    # succeeds a completed one that moves HEAD, and --no-edit keeps git from
+    # opening an editor for the message. --no-overwrite-ignore refuses to
+    # replace an ignored local file (a `.env`, say) that the source tracks:
+    # `is_dirty()` cannot see one, and git would overwrite it unrecoverably.
+    #
+    # Git is given the commit validated above, not the name: a name can stand
+    # for more than one commit (`git merge FETCH_HEAD` merges every head
+    # FETCH_HEAD lists, as an octopus), and only the one checked is merged.
+    # With a sha, git's default message would name the sha, so the message
+    # names what the caller asked for.
+    mode = "--ff-only" if fast_forward_only else "--ff"
+    try:
+        repo.git.merge(
+            mode,
+            "--commit",
+            "--no-squash",
+            "--no-edit",
+            "--no-overwrite-ignore",
+            "-m",
+            f"Merge '{source_branch}' into '{target}'",
+            source.hexsha,
+        )
+    except git.GitCommandError as e:
+        what = f"Merge of '{source_branch}' into '{target}'"
+        raise ValueError(_merge_failure(repo, e, what)) from e
+    merged = repo.head.commit
+    if fast_forward:
+        return f"Fast-forwarded '{target}' to '{source_branch}' ({merged.hexsha[:7]})"
+    return (
+        f"Merged '{source_branch}' into '{target}' with merge commit "
+        f"{merged.hexsha[:7]}"
+    )
+
+
 def git_show(repo: git.Repo, revision: str) -> str:
     # Defense in depth: reject revisions starting with '-' to prevent flag injection,
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
@@ -517,6 +671,118 @@ def git_branch(
     return branch_info
 
 
+# A URL with an authority part: `scheme://[userinfo@]host...`. The userinfo is
+# everything up to the last '@' before the first '/', which is where git itself
+# stops reading it.
+_URL_USERINFO = re.compile(
+    r"^(?P<scheme>[A-Za-z][A-Za-z0-9+.-]*)://(?P<userinfo>[^/]*)@"
+)
+
+# An explicit remote-helper address, `<transport>::<address>`
+# (`https::https://user:token@host/...`, gitremote-helpers(7)). The address
+# after the `::` is a URL of its own, and is redacted as one.
+_REMOTE_HELPER = re.compile(r"^(?P<transport>[A-Za-z][A-Za-z0-9+.-]*)::")
+
+# One line of `git remote -v`: `<name>\t<url> (fetch|push)`, and on a
+# partial clone's fetch line the promisor filter after it (` [blob:none]`).
+# `.` matches everything but '\n', so a URL holding another line separator
+# (U+2028, say) stays whole.
+_REMOTE_LINE = re.compile(
+    r"^(?P<name>[^\t]*)\t(?P<url>.*) \((?P<direction>fetch|push)\)"
+    r"(?P<filter> \[.*\])?$"
+)
+
+# Schemes whose username is an account name rather than a secret, so it is kept
+# (`ssh://git@host/...`) and only a password after it is redacted.
+_SSH_SCHEMES = frozenset({"ssh", "git+ssh", "ssh+git"})
+
+REDACTED = "<redacted>"
+
+
+def redact_url(url: str) -> str:
+    """`url` with any credential in its userinfo replaced by `<redacted>` (#1611).
+
+    A remote URL can carry a credential (`https://user:token@host/...`), and
+    the tool's output goes to the model, so it must not echo one. Over HTTP(S)
+    and every other scheme a token is as often the username as the password
+    (`https://<token>@github.com/...`), so the whole userinfo is redacted. An
+    SSH username names the account and authenticates nothing, so it stays,
+    with only a password after it redacted. A remote-helper address
+    (`<transport>::<url>`) has its inner URL redacted. An scp-like address
+    (`git@host:path`) or a local path has no userinfo to carry a password and
+    is returned as is.
+    """
+    helper = _REMOTE_HELPER.match(url)
+    if helper is not None:
+        return url[: helper.end()] + redact_url(url[helper.end() :])
+    match = _URL_USERINFO.match(url)
+    if match is None:
+        return url
+    scheme, userinfo = match["scheme"], match["userinfo"]
+    if scheme.lower() in _SSH_SCHEMES:
+        user, has_password, _ = userinfo.partition(":")
+        kept = f"{user}:{REDACTED}" if has_password else user
+    else:
+        kept = REDACTED
+    return f"{scheme}://{kept}@{url[match.end() :]}"
+
+
+# The config values `git remote -v` builds its URLs from: each remote's
+# `url` and `pushurl`, and the `insteadOf` / `pushInsteadOf` rewrites.
+_REMOTE_URL_KEYS = r"^(remote\..*\.(url|pushurl)|url\..*\.(insteadof|pushinsteadof))$"
+
+
+def _remote_url_has_newline(repo: git.Repo) -> bool:
+    """Whether a value `git remote -v` prints from holds a newline.
+
+    Such a URL is split across lines of `git remote -v`, and a fragment can
+    look like a whole line (`https://alice:SECRET (fetch)`) with its
+    credential's `@` on the next one, so no line parser can redact it. Read
+    the raw values NUL-separated (`-z`: `<key>\\n<value>\\0`), where a newline
+    cannot hide. `with_exceptions=False` because `--get-regexp` exits 1 when
+    nothing matches; a real failure leaves the output empty, and the
+    `git remote -v` that follows reports it.
+    """
+    entries = repo.git.config(
+        "-z", "--get-regexp", _REMOTE_URL_KEYS, with_exceptions=False
+    )
+    return any("\n" in entry.partition("\n")[2] for entry in entries.split("\0"))
+
+
+def git_remote(repo: git.Repo) -> str:
+    """The repository's remotes with their fetch and push URLs, as `git remote -v`.
+
+    Each line is `<name>\\t<url> (fetch|push)`, a partial clone's fetch line
+    followed by its promisor filter (` [blob:none]`); the URL goes through
+    `redact_url` so no credential reaches the client. Lines are split on
+    '\\n' alone, the only separator git prints, not on every separator
+    `str.splitlines` knows, which would cut a URL holding U+2028 in two. A
+    URL holding a newline itself is refused (`_remote_url_has_newline`).
+    """
+    if _remote_url_has_newline(repo):
+        raise ValueError(
+            "A configured remote URL contains a newline, so the remotes cannot "
+            "be listed without risking a credential in it; git refuses such "
+            "URLs as well"
+        )
+    output = _git_text(repo, "remote", "-v").rstrip("\n")
+    if not output:
+        return "No remotes configured"
+    lines = []
+    for line in output.split("\n"):
+        match = _REMOTE_LINE.match(line)
+        if match is None:
+            # Not a line in the shape `git remote -v` prints (a URL holding a
+            # newline, say): it cannot be parsed, so none of it is returned.
+            lines.append(REDACTED)
+            continue
+        url = redact_url(match["url"])
+        lines.append(
+            f"{match['name']}\t{url} ({match['direction']}){match['filter'] or ''}"
+        )
+    return "\n".join(lines)
+
+
 # The failures a tool reports to the model as a `ToolError`, each with the
 # message it was raised with: the guards' `ValueError`s and
 # `FlagInjectionError`s, git and GitPython errors (`GitError`: a failed
@@ -596,6 +862,93 @@ TIMESTAMP_FORMATS = (
 )
 
 
+class GitPrompts(str, Enum):
+    COMMIT_MESSAGE = "git_commit_message"
+    SUMMARIZE_CHANGES = "git_summarize_changes"
+
+
+def _fenced(text: str, info: str = "diff") -> str:
+    """`text` in a Markdown code fence longer than any backtick run inside it.
+
+    A diff can itself hold a ``` line (a Markdown file's code block), which
+    would close a fixed three-backtick fence early.
+    """
+    # One pass for the longest run: growing the fence and searching again for
+    # each extra backtick is quadratic in a long run, under the git lock.
+    longest = run = 0
+    for char in text:
+        run = run + 1 if char == "`" else 0
+        longest = max(longest, run)
+    fence = "`" * max(3, longest + 1)
+    body = text.rstrip("\n")
+    return f"{fence}{info}\n{body}\n{fence}"
+
+
+def commit_message_prompt(repo: git.Repo) -> str:
+    """The git_commit_message prompt's text: the staged diff and the request."""
+    diff = git_diff_staged(repo)
+    if not diff.strip():
+        return (
+            "There are no staged changes in this repository, so there is nothing "
+            "to write a commit message for. Tell the user to stage changes first "
+            "(git_add); git_status shows what is modified or untracked."
+        )
+    return (
+        "Write a commit message for the staged changes below. Start with an "
+        "imperative subject line of at most 72 characters, then a blank line and "
+        "a short body explaining what changed and why, only if the subject alone "
+        "does not say enough. Follow the repository's existing convention if "
+        "its history shows one (git_log).\n\n"
+        f"Staged changes:\n{_fenced(diff)}"
+    )
+
+
+def summarize_changes_prompt(repo: git.Repo, target: str | None = None) -> str:
+    """The git_summarize_changes prompt's text: the changes and the request."""
+    if target:
+        # git_diff applies the flag-injection guard and resolves the target.
+        diff = git_diff(repo, target)
+        scope = f"compared with `{target}`"
+        changes = f"Diff against {target}:\n{_fenced(diff)}" if diff.strip() else ""
+    else:
+        staged = git_diff_staged(repo)
+        unstaged = git_diff_unstaged(repo)
+        scope = "in the working tree"
+        parts = [f"Status:\n{_fenced(git_status(repo), 'text')}"]
+        if staged.strip():
+            parts.append(f"Staged changes:\n{_fenced(staged)}")
+        if unstaged.strip():
+            parts.append(f"Unstaged changes:\n{_fenced(unstaged)}")
+        # The porcelain status is empty only on a clean tree; an untracked file
+        # alone leaves both diffs empty but is still a change to summarize.
+        clean = not repo.git.status("--porcelain").strip()
+        changes = "" if clean else "\n\n".join(parts)
+    if not changes:
+        return f"There are no changes {scope} to summarize. Tell the user so."
+    return (
+        f"Summarize the changes {scope} below for a reviewer, in plain "
+        "language. Group related changes, explain the intent behind them rather "
+        "than restating each line, and point out anything that looks unfinished "
+        "or risky.\n\n"
+        f"{changes}"
+    )
+
+
+@contextmanager
+def reported_as_invalid_params() -> Iterator[None]:
+    """Turn an anticipated failure in a prompt into a JSON-RPC -32602 error.
+
+    `prompts/get` has no `isError` result: the spec's error handling for it is
+    a JSON-RPC error, and a repository path, target or guard the request named
+    is an invalid argument. Without this, MCPServer hides the message behind
+    "Error rendering prompt" (code 0 or -32603, depending on the era).
+    """
+    try:
+        yield
+    except ANTICIPATED_ERRORS as e:
+        raise MCPError(code=INVALID_PARAMS, message=str(e)) from e
+
+
 def create_server(repository: Path | None) -> MCPServer:
     """The git server, confined to `repository` when one is given."""
 
@@ -636,6 +989,43 @@ def create_server(repository: Path | None) -> MCPServer:
             raise
         return repo
 
+    # Prompts (#5195): each embeds what the repository holds now in one user
+    # message, through the same `open_repo` (and so the same confinement) and
+    # the same guarded helpers as the tools, under the same lock.
+    @server.prompt(
+        name=GitPrompts.COMMIT_MESSAGE.value,
+        title="Draft a commit message",
+        description="Asks the model for a commit message for the staged changes",
+    )
+    def commit_message(
+        repo_path: Annotated[str, Field(description="The path to the Git repository.")],
+    ) -> str:
+        with _GIT_LOCK, reported_as_invalid_params(), open_repo(repo_path) as repo:
+            return commit_message_prompt(repo)
+
+    @server.prompt(
+        name=GitPrompts.SUMMARIZE_CHANGES.value,
+        title="Summarize changes",
+        description=(
+            "Asks the model to summarize the working tree's staged and unstaged "
+            "changes, or the diff against a branch or commit"
+        ),
+    )
+    def summarize_changes(
+        repo_path: Annotated[str, Field(description="The path to the Git repository.")],
+        target: Annotated[
+            Optional[str],
+            Field(
+                description=(
+                    "Branch or commit to diff against. Defaults to the working "
+                    "tree's staged and unstaged changes"
+                )
+            ),
+        ] = None,
+    ) -> str:
+        with _GIT_LOCK, reported_as_invalid_params(), open_repo(repo_path) as repo:
+            return summarize_changes_prompt(repo, target)
+
     @server.tool(
         name=GitTools.STATUS.value,
         description="Shows the working tree status",
@@ -672,7 +1062,7 @@ def create_server(repository: Path | None) -> MCPServer:
 
     @server.tool(
         name=GitTools.DIFF.value,
-        description="Shows differences between branches or commits",
+        description="Shows differences between branches or commits, or across a revision range (main..feature, main...feature)",
         annotations=READ_ONLY,
         structured_output=False,
     )
@@ -775,6 +1165,37 @@ def create_server(repository: Path | None) -> MCPServer:
         return git_checkout(open_repo(repo_path), branch_name)
 
     @server.tool(
+        name=GitTools.MERGE.value,
+        description=(
+            "Merges a branch into the current branch. Fast-forward only unless "
+            "fast_forward_only is false; refuses a dirty working tree, and "
+            "aborts a merge that conflicts, leaving the repository unchanged"
+        ),
+        annotations=writes(destructive=False, idempotent=True),
+        structured_output=False,
+    )
+    @reports_failures
+    def merge(
+        repo_path: str,
+        source_branch: Annotated[
+            str,
+            Field(
+                description=("Branch, tag or commit to merge into the current branch")
+            ),
+        ],
+        fast_forward_only: Annotated[
+            bool,
+            Field(
+                description=(
+                    "Only fast-forward, failing if the branches have diverged. "
+                    "False allows a merge commit"
+                )
+            ),
+        ] = True,
+    ) -> str:
+        return git_merge(open_repo(repo_path), source_branch, fast_forward_only)
+
+    @server.tool(
         name=GitTools.SHOW.value,
         description="Shows the contents of a commit, or of a file or directory given as <revision>:<path>",
         annotations=READ_ONLY,
@@ -813,6 +1234,22 @@ def create_server(repository: Path | None) -> MCPServer:
         ] = None,
     ) -> str:
         return git_branch(open_repo(repo_path), branch_type, contains, not_contains)
+
+    @server.tool(
+        name=GitTools.REMOTE.value,
+        description=(
+            "Lists the repository's remotes with their fetch and push URLs, "
+            "like `git remote -v`. Credentials embedded in a URL are shown as "
+            "<redacted>"
+        ),
+        annotations=READ_ONLY,
+        structured_output=False,
+    )
+    @reports_failures
+    def remote(
+        repo_path: Annotated[str, Field(description="The path to the Git repository.")],
+    ) -> str:
+        return git_remote(open_repo(repo_path))
 
     return server
 

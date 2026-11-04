@@ -124,12 +124,18 @@ export function normalizePathFormat(p: string): string {
 }
 
 /**
- * Expands home directory tildes in paths
+ * Expands home directory tildes in paths: a bare `~`, `~/…` and, on Windows
+ * only, `~\…` (#5180). On POSIX a backslash is an ordinary filename
+ * character, so `~\notes` there names a file and is left as it is.
  * @param filepath The path to expand
  * @returns Expanded path
  */
 export function expandHome(filepath: string): string {
-  if (filepath.startsWith("~/") || filepath === "~") {
+  if (
+    filepath === "~" ||
+    filepath.startsWith("~/") ||
+    (process.platform === "win32" && filepath.startsWith("~\\"))
+  ) {
     return path.join(os.homedir(), filepath.slice(1));
   }
   return filepath;

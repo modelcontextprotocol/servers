@@ -236,6 +236,21 @@ describe("KnowledgeGraphManager", () => {
         ]);
       }).rejects.toThrow("Entity with name NonExistent not found");
     });
+
+    it("should store and report an observation repeated in one call once", async () => {
+      await manager.createEntities([
+        { name: "Alice", entityType: "person", observations: [] },
+      ]);
+
+      const results = await manager.addObservations([
+        { entityName: "Alice", contents: ["x", "y", "x"] },
+      ]);
+
+      expect(results[0].addedObservations).toEqual(["x", "y"]);
+      const graph = await manager.readGraph();
+      const alice = graph.entities.find((e) => e.name === "Alice");
+      expect(alice?.observations).toEqual(["x", "y"]);
+    });
   });
 
   describe("deleteEntities", () => {

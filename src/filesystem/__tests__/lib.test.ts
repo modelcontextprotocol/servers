@@ -402,6 +402,24 @@ describe("Lib Functions", () => {
         ).rejects.toThrow("EACCES lstat");
       });
 
+      // #5191: only an ENOENT from an existing entry's realpath means a
+      // broken symlink; any other failure is reported as it is.
+      it("reports a realpath failure other than ENOENT on an existing component as is", async () => {
+        const base =
+          process.platform === "win32" ? "C:\\Users\\test" : "/home/user";
+        const enoentError = new Error("ENOENT") as NodeJS.ErrnoException;
+        enoentError.code = "ENOENT";
+        mockFs.realpath
+          .mockRejectedValueOnce(enoentError)
+          .mockResolvedValueOnce(base)
+          .mockRejectedValueOnce(new Error("EACCES realpath"));
+        mockReaddirNames.mockResolvedValueOnce(["link"]);
+
+        await expect(
+          validatePath(path.join(base, "link", "a"), allowedDirs),
+        ).rejects.toThrow("EACCES realpath");
+      });
+
       it("rejects when no ancestor directory exists at all", async () => {
         const newFilePath =
           process.platform === "win32"

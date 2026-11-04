@@ -13,6 +13,7 @@ import {
   RESOURCE_TYPE_TEXT,
   RESOURCE_TYPES,
 } from "../resources/templates.js";
+import { PROMPT_ICONS } from "../server/icons.js";
 
 /**
  * Register a prompt with an embedded resource reference
@@ -33,6 +34,7 @@ export const registerEmbeddedResourcePrompt = (server: McpServer) => {
     "resource-prompt",
     {
       title: "Resource Prompt",
+      icons: PROMPT_ICONS,
       description: "A prompt that includes an embedded resource reference",
       argsSchema: promptArgsSchema,
     },

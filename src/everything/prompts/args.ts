@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/server";
+import { PROMPT_ICONS } from "../server/icons.js";
 
 /**
  * Register a prompt with arguments
@@ -20,6 +21,7 @@ export const registerArgumentsPrompt = (server: McpServer) => {
     "args-prompt",
     {
       title: "Arguments Prompt",
+      icons: PROMPT_ICONS,
       description: "A prompt with two arguments, one required and one optional",
       argsSchema: promptArgsSchema,
     },

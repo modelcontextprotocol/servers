@@ -18,6 +18,7 @@ import {
   fromJsonSchema,
   type JsonSchemaType,
 } from "@modelcontextprotocol/server";
+import { TOOL_ICONS } from "../server/icons.js";
 
 /**
  * The keyword that asks a 2026-07-28 client to mirror an argument into the
@@ -81,6 +82,7 @@ const config = {
     "JSON Schema 2020-12 input and output schemas.",
   inputSchema: fromJsonSchema<HeaderParamsInput>(inputSchema),
   outputSchema: fromJsonSchema(outputSchema),
+  icons: TOOL_ICONS,
   annotations: {
     readOnlyHint: true,
     destructiveHint: false,

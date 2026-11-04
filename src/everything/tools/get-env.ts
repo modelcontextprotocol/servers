@@ -16,6 +16,7 @@
  * the environment at call time.
  */
 import { McpServer, CallToolResult } from "@modelcontextprotocol/server";
+import { TOOL_ICONS } from "../server/icons.js";
 
 /** The placeholder that replaces a masked value. */
 export const REDACTED = "<redacted>";
@@ -46,6 +47,7 @@ const config = {
     "Returns all environment variables, helpful for debugging MCP server configuration. " +
     `Values of credential-like names (a KEY, TOKEN, SECRET, PASSWORD, PASSWD, CREDENTIAL, AUTH or COOKIE name segment) are masked as "${REDACTED}" unless ${INCLUDE_SECRETS_VAR} is set to 1 or true in the server's environment.`,
   inputSchema: {},
+  icons: TOOL_ICONS,
   annotations: {
     readOnlyHint: true,
     destructiveHint: false,

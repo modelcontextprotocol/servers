@@ -60,6 +60,39 @@ const graphOutputSchema = {
   additionalProperties: false,
 };
 
+// The read tools' output (#3953): an entity may also carry observationCount.
+const readGraphOutputSchema = {
+  ...graphOutputSchema,
+  properties: {
+    ...graphOutputSchema.properties,
+    entities: {
+      type: "array",
+      items: {
+        ...entityItem(true),
+        properties: {
+          ...entityItem(true).properties,
+          observationCount: {
+            type: "integer",
+            minimum: 0,
+            maximum: Number.MAX_SAFE_INTEGER,
+            description:
+              "How many observations the entity holds in total; present only when observationLimit was given",
+          },
+        },
+      },
+    },
+  },
+};
+
+// The observationLimit input every read tool takes (#3953).
+const observationLimitInput = {
+  type: "integer",
+  minimum: 0,
+  maximum: Number.MAX_SAFE_INTEGER,
+  description:
+    "Return at most this many observations per entity (the first ones, in the order they were added) and add each entity's total as observationCount. Use 0 for names, types and counts only: a cheap overview of a large graph, after which open_nodes reads the entities you need in full. Omit to return every observation.",
+};
+
 const statusOutputSchema = {
   type: "object",
   properties: { success: { type: "boolean" }, message: { type: "string" } },
@@ -68,10 +101,12 @@ const statusOutputSchema = {
   additionalProperties: false,
 };
 
+// create_entities, create_relations and add_observations skip what is already
+// stored, so repeating a call with the same arguments changes nothing (#5153).
 const writeAnnotations = {
   readOnlyHint: false,
   destructiveHint: false,
-  idempotentHint: false,
+  idempotentHint: true,
   openWorldHint: false,
 };
 const deleteAnnotations = {
@@ -270,20 +305,31 @@ const expectedTools = [
   {
     name: "read_graph",
     title: "Read Graph",
-    description: "Read the entire knowledge graph",
+    description:
+      "Read the entire knowledge graph: every entity with its observations, and every relation. The result grows with the graph, so use this only when you need everything; prefer search_nodes to find entities by keyword and open_nodes to read entities whose names you know.",
     inputSchema: {
       type: "object",
-      properties: {},
+      properties: {
+        entityTypes: {
+          type: "array",
+          items: { type: "string" },
+          minItems: 1,
+          description:
+            "Return only entities whose entityType is one of these (exact match), and only the relations that touch one of them. Omit to return every entity.",
+        },
+        observationLimit: observationLimitInput,
+      },
       $schema: JSON_SCHEMA_2020_12,
     },
-    outputSchema: graphOutputSchema,
+    outputSchema: readGraphOutputSchema,
     annotations: readAnnotations,
     execution,
   },
   {
     name: "search_nodes",
     title: "Search Nodes",
-    description: "Search for nodes in the knowledge graph based on a query",
+    description:
+      "Search the knowledge graph for entities whose name, type or observations contain the query (case-insensitive). Use this when you have a keyword, a topic or part of a name but not the exact entity names. Prefer open_nodes when you already know the exact names, and use read_graph only when you need the whole graph. Returns the matching entities and every relation that touches one of them.",
     inputSchema: {
       type: "object",
       properties: {
@@ -293,18 +339,27 @@ const expectedTools = [
           description:
             "The search query to match against entity names, types, and observation content",
         },
+        limit: {
+          type: "integer",
+          minimum: 1,
+          maximum: Number.MAX_SAFE_INTEGER,
+          description:
+            "Return at most this many matching entities (the first matches, in stored order), with the relations that touch them. Omit to return every match.",
+        },
+        observationLimit: observationLimitInput,
       },
       required: ["query"],
       $schema: JSON_SCHEMA_2020_12,
     },
-    outputSchema: graphOutputSchema,
+    outputSchema: readGraphOutputSchema,
     annotations: readAnnotations,
     execution,
   },
   {
     name: "open_nodes",
     title: "Open Nodes",
-    description: "Open specific nodes in the knowledge graph by their names",
+    description:
+      "Retrieve specific entities by their exact names, with every relation that touches one of them. Use this when you already know the names (from the conversation, or from an earlier search_nodes or read_graph result); it is the cheapest way to read entities you can name. Prefer search_nodes when you only have a keyword or part of a name. Names that do not exist are skipped.",
     inputSchema: {
       type: "object",
       properties: {
@@ -313,11 +368,12 @@ const expectedTools = [
           items: { type: "string" },
           description: "An array of entity names to retrieve",
         },
+        observationLimit: observationLimitInput,
       },
       required: ["names"],
       $schema: JSON_SCHEMA_2020_12,
     },
-    outputSchema: graphOutputSchema,
+    outputSchema: readGraphOutputSchema,
     annotations: readAnnotations,
     execution,
   },
@@ -390,6 +446,30 @@ describe("memory tools over the protocol", () => {
     it("lists the nine tools with their schemas and annotations", async () => {
       const { tools } = await client.listTools();
       expect(tools).toEqual(expectedTools);
+    });
+
+    // The idempotentHint the three write tools declare: a repeat of the same
+    // call leaves the graph as the first call left it (#5153).
+    it("changes nothing when a write tool is repeated with the same arguments (#5153)", async () => {
+      const calls: [string, Record<string, unknown>][] = [
+        ["create_entities", { entities: [alice, bob] }],
+        ["create_relations", { relations: [aliceKnowsBob] }],
+        [
+          "add_observations",
+          { observations: [{ entityName: "Bob", contents: ["plays chess"] }] },
+        ],
+      ];
+      for (const [name, args] of calls) {
+        expect((await call(client, name, args)).isError).toBeUndefined();
+      }
+      // Compare around each repeat on its own, so a later repeat cannot mask
+      // a change an earlier one made.
+      for (const [name, args] of calls) {
+        const before = await readGraph();
+        const repeat = await call(client, name, args);
+        expect(repeat.isError).toBeUndefined();
+        expect(await readGraph()).toEqual(before);
+      }
     });
 
     it("offers no prompts", async () => {
@@ -648,6 +728,26 @@ describe("memory tools over the protocol", () => {
       });
       expect(await readGraph()).toEqual({
         entities: [alice, bob],
+        relations: [],
+      });
+    });
+
+    it("stores and reports an observation repeated in one call once", async () => {
+      const result = await call(client, "add_observations", {
+        observations: [
+          { entityName: "Alice", contents: ["plays chess", "plays chess"] },
+        ],
+      });
+      const expected = [
+        { entityName: "Alice", addedObservations: ["plays chess"] },
+      ];
+      expect(result.isError).toBeUndefined();
+      expect(result.structuredContent).toEqual({ results: expected });
+      expect(await readGraph()).toEqual({
+        entities: [
+          { ...alice, observations: [...alice.observations, "plays chess"] },
+          bob,
+        ],
         relations: [],
       });
     });

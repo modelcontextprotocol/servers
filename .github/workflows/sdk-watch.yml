@@ -31,7 +31,7 @@
 # Tokens: `GITHUB_TOKEN` files and comments (`issues: write`). It cannot write
 # the org project board, so the issue arrives labeled and milestoned and
 # `issue-triage` boards it; boarding from here waits on a GitHub App (#5061).
-# `ANTHROPIC_API_KEY` is the organization secret `claude.yml` already uses.
+# `ANTHROPIC_API_KEY` is an organization secret.
 name: SDK Watch
 
 on:

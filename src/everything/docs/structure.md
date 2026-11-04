@@ -28,6 +28,7 @@ src/everything
      │   └── resource.ts
      ├── resources
      │   ├── index.ts
+     │   ├── collections.ts
      │   ├── files.ts
      │   ├── minted.ts
      │   ├── session.ts
@@ -36,6 +37,7 @@ src/everything
      ├── server
      │   ├── index.ts
      │   ├── context.ts
+     │   ├── icons.ts
      │   ├── logging.ts
      │   ├── roots.ts
      │   └── tasks.ts
@@ -132,6 +134,8 @@ src/everything
     - Blob: `demo://resource/dynamic/blob/{index}` (MIME: `application/octet-stream`, Base64 payload)
   - The `{index}` path variable must be a finite positive integer; any other is not found (`-32602`). Content is generated on demand with a timestamp.
   - Exposes helpers `textResource(uri, index)`, `textResourceUri(index)`, `blobResource(uri, index)`, and `blobResourceUri(index)` so other modules can construct and embed dynamic resources directly (e.g., from prompts).
+- `collections.ts`
+  - Registers a resource collection example: `summer-specials` (`demo://resource/collection/summer-specials`), whose read returns every item of a small fixed catalog as a separate content under its own URI; the `collection-by-category` template (`demo://resource/collection/by-category/{category}`), which returns one category's items; and the `collection-item` template (`demo://resource/collection/item/{itemId}`), which reads one item back. Both templates complete their variable, and a category or id not in the catalog is not found (`-32602`).
 - `files.ts`
   - Registers static file-based resources for each file in the `docs/` folder.
   - URIs follow the pattern: `demo://resource/static/document/<filename>`.
@@ -152,6 +156,8 @@ src/everything
   - Exposes `{ server, cleanup }` to the chosen transport. Cleanup stops any running intervals in the server when the connection ends.
 - `context.ts`
   - The per-instance context features receive: the era, the change publisher, the 2025-era subscriptions and a cleanup registry.
+- `icons.ts`
+  - The light- and dark-themed icon pairs (SEP-973) attached to the server info and to every tool, prompt, resource and resource template, one pair per kind, as inline SVG `data:` URIs.
 - `logging.ts`
   - Implements simulated logging (2025 era). Periodically sends randomized log messages at various levels to the connected client. Started/stopped on demand via a dedicated tool.
 - `roots.ts`

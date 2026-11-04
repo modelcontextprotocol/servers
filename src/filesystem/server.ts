@@ -14,13 +14,19 @@ import { z } from "zod";
 import { minimatch } from "minimatch";
 import { getValidRootDirectories } from "./roots-utils.js";
 import {
+  confineRootsToDirectories,
+  describeAllowedDirectories,
+} from "./allowed-directories.js";
+import {
   formatSize,
   validatePath,
   getFileStats,
   readFileContent,
   writeFileContent,
+  appendFileContent,
   createDirectory,
   moveFile,
+  copyFile,
   searchFilesWithValidation,
   applyFileEdits,
   tailFile,
@@ -28,6 +34,7 @@ import {
   readdirWithTimeout,
   createEntryBudget,
 } from "./lib.js";
+import { registerFileResources } from "./file-resources.js";
 import { SERVER_VERSION } from "./version.js";
 
 // The JSON Schema dialect every advertised tool schema declares (#4841). The
@@ -51,10 +58,14 @@ const ReadTextFileArgsSchema = z.object({
   path: z.string(),
   tail: z
     .number()
+    .int()
+    .min(0)
     .optional()
     .describe("If provided, returns only the last N lines of the file"),
   head: z
     .number()
+    .int()
+    .min(0)
     .optional()
     .describe("If provided, returns only the first N lines of the file"),
 });
@@ -75,6 +86,15 @@ const ReadMultipleFilesArgsSchema = z.object({
 const WriteFileArgsSchema = z.object({
   path: z.string(),
   content: z.string(),
+});
+
+const AppendFileArgsSchema = z.object({
+  path: z.string(),
+  content: z
+    .string()
+    .describe(
+      "Text to append, exactly as given. No newline is added: end it with \\n if the next append should start on a new line.",
+    ),
 });
 
 const EditOperation = z.object({
@@ -111,11 +131,27 @@ const ListDirectoryWithSizesArgsSchema = z.object({
 const DirectoryTreeArgsSchema = z.object({
   path: z.string(),
   excludePatterns: z.array(z.string()).optional().default([]),
+  depth: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      "How many levels to descend: 1 lists only the entries directly in path. " +
+        "Directories at the last level have no children array. Omit for the whole tree.",
+    ),
 });
 
 const MoveFileArgsSchema = z.object({
   source: z.string(),
   destination: z.string(),
+});
+
+const CopyFileArgsSchema = z.object({
+  source: z.string().describe("The file to copy"),
+  destination: z
+    .string()
+    .describe("Where to create the copy; nothing may exist there yet"),
 });
 
 const SearchFilesArgsSchema = z.object({
@@ -177,6 +213,19 @@ export interface ServerOptions {
    * Roots (#4992). The stdio entry point exits the process from here.
    */
   onCannotOperate?: (error: Error) => void;
+  /**
+   * Serve only the tools that cannot change the filesystem (#632, #1160):
+   * every tool whose annotations do not declare `readOnlyHint: true` is left
+   * out of the server, so clients never see it and cannot call it.
+   */
+  readOnly?: boolean;
+  /**
+   * Confine the client's Roots to the command-line directories (#3133): on a
+   * 2025-era connection a root may narrow them but never widen them, and a
+   * root outside every one of them is ignored. Has no effect when the server
+   * was started with no command-line directories.
+   */
+  confineRoots?: boolean;
 }
 
 /**
@@ -250,6 +299,25 @@ export function createServer(
       }
       return handler(...args);
     }) as never)) as typeof server.registerTool;
+  // Read-only mode (#632, #1160) withholds every tool that does not declare
+  // itself read-only. Keying on the annotation rather than on a list of write
+  // tools fails closed: a new tool is withheld unless its registration says
+  // `readOnlyHint: true`, the hint the repository already requires to be set
+  // truthfully, so a new write tool needs no change here. A withheld tool is
+  // registered and then removed, before any client connects, so it is absent
+  // from tools/list and a call to it is answered as an unknown tool.
+  if (options.readOnly) {
+    const registerReadWrite = server.registerTool.bind(server);
+    server.registerTool = ((
+      name: string,
+      config: Parameters<typeof registerReadWrite>[1],
+      handler: Parameters<typeof registerReadWrite>[2],
+    ) => {
+      const tool = registerReadWrite(name, config, handler);
+      if (config.annotations?.readOnlyHint !== true) tool.remove();
+      return tool;
+    }) as typeof server.registerTool;
+  }
 
   // Tool registrations
 
@@ -259,16 +327,18 @@ export function createServer(
   ) => {
     const validPath = await validatePath(args.path, allowedDirectories);
 
-    if (args.head && args.tail) {
+    // Compared against undefined, not tested for truthiness: a count of 0
+    // asks for zero lines, not for the whole file (#5184).
+    if (args.head !== undefined && args.tail !== undefined) {
       throw new Error(
         "Cannot specify both head and tail parameters simultaneously",
       );
     }
 
     let content: string;
-    if (args.tail) {
+    if (args.tail !== undefined) {
       content = await tailFile(validPath, args.tail);
-    } else if (args.head) {
+    } else if (args.head !== undefined) {
       content = await headFile(validPath, args.head);
     } else {
       content = await readFileContent(validPath);
@@ -288,7 +358,12 @@ export function createServer(
         "Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.",
       inputSchema: jsonSchema2020(ReadTextFileArgsSchema.shape),
       outputSchema: jsonSchema2020({ content: z.string() }),
-      annotations: { readOnlyHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
     },
     readTextFileHandler,
   );
@@ -309,15 +384,24 @@ export function createServer(
         path: z.string(),
         tail: z
           .number()
+          .int()
+          .min(0)
           .optional()
           .describe("If provided, returns only the last N lines of the file"),
         head: z
           .number()
+          .int()
+          .min(0)
           .optional()
           .describe("If provided, returns only the first N lines of the file"),
       }),
       outputSchema: jsonSchema2020({ content: z.string() }),
-      annotations: { readOnlyHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
     },
     readTextFileHandler,
   );
@@ -351,7 +435,12 @@ export function createServer(
           ]),
         ),
       }),
-      annotations: { readOnlyHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
     },
     async (args: z.infer<typeof ReadMediaFileArgsSchema>) => {
       const validPath = await validatePath(args.path, allowedDirectories);
@@ -407,7 +496,12 @@ export function createServer(
         "the entire operation. Only works within allowed directories.",
       inputSchema: jsonSchema2020(ReadMultipleFilesArgsSchema.shape),
       outputSchema: jsonSchema2020({ content: z.string() }),
-      annotations: { readOnlyHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
     },
     async (args: z.infer<typeof ReadMultipleFilesArgsSchema>) => {
       const results = await Promise.all(
@@ -460,12 +554,48 @@ export function createServer(
   );
 
   server.registerTool(
+    "append_file",
+    {
+      title: "Append File",
+      description:
+        "Append text to the end of a file, creating the file if it does not exist. " +
+        "The existing content is never changed or replaced. The text is appended exactly " +
+        "as given, with no newline added before or after it, so end it with a newline " +
+        "if the next append should start on a new line. Only works within allowed directories.",
+      inputSchema: jsonSchema2020(AppendFileArgsSchema.shape),
+      outputSchema: jsonSchema2020({ content: z.string() }),
+      annotations: {
+        readOnlyHint: false,
+        idempotentHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
+    },
+    async (args: z.infer<typeof AppendFileArgsSchema>) => {
+      const validPath = await validatePath(args.path, allowedDirectories);
+      await appendFileContent(validPath, args.content);
+      const text = `Successfully appended to ${args.path}`;
+      return {
+        content: [{ type: "text" as const, text }],
+        structuredContent: { content: text },
+      };
+    },
+  );
+
+  server.registerTool(
     "edit_file",
     {
       title: "Edit File",
       description:
-        "Make line-based edits to a text file. Each edit replaces exact line sequences " +
-        "with new content. Returns a git-style diff showing the changes made. " +
+        "Make line-based edits to a text file. Edits apply in order, each to the " +
+        "result of the ones before it, and each replaces the first match of its " +
+        "oldText with newText. oldText must match the file's text exactly, except " +
+        "that line endings (LF or CRLF) never matter and, when there is no exact " +
+        "match, a run of whole lines matches if each line is equal once leading and " +
+        "trailing whitespace is ignored (newText then takes the file's indentation). " +
+        "Whitespace inside a line must match. If any edit has no match, nothing is " +
+        "written and the error shows the closest lines of the file, numbered, to " +
+        "copy oldText from. Returns a git-style diff showing the changes made. " +
         "Only works within allowed directories.",
       inputSchema: jsonSchema2020(EditFileArgsSchema.shape),
       outputSchema: jsonSchema2020({ content: z.string() }),
@@ -526,7 +656,12 @@ export function createServer(
         "finding specific files within a directory. Only works within allowed directories.",
       inputSchema: jsonSchema2020(ListDirectoryArgsSchema.shape),
       outputSchema: jsonSchema2020({ content: z.string() }),
-      annotations: { readOnlyHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
     },
     async (args: z.infer<typeof ListDirectoryArgsSchema>) => {
       const validPath = await validatePath(args.path, allowedDirectories);
@@ -555,15 +690,26 @@ export function createServer(
         "finding specific files within a directory. Only works within allowed directories.",
       inputSchema: jsonSchema2020(ListDirectoryWithSizesArgsSchema.shape),
       outputSchema: jsonSchema2020({ content: z.string() }),
-      annotations: { readOnlyHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
     },
     async (args: z.infer<typeof ListDirectoryWithSizesArgsSchema>) => {
       const validPath = await validatePath(args.path, allowedDirectories);
       const entries = await fs.readdir(validPath, { withFileTypes: true });
 
-      // Get detailed information for each entry
+      // Get detailed information for each entry; size is undefined when the
+      // entry could not be stat'd
+      type SizedEntry = {
+        name: string;
+        isDirectory: boolean;
+        size: number | undefined;
+      };
       const detailedEntries = await Promise.all(
-        entries.map(async (entry) => {
+        entries.map(async (entry): Promise<SizedEntry> => {
           const entryPath = path.join(validPath, entry.name);
           try {
             // fs.stat follows symlinks, so validate each entry first: a
@@ -578,14 +724,16 @@ export function createServer(
               name: entry.name,
               isDirectory: entry.isDirectory(),
               size: stats.size,
-              mtime: stats.mtime,
             };
           } catch {
+            // The entry could not be stat'd (unreadable, a dangling symlink,
+            // removed since readdir, or outside the allowed directories).
+            // Its size is unknown, not 0: inventing one would list it as an
+            // empty file and count it in the total (#5190).
             return {
               name: entry.name,
               isDirectory: entry.isDirectory(),
-              size: 0,
-              mtime: new Date(0),
+              size: undefined,
             };
           }
         }),
@@ -594,7 +742,8 @@ export function createServer(
       // Sort entries based on sortBy parameter
       const sortedEntries = [...detailedEntries].sort((a, b) => {
         if (args.sortBy === "size") {
-          return b.size - a.size; // Descending by size
+          // Descending by size; an entry of unknown size sorts last
+          return (b.size ?? -1) - (a.size ?? -1);
         }
         // Default sort by name
         return a.name.localeCompare(b.name);
@@ -604,7 +753,12 @@ export function createServer(
       const formattedEntries = sortedEntries.map(
         (entry) =>
           `${entry.isDirectory ? "[DIR]" : "[FILE]"} ${entry.name.padEnd(30)} ${
-            entry.isDirectory ? "" : formatSize(entry.size).padStart(10)
+            entry.isDirectory
+              ? ""
+              : (entry.size === undefined
+                  ? "unknown"
+                  : formatSize(entry.size)
+                ).padStart(10)
           }`,
       );
 
@@ -612,14 +766,20 @@ export function createServer(
       const totalFiles = detailedEntries.filter((e) => !e.isDirectory).length;
       const totalDirs = detailedEntries.filter((e) => e.isDirectory).length;
       const totalSize = detailedEntries.reduce(
-        (sum, entry) => sum + (entry.isDirectory ? 0 : entry.size),
+        (sum, entry) => sum + (entry.isDirectory ? 0 : (entry.size ?? 0)),
         0,
       );
+      const unknownFiles = detailedEntries.filter(
+        (e) => !e.isDirectory && e.size === undefined,
+      ).length;
 
       const summary = [
         "",
         `Total: ${totalFiles} files, ${totalDirs} directories`,
-        `Combined size: ${formatSize(totalSize)}`,
+        `Combined size: ${formatSize(totalSize)}` +
+          (unknownFiles > 0
+            ? ` (excludes ${unknownFiles} ${unknownFiles === 1 ? "file" : "files"} of unknown size)`
+            : ""),
       ];
 
       const text = [...formattedEntries, ...summary].join("\n");
@@ -638,11 +798,17 @@ export function createServer(
       description:
         "Get a recursive tree view of files and directories as a JSON structure. " +
         "Each entry includes 'name', 'type' (file/directory), and 'children' for directories. " +
-        "Files have no children array, while directories always have a children array (which may be empty). " +
+        "Files have no children array, while directories always have a children array (which may be empty), " +
+        "except at the last level when 'depth' limits the tree: those directories are not read and have no children array. " +
         "The output is formatted with 2-space indentation for readability. Only works within allowed directories.",
       inputSchema: jsonSchema2020(DirectoryTreeArgsSchema.shape),
       outputSchema: jsonSchema2020({ content: z.string() }),
-      annotations: { readOnlyHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
     },
     async (args: z.infer<typeof DirectoryTreeArgsSchema>) => {
       interface TreeEntry {
@@ -653,9 +819,13 @@ export function createServer(
       const rootPath = args.path;
       const visit = createEntryBudget("directory_tree", rootPath);
 
+      // `level` is the depth of currentPath's entries: 1 for those directly
+      // in the requested path. A directory at the depth limit is listed but
+      // not read, so its subtree costs no readdir and no entry budget (#1077).
       async function buildTree(
         currentPath: string,
         excludePatterns: string[] = [],
+        level: number = 1,
       ): Promise<TreeEntry[]> {
         const validPath = await validatePath(currentPath, allowedDirectories);
         const entries = await readdirWithTimeout(validPath);
@@ -689,9 +859,16 @@ export function createServer(
             type: entry.isDirectory() ? "directory" : "file",
           };
 
-          if (entry.isDirectory()) {
+          if (
+            entry.isDirectory() &&
+            (args.depth === undefined || level < args.depth)
+          ) {
             const subPath = path.join(currentPath, entry.name);
-            entryData.children = await buildTree(subPath, excludePatterns);
+            entryData.children = await buildTree(
+              subPath,
+              excludePatterns,
+              level + 1,
+            );
           }
 
           result.push(entryData);
@@ -748,28 +925,85 @@ export function createServer(
   );
 
   server.registerTool(
+    "copy_file",
+    {
+      title: "Copy File",
+      description:
+        "Copy a file to a new location, without reading its content into the conversation. " +
+        "Copies one regular file, keeping its permissions and modification time; directories " +
+        "are not copied. If the destination exists, the operation will fail: it never " +
+        "overwrites. Both source and destination must be within allowed directories.",
+      inputSchema: jsonSchema2020(CopyFileArgsSchema.shape),
+      outputSchema: jsonSchema2020({ content: z.string() }),
+      annotations: {
+        readOnlyHint: false,
+        idempotentHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
+    },
+    async (args: z.infer<typeof CopyFileArgsSchema>) => {
+      const validSourcePath = await validatePath(
+        args.source,
+        allowedDirectories,
+      );
+      const validDestPath = await validatePath(
+        args.destination,
+        allowedDirectories,
+      );
+      await copyFile(validSourcePath, validDestPath);
+      const text = `Successfully copied ${args.source} to ${args.destination}`;
+      return {
+        content: [{ type: "text" as const, text }],
+        structuredContent: { content: text },
+      };
+    },
+  );
+
+  server.registerTool(
     "search_files",
     {
       title: "Search Files",
       description:
-        "Recursively search for files and directories matching a pattern. " +
-        "The patterns should be glob-style patterns that match paths relative to the working directory. " +
-        "Use pattern like '*.ext' to match files in current directory, and '**/*.ext' to match files in all subdirectories. " +
+        "Find files and directories by NAME, not by content: this tool never reads or searches inside files. " +
+        "It walks the tree under 'path' and matches a glob pattern against each entry's path relative to 'path' (case-sensitive). " +
+        "Use '*.ext' to match entries directly under 'path', and '**/*.ext' or '**/name' to match at any depth. " +
         "Returns full paths to all matching items. Great for finding files when you don't know their exact location. " +
         "Only searches within allowed directories.",
       inputSchema: jsonSchema2020(SearchFilesArgsSchema.shape),
       outputSchema: jsonSchema2020({ content: z.string() }),
-      annotations: { readOnlyHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
     },
     async (args: z.infer<typeof SearchFilesArgsSchema>) => {
       const validPath = await validatePath(args.path, allowedDirectories);
+      // A subdirectory that cannot be read is skipped, and named after the
+      // matches so the caller knows they are partial (#5189).
+      const unreadable: string[] = [];
       const results = await searchFilesWithValidation(
         validPath,
         args.pattern,
         allowedDirectories,
-        { excludePatterns: args.excludePatterns },
+        {
+          excludePatterns: args.excludePatterns,
+          onUnreadable: (directory, error) => {
+            const code = (error as NodeJS.ErrnoException).code;
+            unreadable.push(code ? `${directory} (${code})` : directory);
+          },
+        },
       );
-      const text = results.length > 0 ? results.join("\n") : "No matches found";
+      let text = results.length > 0 ? results.join("\n") : "No matches found";
+      if (unreadable.length > 0) {
+        text +=
+          `\n\nThe search is incomplete: ${unreadable.length} ` +
+          `${unreadable.length === 1 ? "directory" : "directories"} could not be read, ` +
+          "and any matches inside are missing:\n" +
+          unreadable.join("\n");
+      }
       return {
         content: [{ type: "text" as const, text }],
         structuredContent: { content: text },
@@ -788,7 +1022,12 @@ export function createServer(
         "without reading the actual content. Only works within allowed directories.",
       inputSchema: jsonSchema2020(GetFileInfoArgsSchema.shape),
       outputSchema: jsonSchema2020({ content: z.string() }),
-      annotations: { readOnlyHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
     },
     async (args: z.infer<typeof GetFileInfoArgsSchema>) => {
       const validPath = await validatePath(args.path, allowedDirectories);
@@ -814,7 +1053,12 @@ export function createServer(
         "before trying to access files.",
       inputSchema: jsonSchema2020({}),
       outputSchema: jsonSchema2020({ content: z.string() }),
-      annotations: { readOnlyHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
     },
     async () => {
       const text = `Allowed directories:\n${allowedDirectories.join("\n")}`;
@@ -825,19 +1069,31 @@ export function createServer(
     },
   );
 
+  // Files as resources (#297): reads see the same allow-list, roots barrier
+  // and 2026-07-28 no-directories error as the tools above.
+  registerFileResources(server, {
+    allowedDirectories: () => allowedDirectories,
+    rootsSettled: () => barrier.settled,
+    unavailableReason: () =>
+      options.era === "modern" && allowedDirectories.length === 0
+        ? NO_ALLOWED_DIRECTORIES_MODERN_ERROR
+        : undefined,
+  });
+
   // Updates allowed directories based on MCP client roots, unless a newer
   // refresh started after this one's `generation` was taken (#5097).
   async function updateAllowedDirectoriesFromRoots(
     requestedRoots: Root[],
     generation: number,
   ) {
-    const validatedRootDirs = await getValidRootDirectories(requestedRoots);
+    const validRootDirs = await getValidRootDirectories(requestedRoots);
     if (generation !== rootsGeneration) {
       console.error(
         "Discarded a stale roots/list answer: a newer roots update has started",
       );
       return;
     }
+    const validatedRootDirs = confineRoots(validRootDirs);
     if (validatedRootDirs.length > 0) {
       allowedDirectories = [...validatedRootDirs];
       rootsInForce = true;
@@ -852,6 +1108,46 @@ export function createServer(
     } else {
       console.error("No valid root directories provided by client");
     }
+    logAllowedDirectories();
+  }
+
+  // Log the allowed directories now in force and where they came from (#4912).
+  function logAllowedDirectories(): void {
+    console.error(
+      describeAllowedDirectories(
+        allowedDirectories,
+        rootsInForce
+          ? {
+              from: "roots",
+              replacedCommandLine: initialAllowedDirectories.length > 0,
+              confined: confining,
+            }
+          : { from: "command-line" },
+      ),
+    );
+  }
+
+  // True when the client's Roots are kept inside the command-line directories
+  // (#3133). With none given there is nothing to confine them to.
+  const confining =
+    options.confineRoots === true && initialAllowedDirectories.length > 0;
+
+  // The client's valid roots as the server will apply them: unchanged, or,
+  // with --confine-roots, cut down to their overlap with the command-line
+  // directories. A root outside all of them is dropped like an invalid one,
+  // so roots that are all outside leave the state as invalid roots would.
+  function confineRoots(validRootDirs: string[]): string[] {
+    if (!confining) return validRootDirs;
+    const { confined, ignored } = confineRootsToDirectories(
+      validRootDirs,
+      initialAllowedDirectories,
+    );
+    if (ignored.length > 0) {
+      console.error(
+        `Ignored client roots outside the command-line directories (--confine-roots): ${ignored.join(", ")}`,
+      );
+    }
+    return confined;
   }
 
   // Handles dynamic roots updates during runtime, when client sends "roots/list_changed" notification, server fetches the updated roots and replaces all allowed directories with the new roots.
@@ -910,6 +1206,7 @@ export function createServer(
           "Failed to request initial roots from client:",
           error instanceof Error ? error.message : String(error),
         );
+        logAllowedDirectories();
       }
     } else {
       if (allowedDirectories.length > 0) {
@@ -917,6 +1214,7 @@ export function createServer(
           "Client does not support MCP Roots, using allowed directories set from server args:",
           allowedDirectories,
         );
+        logAllowedDirectories();
       } else {
         // Nothing could ever be allowed in this session, so fail visibly
         // rather than serve every call with "Access denied" (#4992): log the

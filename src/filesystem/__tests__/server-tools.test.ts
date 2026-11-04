@@ -31,12 +31,14 @@ const TOOL_NAMES = [
   "read_media_file",
   "read_multiple_files",
   "write_file",
+  "append_file",
   "edit_file",
   "create_directory",
   "list_directory",
   "list_directory_with_sizes",
   "directory_tree",
   "move_file",
+  "copy_file",
   "search_files",
   "get_file_info",
   "list_allowed_directories",
@@ -83,25 +85,32 @@ describe("server identity and tool list", () => {
     });
   });
 
-  it("advertises only the tools capability", () => {
+  it("advertises the tools and resources capabilities", () => {
     expect(client.getServerCapabilities()).toEqual({
       tools: { listChanged: true },
+      resources: { listChanged: true },
     });
   });
 
-  it("lists the 14 tools in registration order", async () => {
+  it("lists the tools in registration order", async () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name)).toEqual(TOOL_NAMES);
   });
 
-  // #3402: the read-only tools carry no idempotentHint or destructiveHint.
-  // When that issue is fixed, this table is the test to change.
+  // #3402: every tool sets all four hints explicitly, the read-only ones
+  // included (idempotent, never destructive), so a client never falls back
+  // to the spec's defaults (destructive, not idempotent, open world).
   it("pins each tool's title and annotations (#3402)", async () => {
     const { tools } = await client.listTools();
     const table = Object.fromEntries(
       tools.map((t) => [t.name, { title: t.title, ...t.annotations }]),
     );
-    const readOnly = { readOnlyHint: true, openWorldHint: false };
+    const readOnly = {
+      readOnlyHint: true,
+      idempotentHint: true,
+      destructiveHint: false,
+      openWorldHint: false,
+    };
     expect(table).toEqual({
       read_file: { title: "Read File (Deprecated)", ...readOnly },
       read_text_file: { title: "Read Text File", ...readOnly },
@@ -112,6 +121,13 @@ describe("server identity and tool list", () => {
         readOnlyHint: false,
         idempotentHint: true,
         destructiveHint: true,
+        openWorldHint: false,
+      },
+      append_file: {
+        title: "Append File",
+        readOnlyHint: false,
+        idempotentHint: false,
+        destructiveHint: false,
         openWorldHint: false,
       },
       edit_file: {
@@ -139,6 +155,13 @@ describe("server identity and tool list", () => {
         readOnlyHint: false,
         idempotentHint: false,
         destructiveHint: true,
+        openWorldHint: false,
+      },
+      copy_file: {
+        title: "Copy File",
+        readOnlyHint: false,
+        idempotentHint: true,
+        destructiveHint: false,
         openWorldHint: false,
       },
       search_files: { title: "Search Files", ...readOnly },
@@ -209,11 +232,15 @@ describe("server identity and tool list", () => {
       properties: {
         path: { type: "string" },
         tail: {
-          type: "number",
+          type: "integer",
+          minimum: 0,
+          maximum: Number.MAX_SAFE_INTEGER,
           description: "If provided, returns only the last N lines of the file",
         },
         head: {
-          type: "number",
+          type: "integer",
+          minimum: 0,
+          maximum: Number.MAX_SAFE_INTEGER,
           description:
             "If provided, returns only the first N lines of the file",
         },
@@ -449,12 +476,55 @@ describe("read_text_file and read_file", () => {
     });
   });
 
-  it("treats head: 0 as absent and returns the whole file", async () => {
-    const result = await call(client, "read_text_file", {
-      path: file,
-      head: 0,
+  describe("a zero count (#5184)", () => {
+    it.each(["head", "tail"])("%s: 0 returns no lines", async (key) => {
+      const result = await call(client, "read_text_file", {
+        path: file,
+        [key]: 0,
+      });
+      expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toEqual({ content: "" });
     });
-    expect(textOf(result)).toBe("one\ntwo\nthree\nfour\n");
+
+    it.each(["head", "tail"])(
+      "%s: 0 still reports a missing file",
+      async (key) => {
+        const result = await call(client, "read_text_file", {
+          path: path.join(dir, "missing.txt"),
+          [key]: 0,
+        });
+        expect(result.isError).toBe(true);
+        expect(textOf(result)).toMatch(/^ENOENT: no such file or directory/);
+      },
+    );
+
+    it("rejects head: 0 and tail: 0 together", async () => {
+      const result = await call(client, "read_text_file", {
+        path: file,
+        head: 0,
+        tail: 0,
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toBe(
+        "Cannot specify both head and tail parameters simultaneously",
+      );
+    });
+
+    it.each([
+      ["head", -1],
+      ["tail", -1],
+      ["head", 1.5],
+      ["tail", 1.5],
+    ])("rejects %s: %s as invalid input", async (key, value) => {
+      for (const tool of ["read_text_file", "read_file"]) {
+        const result = await call(client, tool, {
+          path: file,
+          [key]: value,
+        });
+        expect(result.isError, tool).toBe(true);
+        expect(textOf(result), tool).toMatch(/Input validation error/);
+      }
+    });
   });
 
   it("rejects head and tail together", async () => {
@@ -871,8 +941,9 @@ describe("edit_file", () => {
       edits: [{ oldText: "return 9;", newText: "x" }],
     });
     expect(result.isError).toBe(true);
-    expect(textOf(result)).toBe(
-      "Could not find exact match for edit:\nreturn 9;",
+    // #2034: the error also quotes the closest lines of the file.
+    expect(textOf(result)).toMatch(
+      /^Could not find exact match for edit 1 of 1\. [^]*\n\noldText:\nreturn 9;\n\nClosest text in the file \(lines 1-4 of 4\):\n[^]*3: {3}return 1;\n/,
     );
   });
 
@@ -1174,15 +1245,38 @@ describe("list_directory_with_sizes", () => {
     expect(files).toEqual(["b.txt", "a.txt"]);
   });
 
-  it("lists an entry it cannot stat (a dangling symlink) as size 0", async () => {
+  it("lists an entry it cannot stat (a dangling symlink) as unknown size, left out of the total (#5190)", async () => {
     await fs.symlink(path.join(dir, "gone"), path.join(dir, "dangling"));
     const result = await call(client, "list_directory_with_sizes", {
       path: dir,
     });
     expect(textOf(result)).toContain(
-      `[FILE] ${"dangling".padEnd(30)} ${"0 B".padStart(10)}`,
+      `[FILE] ${"dangling".padEnd(30)} ${"unknown".padStart(10)}`,
     );
+    expect(textOf(result)).not.toContain(" 0 B");
     expect(textOf(result)).toContain("Total: 3 files, 1 directories");
+    expect(textOf(result)).toContain(
+      "Combined size: 2.00 KB (excludes 1 file of unknown size)",
+    );
+  });
+
+  it("sorts entries of unknown size last when sorting by size (#5190)", async () => {
+    await fs.symlink(path.join(dir, "gone"), path.join(dir, "dangling"));
+    await fs.symlink(path.join(dir, "gone2"), path.join(dir, "dangling2"));
+    await fs.writeFile(path.join(dir, "empty.txt"), "");
+    const result = await call(client, "list_directory_with_sizes", {
+      path: dir,
+      sortBy: "size",
+    });
+    const files = textOf(result)
+      .split("\n")
+      .filter((line) => line.startsWith("[FILE]"))
+      .map((line) => line.split(/\s+/)[1]);
+    expect(files.slice(0, 3)).toEqual(["b.txt", "a.txt", "empty.txt"]);
+    expect(files.slice(3).sort()).toEqual(["dangling", "dangling2"]);
+    expect(textOf(result)).toContain(
+      "Combined size: 2.00 KB (excludes 2 files of unknown size)",
+    );
   });
 
   it("does not report the size of a symlink target outside the allowed directories", async () => {
@@ -1197,10 +1291,12 @@ describe("list_directory_with_sizes", () => {
         path: dir,
       });
       expect(textOf(result)).toContain(
-        `[FILE] ${"link-out".padEnd(30)} ${"0 B".padStart(10)}`,
+        `[FILE] ${"link-out".padEnd(30)} ${"unknown".padStart(10)}`,
       );
       expect(textOf(result)).not.toContain("1.50 KB");
-      expect(textOf(result)).toContain("Combined size: 2.00 KB");
+      expect(textOf(result)).toContain(
+        "Combined size: 2.00 KB (excludes 1 file of unknown size)",
+      );
     } finally {
       await fs.rm(outside, { recursive: true, force: true });
     }

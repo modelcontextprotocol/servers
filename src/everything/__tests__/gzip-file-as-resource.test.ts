@@ -22,6 +22,7 @@ import {
   textOf,
   type Session,
 } from "./harness.js";
+import { RESOURCE_ICONS } from "../server/icons.js";
 
 const TEXT = "hello, gzip";
 const DATA_URI = `data:text/plain;base64,${Buffer.from(TEXT).toString("base64")}`;
@@ -100,6 +101,7 @@ describe("gzip-file-as-resource", () => {
         uri: "demo://resource/session/hello.txt.gz",
         name: "hello.txt.gz",
         mimeType: "application/gzip",
+        icons: RESOURCE_ICONS,
       },
     ]);
     const blob = await readBlob(s, "demo://resource/session/hello.txt.gz");
@@ -114,6 +116,7 @@ describe("gzip-file-as-resource", () => {
       uri: "demo://resource/session/listed.gz",
       name: "listed.gz",
       mimeType: "application/gzip",
+      icons: RESOURCE_ICONS,
     });
     expect(
       ofMethod(s.notifications, "notifications/resources/list_changed").length,

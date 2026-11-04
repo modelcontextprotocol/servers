@@ -34,6 +34,7 @@ import {
   registerSessionResource,
 } from "../resources/session.js";
 import type { ServerContext } from "../server/context.js";
+import { RESOURCE_ICONS, TOOL_ICONS } from "../server/icons.js";
 
 // Maximum input file size - 10 MB default
 const GZIP_MAX_FETCH_SIZE = Number(
@@ -179,6 +180,7 @@ const config = {
   description:
     "Compresses a single file using gzip compression. Depending upon the selected output type, returns either the compressed data as a gzipped resource or a resource link, allowing it to be downloaded in a subsequent request: during the current session for a 2025-era client, or for ten minutes at a minted URI on protocol version 2026-07-28.",
   inputSchema: GZipFileAsResourceSchema,
+  icons: TOOL_ICONS,
   annotations: {
     readOnlyHint: false,
     destructiveHint: false,
@@ -228,7 +230,9 @@ export const registerGZipFileAsResourceTool = (
     const uri = getSessionResourceURI(name);
     const blob = compressedBuffer.toString("base64");
     const mimeType = "application/gzip";
-    const resource = <Resource>{ uri, name, mimeType };
+    // #5434: the session resource is listed like any other, so it carries
+    // the resource icons (#3131) in resources/list and in its link.
+    const resource = <Resource>{ uri, name, mimeType, icons: RESOURCE_ICONS };
 
     // Return the resource or a resource link that can be used to access this resource later
     if (outputType === "resource") {
