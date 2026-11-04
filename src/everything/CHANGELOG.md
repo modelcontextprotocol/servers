@@ -1,5 +1,11 @@
 # @modelcontextprotocol/server-everything
 
+## 2.2.1
+
+### Patch Changes
+
+- [#5436](https://github.com/modelcontextprotocol/servers/pull/5436) [`ee12fb1`](https://github.com/modelcontextprotocol/servers/commit/ee12fb1446585fe27407d4fe1a0205c3feffefa8) [@cliffhall](https://github.com/cliffhall) - Give the resource `gzip-file-as-resource` creates the light and dark resource icons, like every other resource. A 2025-era client now sees them on the session resource's `resources/list` entry and on the returned link; a 2026-07-28 client sees them on the minted resource link.
+
 ## 2.2.0
 
 ### Minor Changes
