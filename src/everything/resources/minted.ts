@@ -20,7 +20,7 @@ import {
   ResourceTemplate,
   type ResourceLink,
 } from "@modelcontextprotocol/server";
-import { RESOURCE_TEMPLATE_ICONS } from "../server/icons.js";
+import { RESOURCE_ICONS, RESOURCE_TEMPLATE_ICONS } from "../server/icons.js";
 
 /** How long a minted resource stays readable, in milliseconds. */
 export const MINTED_RESOURCE_TTL_MS = 10 * 60_000;
@@ -110,6 +110,8 @@ export function mintBlobResource(
     name,
     mimeType,
     description: `Created by a tool call; readable for ${MINTED_RESOURCE_TTL_MS / 60_000} minutes at this URI`,
+    // #5434: a minted resource is a resource like any other (#3131).
+    icons: RESOURCE_ICONS,
   };
 }
 
