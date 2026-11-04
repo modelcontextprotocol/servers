@@ -134,6 +134,8 @@ On Windows, use `cmd /c` to launch `npx`:
 
 To disable logging of thought information set env var: `DISABLE_THOUGHT_LOGGING` to `true`.
 
+Each thought is logged to stderr as a box, one row per line of the thought. The box is at most 100 characters wide, with longer lines wrapped, and draws at most 1000 rows; past that it ends with a row saying how many lines it left out. Only the log is shortened: the thought itself is stored and returned whole.
+
 To bound memory use, the server retains at most `MAX_THOUGHT_HISTORY` thoughts per connection (a positive integer; default `1000`). Past the cap the oldest thought is dropped, from its branch too, so `thoughtHistoryLength` in the result stops at the cap and a branch whose thoughts have all been dropped is no longer listed in `branches`.
 
 ### Usage with VS Code
