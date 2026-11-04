@@ -25,8 +25,9 @@ export const MAX_BOX_TEXT_WIDTH = 100;
  * The most rows of thought text a box draws (#5433). Each row is padded to
  * the box's width, so a thought of many short lines would still log about a
  * hundred times its own size; past this many rows the box ends with one row
- * saying how many lines it left out. Only stderr is cut: the stored thought
- * and the tool result are whole.
+ * saying how many lines it left out. Header rows (a long branchId) are not
+ * counted. Only stderr is cut: the thought kept in thoughtHistory is whole,
+ * and the tool result, which carries no thought text, is unchanged.
  */
 export const MAX_BOX_ROWS = 1000;
 
