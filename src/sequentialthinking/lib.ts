@@ -148,41 +148,47 @@ export class SequentialThinkingServer {
     // A reduce rather than Math.max(...lengths): spreading one argument per
     // line would overflow the call stack on a thought with very many lines.
     // #5433: never wider than MAX_BOX_TEXT_WIDTH; longer lines wrap below.
-    const width = Math.min(
+    const wrapWidth = Math.min(
       MAX_BOX_TEXT_WIDTH,
       lines.reduce(
         (widest, line) => Math.max(widest, line.length),
         visibleHeader.length,
       ),
     );
-    const border = "─".repeat(width + 4);
-    // Every row, header rows included, is padded to the border's width by the
-    // visible text's length. Each label's emoji is one surrogate pair, so its
-    // length of 2 is also its display width in a terminal. A header longer
-    // than the cap (a long branchId) wraps like a thought line; only its first
-    // row, which starts with the label, is coloured.
-    const row = (text: string) => `│ ${text.padEnd(border.length - 2)} │`;
-    const headerRows = wrapRow(visibleHeader, width).map((text, i) =>
-      i === 0 ? row(text).replace(label, colour(label)) : row(text),
-    );
+    // A header longer than the cap (a long branchId) wraps like a thought
+    // line; only its first row, which starts with the label, is coloured.
+    const headerTexts = wrapRow(visibleHeader, wrapWidth);
     // Rows are drawn up to MAX_BOX_ROWS; the lines left over are counted, not
     // drawn, so a huge thought costs no more than the cap.
-    const rows: string[] = [];
+    const texts: string[] = [];
     // Lines drawn in full; a line cut off by the cap counts as hidden.
     let whole = 0;
     for (const line of lines) {
-      const wrapped = wrapRow(line, width);
-      const room = MAX_BOX_ROWS - rows.length;
-      for (const text of wrapped.slice(0, room)) rows.push(row(text));
+      const wrapped = wrapRow(line, wrapWidth);
+      const room = MAX_BOX_ROWS - texts.length;
+      texts.push(...wrapped.slice(0, room));
       if (wrapped.length > room) break;
       whole++;
     }
     const hidden = lines.length - whole;
-    if (hidden > 0) {
-      rows.push(
-        row(`… ${hidden} more line${hidden === 1 ? "" : "s"} not shown`),
-      );
-    }
+    const summary =
+      hidden > 0
+        ? `… ${hidden} more line${hidden === 1 ? "" : "s"} not shown`
+        : "";
+    if (summary) texts.push(summary);
+    // The summary row can be wider than every line it follows, so the box is
+    // sized after it. Widening cannot change the wrapping above: below the cap
+    // no line wrapped, and at the cap the summary (under 40 characters) fits.
+    const width = Math.max(wrapWidth, summary.length);
+    const border = "─".repeat(width + 4);
+    // Every row, header rows included, is padded to the border's width by the
+    // visible text's length. Each label's emoji is one surrogate pair, so its
+    // length of 2 is also its display width in a terminal.
+    const row = (text: string) => `│ ${text.padEnd(border.length - 2)} │`;
+    const headerRows = headerTexts.map((text, i) =>
+      i === 0 ? row(text).replace(label, colour(label)) : row(text),
+    );
+    const rows = texts.map(row);
 
     return `
 ┌${border}┐

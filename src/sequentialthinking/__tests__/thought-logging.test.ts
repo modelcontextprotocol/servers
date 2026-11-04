@@ -242,6 +242,9 @@ ${rows.join("\n")}
       expect(out.at(-2)).toContain(
         `… ${200_000 - MAX_BOX_ROWS} more lines not shown`,
       );
+      // The summary is wider than every one-character line and the header,
+      // so it sets the box's width; it must not stick out of it.
+      expect(new Set(out.slice(1).map((r) => r.length)).size).toBe(1);
     });
   });
 
