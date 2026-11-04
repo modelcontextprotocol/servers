@@ -13,6 +13,50 @@ export interface ThoughtData {
 }
 
 /**
+ * The widest the text inside a thought box gets (#5433). A longer line, or a
+ * longer header, wraps onto further rows of this width. Without the cap every
+ * row was padded to the longest line, so one long line and many short ones
+ * made the box grow as their product: a 60 KB thought logged 400 million
+ * characters. Capped, the box grows linearly with the thought.
+ */
+export const MAX_BOX_TEXT_WIDTH = 100;
+
+/**
+ * The most rows of thought text a box draws (#5433). Each row is padded to
+ * the box's width, so a thought of many short lines would still log about a
+ * hundred times its own size; past this many rows the box ends with one row
+ * saying how many lines it left out. Header rows (a long branchId) are not
+ * counted. Only stderr is cut: the thought kept in thoughtHistory is whole,
+ * and the tool result, which carries no thought text, is unchanged.
+ */
+export const MAX_BOX_ROWS = 1000;
+
+/**
+ * `text` cut into rows of at most `width` UTF-16 code units, never between
+ * the two halves of a surrogate pair, so an emoji is never split across rows.
+ * An empty string is one empty row.
+ */
+function wrapRow(text: string, width: number): string[] {
+  const rows: string[] = [];
+  let start = 0;
+  do {
+    let end = Math.min(start + width, text.length);
+    const last = text.charCodeAt(end - 1);
+    if (
+      end < text.length &&
+      end - start > 1 &&
+      last >= 0xd800 &&
+      last <= 0xdbff
+    ) {
+      end -= 1;
+    }
+    rows.push(text.slice(start, end));
+    start = end;
+  } while (start < text.length);
+  return rows;
+}
+
+/**
  * How many thoughts one server instance retains when MAX_THOUGHT_HISTORY is
  * unset (#2912). A server lives as long as its client's connection, so without
  * a cap a long-lived connection grows its history without bound.
@@ -104,25 +148,54 @@ export class SequentialThinkingServer {
     const lines = thought.split(/\r\n|\r|\n/);
     // A reduce rather than Math.max(...lengths): spreading one argument per
     // line would overflow the call stack on a thought with very many lines.
-    const width = lines.reduce(
-      (widest, line) => Math.max(widest, line.length),
-      visibleHeader.length,
+    // #5433: never wider than MAX_BOX_TEXT_WIDTH; longer lines wrap below.
+    const wrapWidth = Math.min(
+      MAX_BOX_TEXT_WIDTH,
+      lines.reduce(
+        (widest, line) => Math.max(widest, line.length),
+        visibleHeader.length,
+      ),
     );
+    // A header longer than the cap (a long branchId) wraps like a thought
+    // line; only its first row, which starts with the label, is coloured.
+    const headerTexts = wrapRow(visibleHeader, wrapWidth);
+    // Rows are drawn up to MAX_BOX_ROWS; the lines left over are counted, not
+    // drawn, so a huge thought costs no more than the cap.
+    const texts: string[] = [];
+    // Lines drawn in full; a line cut off by the cap counts as hidden.
+    let whole = 0;
+    for (const line of lines) {
+      const wrapped = wrapRow(line, wrapWidth);
+      const room = MAX_BOX_ROWS - texts.length;
+      texts.push(...wrapped.slice(0, room));
+      if (wrapped.length > room) break;
+      whole++;
+    }
+    const hidden = lines.length - whole;
+    const summary =
+      hidden > 0
+        ? `… ${hidden} more line${hidden === 1 ? "" : "s"} not shown`
+        : "";
+    if (summary) texts.push(summary);
+    // The summary row can be wider than every line it follows, so the box is
+    // sized after it. Widening cannot change the wrapping above: below the cap
+    // no line wrapped, and at the cap the summary (under 40 characters) fits.
+    const width = Math.max(wrapWidth, summary.length);
     const border = "─".repeat(width + 4);
-    // The header row is padded to the border's width like the thought rows, by
-    // the visible text's length. Each label's emoji is one surrogate pair, so
-    // its length of 2 is also its display width in a terminal.
-    const padding = " ".repeat(border.length - 2 - visibleHeader.length);
-    const header = `${colour(label)}${counts}${padding}`;
-    const rows = lines
-      .map((line) => `│ ${line.padEnd(border.length - 2)} │`)
-      .join("\n");
+    // Every row, header rows included, is padded to the border's width by the
+    // visible text's length. Each label's emoji is one surrogate pair, so its
+    // length of 2 is also its display width in a terminal.
+    const row = (text: string) => `│ ${text.padEnd(border.length - 2)} │`;
+    const headerRows = headerTexts.map((text, i) =>
+      i === 0 ? row(text).replace(label, colour(label)) : row(text),
+    );
+    const rows = texts.map(row);
 
     return `
 ┌${border}┐
-│ ${header} │
+${headerRows.join("\n")}
 ├${border}┤
-${rows}
+${rows.join("\n")}
 └${border}┘`;
   }
 
