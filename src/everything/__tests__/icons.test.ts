@@ -6,7 +6,8 @@
  * (server/icons.ts). These tests read what crosses the wire, in both
  * protocol eras: `serverInfo` from `initialize` (2025-era) or
  * `server/discover` (2026-07-28), and every entry of `tools/list`,
- * `prompts/list`, `resources/list` and `resources/templates/list`. Each
+ * `prompts/list`, `resources/list` and `resources/templates/list`, and the
+ * resource link a tool returns for a resource it creates (#5434). Each
  * must carry a "light" and a "dark" icon, and each icon must be a scalable
  * SVG `data:` URI that decodes to an SVG document.
  */
@@ -17,6 +18,8 @@ import {
   connect,
   connectModern,
   connectRaw,
+  contentOf,
+  contentOfType,
   MODERN_CAPABILITIES,
   type RawSession,
   type Session,
@@ -40,6 +43,9 @@ afterEach(async () => {
 });
 
 const SVG_DATA_URI = "data:image/svg+xml;base64,";
+
+/** A small file for gzip-file-as-resource; a data: URI needs no network. */
+const DATA_URI = `data:text/plain;base64,${Buffer.from("icons").toString("base64")}`;
 
 /** Assert that `icons` is a themed pair of decodable SVG icons. */
 function expectThemedPair(icons: Icon[] | undefined): void {
@@ -126,6 +132,35 @@ describe.each([
       expect(template.icons).toEqual(RESOURCE_TEMPLATE_ICONS);
     }
   });
+
+  // #5434: a resource a tool creates is a resource too: its link carries the
+  // resource pair, whichever era's mechanism keeps it readable (a session
+  // resource for a 2025-era client, a minted URI on 2026-07-28).
+  it("puts the resource pair on the link gzip-file-as-resource returns", async () => {
+    session = await open();
+    const result = await session.client.callTool({
+      name: "gzip-file-as-resource",
+      arguments: { name: "icons.gz", data: DATA_URI },
+    });
+    const link = contentOfType(contentOf(result)[0], "resource_link");
+    expect(link.icons).toEqual(RESOURCE_ICONS);
+  });
+});
+
+// #5434: on the 2025 era the tool also registers the file as a session
+// resource, which then appears in resources/list with the pair.
+it("puts the resource pair on the session resource gzip-file-as-resource lists", async () => {
+  session = await connect({ capabilities: ALL_CAPABILITIES });
+  await session.client.callTool({
+    name: "gzip-file-as-resource",
+    arguments: { name: "listed-icons.gz", data: DATA_URI },
+  });
+  const { resources } = await session.client.listResources();
+  const generated = resources.find((r) => r.name === "listed-icons.gz");
+  expect(generated?.icons).toEqual(RESOURCE_ICONS);
+  for (const resource of resources) {
+    expect(resource.icons).toEqual(RESOURCE_ICONS);
+  }
 });
 
 describe("icons on the raw 2026-07-28 wire", () => {
