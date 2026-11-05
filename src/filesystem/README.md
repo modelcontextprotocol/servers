@@ -200,14 +200,16 @@ Files inside the allowed directories are also [resources](https://modelcontextpr
   - Succeeds silently if directory exists
 
 - **list_directory**
-  - List directory contents with [FILE] or [DIR] prefixes
+  - List the entries directly inside a directory, one per line, with [FILE] or [DIR] prefixes
   - Input: `path` (string)
+  - For sizes or a size-sorted listing, use `list_directory_with_sizes`; for a recursive view, use `directory_tree`
 
 - **list_directory_with_sizes**
-  - List directory contents with [FILE] or [DIR] prefixes, including file sizes
+  - List the entries directly inside a directory with [FILE] or [DIR] prefixes, including file sizes
+  - Use it when sizes matter (finding the largest files, say); for names only, use `list_directory`, which returns less text
   - Inputs:
     - `path` (string): Directory path to list
-    - `sortBy` (string, optional): Sort entries by "name" or "size" (default: "name")
+    - `sortBy` (string, optional): Sort entries by "name" or "size" (default: "name"; "size" lists the largest first)
   - Returns detailed listing with file sizes and summary statistics
   - Shows total files, directories, and combined size
   - An entry that cannot be stat'd (unreadable, a dangling symlink, or a symlink leaving the allowed directories) is listed with size `unknown` and left out of the combined size
@@ -246,7 +248,9 @@ Files inside the allowed directories are also [resources](https://modelcontextpr
     - `pattern` (string): Glob matched, case-sensitively, against each entry's
       path relative to `path`: `*.ext` matches entries directly under `path`,
       `**/*.ext` or `**/name` matches at any depth
-    - `excludePatterns` (string[]): Exclude any patterns. An excluded entry is
+    - `excludePatterns` (string[]): Globs for entries to skip, matched like
+      `pattern`, so a bare name skips only the top-level entry: use
+      `**/node_modules` to skip that name at any depth. An excluded entry is
       skipped before it is resolved or read, so excluding a slow folder keeps
       the search out of it entirely.
   - Glob-style pattern matching
@@ -261,7 +265,10 @@ Files inside the allowed directories are also [resources](https://modelcontextpr
   - Get recursive JSON tree structure of directory contents
   - Inputs:
     - `path` (string): Starting directory
-    - `excludePatterns` (string[]): Exclude any patterns. Glob formats are supported.
+    - `excludePatterns` (string[]): Globs for entries to leave out, with their
+      contents, matched against each entry's path relative to `path`. A
+      pattern with no `*` also matches that name at any depth, so
+      `node_modules` leaves out every `node_modules` directory.
     - `depth` (positive integer, optional): How many levels to descend. `1`
       lists only the entries directly in `path`, `2` adds their children, and
       so on. Omitted, the whole tree is returned

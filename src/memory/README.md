@@ -85,9 +85,10 @@ Example:
   - Fails if entity doesn't exist
 
 - **delete_entities**
-  - Remove entities and their relations
+  - Remove whole entities, with all their observations
   - Input: `entityNames` (string[])
-  - Cascading deletion of associated relations
+  - Cascading deletion of every relation that points to or from a deleted entity
+  - To remove a link between two entities and keep both, use `delete_relations`; to remove facts from an entity, use `delete_observations`
   - No error if an entity doesn't exist; the response reports which names were not found
 
 - **delete_observations**
@@ -99,12 +100,13 @@ Example:
   - No error if an observation doesn't exist; the response reports how many were deleted
 
 - **delete_relations**
-  - Remove specific relations from the graph
+  - Remove specific relations from the graph, keeping the entities they connect (to remove an entity itself, use `delete_entities`)
   - Input: `relations` (array of objects)
     - Each object contains:
       - `from` (string): Source entity name
       - `to` (string): Target entity name
       - `relationType` (string): Relationship type
+  - A relation is deleted only when `from`, `to` and `relationType` all match a stored one exactly; read the stored `relationType` with `open_nodes` (or `search_nodes`) first if unsure
   - No error if a relation doesn't exist; the response reports how many were deleted
 
 - **read_graph**
@@ -381,13 +383,44 @@ Docker:
 docker build -t mcp/memory -f src/memory/Dockerfile . 
 ```
 
-The image runs as the unprivileged `node` user, not root. A new named volume mounted at `/app/dist` takes its ownership from the image, but a volume created by an older image, which ran as root, is owned by root, and the server fails to save with `EACCES`. Give such a volume to `node` once (the graph in it is kept):
+### Upgrading a Docker install
+
+The [Docker](#docker) setup mounts the named volume `claude-memory` over `/app/dist`, the image's code directory, so the volume holds the server's code (`index.js`, `version.js`) next to your `memory.jsonl`. Docker copies an image's files into a named volume only while the volume is empty. Once the volume holds your graph, a newer image never reaches it: the container keeps running the code from the image that first filled the volume, which may not even start against the newer image's dependencies. Deleting `index.js` from the volume does not help; it leaves `/app/dist` with no entry point.
+
+To upgrade, build or pull the new `mcp/memory` image, quit the MCP clients that start it, then replace the code in the volume with the new image's, keeping `memory.jsonl`:
 
 ```sh
-docker run --rm -v claude-memory:/app/dist --user root --entrypoint chown mcp/memory -R node:node /app/dist
+docker run --rm -v claude-memory:/volume --user root --entrypoint sh mcp/memory \
+  -c 'rm -f /volume/*.js && cp /app/dist/*.js /volume/ && chown -R node:node /volume'
 ```
 
-For Awareness: a prior mcp/memory volume contains an index.js file that could be overwritten by the new container. If you are using a docker volume for storage, delete the old docker volume's `index.js` file before starting the new container.
+The volume is mounted at `/volume` rather than `/app/dist`, so the image's own `/app/dist` stays visible to copy from. Only the `.js` files are replaced; `memory.jsonl` (or a legacy `memory.json`) is left as it is. Repeat this after every image update.
+
+The image runs the server as the unprivileged `node` user, not root, so it must own the volume to save the graph. A volume an older image created, which ran as root, is owned by root, and without the `chown` above the server fails to save with `EACCES`. That is why this step runs as `--user root` and ends by giving the volume to `node`.
+
+#### Alternative: keep the graph in a volume of its own
+
+Mounting a volume on a directory of its own and pointing `MEMORY_FILE_PATH` at it keeps the code out of the volume, so a new image takes effect with no copying step:
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "docker",
+      "args": ["run", "-i", "-v", "claude-memory-data:/data", "-e", "MEMORY_FILE_PATH=/data/memory.jsonl", "--rm", "mcp/memory"]
+    }
+  }
+}
+```
+
+To move an existing graph from the `claude-memory` volume into the new one, quit the MCP clients that start the server, then run:
+
+```sh
+docker run --rm -v claude-memory:/old -v claude-memory-data:/data \
+  --entrypoint cp mcp/memory /old/memory.jsonl /data/memory.jsonl
+```
+
+If the old volume holds only a legacy `memory.json`, copy `/old/memory.json` to `/data/memory.jsonl` instead. Once the server has started on the new volume with your graph, you can remove the old volume with `docker volume rm claude-memory`.
 
 ## License
 

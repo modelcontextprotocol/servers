@@ -509,11 +509,12 @@ describe("tools/list", () => {
           "properties": {
             "resourceId": {
               "default": 1,
-              "description": "ID of the text resource to fetch",
+              "description": "ID of the text or blob resource to fetch, a positive integer",
               "type": "number",
             },
             "resourceType": {
               "default": "Text",
+              "description": "Whether to reference a text resource or a blob resource",
               "enum": [
                 "Text",
                 "Blob",

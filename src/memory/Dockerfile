@@ -19,7 +19,7 @@
 #
 # Like that image, it runs as the unprivileged `node` user (#4741). A volume an
 # earlier, root-running image created is owned by root, so the server can read
-# that graph but not save it; the README gives the one-time chown.
+# that graph but not save it; the README's upgrade step gives it to `node`.
 
 FROM node:24-alpine AS builder
 
@@ -57,6 +57,12 @@ RUN --mount=type=cache,target=/root/.npm \
 COPY --from=builder --chown=node:node /repo/src/memory/dist src/memory/dist
 
 RUN ln -s /repo/src/memory /app
+
+# /data is where the README's alternative setup mounts a volume of its own for
+# the graph (MEMORY_FILE_PATH=/data/memory.jsonl). Docker creates a missing
+# mount point owned by root, which the `node` user could not save to; a new
+# named volume takes this directory's ownership instead.
+RUN mkdir /data && chown node:node /data
 
 WORKDIR /app
 
