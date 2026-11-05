@@ -214,7 +214,9 @@ describe("append_file", () => {
       content: "x",
     });
     expect(result.isError).toBe(true);
-    expect(textOf(result)).toMatch(/ENOENT/);
+    expect(textOf(result)).toBe(
+      `Parent directory does not exist: ${path.join(dir, "missing")}`,
+    );
     expect(fsSync.existsSync(path.join(dir, "missing"))).toBe(false);
   });
 

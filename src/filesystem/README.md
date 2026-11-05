@@ -147,6 +147,10 @@ Files inside the allowed directories are also [resources](https://modelcontextpr
   - Inputs:
     - `path` (string): File location
     - `content` (string): File content
+  - Does not create directories: when the file's directory does not exist, it
+    fails with `Parent directory does not exist: <directory>`; create the
+    directory first with `create_directory`. `append_file`, `move_file` and
+    `copy_file` fail the same way for a missing destination directory
   - An existing file is overwritten in place, so it keeps its inode, creation
     time, hard links and permissions (`edit_file` writes the same way). The
     overwrite is not crash-atomic: a crash mid-write can leave the file partly
