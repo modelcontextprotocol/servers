@@ -199,6 +199,7 @@ export function registerFileResources(
         validPath = await validatePath(
           requestedPath,
           context.allowedDirectories(),
+          "read",
         );
       } catch (error) {
         // A path that does not exist (a dangling symlink, a missing parent, a

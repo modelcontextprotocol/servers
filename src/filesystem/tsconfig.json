@@ -6,9 +6,7 @@
     "moduleResolution": "NodeNext",
     "module": "NodeNext"
   },
-  "include": [
-    "./**/*.ts"
-  ],
+  "include": ["./**/*.ts"],
   "exclude": [
     "**/__tests__/**",
     "**/*.test.ts",
