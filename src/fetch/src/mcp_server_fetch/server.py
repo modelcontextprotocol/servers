@@ -435,6 +435,11 @@ class BoundedInflater:
     def unconsumed_tail(self) -> bytes:
         return self._z.unconsumed_tail
 
+    @property
+    def eof(self) -> bool:
+        """Whether the compressed stream has ended."""
+        return self._z.eof
+
     def decompress(self, data: bytes, max_length: int) -> bytes:
         try:
             out = self._z.decompress(data, max_length)
@@ -536,6 +541,11 @@ async def read_capped(response: httpx.Response, limit: int) -> tuple[bytes, bool
             body += out
             if len(body) > limit:
                 return bytes(body[:limit]), True
+            if inflater is not None and inflater.eof:
+                # The compressed stream is complete. Whatever follows it is not
+                # part of the body (httpx's decoders drop it too), and zlib
+                # would keep all of it in `unused_data`, so reading stops here.
+                return bytes(body), False
     if inflater is not None:
         # All input is consumed by now, so zlib has at most a few bytes left.
         body += inflater.flush()

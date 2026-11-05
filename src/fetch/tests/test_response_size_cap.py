@@ -299,6 +299,63 @@ async def test_a_compression_bomb_never_decodes_past_the_cap(
 
 @pytest.mark.parametrize(
     ("coding", "encode"),
+    [("gzip", gzip.compress), ("deflate", zlib.compress), ("deflate", raw_deflate)],
+)
+async def test_data_after_the_compressed_stream_is_not_read(
+    web: FakeWeb, coding: str, encode: Any
+) -> None:
+    # A complete compressed body, then endless trailing bytes: zlib would hold
+    # every one of them in `unused_data`, which no output cap sees, so the read
+    # stops where the compressed stream ends.
+    trailing = Body(fill=b"\x00")
+
+    async def stream() -> AsyncIterator[bytes]:
+        yield encode(b"t" * 10)
+        async for chunk in trailing.stream():
+            yield chunk
+
+    web.add(
+        PAGE,
+        httpx.Response(
+            200,
+            content=stream(),
+            headers={"content-type": "text/plain", "content-encoding": coding},
+        ),
+    )
+    result = await call()
+    assert wire(result)["isError"] is False
+    assert text_of(result).endswith("t" * 10)
+    assert trailing.chunks_sent <= 1
+
+
+async def test_robots_txt_stops_at_the_end_of_its_compressed_stream(
+    web: FakeWeb,
+) -> None:
+    trailing = Body(fill=b"\x00")
+
+    async def robots() -> AsyncIterator[bytes]:
+        yield gzip.compress(b"User-agent: *\nDisallow: /page\n")
+        async for chunk in trailing.stream():
+            yield chunk
+
+    web.add(
+        ROBOTS,
+        httpx.Response(
+            200,
+            content=robots(),
+            headers={"content-type": "text/plain", "content-encoding": "gzip"},
+        ),
+    )
+    async with connect() as (session, _):
+        result = await session.call_tool("fetch", {"url": PAGE})
+    assert "specifies that autonomous fetching of this page is not allowed" in (
+        text_of(result)
+    )
+    assert trailing.chunks_sent <= 1
+
+
+@pytest.mark.parametrize(
+    ("coding", "encode"),
     [
         ("gzip", gzip.compress),
         ("x-gzip", gzip.compress),
