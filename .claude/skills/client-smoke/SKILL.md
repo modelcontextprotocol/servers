@@ -154,8 +154,8 @@ server is listening and exit 4. The wait is bounded and checks that this
 server is still alive, so one that fails to bind (the build is missing, the
 port was taken in between) ends the run instead of hanging it. The subshell's `EXIT` trap stops the server by pid even when the CLI call
 fails; a listener left on the port makes the next run talk to the old build.
-By hand in two terminals, the equivalent is waiting for the `listening on
-port` line and stopping the server with Ctrl-C.
+By hand in two terminals, the equivalent is waiting for the listening line
+(`… listening on 127.0.0.1:3917`) and stopping the server with Ctrl-C.
 
 A change to a tool, resource or prompt of `everything` is checked over stdio
 and Streamable HTTP. Check HTTP+SSE as well when the change touches transport

@@ -230,7 +230,11 @@ describe("server identity and tool list", () => {
     expect(strip(byName.read_text_file.inputSchema)).toEqual({
       type: "object",
       properties: {
-        path: { type: "string" },
+        path: {
+          type: "string",
+          description:
+            "The file to read as text. Absolute, or relative to an allowed directory; it must resolve inside the allowed directories.",
+        },
         tail: {
           type: "integer",
           minimum: 0,
@@ -247,12 +251,23 @@ describe("server identity and tool list", () => {
       },
       required: ["path"],
     });
+    // The deprecated alias advertises read_text_file's schema, not a copy.
+    expect(byName.read_file.inputSchema).toEqual(
+      byName.read_text_file.inputSchema,
+    );
     expect(strip(byName.edit_file.inputSchema)).toEqual({
       type: "object",
       properties: {
-        path: { type: "string" },
+        path: {
+          type: "string",
+          description:
+            "The text file to edit. Absolute, or relative to an allowed directory; it must resolve inside the allowed directories.",
+        },
         edits: {
           type: "array",
+          description:
+            "The replacements to make, applied in order, each to the result of the ones before it. " +
+            "If any one has no match, none is written.",
           items: {
             type: "object",
             properties: {
