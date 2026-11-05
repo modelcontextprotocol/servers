@@ -1192,15 +1192,31 @@ export async function headFile(
 // prunes every `node_modules` directory, not only one at the root. Names are
 // matched whole: `node_modules` does not exclude `node_modules_old`.
 //
+// A wildcard pattern ending in `/**` also excludes the directory it names
+// (#5445): minimatch matches `**/node_modules/**` only against paths below a
+// `node_modules`, never the directory entry itself, so without this the walk
+// would still resolve and read the directory and only drop its children. The
+// pattern is matched a second time with that suffix removed (`**/node_modules`),
+// for directory entries only: a file is not a directory a pattern can name, so a
+// file called `build` stays under `**/build/**`, and `index.js` under `*/**`.
+//
 // Callers check it before validating an entry, so an excluded subtree is never
 // realpath'd or read (#4162).
 export function isExcludedPath(
   relativePath: string,
   excludePatterns: readonly string[],
+  isDirectory = false,
 ): boolean {
   return excludePatterns.some((pattern) => {
     if (pattern.includes("*")) {
-      return minimatch(relativePath, pattern, { dot: true });
+      return (
+        minimatch(relativePath, pattern, { dot: true }) ||
+        (isDirectory &&
+          pattern.endsWith("/**") &&
+          minimatch(relativePath, pattern.slice(0, -"/**".length), {
+            dot: true,
+          }))
+      );
     }
     return (
       minimatch(relativePath, pattern, { dot: true }) ||
@@ -1243,7 +1259,8 @@ export async function searchFilesWithValidation(
       // excluded subtree is never realpath'd or read (#4162): excluding a slow
       // provider folder keeps the walk from touching it at all.
       const relativePath = path.relative(rootPath, fullPath);
-      if (isExcludedPath(relativePath, excludePatterns)) continue;
+      if (isExcludedPath(relativePath, excludePatterns, entry.isDirectory()))
+        continue;
 
       visit();
 

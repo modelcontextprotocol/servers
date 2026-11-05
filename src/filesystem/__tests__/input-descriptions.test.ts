@@ -127,4 +127,12 @@ describe("excludePatterns, as the descriptions state it (#3669)", () => {
       path.join(dir, "pkg", "keep.txt"),
     ]);
   });
+
+  it("a glob ending in '/**' leaves out the directory it names (#5445)", async () => {
+    const result = await call(conn.client, "directory_tree", {
+      path: dir,
+      excludePatterns: ["**/node_modules/**"],
+    });
+    expect(textOf(result)).not.toContain("node_modules");
+  });
 });

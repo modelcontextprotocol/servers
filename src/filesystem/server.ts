@@ -158,7 +158,7 @@ const DirectoryTreeArgsSchema = z.object({
     .describe(
       "Patterns for entries to leave out, with their contents, matched against each entry's path relative to path. " +
         "A pattern with no '*' matches that name at any depth ('node_modules' leaves out every node_modules directory); " +
-        "a pattern with '*' is a glob matched as written.",
+        "a pattern with '*' is a glob matched as written, and one ending in '/**' also leaves out the directory it names.",
     ),
   depth: z
     .number()
@@ -200,7 +200,7 @@ const SearchFilesArgsSchema = z.object({
     .describe(
       "Patterns for entries to leave out, with their contents, matched against each entry's path relative to path. " +
         "A pattern with no '*' matches that name at any depth ('node_modules' leaves out every node_modules directory); " +
-        "a pattern with '*' is a glob matched as written.",
+        "a pattern with '*' is a glob matched as written, and one ending in '/**' also leaves out the directory it names.",
     ),
 });
 
@@ -868,7 +868,10 @@ export function createServer(
             rootPath,
             path.join(currentPath, entry.name),
           );
-          if (isExcludedPath(relativePath, excludePatterns)) continue;
+          if (
+            isExcludedPath(relativePath, excludePatterns, entry.isDirectory())
+          )
+            continue;
           // Counted after the exclude check, so excluded subtrees cost
           // nothing; the cap and the readdir timeout keep one call from
           // walking an unbounded or stalled tree (#4162).
