@@ -127,6 +127,13 @@ npm run start:streamableHttp
 
 The endpoint is `http://localhost:3001/mcp` (`PORT` overrides the port). It serves 2026-07-28 clients statelessly and 2025-era clients with sessions, from the same URL.
 
+Both HTTP transports (Streamable HTTP and HTTP+SSE) listen on the loopback interface, `127.0.0.1`, by default, so only clients on the same machine can reach them. Set `HOST` to bind another address: `HOST=0.0.0.0` listens on every interface, which exposes the server's tools to every host that can reach the machine, so set it only on a network you trust. The listening line the server prints names the address and port it bound, such as `127.0.0.1:3001`.
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `PORT` | `3001` | The port the HTTP transport listens on |
+| `HOST` | `127.0.0.1` | The address it binds; `0.0.0.0` (or `::`) for every interface |
+
 Both HTTP transports (Streamable HTTP and HTTP+SSE) accept browser requests only from a localhost origin: an `Origin` header whose host is `localhost`, `127.0.0.1` or `[::1]`, on any port, such as the MCP Inspector's. A request carrying any other `Origin` is refused with `403 Forbidden`. Clients that send no `Origin` header, which is every non-browser client, are unaffected.
 
 ## Running from source with [HTTP+SSE Transport](https://modelcontextprotocol.io/specification/2024-11-05/basic/transports#http-with-sse) (deprecated as of [2025-03-26](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports))
@@ -195,7 +202,7 @@ docker run -i --rm mcp/everything
 docker run --rm -p 127.0.0.1:3001:3001 mcp/everything streamableHttp
 ```
 
-The endpoint is `http://localhost:3001/mcp`. The server listens on port 3001 on every interface inside the container; `127.0.0.1:` publishes it on the host's loopback only. To use another port, set `PORT` and publish that one (`-e PORT=8080 -p 127.0.0.1:8080:8080`). The localhost-only `Origin` check described above applies inside the container too. `docker stop` ends the server cleanly.
+The endpoint is `http://localhost:3001/mcp`. The image sets `HOST=0.0.0.0`, so the server listens on port 3001 on every interface inside the container, which is what lets a published port reach it; `127.0.0.1:` publishes it on the host's loopback only. To use another port, set `PORT` and publish that one (`-e PORT=8080 -p 127.0.0.1:8080:8080`). The localhost-only `Origin` check described above applies inside the container too. `docker stop` ends the server cleanly.
 
 ## License
 
