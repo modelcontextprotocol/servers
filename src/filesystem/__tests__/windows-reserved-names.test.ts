@@ -53,6 +53,9 @@ describe("namesWindowsDevice on win32", () => {
     "C:\\work\\NUL.txt",
     "C:\\work\\com1.tar.gz",
     "C:\\work\\CON .txt",
+    // `.` must match any character in the extension, line separators included.
+    "C:\\work\\NUL.\u2028txt",
+    "C:\\work\\NUL.\u2029txt",
     "C:\\work\\aux\\file.txt",
     "\\\\?\\C:\\work\\NUL",
     "\\\\.\\NUL",

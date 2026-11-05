@@ -44,7 +44,7 @@ const WINDOWS_UNC_ROOT =
   /^(?:\\\\[?.]\\UNC\\|\\\\(?![?.]\\))[^\\/]+[\\/][^\\/]+/i;
 
 const WINDOWS_DEVICE_NAME =
-  /^(?:CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³]) *(?:\..*)?$/i;
+  /^(?:CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³]) *(?:\..*)?$/is;
 
 function windowsNameComponents(normalizedPath: string): string[] {
   return normalizedPath
