@@ -338,6 +338,54 @@ describe("validatePath's access mode", () => {
   });
 });
 
+describe("the macOS Data-volume spelling", () => {
+  const vault = "/Users/me/ref";
+  const aliased = "/System/Volumes/Data/Users/me/ref";
+
+  it.each([
+    ["the aliased path, firmlinked marking", `${aliased}/notes.txt`, vault],
+    ["the firmlinked path, aliased marking", `${vault}/notes.txt`, aliased],
+  ])("refuses a write through %s on darwin", (_label, target, marking) => {
+    expect(() => assertWritable(target, [marking], "write", "darwin")).toThrow(
+      "Access denied - read-only directory",
+    );
+  });
+
+  it.each([
+    ["the aliased parent", "/System/Volumes/Data/Users/me", vault],
+    ["the firmlinked parent", "/Users/me", aliased],
+  ])(
+    "refuses moving %s of a read-only directory on darwin",
+    (_label, source, marking) => {
+      expect(() => assertWritable(source, [marking], "move", "darwin")).toThrow(
+        `contains ${marking}`,
+      );
+    },
+  );
+
+  it("keeps the two spellings apart off darwin", () => {
+    expect(() =>
+      assertWritable(`${aliased}/notes.txt`, [vault], "move", "linux"),
+    ).not.toThrow();
+  });
+
+  it.runIf(process.platform === "darwin")(
+    "refuses a write through the Data-volume spelling over the protocol",
+    async () => {
+      const client = await connect(
+        "legacy",
+        [writable, `/System/Volumes/Data${protectedDir}`],
+        [protectedDir],
+      );
+      await expectRefused(client, "write_file", {
+        path: `/System/Volumes/Data${protectedDir}/keep.txt`,
+        content: "changed",
+      });
+      expect(await keepContent()).toBe("original\n");
+    },
+  );
+});
+
 describe("resolveReadOnlyDirectories", () => {
   it("keeps both spellings of a symlinked directory", async () => {
     const link = path.join(writable, "alias");

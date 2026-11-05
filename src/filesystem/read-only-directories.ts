@@ -65,6 +65,22 @@ export async function resolveReadOnlyDirectories(
   return [...new Set(resolved.flat())];
 }
 
+// The macOS Data volume firmlinks /Users, /private and the rest into the
+// root, and realpath keeps a /System/Volumes/Data/... spelling it is given, so
+// one directory has two resolved spellings there. Both sides of every
+// containment check below drop that prefix on darwin, so neither spelling
+// reaches a read-only directory the other one names. pinned-directory.ts
+// folds the same prefix for the same reason.
+const DATA_VOLUME = "/System/Volumes/Data";
+
+/** `p` normalized, without the macOS Data-volume prefix on darwin. */
+function comparable(p: string, platform: string): string {
+  const normalized = normalizePathFormat(p);
+  return platform === "darwin" && normalized.startsWith(`${DATA_VOLUME}/`)
+    ? normalized.slice(DATA_VOLUME.length)
+    : normalized;
+}
+
 /**
  * The read-only directory that `resolvedPath` (a path validatePath resolved)
  * falls in, or undefined when it is in none.
@@ -72,10 +88,11 @@ export async function resolveReadOnlyDirectories(
 export function findReadOnlyDirectory(
   resolvedPath: string,
   readOnlyDirectories: readonly string[],
+  platform: string = process.platform,
 ): string | undefined {
-  const normalized = normalizePathFormat(resolvedPath);
+  const target = comparable(resolvedPath, platform);
   return readOnlyDirectories.find((dir) =>
-    isPathWithinAllowedDirectories(normalized, [dir]),
+    isPathWithinAllowedDirectories(target, [comparable(dir, platform)]),
   );
 }
 
@@ -89,17 +106,22 @@ export function assertWritable(
   resolvedPath: string,
   readOnlyDirectories: readonly string[],
   access: "write" | "move" = "write",
+  platform: string = process.platform,
 ): void {
-  const directory = findReadOnlyDirectory(resolvedPath, readOnlyDirectories);
+  const directory = findReadOnlyDirectory(
+    resolvedPath,
+    readOnlyDirectories,
+    platform,
+  );
   if (directory !== undefined) {
     throw new Error(
       `Access denied - read-only directory: ${resolvedPath} is in ${directory}, which the server was started with --read-only-dir`,
     );
   }
   if (access === "move") {
-    const normalized = normalizePathFormat(resolvedPath);
+    const target = comparable(resolvedPath, platform);
     const contained = readOnlyDirectories.find((dir) =>
-      isPathWithinAllowedDirectories(dir, [normalized]),
+      isPathWithinAllowedDirectories(comparable(dir, platform), [target]),
     );
     if (contained !== undefined) {
       throw new Error(
