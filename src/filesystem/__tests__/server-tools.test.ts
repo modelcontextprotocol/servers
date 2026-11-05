@@ -869,13 +869,15 @@ describe("write_file", () => {
     expect(textOf(result)).toBe("EIO: i/o error");
   });
 
-  it("reports a missing parent directory as ENOENT", async () => {
+  it("reports a missing parent directory (#5432)", async () => {
     const result = await call(client, "write_file", {
       path: path.join(dir, "no", "such", "file.txt"),
       content: "x",
     });
     expect(result.isError).toBe(true);
-    expect(textOf(result)).toMatch(/^ENOENT: no such file or directory/);
+    expect(textOf(result)).toBe(
+      `Parent directory does not exist: ${path.join(dir, "no", "such")}`,
+    );
   });
 });
 
