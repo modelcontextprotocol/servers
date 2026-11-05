@@ -156,8 +156,9 @@ const DirectoryTreeArgsSchema = z.object({
     .optional()
     .default([])
     .describe(
-      "Glob patterns for entries to leave out, with their contents, matched against each entry's path relative to path. " +
-        "A pattern with no '*' also matches that name at any depth, so 'node_modules' leaves out every node_modules directory.",
+      "Patterns for entries to leave out, with their contents, matched against each entry's path relative to path. " +
+        "A pattern with no '*' matches that name at any depth ('node_modules' leaves out every node_modules directory); " +
+        "a pattern with '*' is a glob matched as written.",
     ),
   depth: z
     .number()
@@ -197,8 +198,9 @@ const SearchFilesArgsSchema = z.object({
     .optional()
     .default([])
     .describe(
-      "Glob patterns for entries to skip, matched like pattern; a skipped directory is not searched. " +
-        "Use '**/node_modules' to skip that name at any depth.",
+      "Patterns for entries to leave out, with their contents, matched against each entry's path relative to path. " +
+        "A pattern with no '*' matches that name at any depth ('node_modules' leaves out every node_modules directory); " +
+        "a pattern with '*' is a glob matched as written.",
     ),
 });
 
