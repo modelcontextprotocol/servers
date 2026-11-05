@@ -77,6 +77,10 @@ describe("namesWindowsDevice on win32", () => {
     "C:\\work\\.nul",
     "\\\\?\\C:\\work\\file.txt",
     "\\\\server\\share\\file.txt",
+    // A UNC root's server and share are network names, not path components.
+    "\\\\nas\\CON\\notes.txt",
+    "\\\\aux\\share\\notes.txt",
+    "\\\\?\\UNC\\nas\\NUL\\notes.txt",
   ])("accepts %s", (p) => {
     expect(namesWindowsDevice(p)).toBe(false);
   });
@@ -92,6 +96,7 @@ describe("hasTrailingDotOrSpace on win32", () => {
     "C:\\work\\...",
     "\\\\?\\C:\\work\\file.txt.",
     "\\\\server\\share\\file.txt ",
+    "\\\\?\\UNC\\server\\share\\file.txt.",
   ])("refuses %s", (p) => {
     expect(hasTrailingDotOrSpace(p)).toBe(true);
   });
@@ -109,6 +114,9 @@ describe("hasTrailingDotOrSpace on win32", () => {
     "C:\\work\\..\\file.txt",
     "\\\\.\\C:\\work\\file.txt",
     "\\\\?\\C:\\work\\file.txt",
+    // An FQDN server name may end in a dot; it is not a path component.
+    "\\\\fileserver.example.com.\\share\\notes.txt",
+    "\\\\?\\UNC\\fileserver.example.com.\\share\\notes.txt",
   ])("accepts %s", (p) => {
     expect(hasTrailingDotOrSpace(p)).toBe(false);
   });
@@ -148,6 +156,20 @@ describe("isPathWithinAllowedDirectories on win32 refuses device names and trail
         "\\\\?\\C:\\work",
       ]),
     ).toThrow(TRAILING);
+  });
+
+  it("accepts a file on a UNC share whose server or share looks reserved", () => {
+    expect(
+      isPathWithinAllowedDirectories("\\\\nas\\CON\\notes.txt", [
+        "\\\\nas\\CON",
+      ]),
+    ).toBe(true);
+    expect(
+      isPathWithinAllowedDirectories(
+        "\\\\fileserver.example.com.\\share\\notes.txt",
+        ["\\\\fileserver.example.com.\\share"],
+      ),
+    ).toBe(true);
   });
 
   it("names the requested path in the error", () => {

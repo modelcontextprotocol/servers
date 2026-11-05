@@ -36,12 +36,19 @@ export function namesAlternateDataStream(normalizedPath: string): boolean {
 //   created through `\\?\` that cannot be opened the ordinary way afterwards.
 // The `.` and `..` components are not "trailing dot" names (resolve has
 // already folded them away, and `\\.\` keeps a lone `.` as its prefix), and
-// the drive (`C:`) is neither, so only real names are judged.
+// the drive (`C:`) is neither, so only real names are judged. A UNC root's
+// server and share (`\\server\share`, `\\?\UNC\server\share`) are network
+// names, not path components Win32 maps or strips (an FQDN server may end in
+// a dot), so they are skipped too; `\\.\NUL` is a device target and is not.
+const WINDOWS_UNC_ROOT =
+  /^(?:\\\\[?.]\\UNC\\|\\\\(?![?.]\\))[^\\/]+[\\/][^\\/]+/i;
+
 const WINDOWS_DEVICE_NAME =
   /^(?:CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³]) *(?:\..*)?$/i;
 
 function windowsNameComponents(normalizedPath: string): string[] {
   return normalizedPath
+    .replace(WINDOWS_UNC_ROOT, "")
     .split(/[\\/]/)
     .filter((part) => part !== "" && part !== "." && part !== "..");
 }
