@@ -24,6 +24,8 @@ Specify Allowed directories when starting the server:
 mcp-server-filesystem /path/to/dir1 /path/to/dir2
 ```
 
+Options may come before, between or after the directories: `--read-only`, `--read-only-dir <path>` (both below) and `--confine-roots` (under Method 2).
+
 This is the only method that works on every protocol version, so it is the one to use.
 
 ### Read-only Mode
@@ -36,7 +38,22 @@ The server then registers only the tools annotated `readOnlyHint: true` in the [
 
 The flag may appear anywhere among the arguments. `--` ends the options, so a directory literally named `--read-only` can be given after it.
 
-Read-only mode covers every allowed directory. To make only some of them read-only, run two servers: one with `--read-only` for the directories to protect, and one without it for the rest. That separation holds only while the writable server keeps its command-line directories: a 2025-era client that supports Roots replaces them (see Method 2), so it could expose a protected directory to the writable server, unless that server is started with `--confine-roots` (see below). Where that matters, make the protected directories read-only at the operating-system level as well, with file permissions or, with Docker, a bind mount's `ro` flag.
+Read-only mode covers every allowed directory. To make only some of them read-only, use `--read-only-dir` below.
+
+#### Read-only directories
+Add `--read-only-dir <path>` to make one directory read-only while the others stay writable. Repeat it for each directory to protect:
+```bash
+mcp-server-filesystem --read-only-dir /path/to/reference /path/to/workspace
+```
+
+- A read-only directory is an allowed directory too, so it need not also be listed on its own.
+- Every write tool (`write_file`, `append_file`, `edit_file`, `create_directory`, `move_file` and `copy_file`) stays listed, since the other directories are writable, but refuses a target inside a read-only directory with an error such as `Access denied - read-only directory: /path/to/reference/notes.md is in /path/to/reference, which the server was started with --read-only-dir`. `move_file` is refused when either its source or its destination is inside one; `copy_file` may copy out of one, never into it. `edit_file` is refused there even with `dryRun`.
+- The check runs on a path's resolved location, so a symlink in a writable directory cannot route a write into a read-only one.
+- A path inside any read-only directory is refused, so a directory nested inside a read-only one is read-only too, even if it is also given as a writable directory.
+- The marking is fixed at startup and holds on both protocol eras. A 2025-era client's Roots can replace the allowed directories (see Method 2), but Roots say nothing about writing, so they never lift it: a write into a read-only directory is refused whichever directories are in force, with or without `--confine-roots`.
+- `list_allowed_directories` lists the read-only directories after the allowed ones, and the server logs them to stderr at startup.
+
+The option may appear anywhere among the arguments, and takes the next argument as its directory, whatever it is. `--` ends the options, so after it `--read-only-dir` is a directory name. With `--read-only` as well, every write tool is withheld anyway. For defence in depth, make the protected directories read-only at the operating-system level as well, with file permissions or, with Docker, a bind mount's `ro` flag.
 
 ### Method 2: MCP Roots (Deprecated, 2025-era clients only)
 A client that connects with a 2025-era protocol version (the `initialize` handshake) and supports [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots) can dynamically update the Allowed directories.

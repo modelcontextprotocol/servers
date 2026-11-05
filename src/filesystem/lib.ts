@@ -6,6 +6,7 @@ import { createTwoFilesPatch } from "diff";
 import { minimatch } from "minimatch";
 import { normalizePathFormat, expandHome } from "./path-utils.js";
 import { isPathWithinAllowedDirectories } from "./path-validation.js";
+import { assertWritable } from "./read-only-directories.js";
 import {
   appendFileInDirectory,
   createDirectoryInPlace,
@@ -470,7 +471,37 @@ async function resolveUnicodeEquivalentPath(
 // The allow-list is passed in rather than read from module state, so each
 // server instance (see server.ts) validates against its own directories and two
 // instances can coexist in one process (#4854).
+//
+// Every caller states what it will do with the path (#5348). A "read" is
+// checked against the allowed directories only. A "write" must also be handed
+// the read-only directories, and is refused when the resolved path falls in
+// one, so a write tool cannot skip the check: the mode is required, and the
+// "write" overload does not compile without the list.
 export async function validatePath(
+  requestedPath: string,
+  allowedDirectories: readonly string[],
+  access: "read",
+): Promise<string>;
+export async function validatePath(
+  requestedPath: string,
+  allowedDirectories: readonly string[],
+  access: "write",
+  readOnlyDirectories: readonly string[],
+): Promise<string>;
+export async function validatePath(
+  requestedPath: string,
+  allowedDirectories: readonly string[],
+  access: "read" | "write",
+  readOnlyDirectories: readonly string[] = [],
+): Promise<string> {
+  const resolved = await resolveAllowedPath(requestedPath, allowedDirectories);
+  if (access === "write") assertWritable(resolved, readOnlyDirectories);
+  return resolved;
+}
+
+// The allow-list half of validatePath: the requested path resolved to its real
+// location and checked to be inside the allowed directories.
+async function resolveAllowedPath(
   requestedPath: string,
   allowedDirectories: readonly string[],
 ): Promise<string> {
@@ -1228,7 +1259,7 @@ export async function searchFilesWithValidation(
       // timeout still ends the whole search rather than returning partial
       // results as if they were complete.
       try {
-        await validatePath(fullPath, allowedDirectories);
+        await validatePath(fullPath, allowedDirectories, "read");
       } catch (error) {
         if (error instanceof FsTimeoutError) {
           throw error;

@@ -227,11 +227,13 @@ describe("the command line", () => {
       directories: ["/a"],
       readOnly: false,
       confineRoots: true,
+      readOnlyDirectories: [],
     });
     expect(parseArgs(["--", "--confine-roots"])).toEqual({
       directories: ["--confine-roots"],
       readOnly: false,
       confineRoots: false,
+      readOnlyDirectories: [],
     });
   });
 
