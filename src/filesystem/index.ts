@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The stdio entry point of the filesystem server (the package's bin). It
-// parses the command line (its options, such as --read-only, and the allowed
-// directories), resolves the allowed directories and serves
+// parses the command line (its options, such as --read-only or --read-only-dir,
+// and the allowed directories), resolves the allowed directories and serves
 // createServer() on stdio through the SDK's serveStdio entry, which answers
 // 2026-07-28 clients (server/discover, no handshake) and 2025-era clients
 // (initialize, then Roots) from the same factory (#4852). Everything runs inside
@@ -27,6 +27,10 @@ import {
 } from "./path-utils.js";
 import { createServer } from "./server.js";
 import { describeAllowedDirectories } from "./allowed-directories.js";
+import {
+  describeReadOnlyDirectories,
+  resolveReadOnlyDirectories,
+} from "./read-only-directories.js";
 
 /**
  * Resolve the allowed directories given on the command line, warning about and
@@ -104,28 +108,44 @@ export interface ParsedArgs {
   readOnly: boolean;
   /** `--confine-roots`: keep a client's Roots inside the directories (#3133). */
   confineRoots: boolean;
+  /**
+   * `--read-only-dir <path>`, repeatable: directories every write tool
+   * refuses (#5348). Each is also an allowed directory, so it need not be
+   * listed twice.
+   */
+  readOnlyDirectories: string[];
 }
 
 /**
  * Split the command line into options and allowed directories. An option may
  * appear anywhere; `--` ends the options, so a directory whose name is an
  * option's can still be given after it. Any other argument is a directory, as
- * every argument was before options existed.
+ * every argument was before options existed. `--read-only-dir` takes the next
+ * argument as its directory, whatever it looks like, and throws when there is
+ * none.
  */
 export function parseArgs(args: string[]): ParsedArgs {
   const parsed: ParsedArgs = {
     directories: [],
     readOnly: false,
     confineRoots: false,
+    readOnlyDirectories: [],
   };
   let options = true;
-  for (const arg of args) {
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index];
     if (options && arg === "--") {
       options = false;
     } else if (options && arg === "--read-only") {
       parsed.readOnly = true;
     } else if (options && arg === "--confine-roots") {
       parsed.confineRoots = true;
+    } else if (options && arg === "--read-only-dir") {
+      index++;
+      if (index >= args.length) {
+        throw new Error("--read-only-dir needs a directory after it");
+      }
+      parsed.readOnlyDirectories.push(args[index]);
     } else {
       parsed.directories.push(arg);
     }
@@ -144,10 +164,11 @@ export async function main(
   stdin: Readable = process.stdin,
   stdout: Writable = process.stdout,
 ): Promise<StdioServerHandle> {
-  const { directories, readOnly, confineRoots } = parseArgs(args);
-  if (directories.length === 0) {
+  const { directories, readOnly, confineRoots, readOnlyDirectories } =
+    parseArgs(args);
+  if (directories.length === 0 && readOnlyDirectories.length === 0) {
     console.error(
-      "Usage: mcp-server-filesystem [--read-only] [--confine-roots] [allowed-directory] [additional-directories...]",
+      "Usage: mcp-server-filesystem [--read-only] [--confine-roots] [--read-only-dir <dir>]... [allowed-directory] [additional-directories...]",
     );
     console.error("Note: Allowed directories can be provided via:");
     console.error("  1. Command-line arguments (shown above)");
@@ -159,7 +180,15 @@ export async function main(
     );
   }
 
-  const allowedDirectories = await resolveAllowedDirectories(directories);
+  // A read-only directory is an allowed directory too (#5348).
+  const allowedDirectories = await resolveAllowedDirectories([
+    ...directories,
+    ...readOnlyDirectories,
+  ]);
+  // Rejects, so the server does not start, when a read-only directory
+  // cannot be resolved: it could not be protected reliably.
+  const resolvedReadOnlyDirectories =
+    await resolveReadOnlyDirectories(readOnlyDirectories);
   // With no directories and a 2025-era client without Roots, the server
   // closes the connection after initialize (#4992); exit non-zero so the
   // failure shows.
@@ -169,6 +198,7 @@ export async function main(
         era,
         readOnly,
         confineRoots,
+        readOnlyDirectories: resolvedReadOnlyDirectories,
         onCannotOperate: () => process.exit(1),
       }),
     {
@@ -187,6 +217,9 @@ export async function main(
     console.error(
       "Read-only mode: only tools that cannot change the filesystem are served",
     );
+  }
+  if (resolvedReadOnlyDirectories.length > 0) {
+    console.error(describeReadOnlyDirectories(resolvedReadOnlyDirectories));
   }
   if (confineRoots && allowedDirectories.length === 0) {
     console.error(

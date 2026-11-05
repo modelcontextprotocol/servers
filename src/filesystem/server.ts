@@ -35,6 +35,7 @@ import {
   createEntryBudget,
 } from "./lib.js";
 import { registerFileResources } from "./file-resources.js";
+import { describeReadOnlyDirectories } from "./read-only-directories.js";
 import { SERVER_VERSION } from "./version.js";
 
 // The JSON Schema dialect every advertised tool schema declares (#4841). The
@@ -270,6 +271,14 @@ export interface ServerOptions {
    * was started with no command-line directories.
    */
   confineRoots?: boolean;
+  /**
+   * Directories every write tool refuses (`--read-only-dir`, #5348), already
+   * resolved by resolveReadOnlyDirectories. A write whose resolved target is
+   * inside any of them is refused, whatever the allowed directories in force,
+   * so a client's Roots never lift the marking. The write tools stay listed,
+   * since the other directories are writable.
+   */
+  readOnlyDirectories?: readonly string[];
 }
 
 /**
@@ -282,6 +291,7 @@ export function createServer(
   options: ServerOptions = {},
 ): McpServer {
   let allowedDirectories = [...initialAllowedDirectories];
+  const readOnlyDirectories = [...(options.readOnlyDirectories ?? [])];
   // True once the client's roots have replaced the command-line directories.
   // From then on a roots update replaces them even with none, so a client that
   // withdraws its roots withdraws the server's access too (#5094). Until then an
@@ -369,7 +379,7 @@ export function createServer(
   const readTextFileHandler = async (
     args: z.infer<typeof ReadTextFileArgsSchema>,
   ) => {
-    const validPath = await validatePath(args.path, allowedDirectories);
+    const validPath = await validatePath(args.path, allowedDirectories, "read");
 
     // Compared against undefined, not tested for truthiness: a count of 0
     // asks for zero lines, not for the whole file (#5184).
@@ -473,7 +483,11 @@ export function createServer(
       },
     },
     async (args: z.infer<typeof ReadMediaFileArgsSchema>) => {
-      const validPath = await validatePath(args.path, allowedDirectories);
+      const validPath = await validatePath(
+        args.path,
+        allowedDirectories,
+        "read",
+      );
       const extension = path.extname(validPath).toLowerCase();
       const mimeTypes: Record<string, string> = {
         ".png": "image/png",
@@ -537,7 +551,11 @@ export function createServer(
       const results = await Promise.all(
         args.paths.map(async (filePath: string) => {
           try {
-            const validPath = await validatePath(filePath, allowedDirectories);
+            const validPath = await validatePath(
+              filePath,
+              allowedDirectories,
+              "read",
+            );
             const content = await readFileContent(validPath);
             return `${filePath}:\n${content}\n`;
           } catch (error) {
@@ -573,7 +591,12 @@ export function createServer(
       },
     },
     async (args: z.infer<typeof WriteFileArgsSchema>) => {
-      const validPath = await validatePath(args.path, allowedDirectories);
+      const validPath = await validatePath(
+        args.path,
+        allowedDirectories,
+        "write",
+        readOnlyDirectories,
+      );
       await writeFileContent(validPath, args.content);
       const text = `Successfully wrote to ${args.path}`;
       return {
@@ -602,7 +625,12 @@ export function createServer(
       },
     },
     async (args: z.infer<typeof AppendFileArgsSchema>) => {
-      const validPath = await validatePath(args.path, allowedDirectories);
+      const validPath = await validatePath(
+        args.path,
+        allowedDirectories,
+        "write",
+        readOnlyDirectories,
+      );
       await appendFileContent(validPath, args.content);
       const text = `Successfully appended to ${args.path}`;
       return {
@@ -637,7 +665,12 @@ export function createServer(
       },
     },
     async (args: z.infer<typeof EditFileArgsSchema>) => {
-      const validPath = await validatePath(args.path, allowedDirectories);
+      const validPath = await validatePath(
+        args.path,
+        allowedDirectories,
+        "write",
+        readOnlyDirectories,
+      );
       const result = await applyFileEdits(validPath, args.edits, args.dryRun);
       return {
         content: [{ type: "text" as const, text: result }],
@@ -665,7 +698,12 @@ export function createServer(
       },
     },
     async (args: z.infer<typeof CreateDirectoryArgsSchema>) => {
-      const validPath = await validatePath(args.path, allowedDirectories);
+      const validPath = await validatePath(
+        args.path,
+        allowedDirectories,
+        "write",
+        readOnlyDirectories,
+      );
       await createDirectory(validPath);
       const text = `Successfully created directory ${args.path}`;
       return {
@@ -695,7 +733,11 @@ export function createServer(
       },
     },
     async (args: z.infer<typeof ListDirectoryArgsSchema>) => {
-      const validPath = await validatePath(args.path, allowedDirectories);
+      const validPath = await validatePath(
+        args.path,
+        allowedDirectories,
+        "read",
+      );
       const entries = await fs.readdir(validPath, { withFileTypes: true });
       const formatted = entries
         .map(
@@ -730,7 +772,11 @@ export function createServer(
       },
     },
     async (args: z.infer<typeof ListDirectoryWithSizesArgsSchema>) => {
-      const validPath = await validatePath(args.path, allowedDirectories);
+      const validPath = await validatePath(
+        args.path,
+        allowedDirectories,
+        "read",
+      );
       const entries = await fs.readdir(validPath, { withFileTypes: true });
 
       // Get detailed information for each entry; size is undefined when the
@@ -750,6 +796,7 @@ export function createServer(
             const validEntryPath = await validatePath(
               entryPath,
               allowedDirectories,
+              "read",
             );
             const stats = await fs.stat(validEntryPath);
             return {
@@ -859,7 +906,11 @@ export function createServer(
         excludePatterns: string[] = [],
         level: number = 1,
       ): Promise<TreeEntry[]> {
-        const validPath = await validatePath(currentPath, allowedDirectories);
+        const validPath = await validatePath(
+          currentPath,
+          allowedDirectories,
+          "read",
+        );
         const entries = await readdirWithTimeout(validPath);
         const result: TreeEntry[] = [];
 
@@ -932,10 +983,14 @@ export function createServer(
       const validSourcePath = await validatePath(
         args.source,
         allowedDirectories,
+        "move",
+        readOnlyDirectories,
       );
       const validDestPath = await validatePath(
         args.destination,
         allowedDirectories,
+        "move",
+        readOnlyDirectories,
       );
       await moveFile(validSourcePath, validDestPath);
       const text = `Successfully moved ${args.source} to ${args.destination}`;
@@ -969,10 +1024,13 @@ export function createServer(
       const validSourcePath = await validatePath(
         args.source,
         allowedDirectories,
+        "read",
       );
       const validDestPath = await validatePath(
         args.destination,
         allowedDirectories,
+        "write",
+        readOnlyDirectories,
       );
       await copyFile(validSourcePath, validDestPath);
       const text = `Successfully copied ${args.source} to ${args.destination}`;
@@ -1003,7 +1061,11 @@ export function createServer(
       },
     },
     async (args: z.infer<typeof SearchFilesArgsSchema>) => {
-      const validPath = await validatePath(args.path, allowedDirectories);
+      const validPath = await validatePath(
+        args.path,
+        allowedDirectories,
+        "read",
+      );
       // A subdirectory that cannot be read is skipped, and named after the
       // matches so the caller knows they are partial (#5189).
       const unreadable: string[] = [];
@@ -1053,7 +1115,11 @@ export function createServer(
       },
     },
     async (args: z.infer<typeof GetFileInfoArgsSchema>) => {
-      const validPath = await validatePath(args.path, allowedDirectories);
+      const validPath = await validatePath(
+        args.path,
+        allowedDirectories,
+        "read",
+      );
       const info = await getFileStats(validPath);
       const text = Object.entries(info)
         .map(([key, value]) => `${key}: ${value}`)
@@ -1084,7 +1150,13 @@ export function createServer(
       },
     },
     async () => {
-      const text = `Allowed directories:\n${allowedDirectories.join("\n")}`;
+      // The read-only directories follow as a section of their own (#5348),
+      // only when there are any, so a client can tell before it writes.
+      const text =
+        `Allowed directories:\n${allowedDirectories.join("\n")}` +
+        (readOnlyDirectories.length > 0
+          ? `\n\n${describeReadOnlyDirectories(readOnlyDirectories)}`
+          : "");
       return {
         content: [{ type: "text" as const, text }],
         structuredContent: { content: text },

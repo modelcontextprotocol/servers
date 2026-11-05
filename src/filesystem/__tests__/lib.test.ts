@@ -288,7 +288,7 @@ describe("Lib Functions", () => {
         if (process.platform === "win32") return;
 
         await expect(
-          validatePath("C:\\Users\\me\\notes\\file.md", allowedDirs),
+          validatePath("C:\\Users\\me\\notes\\file.md", allowedDirs, "read"),
         ).rejects.toThrow("Windows-style path received on a POSIX host");
       });
 
@@ -308,7 +308,7 @@ describe("Lib Functions", () => {
           process.platform === "win32"
             ? "C:\\Users\\test\\file.txt"
             : "/home/user/file.txt";
-        const result = await validatePath(testPath, allowedDirs);
+        const result = await validatePath(testPath, allowedDirs, "read");
         expect(result).toBe(testPath);
       });
 
@@ -317,9 +317,9 @@ describe("Lib Functions", () => {
           process.platform === "win32"
             ? "C:\\Windows\\System32\\file.txt"
             : "/etc/passwd";
-        await expect(validatePath(testPath, allowedDirs)).rejects.toThrow(
-          "Access denied - path outside allowed directories",
-        );
+        await expect(
+          validatePath(testPath, allowedDirs, "read"),
+        ).rejects.toThrow("Access denied - path outside allowed directories");
       });
 
       it("handles non-existent files by checking parent directory", async () => {
@@ -338,7 +338,7 @@ describe("Lib Functions", () => {
           .mockRejectedValueOnce(enoentError)
           .mockResolvedValueOnce(parentPath);
 
-        const result = await validatePath(newFilePath, allowedDirs);
+        const result = await validatePath(newFilePath, allowedDirs, "read");
         expect(result).toBe(path.resolve(newFilePath));
       });
 
@@ -360,7 +360,7 @@ describe("Lib Functions", () => {
         // undefined, so every component below it counts as missing.
         mockFs.realpath.mockRejectedValueOnce(enoentError);
 
-        const result = await validatePath(newFilePath, allowedDirs);
+        const result = await validatePath(newFilePath, allowedDirs, "read");
         expect(result).toBe(path.resolve(newFilePath));
       });
 
@@ -381,7 +381,7 @@ describe("Lib Functions", () => {
         mockFs.lstat.mockResolvedValueOnce({} as Stats);
 
         await expect(
-          validatePath(path.join(base, "LINK", "a"), allowedDirs),
+          validatePath(path.join(base, "LINK", "a"), allowedDirs, "read"),
         ).rejects.toThrow(
           `Access denied - symlink target outside allowed directories: ${outsideDir}`,
         );
@@ -398,7 +398,7 @@ describe("Lib Functions", () => {
         mockFs.lstat.mockRejectedValueOnce(new Error("EACCES lstat"));
 
         await expect(
-          validatePath(path.join(base, "new", "f.txt"), allowedDirs),
+          validatePath(path.join(base, "new", "f.txt"), allowedDirs, "read"),
         ).rejects.toThrow("EACCES lstat");
       });
 
@@ -416,7 +416,7 @@ describe("Lib Functions", () => {
         mockReaddirNames.mockResolvedValueOnce(["link"]);
 
         await expect(
-          validatePath(path.join(base, "link", "a"), allowedDirs),
+          validatePath(path.join(base, "link", "a"), allowedDirs, "read"),
         ).rejects.toThrow("EACCES realpath");
       });
 
@@ -432,9 +432,9 @@ describe("Lib Functions", () => {
         // Every ancestor, all the way up to the filesystem root, is missing.
         mockFs.realpath.mockRejectedValue(enoentError);
 
-        await expect(validatePath(newFilePath, allowedDirs)).rejects.toThrow(
-          "Parent directory does not exist",
-        );
+        await expect(
+          validatePath(newFilePath, allowedDirs, "read"),
+        ).rejects.toThrow("Parent directory does not exist");
       });
 
       it("resolves relative paths against allowed directories instead of process.cwd()", async () => {
@@ -447,7 +447,7 @@ describe("Lib Functions", () => {
         process.cwd = vi.fn(() => disallowedCwd);
 
         try {
-          const result = await validatePath(relativePath, allowedDirs);
+          const result = await validatePath(relativePath, allowedDirs, "read");
 
           // Result should be resolved against first allowed directory, not process.cwd()
           const expectedPath =
@@ -499,9 +499,9 @@ describe("Lib Functions", () => {
 
         it("respells the request onto the allowed directory when the file system folds case", async () => {
           foldingLstat();
-          await expect(validatePath(requestedFile, allowedDirs)).resolves.toBe(
-            respelled,
-          );
+          await expect(
+            validatePath(requestedFile, allowedDirs, "read"),
+          ).resolves.toBe(respelled);
         });
 
         it("refuses when a directory holds two entries differing only in case", async () => {
@@ -512,14 +512,14 @@ describe("Lib Functions", () => {
             p.toString() === parent ? [first, first.toUpperCase()] : [second],
           );
           await expect(
-            validatePath(requestedFile, allowedDirs),
+            validatePath(requestedFile, allowedDirs, "read"),
           ).rejects.toThrow("Access denied - path outside allowed directories");
         });
 
         it("refuses when the requested spelling does not exist (a case-sensitive directory)", async () => {
           // beforeEach makes every lstat ENOENT.
           await expect(
-            validatePath(requestedFile, allowedDirs),
+            validatePath(requestedFile, allowedDirs, "read"),
           ).rejects.toThrow("Access denied - path outside allowed directories");
         });
 
@@ -529,7 +529,7 @@ describe("Lib Functions", () => {
             async () => ({ dev: 1n, ino: ++ino }) as BigIntStats,
           );
           await expect(
-            validatePath(requestedFile, allowedDirs),
+            validatePath(requestedFile, allowedDirs, "read"),
           ).rejects.toThrow("Access denied - path outside allowed directories");
         });
 
@@ -537,16 +537,16 @@ describe("Lib Functions", () => {
           foldingLstat();
           mockReaddirNames.mockRejectedValue(new Error("EACCES readdir"));
           await expect(
-            validatePath(requestedFile, allowedDirs),
+            validatePath(requestedFile, allowedDirs, "read"),
           ).rejects.toThrow("Access denied - path outside allowed directories");
         });
 
         it("still refuses a name that only folds onto part of an allowed directory", async () => {
           foldingLstat();
           const parentOnly = win ? "C:\\USERS\\x.txt" : "/HOME/x.txt";
-          await expect(validatePath(parentOnly, allowedDirs)).rejects.toThrow(
-            "Access denied - path outside allowed directories",
-          );
+          await expect(
+            validatePath(parentOnly, allowedDirs, "read"),
+          ).rejects.toThrow("Access denied - path outside allowed directories");
         });
       });
     });

@@ -142,6 +142,7 @@ describe("parseArgs", () => {
       directories: ["/a", "/b"],
       readOnly: false,
       confineRoots: false,
+      readOnlyDirectories: [],
     });
   });
 
@@ -155,6 +156,7 @@ describe("parseArgs", () => {
         directories: ["/a", "/b"],
         readOnly: true,
         confineRoots: false,
+        readOnlyDirectories: [],
       });
     }
   });
@@ -164,6 +166,7 @@ describe("parseArgs", () => {
       directories: ["--read-only", "/a"],
       readOnly: true,
       confineRoots: false,
+      readOnlyDirectories: [],
     });
   });
 });
@@ -215,7 +218,7 @@ describe("main() with --read-only", () => {
     );
     closers.push(() => handle.close());
     expect(stderr).toHaveBeenCalledWith(
-      "Usage: mcp-server-filesystem [--read-only] [--confine-roots] [allowed-directory] [additional-directories...]",
+      "Usage: mcp-server-filesystem [--read-only] [--confine-roots] [--read-only-dir <dir>]... [allowed-directory] [additional-directories...]",
     );
   });
 });
