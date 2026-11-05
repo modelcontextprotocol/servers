@@ -963,6 +963,16 @@ def test_git_log_rejects_timestamp_flag_injection(test_repository):
         git_log(test_repository, end_timestamp="--exec=evil")
 
 
+def test_git_log_rejects_non_positive_max_count(test_repository):
+    """git_log should reject a max_count below 1 (#5214): git reads a negative
+    -n as "no limit" and 0 as nothing."""
+    with pytest.raises(ValueError, match="Invalid max_count: 0 - must be at least 1"):
+        git_log(test_repository, max_count=0)
+
+    with pytest.raises(ValueError, match="Invalid max_count: -1 - must be at least 1"):
+        git_log(test_repository, max_count=-1)
+
+
 def test_git_branch_rejects_contains_flag_injection(test_repository):
     """git_branch should reject contains/not_contains values starting with '-'."""
     with pytest.raises(BadName):

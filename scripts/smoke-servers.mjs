@@ -326,9 +326,10 @@ async function exercise(client, server, ctx) {
 
 /**
  * A port the OS says is free right now. Probed on the wildcard address, the
- * way the servers bind it (`app.listen(PORT)`): a port held on one interface
- * only can be bound again on the wildcard without an error, and the client
- * would then reach the holder, not the server.
+ * strictest check: it fails when the port is held on any interface, loopback
+ * included, which is where the servers bind (`HOST`, pinned to 127.0.0.1
+ * below). A port held on one interface only could otherwise pass a probe on
+ * another, and the client would then reach the holder, not the server.
  */
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -459,7 +460,14 @@ export async function smokeOne(server, transport, ctx, installed) {
     let output = "";
     const child = spawn(spec.command, spec.args, {
       cwd: spec.cwd,
-      env: envFor(server, ctx, { PORT: String(port) }, installed?.env),
+      // HOST is pinned to the loopback address the client below connects to,
+      // so a HOST in the developer's environment cannot move the bind.
+      env: envFor(
+        server,
+        ctx,
+        { PORT: String(port), HOST: "127.0.0.1" },
+        installed?.env,
+      ),
       stdio: ["ignore", "pipe", "pipe"],
     });
     child.stdout.on("data", (chunk) => (output += chunk));

@@ -66,7 +66,7 @@ Please note that mcp-server-git is currently in early development. The functiona
    - Shows the commit logs with optional date filtering
    - Inputs:
      - `repo_path` (string): Path to Git repository
-     - `max_count` (number, optional): Maximum number of commits to show (default: 10)
+     - `max_count` (number, optional): Maximum number of commits to show, at least 1 (default: 10)
      - `start_timestamp` (string, optional): Start timestamp for filtering commits. Accepts ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')
      - `end_timestamp` (string, optional): End timestamp for filtering commits. Accepts ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')
    - Returns: Array of commit entries with hash, author, date, and message
@@ -182,7 +182,7 @@ A tool call's `repo_path` must be inside that repository, and so must the direct
 1. The server process's environment: `GIT_AUTHOR_NAME` and `GIT_AUTHOR_EMAIL` for the author, `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL` for the committer. The author and the committer are resolved separately, so set all four (usually to the same name and email).
 2. `user.name` and `user.email` from Git config: the repository's `.git/config`, then `~/.gitconfig`, then `$XDG_CONFIG_HOME/git/config` (by default `~/.config/git/config`), then `/etc/gitconfig`.
 
-Unlike `git commit`, the server does not refuse to commit when neither is set. It falls back to the operating-system user and host name, so a commit made in a container is recorded as something like `root <root@3f2a1b9c8d7e>`. A local install usually finds your own `~/.gitconfig`; a Docker container has none, so give it an identity explicitly.
+Unlike `git commit`, the server does not refuse to commit when neither is set. It falls back to the operating-system user and host name, so a commit made in a container is recorded as something like `app <app@3f2a1b9c8d7e>`. A local install usually finds your own `~/.gitconfig`; a Docker container has none, so give it an identity explicitly.
 
 For a local command (`uvx`, `python -m mcp_server_git`), add an `env` block to the server's entry in your client configuration:
 
@@ -201,12 +201,12 @@ For a local command (`uvx`, `python -m mcp_server_git`), add an `env` block to t
 }
 ```
 
-For Docker, pass the variables to `docker run` with `-e`, as the Docker examples below do. Alternatively, mount your gitconfig read-only in place of the four `-e` pairs. The image runs as `root`, so it goes at `/root/.gitconfig`:
+For Docker, pass the variables to `docker run` with `-e`, as the Docker examples below do. Alternatively, mount your gitconfig read-only in place of the four `-e` pairs. The image runs as the unprivileged `app` user, whose home is `/home/app`, so it goes at `/home/app/.gitconfig`:
 
 ```json
 "args": [
   "run", "--rm", "-i",
-  "--mount", "type=bind,src=/Users/username/.gitconfig,dst=/root/.gitconfig,readonly",
+  "--mount", "type=bind,src=/Users/username/.gitconfig,dst=/home/app/.gitconfig,readonly",
   "--mount", "type=bind,src=/Users/username,dst=/Users/username",
   "mcp/git"
 ]
@@ -234,6 +234,7 @@ Add this to your `claude_desktop_config.json`:
 
 * Note: replace '/Users/username' with a path that you want to be accessible by this tool
 * Note: the `-e` lines set the identity `git_commit` records; see [Commit identity](#commit-identity)
+* Note: the image runs as the unprivileged `app` user, not root, and trusts every repository mounted into it (`safe.directory '*'`), since a bind mount rarely shows up owned by that user. On a Linux host, where a bind mount keeps the host's file ownership, add `"--user", "1000:1000"` (your own `id -u` and `id -g`) before `mcp/git` so the server can write to the repository and its commits leave files you own; with `--user`, mount a gitconfig at `/.gitconfig` rather than `/home/app/.gitconfig`, or use the `-e` lines. Docker Desktop on macOS and Windows needs neither.
 
 ```json
 "mcpServers": {
@@ -324,14 +325,14 @@ Add to your Zed settings.json:
 <summary>Using uvx</summary>
 
 ```json
-"context_servers": [
-  "mcp-server-git": {
-    "command": {
-      "path": "uvx",
+{
+  "context_servers": {
+    "mcp-server-git": {
+      "command": "uvx",
       "args": ["mcp-server-git"]
     }
   }
-],
+}
 ```
 </details>
 
@@ -339,14 +340,14 @@ Add to your Zed settings.json:
 <summary>Using pip installation</summary>
 
 ```json
-"context_servers": {
-  "mcp-server-git": {
-    "command": {
-      "path": "python",
+{
+  "context_servers": {
+    "mcp-server-git": {
+      "command": "python",
       "args": ["-m", "mcp_server_git"]
     }
   }
-},
+}
 ```
 </details>
 

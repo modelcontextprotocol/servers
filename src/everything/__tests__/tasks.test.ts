@@ -210,6 +210,37 @@ describe("the extension", () => {
     expect(Object.keys(task.inputRequests as object)).toEqual(["sampling-1"]);
   });
 
+  it("counts the answers in UTF-8 bytes, not string length (#5419)", async () => {
+    peer = await rawClient({ ...TASKS, sampling: {} });
+    const created = await peer.call("trigger-sampling-request-async", {
+      prompt: "p",
+    });
+    // Each "é" is one UTF-16 code unit but two UTF-8 bytes, so these answers
+    // are under the limit by string length and over it in bytes.
+    const inputResponses = {
+      "sampling-1": {
+        role: "assistant",
+        model: "m",
+        content: { type: "text", text: "é".repeat(MAX_ANSWER_BYTES / 2) },
+      },
+    };
+    const serialized = JSON.stringify(inputResponses);
+    const bytes = Buffer.byteLength(serialized, "utf8");
+    expect(serialized.length).toBeLessThan(MAX_ANSWER_BYTES);
+    expect(bytes).toBeGreaterThan(MAX_ANSWER_BYTES);
+    const response = await peer.request("tasks/update", {
+      taskId: created.taskId,
+      inputResponses,
+    });
+    expect(response.error).toMatchObject({
+      code: -32602,
+      message: `Invalid params for tasks/update: the answers are ${bytes} bytes, over the ${MAX_ANSWER_BYTES}-byte limit; the task is unchanged`,
+    });
+    const task = await peer.get(created.taskId as string);
+    expect(task.status).toBe("input_required");
+    expect(Object.keys(task.inputRequests as object)).toEqual(["sampling-1"]);
+  });
+
   it("refuses tasks/update without inputResponses with -32602", async () => {
     peer = await rawClient(TASKS);
     const created = await peer.call("simulate-research-query", { topic: "t" });
