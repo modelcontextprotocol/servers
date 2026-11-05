@@ -1,68 +1,72 @@
-# Tracks public interface changes to the Everything MCP server.
-# The Everything server is a reference implementation demonstrating all MCP features.
-# This workflow helps reviewers see how tools, resources, prompts, and capabilities
-# evolve over time - useful for SDK compliance validation and catching regressions.
+# Tracks public interface changes to the MCP servers: how each server's tools,
+# resources, prompts and capabilities evolve, so a reviewer sees the protocol
+# surface a change moves without running anything (useful for SDK compliance
+# validation and catching regressions).
 #
-# Contributed by @SamMorrowDrums in #3260 and adapted for v2/main in #4860:
+# Contributed by @SamMorrowDrums in #3260 for the Everything server, adapted for
+# v2/main in #4860, and extended to every server in #5428:
 #
 # - The check is `npm run interface-diff` (scripts/interface-diff.mjs), which
 #   drives the `mcp-server-diff` CLI, an exact-pinned root devDependency. The
 #   same script is a `local:gate` stage, and `scripts/lib/workflow-gate.test.mjs`
 #   requires every npm script a workflow runs to be one, so CI and the gate run
 #   the same check. No third-party action runs here.
+# - A server is diffed only when the change touches it: its own directory, a
+#   package it resolves in the root lockfile, the root tsconfig (TypeScript
+#   servers), or the diff tooling itself (every server). A `paths` filter
+#   cannot say "the lockfile changed in a way that reaches this server", and
+#   almost every TypeScript PR rewrites the lockfile, so the workflow runs on
+#   every change and the `changes` job asks the script which servers to diff
+#   (`--list`, the same selection the gate makes). `diff` and `comment` fan out
+#   over that list, one matrix leg per server.
 # - The base is chosen per event below rather than by the tool, whose default
 #   (the merge-base with origin/main) is the wrong base for PRs to v2/main.
-# - Untrusted code (the PR's install, build and server) runs only in `diff`,
-#   which holds a read-only token and no persisted credentials. The sticky
-#   comment is posted by `comment`, which holds `pull-requests: write` and runs
-#   none of the PR's code, and only for PRs from this repository: a fork PR's
-#   token is read-only, so there the report is in the job summary and the
-#   `mcp-diff-report` artifact. `pull_request_target` is deliberately not used,
-#   since it would run the fork's build next to a write token. If fork PRs need
-#   the comment too, the way is a separate `workflow_run` workflow that posts
-#   the artifact without checking anything out.
+# - Untrusted code (the PR's install, build and server, and the selection
+#   script) runs only in `changes` and `diff`, which hold a read-only token and
+#   no persisted credentials. Each sticky comment (one per server, found again
+#   by its marker) is posted by `comment`, which holds `pull-requests: write`
+#   and runs none of the PR's code, and only for PRs from this repository: a
+#   fork PR's token is read-only, so there the report is in the job summary and
+#   the `mcp-diff-report-<server>` artifact. `pull_request_target` is
+#   deliberately not used, since it would run the fork's build next to a write
+#   token. If fork PRs need the comment too, the way is a separate
+#   `workflow_run` workflow that posts the artifact without checking anything
+#   out. The server names `comment` reads come from `changes`, which ran PR
+#   code, so it checks each against the known list before using it.
 #
 # A changed interface does not fail the run: the diff is information for the
 # reviewer. A diff that cannot run (a base that does not build, a server that
 # cannot be probed) does.
 #
-# The Version Packages PR is pushed and opened with the workflow token, whose
-# events start no `pull_request` run here: GitHub holds each one as
+# A server's comment is left as it is when a later push stops touching that
+# server; it then describes the last push that did.
+#
+# The version PRs are pushed and opened with the workflow token, whose events
+# start no `pull_request` run here: GitHub holds each one as
 # `action_required`, or fails it with no jobs (#5173). So the Version Packages
-# workflow dispatches this one on the PR's branch, as it does the CI workflows
-# (#5110), and the `dispatch-status` jobs report the dispatched run on the PR
-# as a commit status. The Prepare Python Release PR touches none of the paths
-# below, so it is not dispatched there.
+# and Prepare Python Release workflows dispatch this one on the PR's branch, as
+# they do the CI workflows (#5110), and the `dispatch-status` jobs report the
+# dispatched run on the PR as a commit status.
+#
+# The file keeps its `everything-` name although it diffs every server: GitHub
+# dispatches only a workflow whose file exists on the default branch (`main`),
+# and both version workflows dispatch this one by file name from `v2/main`, so
+# renaming it here would break their dispatch until the next milestone merge.
 #
 # See: https://github.com/modelcontextprotocol/inspector/issues/1034
-name: Everything Server MCP Diff
+name: MCP Interface Diff
 
 on:
   push:
     branches: [main, v2/main]
-    paths:
-      - "src/everything/**"
-      - "package.json"
-      - "package-lock.json"
-      - "tsconfig.json"
-      - "scripts/interface-diff.mjs"
-      - "scripts/lib/win-shell-args.mjs"
-      - ".github/workflows/everything-mcp-diff.yml"
   # No branch filter: PRs to v2/main and to main both run, and so does a PR
   # stacked on another PR's branch. The base is the PR's own base either way.
   pull_request:
-    paths:
-      - "src/everything/**"
-      - "package.json"
-      - "package-lock.json"
-      - "tsconfig.json"
-      - "scripts/interface-diff.mjs"
-      - "scripts/lib/win-shell-args.mjs"
-      - ".github/workflows/everything-mcp-diff.yml"
   # A published Release (a milestone, tagged vX.Y.Z on main; see RELEASING.md)
-  # surfaces the cumulative interface delta since the previous Release. This
-  # replaces #3260's `typescript-servers-*` tag trigger: those tags stopped in
-  # 2024, and no release since has used them.
+  # surfaces the cumulative interface delta since the previous Release, for
+  # each server that changed in between. This replaces #3260's
+  # `typescript-servers-*` tag trigger: those tags stopped in 2024, and no
+  # release since has used them.
   release:
     types: [published]
   # Manual trigger: the branch chosen in "Use workflow from" is the head, and
@@ -87,17 +91,20 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  diff:
-    name: Diff Everything Server Interface
-    timeout-minutes: 15
+  changes:
+    name: Choose the servers to diff
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      base: ${{ steps.base.outputs.ref }}
+      servers: ${{ steps.list.outputs.servers }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          # The base is built from history, so all of it is needed, tags
+          # The base is found in history, so all of it is needed, tags
           # included (the release base is the previous Release's tag).
           fetch-depth: 0
           # The event's own commit (the merge commit for a PR), not a branch
@@ -105,15 +112,10 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
 
+      # No install: the selection imports nothing outside Node.
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-          cache: npm
-
-      # A root `npm ci` runs every workspace's `prepare`, which builds it, so
-      # the head build the diff probes exists after this step.
-      - name: Install dependencies and build
-        run: npm ci
 
       - name: Choose the base to compare against
         id: base
@@ -156,24 +158,92 @@ jobs:
               fi ;;
             *) echo "unexpected event: $EVENT" >&2; exit 1 ;;
           esac
+          # Resolved to a SHA here, so every leg compares against the same
+          # commit even if a branch named as the base moves meanwhile.
+          base=$(git rev-parse --verify "$base^{commit}")
           echo "Comparing against $base"
           echo "ref=$base" >> "$GITHUB_OUTPUT"
 
-      - name: Diff the interface
+      - name: List the servers the change touches
+        id: list
         env:
           BASE: ${{ steps.base.outputs.ref }}
-        run: npm run interface-diff -- --base "$BASE" --report-dir mcp-diff-report
+        run: |
+          # The reasons go to the log on stderr; stdout is the JSON list.
+          servers=$(npm run --silent interface-diff -- --base "$BASE" --list)
+          echo "Servers to diff: $servers"
+          echo "servers=$servers" >> "$GITHUB_OUTPUT"
+          {
+            if [ "$servers" = "[]" ]; then
+              echo "No server changed since \`$BASE\`; there is no interface to diff."
+            else
+              echo "Diffing: $(jq -r 'map("`" + .server + "`") | join(", ")' <<<"$servers")"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  diff:
+    name: Diff ${{ matrix.server }}
+    needs: changes
+    if: needs.changes.outputs.servers != '[]'
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      # One server's broken diff must not hide another's report.
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.changes.outputs.servers) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          # The base is built from history.
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      # A root `npm ci` runs every workspace's `prepare`, which builds it, so
+      # a TypeScript head build the diff probes exists after this step. It also
+      # installs `mcp-server-diff`, which every leg needs.
+      - name: Install dependencies and build
+        run: npm ci
+
+      - name: Install uv
+        if: matrix.language == 'py'
+        uses: astral-sh/setup-uv@v7
+
+      # The diff probes a Python head with `uv run --no-sync`, so its
+      # environment is synced here, as the gate's `validate:py` does.
+      - name: Sync the Python server
+        if: matrix.language == 'py'
+        working-directory: src/${{ matrix.server }}
+        run: uv sync --locked
+
+      - name: Diff the interface
+        env:
+          BASE: ${{ needs.changes.outputs.base }}
+          SERVER: ${{ matrix.server }}
+        run: npm run interface-diff -- --base "$BASE" --server "$SERVER" --report-dir mcp-diff-report
 
       - name: Write the job summary
         if: always()
+        env:
+          SERVER: ${{ matrix.server }}
         run: |
+          report="mcp-diff-report/$SERVER/report.md"
           {
-            if [ -f mcp-diff-report/report.md ]; then
+            if [ -f "$report" ]; then
               # A step summary holds at most 1 MiB.
-              head -c 900000 mcp-diff-report/report.md
-              if [ "$(wc -c < mcp-diff-report/report.md)" -gt 900000 ]; then
+              head -c 900000 "$report"
+              if [ "$(wc -c < "$report")" -gt 900000 ]; then
                 echo ""
-                echo "_The report is truncated here; the full report is in the run's \`mcp-diff-report\` artifact._"
+                echo "_The report is truncated here; the full report is in the run's \`mcp-diff-report-$SERVER\` artifact._"
               fi
             else
               echo "The interface diff produced no report; see the job log."
@@ -183,8 +253,7 @@ jobs:
             echo ""
             echo "ℹ️ **Interpreting Results**"
             echo ""
-            echo "The Everything server is a reference implementation that exercises all MCP features."
-            echo "Interface changes here may indicate:"
+            echo "These are reference servers, so a change to one's interface may indicate:"
             echo "- New MCP protocol features being demonstrated"
             echo "- Updated tool schemas or descriptions"
             echo "- New resources, prompts, or capabilities"
@@ -196,7 +265,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: mcp-diff-report
+          name: mcp-diff-report-${{ matrix.server }}
           path: mcp-diff-report/
           if-no-files-found: ignore
 
@@ -232,16 +301,17 @@ jobs:
             exit 0
           fi
           gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
-            -f state=pending -f context="Everything diff (dispatched)" \
+            -f state=pending -f context="Interface diff (dispatched)" \
             -f description="Dispatched run in progress" \
             -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
 
   # `comment` runs only on `pull_request`, so on a dispatch it is skipped,
-  # which counts as passed; the report is in the run's summary and artifact.
+  # which counts as passed, and so is `diff` when no server changed; the report
+  # is in the run's summary and artifacts.
   dispatch-status:
     name: Report the dispatched run's result
     if: github.event_name == 'workflow_dispatch' && always()
-    needs: [dispatch-status-pending, diff, comment]
+    needs: [dispatch-status-pending, changes, diff, comment]
     timeout-minutes: 5
     runs-on: ubuntu-latest
     permissions:
@@ -274,35 +344,52 @@ jobs:
             STATE=error DESCRIPTION="The run was cancelled; dispatch it again"
           fi
           gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
-            -f state="$STATE" -f context="Everything diff (dispatched)" \
+            -f state="$STATE" -f context="Interface diff (dispatched)" \
             -f description="$DESCRIPTION" \
             -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
 
-  # Post (or update) a sticky PR comment so reviewers can see the diff without
-  # navigating to the Actions tab. One comment per PR, found again by its
-  # marker and edited on each push. This job checks nothing out and runs none
-  # of the PR's code; it only reads the report the `diff` job uploaded.
-  # Dependabot's PRs are same-repo but get a read-only token, so they are
-  # skipped like fork PRs and keep the job summary and the artifact.
+  # Post (or update) one sticky PR comment per diffed server so reviewers can
+  # see the diff without navigating to the Actions tab, found again by its
+  # per-server marker and edited on each push. This job checks nothing out and
+  # runs none of the PR's code; it only reads the report the `diff` leg
+  # uploaded. Dependabot's PRs are same-repo but get a read-only token, so they
+  # are skipped like fork PRs and keep the job summary and the artifact.
   comment:
-    name: Post the diff on the PR
-    needs: diff
+    name: Post the ${{ matrix.server }} diff on the PR
+    needs: [changes, diff]
     if: >-
       always() &&
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login != 'dependabot[bot]' &&
+      needs.changes.result == 'success' &&
+      needs.changes.outputs.servers != '[]' &&
       (needs.diff.result == 'success' || needs.diff.result == 'failure')
     timeout-minutes: 5
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.changes.outputs.servers) }}
     steps:
+      # The list came from a job that ran the PR's code; only a known server
+      # name reaches an artifact name, a marker or a path below.
+      - name: Check the server name
+        env:
+          SERVER: ${{ matrix.server }}
+        run: |
+          case "$SERVER" in
+            everything|filesystem|memory|sequentialthinking|fetch|git|time) ;;
+            *) echo "::error::Not a known server: $SERVER"; exit 1 ;;
+          esac
+
       - name: Download the report
         uses: actions/download-artifact@v8
         continue-on-error: true
         with:
-          name: mcp-diff-report
+          name: mcp-diff-report-${{ matrix.server }}
           path: mcp-diff-report
 
       - name: Post / update sticky PR comment
@@ -311,20 +398,22 @@ jobs:
           REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          SERVER: ${{ matrix.server }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          marker='<!-- everything-mcp-diff -->'
+          marker="<!-- mcp-interface-diff:$SERVER -->"
+          report="mcp-diff-report/$SERVER/report.md"
           {
             echo "$marker"
-            if [ -f mcp-diff-report/report.md ]; then
+            if [ -f "$report" ]; then
               # A comment holds at most 65536 characters.
-              head -c 60000 mcp-diff-report/report.md
-              if [ "$(wc -c < mcp-diff-report/report.md)" -gt 60000 ]; then
+              head -c 60000 "$report"
+              if [ "$(wc -c < "$report")" -gt 60000 ]; then
                 echo ""
-                echo "_The report is truncated here; the full report is in the run's \`mcp-diff-report\` artifact._"
+                echo "_The report is truncated here; the full report is in the run's \`mcp-diff-report-$SERVER\` artifact._"
               fi
             else
-              echo "## \`everything\`: MCP interface diff"
+              echo "## \`$SERVER\`: MCP interface diff"
               echo ""
               echo "❌ The diff job produced no report; see the run's log."
             fi
