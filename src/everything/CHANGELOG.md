@@ -1,5 +1,21 @@
 # @modelcontextprotocol/server-everything
 
+## 2.3.0
+
+### Minor Changes
+
+- [#5452](https://github.com/modelcontextprotocol/servers/pull/5452) [`41a758c`](https://github.com/modelcontextprotocol/servers/commit/41a758c288398b7aa2b38f6ddaad43dd60e6498d) [@cliffhall](https://github.com/cliffhall) - The Streamable HTTP and HTTP+SSE transports now bind the loopback interface (`127.0.0.1`) by default instead of every interface, so a server started over HTTP is no longer reachable from other hosts on the network. Set the new `HOST` environment variable to widen the bind deliberately (`HOST=0.0.0.0`); the container image sets it. The listening line now names the bound address and port. Thanks to TheodorNEngoy for the prototype in [#3303](https://github.com/modelcontextprotocol/servers/issues/3303).
+
+### Patch Changes
+
+- [#5475](https://github.com/modelcontextprotocol/servers/pull/5475) [`2a73097`](https://github.com/modelcontextprotocol/servers/commit/2a7309707ce00d340bc8c29288084a1408f14efb) [@cliffhall](https://github.com/cliffhall) - Describe every tool input property in tools/list ([#3669](https://github.com/modelcontextprotocol/servers/issues/3669)). Every filesystem path argument now says how it is resolved and that it must stay inside the allowed directories, and `excludePatterns` says how its globs match (which differs between `directory_tree` and `search_files`). The memory server's top-level array arguments, and the everything server's `resourceType`, gain descriptions, and `get-resource-reference`'s `resourceId` no longer claims to fetch only text resources.
+
+- [#5476](https://github.com/modelcontextprotocol/servers/pull/5476) [`6f16868`](https://github.com/modelcontextprotocol/servers/commit/6f1686851264517f5cec0dde54effa1f68473d44) [@cliffhall](https://github.com/cliffhall) - Raise the `express` dependency floor to `^5.3.0` (monthly dependency refresh).
+
+- [#5478](https://github.com/modelcontextprotocol/servers/pull/5478) [`67b541c`](https://github.com/modelcontextprotocol/servers/commit/67b541cc7c862f67f419c4ab339b9c73e86e9e46) [@cliffhall](https://github.com/cliffhall) - Remove the unused `jszip` dependency. Nothing in the server imports it, so installs no longer pull in jszip and its transitive dependencies.
+
+- [#5449](https://github.com/modelcontextprotocol/servers/pull/5449) [`1fbdd4e`](https://github.com/modelcontextprotocol/servers/commit/1fbdd4eaf948f883e374af0b18cba3b8b7678e8e) [@cliffhall](https://github.com/cliffhall) - `tasks/update` now measures the answers against its 64 KiB limit in UTF-8 bytes rather than string length, so non-ASCII answers can no longer exceed the byte budget.
+
 ## 2.2.1
 
 ### Patch Changes
