@@ -85,9 +85,10 @@ Example:
   - Fails if entity doesn't exist
 
 - **delete_entities**
-  - Remove entities and their relations
+  - Remove whole entities, with all their observations
   - Input: `entityNames` (string[])
-  - Cascading deletion of associated relations
+  - Cascading deletion of every relation that points to or from a deleted entity
+  - To remove a link between two entities and keep both, use `delete_relations`; to remove facts from an entity, use `delete_observations`
   - No error if an entity doesn't exist; the response reports which names were not found
 
 - **delete_observations**
@@ -99,12 +100,13 @@ Example:
   - No error if an observation doesn't exist; the response reports how many were deleted
 
 - **delete_relations**
-  - Remove specific relations from the graph
+  - Remove specific relations from the graph, keeping the entities they connect (to remove an entity itself, use `delete_entities`)
   - Input: `relations` (array of objects)
     - Each object contains:
       - `from` (string): Source entity name
       - `to` (string): Target entity name
       - `relationType` (string): Relationship type
+  - A relation is deleted only when `from`, `to` and `relationType` all match a stored one exactly; read the stored `relationType` with `open_nodes` (or `search_nodes`) first if unsure
   - No error if a relation doesn't exist; the response reports how many were deleted
 
 - **read_graph**
