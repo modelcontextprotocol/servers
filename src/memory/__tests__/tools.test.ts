@@ -244,7 +244,7 @@ const expectedTools = [
     name: "delete_entities",
     title: "Delete Entities",
     description:
-      "Delete multiple entities and their associated relations from the knowledge graph",
+      "Delete whole entities from the knowledge graph, together with every relation that points to or from them and all their observations. Use it only to remove an entity entirely; to remove a link between two entities and keep both, use delete_relations, and to remove facts from an entity, use delete_observations. Cannot be undone.",
     inputSchema: {
       type: "object",
       properties: {
@@ -301,7 +301,8 @@ const expectedTools = [
   {
     name: "delete_relations",
     title: "Delete Relations",
-    description: "Delete multiple relations from the knowledge graph",
+    description:
+      "Delete specific relations (from, to, relationType) from the knowledge graph and keep the entities they connect. Each relation must match an existing one exactly on all three fields; if unsure, call open_nodes (or search_nodes) first to read the stored relationType. Use it to remove a link between two entities; to remove an entity itself, use delete_entities. Cannot be undone.",
     inputSchema: {
       type: "object",
       properties: {
