@@ -17,7 +17,6 @@ vi.mock("../version.js", () => ({ SERVER_VERSION: "0.0.0-test" }));
 
 const { isPathWithinAllowedDirectories, namesAlternateDataStream } =
   await import("../path-validation.js");
-const { validatePath } = await import("../lib.js");
 const { call, connect, quietStderr, textOf } = await import("./helpers.js");
 
 const realPlatform = process.platform;
@@ -134,20 +133,6 @@ describe("isPathWithinAllowedDirectories on win32 refuses alternate streams", ()
   });
 });
 
-describe("validatePath on win32 refuses alternate streams", () => {
-  it("reports the stream refusal, not 'outside allowed directories'", async () => {
-    await expect(
-      validatePath("C:\\work\\file.txt:hidden", ["C:\\work"]),
-    ).rejects.toThrow(REFUSAL);
-  });
-
-  it("refuses a relative path that names a stream", async () => {
-    await expect(validatePath("file.txt:hidden", ["C:\\work"])).rejects.toThrow(
-      REFUSAL,
-    );
-  });
-});
-
 describe("the tools on win32 refuse alternate streams", () => {
   it("returns the refusal as a tool error for a read and a write", async () => {
     quietStderr();
@@ -165,6 +150,39 @@ describe("the tools on win32 refuse alternate streams", () => {
       });
       expect(write.isError).toBe(true);
       expect(textOf(write)).toMatch(REFUSAL);
+    } finally {
+      await conn.close();
+      vi.restoreAllMocks();
+    }
+  });
+
+  // validatePath runs the stream check before the containment check, so the
+  // error names the stream rather than "outside allowed directories".
+  it("reports the stream refusal, not 'outside allowed directories'", async () => {
+    quietStderr();
+    const conn = await connect(["C:\\work"]);
+    try {
+      const result = await call(conn.client, "read_text_file", {
+        path: "C:\\work\\file.txt:hidden",
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toMatch(REFUSAL);
+      expect(textOf(result)).not.toMatch(/outside allowed directories/);
+    } finally {
+      await conn.close();
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("refuses a relative path that names a stream", async () => {
+    quietStderr();
+    const conn = await connect(["C:\\work"]);
+    try {
+      const result = await call(conn.client, "read_text_file", {
+        path: "file.txt:hidden",
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toMatch(REFUSAL);
     } finally {
       await conn.close();
       vi.restoreAllMocks();
