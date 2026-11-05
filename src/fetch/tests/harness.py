@@ -66,10 +66,21 @@ class FakeWeb:
         self.requests.append(request)
         responder = self.routes.get(str(request.url))
         if responder is None:
-            return httpx.Response(404, content=b"no route in FakeWeb")
-        if isinstance(responder, httpx.Response):
-            return responder
-        return responder(request)
+            response = httpx.Response(404, content=b"no route in FakeWeb")
+        elif isinstance(responder, httpx.Response):
+            response = responder
+        else:
+            response = responder(request)
+        # Served unread, as from the network. `httpx.Response(content=...)`
+        # reads (and decodes) its body when it is built, which leaves nothing
+        # for the server's raw, capped read (#5370); its stream still holds the
+        # bytes as given, so a fresh response over that stream is the wire form.
+        return httpx.Response(
+            response.status_code,
+            headers=response.headers,
+            stream=response.stream,
+            extensions=response.extensions,
+        )
 
     def urls(self) -> list[str]:
         return [str(r.url) for r in self.requests]

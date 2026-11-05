@@ -26,6 +26,7 @@ import asyncio
 import ipaddress
 import os
 import socket
+import zlib
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from typing import Annotated, Any, Tuple
@@ -403,9 +404,75 @@ def make_client(proxy_url: str | None) -> httpx.AsyncClient:
 # streamed and the read stops at this cap, so a very large or endless response
 # cannot make the server buffer all of it. `max_length` cannot do this: it
 # limits what is returned, after the whole page has been read and converted.
-# The cap counts decoded bytes (after gzip, deflate or brotli), so a small
-# compressed body that expands enormously is stopped too.
+# The cap counts decoded bytes, so a small compressed body that expands
+# enormously is stopped too, and decoding itself is bounded by it (see
+# `read_capped`).
 MAX_RESPONSE_BYTES = 5 * 1024 * 1024
+
+# The content codings the server asks for, and the only ones it decodes. They
+# are named explicitly because httpx would also offer br and zstd whenever
+# their packages happen to be installed, and decode them with no output limit.
+ACCEPT_ENCODING = "gzip, deflate"
+
+
+class BoundedInflater:
+    """Incremental gzip or deflate decoding whose output per call is bounded.
+
+    httpx's decoders inflate each network chunk whole, so one small chunk of a
+    compression bomb could allocate far past the cap before any check saw it
+    (#5370). zlib's ``max_length`` stops each call at the room left instead,
+    and keeps the input it did not get to in ``unconsumed_tail``.
+    """
+
+    def __init__(self, coding: str) -> None:
+        self._gzip = coding in ("gzip", "x-gzip")
+        self._first = True
+        self._z = zlib.decompressobj(
+            zlib.MAX_WBITS | 16 if self._gzip else zlib.MAX_WBITS
+        )
+
+    @property
+    def unconsumed_tail(self) -> bytes:
+        return self._z.unconsumed_tail
+
+    def decompress(self, data: bytes, max_length: int) -> bytes:
+        try:
+            out = self._z.decompress(data, max_length)
+        except zlib.error as e:
+            if self._first and not self._gzip:
+                # Servers often send deflate raw, without zlib's wrapper; httpx
+                # retries the same way.
+                self._first = False
+                self._z = zlib.decompressobj(-zlib.MAX_WBITS)
+                return self.decompress(data, max_length)
+            raise httpx.DecodingError(f"Error decoding the response body: {e}")
+        self._first = False
+        return out
+
+    def flush(self) -> bytes:
+        return self._z.flush()
+
+
+def inflater_for(response: httpx.Response) -> BoundedInflater | None:
+    """The decoder a response's Content-Encoding needs, or None for none.
+
+    Only a single gzip or deflate coding is decoded. Any other (br, zstd, a
+    chain of codings) is refused rather than handed over undecoded or decoded
+    without a bound.
+    """
+    codings = [
+        coding.strip().lower()
+        for coding in response.headers.get("content-encoding", "").split(",")
+    ]
+    codings = [coding for coding in codings if coding not in ("", "identity")]
+    if not codings:
+        return None
+    if len(codings) == 1 and codings[0] in ("gzip", "x-gzip", "deflate"):
+        return BoundedInflater(codings[0])
+    raise httpx.DecodingError(
+        f"Unsupported content encoding {', '.join(codings)}: this server "
+        f"decodes only {ACCEPT_ENCODING}"
+    )
 
 
 @asynccontextmanager
@@ -421,7 +488,10 @@ async def stream_get(
     ``build_request`` (the timeout).
     """
     request = client.build_request(
-        "GET", url, headers={"User-Agent": user_agent}, **kwargs
+        "GET",
+        url,
+        headers={"User-Agent": user_agent, "Accept-Encoding": ACCEPT_ENCODING},
+        **kwargs,
     )
     response = await client.send(request, stream=True, follow_redirects=False)
     try:
@@ -448,15 +518,29 @@ async def read_capped(response: httpx.Response, limit: int) -> tuple[bytes, bool
 
     Returns the body, at most ``limit`` bytes of it, and whether it was cut
     short. Whatever the server has not sent yet is never read: closing the
-    response (leaving `stream_get`) closes the connection.
+    response (leaving `stream_get`) closes the connection. The raw bytes are
+    decoded here rather than by httpx, so no single step produces more than
+    one byte past the room left under ``limit`` (see `BoundedInflater`).
     """
+    inflater = inflater_for(response)
     body = bytearray()
-    async for chunk in response.aiter_bytes():
-        room = limit - len(body)
-        if len(chunk) > room:
-            body += chunk[:room]
-            return bytes(body), True
-        body += chunk
+    async for raw in response.aiter_raw():
+        pending = raw
+        while pending:
+            room = limit - len(body)
+            if inflater is None:
+                out, pending = pending[: room + 1], b""
+            else:
+                out = inflater.decompress(pending, room + 1)
+                pending = inflater.unconsumed_tail
+            body += out
+            if len(body) > limit:
+                return bytes(body[:limit]), True
+    if inflater is not None:
+        # All input is consumed by now, so zlib has at most a few bytes left.
+        body += inflater.flush()
+    if len(body) > limit:
+        return bytes(body[:limit]), True
     return bytes(body), False
 
 
