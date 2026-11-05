@@ -101,6 +101,7 @@ The server's directory access control follows this flow:
      ```
    - Server requires at least ONE allowed directory to operate
    - On Windows, a path naming an NTFS alternate data stream (`file.txt:stream`, `file.txt::$DATA`) is refused with "Access denied - NTFS alternate data stream paths are not supported", even inside an allowed directory: a colon is accepted only as a drive letter's (`C:\`, `\\?\C:\`). A stream holds data that no directory listing or diff of the file shows. On macOS and Linux a colon is an ordinary file-name character and is not refused
+   - On Windows, a path any of whose components is a reserved device name (`CON`, `PRN`, `AUX`, `NUL`, `COM1`-`COM9`, `LPT1`-`LPT9`, in any case and with or without an extension, such as `NUL.txt`) is refused with "Access denied - Windows reserved device names ... are not supported", and one any of whose components ends in a dot or a space (`file.txt.`, `dir \file.txt`) with "Access denied - Windows path components ending in a dot or a space are not supported". Windows opens the device rather than a file in the directory, and strips trailing dots and spaces so the name refers to a different file. `.` and `..` are not affected. On macOS and Linux these are ordinary file names and are not refused
 
 **Note**: The server will only allow operations within directories specified either via `args` or, for a 2025-era client, via Roots.
 
