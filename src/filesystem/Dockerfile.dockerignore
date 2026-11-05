@@ -1,0 +1,15 @@
+# The build context for src/filesystem/Dockerfile (#5345). BuildKit reads a
+# `<Dockerfile>.dockerignore` beside the Dockerfile in place of a root
+# .dockerignore, so this allow-list applies to this image only. The context is
+# the repository root, so start from nothing and admit only what the build
+# copies: the root manifests and lockfile, and the server's source without
+# its build output or test artifacts.
+*
+!package.json
+!package-lock.json
+!.npmrc
+!tsconfig.json
+!src/filesystem
+src/filesystem/node_modules
+src/filesystem/dist
+src/filesystem/coverage
