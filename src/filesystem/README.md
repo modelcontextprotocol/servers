@@ -246,9 +246,14 @@ Files inside the allowed directories are also [resources](https://modelcontextpr
     - `pattern` (string): Glob matched, case-sensitively, against each entry's
       path relative to `path`: `*.ext` matches entries directly under `path`,
       `**/*.ext` or `**/name` matches at any depth
-    - `excludePatterns` (string[]): Exclude any patterns. An excluded entry is
-      skipped before it is resolved or read, so excluding a slow folder keeps
-      the search out of it entirely.
+    - `excludePatterns` (string[]): Entries to leave out, read the same way as
+      `directory_tree`'s. A bare name such as `node_modules` excludes an entry
+      of that name at any depth and everything below it; it matches whole
+      names, so `node_modules_old` is kept. A pattern containing `*` is a glob
+      matched against the path relative to `path` as written: `*.log` excludes
+      only entries directly under `path`, `**/*.log` at any depth. An excluded
+      entry is skipped before it is resolved or read, so excluding a slow
+      folder keeps the search out of it entirely.
   - Glob-style pattern matching
   - Returns full paths to matches
   - Bounded: see [Slow and very large trees](#slow-and-very-large-trees)
@@ -261,7 +266,10 @@ Files inside the allowed directories are also [resources](https://modelcontextpr
   - Get recursive JSON tree structure of directory contents
   - Inputs:
     - `path` (string): Starting directory
-    - `excludePatterns` (string[]): Exclude any patterns. Glob formats are supported.
+    - `excludePatterns` (string[]): Entries to leave out, read the same way as
+      `search_files`'s: a bare name excludes that name at any depth and the
+      subtree below it, and a pattern containing `*` is a glob matched against
+      the path relative to `path` as written.
     - `depth` (positive integer, optional): How many levels to descend. `1`
       lists only the entries directly in `path`, `2` adds their children, and
       so on. Omitted, the whole tree is returned

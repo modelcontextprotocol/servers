@@ -1183,6 +1183,33 @@ export async function headFile(
   }
 }
 
+// Whether an entry is excluded by an `excludePatterns` list, given its path
+// relative to the root of the walk. `directory_tree` and `search_files` take the
+// same argument, so they share this one predicate and read it the same way
+// (#5216). A pattern containing `*` is a glob matched against the relative path
+// as written. A bare name also matches an entry of that name at any depth
+// (`**/<name>`) and everything below it (`**/<name>/**`), so `["node_modules"]`
+// prunes every `node_modules` directory, not only one at the root. Names are
+// matched whole: `node_modules` does not exclude `node_modules_old`.
+//
+// Callers check it before validating an entry, so an excluded subtree is never
+// realpath'd or read (#4162).
+export function isExcludedPath(
+  relativePath: string,
+  excludePatterns: readonly string[],
+): boolean {
+  return excludePatterns.some((pattern) => {
+    if (pattern.includes("*")) {
+      return minimatch(relativePath, pattern, { dot: true });
+    }
+    return (
+      minimatch(relativePath, pattern, { dot: true }) ||
+      minimatch(relativePath, `**/${pattern}`, { dot: true }) ||
+      minimatch(relativePath, `**/${pattern}/**`, { dot: true })
+    );
+  });
+}
+
 export async function searchFilesWithValidation(
   rootPath: string,
   pattern: string,
@@ -1216,10 +1243,7 @@ export async function searchFilesWithValidation(
       // excluded subtree is never realpath'd or read (#4162): excluding a slow
       // provider folder keeps the walk from touching it at all.
       const relativePath = path.relative(rootPath, fullPath);
-      const shouldExclude = excludePatterns.some((excludePattern) =>
-        minimatch(relativePath, excludePattern, { dot: true }),
-      );
-      if (shouldExclude) continue;
+      if (isExcludedPath(relativePath, excludePatterns)) continue;
 
       visit();
 

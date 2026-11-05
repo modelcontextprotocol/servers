@@ -11,7 +11,6 @@ import { createReadStream } from "fs";
 import path from "path";
 import { pathToFileURL } from "url";
 import { z } from "zod";
-import { minimatch } from "minimatch";
 import { getValidRootDirectories } from "./roots-utils.js";
 import {
   confineRootsToDirectories,
@@ -28,6 +27,7 @@ import {
   moveFile,
   copyFile,
   searchFilesWithValidation,
+  isExcludedPath,
   applyFileEdits,
   tailFile,
   headFile,
@@ -836,19 +836,7 @@ export function createServer(
             rootPath,
             path.join(currentPath, entry.name),
           );
-          const shouldExclude = excludePatterns.some((pattern) => {
-            if (pattern.includes("*")) {
-              return minimatch(relativePath, pattern, { dot: true });
-            }
-            // For files: match exact name or as part of path
-            // For directories: match as directory path
-            return (
-              minimatch(relativePath, pattern, { dot: true }) ||
-              minimatch(relativePath, `**/${pattern}`, { dot: true }) ||
-              minimatch(relativePath, `**/${pattern}/**`, { dot: true })
-            );
-          });
-          if (shouldExclude) continue;
+          if (isExcludedPath(relativePath, excludePatterns)) continue;
           // Counted after the exclude check, so excluded subtrees cost
           // nothing; the cap and the readdir timeout keep one call from
           // walking an unbounded or stalled tree (#4162).
