@@ -21,7 +21,6 @@ const {
   isPathWithinAllowedDirectories,
   namesWindowsDevice,
 } = await import("../path-validation.js");
-const { validatePath } = await import("../lib.js");
 const { call, connect, quietStderr, textOf } = await import("./helpers.js");
 
 const realPlatform = process.platform;
@@ -207,20 +206,6 @@ describe("isPathWithinAllowedDirectories on win32 refuses device names and trail
   });
 });
 
-describe("validatePath on win32 refuses device names and trailing dots or spaces", () => {
-  it("reports the device refusal, not 'outside allowed directories'", async () => {
-    await expect(validatePath("C:\\work\\NUL", ["C:\\work"])).rejects.toThrow(
-      DEVICE,
-    );
-  });
-
-  it("refuses a relative path with a trailing dot", async () => {
-    await expect(validatePath("notes.txt.", ["C:\\work"])).rejects.toThrow(
-      TRAILING,
-    );
-  });
-});
-
 describe("the tools on win32 refuse device names and trailing dots or spaces", () => {
   it("returns each refusal as a tool error", async () => {
     quietStderr();
@@ -238,6 +223,39 @@ describe("the tools on win32 refuse device names and trailing dots or spaces", (
       });
       expect(write.isError).toBe(true);
       expect(textOf(write)).toMatch(TRAILING);
+    } finally {
+      await conn.close();
+      vi.restoreAllMocks();
+    }
+  });
+
+  // validatePath runs these checks before the containment check, so the
+  // error names the reason rather than "outside allowed directories".
+  it("reports the device refusal, not 'outside allowed directories'", async () => {
+    quietStderr();
+    const conn = await connect(["C:\\work"]);
+    try {
+      const result = await call(conn.client, "read_text_file", {
+        path: "C:\\work\\NUL",
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toMatch(DEVICE);
+      expect(textOf(result)).not.toMatch(/outside allowed directories/);
+    } finally {
+      await conn.close();
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("refuses a relative path with a trailing dot", async () => {
+    quietStderr();
+    const conn = await connect(["C:\\work"]);
+    try {
+      const result = await call(conn.client, "read_text_file", {
+        path: "notes.txt.",
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toMatch(TRAILING);
     } finally {
       await conn.close();
       vi.restoreAllMocks();
