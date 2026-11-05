@@ -253,9 +253,12 @@ Files inside the allowed directories are also [resources](https://modelcontextpr
       of that name at any depth and everything below it; it matches whole
       names, so `node_modules_old` is kept. A pattern containing `*` is a glob
       matched against the path relative to `path` as written: `*.log` excludes
-      only entries directly under `path`, `**/*.log` at any depth. An excluded
-      entry is skipped before it is resolved or read, so excluding a slow
-      folder keeps the search out of it entirely.
+      only entries directly under `path`, `**/*.log` at any depth. A glob
+      ending in `/**` also excludes the directory it names, so
+      `**/node_modules/**` leaves out every `node_modules` directory itself,
+      not only what is inside it. An excluded entry is skipped before it is
+      resolved or read, so excluding a slow folder keeps the search out of it
+      entirely.
   - Glob-style pattern matching
   - Returns full paths to matches
   - Bounded: see [Slow and very large trees](#slow-and-very-large-trees)
@@ -271,7 +274,9 @@ Files inside the allowed directories are also [resources](https://modelcontextpr
     - `excludePatterns` (string[]): Entries to leave out, read the same way as
       `search_files`'s: a bare name excludes that name at any depth and the
       subtree below it, and a pattern containing `*` is a glob matched against
-      the path relative to `path` as written.
+      the path relative to `path` as written. A glob ending in `/**` also
+      excludes the directory it names, so it is not listed, even as empty, and
+      is never read.
     - `depth` (positive integer, optional): How many levels to descend. `1`
       lists only the entries directly in `path`, `2` adds their children, and
       so on. Omitted, the whole tree is returned

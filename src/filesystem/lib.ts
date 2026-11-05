@@ -1192,6 +1192,12 @@ export async function headFile(
 // prunes every `node_modules` directory, not only one at the root. Names are
 // matched whole: `node_modules` does not exclude `node_modules_old`.
 //
+// A wildcard pattern ending in `/**` also excludes the directory it names
+// (#5445): minimatch matches `**/node_modules/**` only against paths below a
+// `node_modules`, never the directory entry itself, so without this the walk
+// would still resolve and read the directory and only drop its children. The
+// pattern is matched a second time with that suffix removed (`**/node_modules`).
+//
 // Callers check it before validating an entry, so an excluded subtree is never
 // realpath'd or read (#4162).
 export function isExcludedPath(
@@ -1200,7 +1206,13 @@ export function isExcludedPath(
 ): boolean {
   return excludePatterns.some((pattern) => {
     if (pattern.includes("*")) {
-      return minimatch(relativePath, pattern, { dot: true });
+      return (
+        minimatch(relativePath, pattern, { dot: true }) ||
+        (pattern.endsWith("/**") &&
+          minimatch(relativePath, pattern.slice(0, -"/**".length), {
+            dot: true,
+          }))
+      );
     }
     return (
       minimatch(relativePath, pattern, { dot: true }) ||
