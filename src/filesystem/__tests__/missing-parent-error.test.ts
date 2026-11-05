@@ -138,7 +138,8 @@ describe("the pinned write's error for a directory it cannot enter", () => {
     ).rejects.toThrow(
       expect.objectContaining({
         message: `Parent directory does not exist: ${parent}`,
-        code: "ENOTDIR",
+        // Windows reports a file in the way of chdir as ENOENT.
+        code: process.platform === "win32" ? "ENOENT" : "ENOTDIR",
       }),
     );
   });
