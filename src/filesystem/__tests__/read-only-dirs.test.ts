@@ -363,6 +363,26 @@ describe("the macOS Data-volume spelling", () => {
     },
   );
 
+  it("protects every path under a marking of the Data volume root itself", () => {
+    for (const target of [
+      "/System/Volumes/Data/Users/me/file.txt",
+      "/Users/me/file.txt",
+      "/System/Volumes/Data",
+    ]) {
+      expect(() =>
+        assertWritable(target, ["/System/Volumes/Data"], "write", "darwin"),
+      ).toThrow("Access denied - read-only directory");
+    }
+    expect(() =>
+      assertWritable(
+        "/System/Volumes",
+        ["/System/Volumes/Data"],
+        "move",
+        "darwin",
+      ),
+    ).toThrow("Access denied - read-only directory");
+  });
+
   it("keeps the two spellings apart off darwin", () => {
     expect(() =>
       assertWritable(`${aliased}/notes.txt`, [vault], "move", "linux"),

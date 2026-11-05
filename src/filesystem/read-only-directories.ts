@@ -69,14 +69,19 @@ export async function resolveReadOnlyDirectories(
 // root, and realpath keeps a /System/Volumes/Data/... spelling it is given, so
 // one directory has two resolved spellings there. Both sides of every
 // containment check below drop that prefix on darwin, so neither spelling
-// reaches a read-only directory the other one names. pinned-directory.ts
+// reaches a read-only directory the other one names. The volume root itself
+// folds to "/", so a marking of /System/Volumes/Data still contains every
+// path under it (and, folded, the root's: the rest of the root is the sealed
+// system volume, which nothing can write to anyway). pinned-directory.ts
 // folds the same prefix for the same reason.
 const DATA_VOLUME = "/System/Volumes/Data";
 
 /** `p` normalized, without the macOS Data-volume prefix on darwin. */
 function comparable(p: string, platform: string): string {
   const normalized = normalizePathFormat(p);
-  return platform === "darwin" && normalized.startsWith(`${DATA_VOLUME}/`)
+  if (platform !== "darwin") return normalized;
+  if (normalized === DATA_VOLUME) return "/";
+  return normalized.startsWith(`${DATA_VOLUME}/`)
     ? normalized.slice(DATA_VOLUME.length)
     : normalized;
 }
