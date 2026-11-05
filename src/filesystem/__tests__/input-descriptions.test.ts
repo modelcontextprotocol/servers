@@ -4,8 +4,8 @@
 // This is the reference implementation other server authors copy, so the rule
 // is pinned for every tool, existing or added later, and for nested
 // properties (array items, object fields) as well as top-level ones. The
-// excludePatterns descriptions state matching rules that differ between
-// directory_tree and search_files, so those rules are pinned here as well.
+// excludePatterns descriptions state the matching rule directory_tree and
+// search_files share (#5216), so that rule is pinned here as well.
 
 import fs from "fs/promises";
 import path from "path";
@@ -116,10 +116,9 @@ describe("excludePatterns, as the descriptions state it (#3669)", () => {
     expect(text).toContain("keep.txt");
   });
 
-  it("search_files: a bare name skips only the top-level entry", async () => {
+  it("search_files: a name with no '*' is skipped at any depth", async () => {
     expect(await search(["node_modules"])).toEqual([
       path.join(dir, "pkg", "keep.txt"),
-      path.join(dir, "pkg", "node_modules", "deep.txt"),
     ]);
   });
 

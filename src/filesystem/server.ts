@@ -11,7 +11,6 @@ import { createReadStream } from "fs";
 import path from "path";
 import { pathToFileURL } from "url";
 import { z } from "zod";
-import { minimatch } from "minimatch";
 import { getValidRootDirectories } from "./roots-utils.js";
 import {
   confineRootsToDirectories,
@@ -28,6 +27,7 @@ import {
   moveFile,
   copyFile,
   searchFilesWithValidation,
+  isExcludedPath,
   applyFileEdits,
   tailFile,
   headFile,
@@ -156,8 +156,9 @@ const DirectoryTreeArgsSchema = z.object({
     .optional()
     .default([])
     .describe(
-      "Glob patterns for entries to leave out, with their contents, matched against each entry's path relative to path. " +
-        "A pattern with no '*' also matches that name at any depth, so 'node_modules' leaves out every node_modules directory.",
+      "Patterns for entries to leave out, with their contents, matched against each entry's path relative to path. " +
+        "A pattern with no '*' matches that name at any depth ('node_modules' leaves out every node_modules directory); " +
+        "a pattern with '*' is a glob matched as written.",
     ),
   depth: z
     .number()
@@ -197,8 +198,9 @@ const SearchFilesArgsSchema = z.object({
     .optional()
     .default([])
     .describe(
-      "Glob patterns for entries to skip, matched like pattern; a skipped directory is not searched. " +
-        "Use '**/node_modules' to skip that name at any depth.",
+      "Patterns for entries to leave out, with their contents, matched against each entry's path relative to path. " +
+        "A pattern with no '*' matches that name at any depth ('node_modules' leaves out every node_modules directory); " +
+        "a pattern with '*' is a glob matched as written.",
     ),
 });
 
@@ -866,19 +868,7 @@ export function createServer(
             rootPath,
             path.join(currentPath, entry.name),
           );
-          const shouldExclude = excludePatterns.some((pattern) => {
-            if (pattern.includes("*")) {
-              return minimatch(relativePath, pattern, { dot: true });
-            }
-            // For files: match exact name or as part of path
-            // For directories: match as directory path
-            return (
-              minimatch(relativePath, pattern, { dot: true }) ||
-              minimatch(relativePath, `**/${pattern}`, { dot: true }) ||
-              minimatch(relativePath, `**/${pattern}/**`, { dot: true })
-            );
-          });
-          if (shouldExclude) continue;
+          if (isExcludedPath(relativePath, excludePatterns)) continue;
           // Counted after the exclude check, so excluded subtrees cost
           // nothing; the cap and the readdir timeout keep one call from
           // walking an unbounded or stalled tree (#4162).
