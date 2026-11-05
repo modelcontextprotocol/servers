@@ -13,7 +13,8 @@
 #
 # The image runs the server over stdio by default (`docker run -i`); give the
 # transport name as the argument to run another, e.g. `streamableHttp`, which
-# listens on PORT (3001) on every interface so a published port reaches it.
+# listens on PORT (3001) on every interface (HOST=0.0.0.0) so a published
+# port reaches it.
 # The README's "Running with Docker" section has both commands. This repository
 # publishes no image: `mcp/everything` on Docker Hub is built by Docker.
 
@@ -54,6 +55,11 @@ USER node
 
 # The Streamable HTTP (and deprecated HTTP+SSE) transports' default port.
 ENV PORT=3001
+# Outside a container they bind loopback only (#5371); inside one, loopback is
+# the container's own, which a published port cannot reach, so the image
+# widens the bind to every interface. `-p 127.0.0.1:…` keeps it off the
+# host's network.
+ENV HOST=0.0.0.0
 EXPOSE 3001
 
 # Both transports close cleanly on SIGINT; node running as PID 1 would ignore

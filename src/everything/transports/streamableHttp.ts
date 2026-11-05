@@ -42,7 +42,7 @@ import type { Server } from "node:http";
 import { createServer } from "../server/index.js";
 import { randomUUID } from "node:crypto";
 import cors from "cors";
-import { listenOrExit } from "./listen.js";
+import { bindHost, hostAndPort, listenOrExit } from "./listen.js";
 import { InMemoryEventStore } from "./in-memory-event-store.js";
 
 /** The most bytes of a refused POST's body read to find its request id. */
@@ -383,7 +383,8 @@ export function createApp(): StreamableHttpApp {
 
 /**
  * Start the Streamable HTTP server as the launcher does: build the app, bind
- * it to `PORT` (default 3001), and install its shutdown handler for SIGINT.
+ * it to `PORT` (default 3001) on `HOST` (default loopback), and install its
+ * shutdown handler for SIGINT.
  */
 export function startStreamableHttpServer(): Server {
   console.log("Starting Streamable HTTP server...");
@@ -391,10 +392,12 @@ export function startStreamableHttpServer(): Server {
 
   // Start the server
   const PORT = process.env.PORT || 3001;
+  const HOST = bindHost();
   const httpServer = listenOrExit(
     app,
     PORT,
-    `MCP Streamable HTTP Server listening on port ${PORT}`,
+    HOST,
+    `MCP Streamable HTTP Server listening on ${hostAndPort(HOST, PORT)}`,
   );
 
   // Handle server shutdown

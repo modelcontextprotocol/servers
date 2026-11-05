@@ -23,7 +23,7 @@ import express, {
 import type { Server } from "node:http";
 import { createServer } from "../server/index.js";
 import cors from "cors";
-import { listenOrExit } from "./listen.js";
+import { bindHost, hostAndPort, listenOrExit } from "./listen.js";
 
 /**
  * Answer a request the transport cannot serve with a JSON-RPC error body, as
@@ -132,7 +132,7 @@ export function createApp(): Express {
 
 /**
  * Start the SSE server as the launcher does: build the app and bind it to
- * `PORT` (default 3001).
+ * `PORT` (default 3001) on `HOST` (default loopback).
  */
 export function startSseServer(): Server {
   console.error("Starting SSE server...");
@@ -144,5 +144,11 @@ export function startSseServer(): Server {
 
   // Start the express server
   const PORT = process.env.PORT || 3001;
-  return listenOrExit(app, PORT, `Server is running on port ${PORT}`);
+  const HOST = bindHost();
+  return listenOrExit(
+    app,
+    PORT,
+    HOST,
+    `Server is running on ${hostAndPort(HOST, PORT)}`,
+  );
 }
