@@ -350,9 +350,24 @@ export async function withFileLock<T>(
 
   // Keep the lock fresh while the operation runs, so a mutation that outlasts
   // staleMs (a large graph, a slow disk) is not mistaken for an abandoned one.
+  // Refresh only our own lock, as the release below does: once it is broken
+  // as stale and re-taken, the file belongs to another process, and keeping
+  // it fresh would stop a crashed new owner's lock from ever going stale.
   const heartbeat = setInterval(() => {
     const now = new Date();
-    fs.utimes(lockPath, now, now).catch(ignoreError);
+    // Not awaited: an interval callback has no caller to await it, and every
+    // failure (the lock already gone) is caught and ignored here.
+    void fs
+      .readFile(lockPath, "utf-8")
+      .then((current) => {
+        if (current !== token) {
+          // The lock changed hands: stop refreshing it, for good.
+          clearInterval(heartbeat);
+          return;
+        }
+        return fs.utimes(lockPath, now, now);
+      })
+      .catch(ignoreError);
   }, staleMs / 2);
   heartbeat.unref();
 
@@ -984,7 +999,11 @@ export function createServer(
       description:
         "Create multiple new entities in the knowledge graph. An entity whose name already exists, or repeats an earlier entity in the same call, is skipped and its observations are not added; the result lists the skipped names in `skipped`. Use add_observations to add observations to an existing entity.",
       inputSchema: z.object({
-        entities: z.array(EntitySchema),
+        entities: z
+          .array(EntitySchema)
+          .describe(
+            "The entities to create, each with a name unique in the graph",
+          ),
       }),
       outputSchema: z.object({
         entities: z.array(EntitySchema),
@@ -1031,7 +1050,11 @@ export function createServer(
       description:
         "Create multiple new relations between entities in the knowledge graph. Relations should be in active voice",
       inputSchema: z.object({
-        relations: z.array(RelationSchema),
+        relations: z
+          .array(RelationSchema)
+          .describe(
+            "The relations to create. Both ends must name existing entities; a relation already in the graph is not added again",
+          ),
       }),
       outputSchema: z.object({
         relations: z.array(RelationSchema),
@@ -1063,16 +1086,20 @@ export function createServer(
       description:
         "Add new observations to existing entities in the knowledge graph",
       inputSchema: z.object({
-        observations: z.array(
-          z.object({
-            entityName: z
-              .string()
-              .describe("The name of the entity to add the observations to"),
-            contents: z
-              .array(z.string())
-              .describe("An array of observation contents to add"),
-          }),
-        ),
+        observations: z
+          .array(
+            z.object({
+              entityName: z
+                .string()
+                .describe("The name of the entity to add the observations to"),
+              contents: z
+                .array(z.string())
+                .describe("An array of observation contents to add"),
+            }),
+          )
+          .describe(
+            "The observations to add, grouped by entity. Each entity must already exist; an observation it already has is not added again",
+          ),
       }),
       outputSchema: z.object({
         results: z.array(
@@ -1107,7 +1134,7 @@ export function createServer(
     {
       title: "Delete Entities",
       description:
-        "Delete multiple entities and their associated relations from the knowledge graph",
+        "Delete whole entities from the knowledge graph, together with every relation that points to or from them and all their observations. Use it only to remove an entity entirely; to remove a link between two entities and keep both, use delete_relations, and to remove facts from an entity, use delete_observations. Cannot be undone.",
       inputSchema: z.object({
         entityNames: z
           .array(z.string())
@@ -1147,16 +1174,20 @@ export function createServer(
       description:
         "Delete specific observations from entities in the knowledge graph",
       inputSchema: z.object({
-        deletions: z.array(
-          z.object({
-            entityName: z
-              .string()
-              .describe("The name of the entity containing the observations"),
-            observations: z
-              .array(z.string())
-              .describe("An array of observations to delete"),
-          }),
-        ),
+        deletions: z
+          .array(
+            z.object({
+              entityName: z
+                .string()
+                .describe("The name of the entity containing the observations"),
+              observations: z
+                .array(z.string())
+                .describe("An array of observations to delete"),
+            }),
+          )
+          .describe(
+            "The observations to delete, grouped by entity, each matched by its exact text",
+          ),
       }),
       outputSchema: z.object({
         success: z.boolean(),
@@ -1196,7 +1227,8 @@ export function createServer(
     "delete_relations",
     {
       title: "Delete Relations",
-      description: "Delete multiple relations from the knowledge graph",
+      description:
+        "Delete specific relations (from, to, relationType) from the knowledge graph and keep the entities they connect. Each relation must match an existing one exactly on all three fields; if unsure, call open_nodes (or search_nodes) first to read the stored relationType. Use it to remove a link between two entities; to remove an entity itself, use delete_entities. Cannot be undone.",
       inputSchema: z.object({
         relations: z
           .array(RelationSchema)

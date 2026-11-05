@@ -173,6 +173,14 @@ def test_main_help():
     assert "MCP Git Server - Git functionality for MCP" in result.output
     assert "-r, --repository PATH" in result.output
     assert "-v, --verbose" in result.output
+    # Click wraps option help to the terminal width, so compare with the
+    # whitespace collapsed rather than against one rendered line.
+    help_text = " ".join(result.output.split())
+    assert "Git repository to confine operations to" in help_text
+    assert (
+        "Without this option, every repository the server process can reach is in scope."
+        in help_text
+    )
 
 
 # --------------------------------------------------------------------------

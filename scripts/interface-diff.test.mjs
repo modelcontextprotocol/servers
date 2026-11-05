@@ -1,40 +1,121 @@
-// Tests for the `everything` interface diff (#4860). The pure halves are
-// exercised here: the argument parser, the verdict drawn from
+// Tests for the MCP interface diff (#4860, every server since #5428). The pure
+// halves are exercised here: the argument parser, which servers a run covers,
+// the start command each build is probed with, the verdict drawn from
 // `mcp-server-diff`'s JSON (the one thing that decides whether the gate and
 // the CI job fail), and the report. Building a base and probing two servers is
 // what `npm run interface-diff` itself does as a gate stage, so it is not
-// repeated here. Run via `npm run test:scripts`.
+// repeated here; which servers a change selects is
+// `lib/interface-diff-servers.test.mjs`. Run via `npm run test:scripts`.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  chooseServers,
   classify,
   fenceFor,
   main,
   parseArgs,
   renderReport,
+  startCommand,
 } from "./interface-diff.mjs";
+import { SERVERS } from "./lib/interface-diff-servers.mjs";
 
 const counts = { tools: 13, prompts: 4, resources: 7, resourceTemplates: 2 };
 const cliJson = (result) =>
   JSON.stringify({ timestamp: "t", results: [result], summary: {} });
 
-test("parseArgs reads both flags, in either spelling", () => {
-  assert.deepEqual(parseArgs([]), { base: null, reportDir: null });
+const defaults = {
+  base: null,
+  reportDir: null,
+  servers: [],
+  all: false,
+  list: false,
+};
+
+test("parseArgs reads every flag, in either spelling", () => {
+  assert.deepEqual(parseArgs([]), defaults);
   assert.deepEqual(parseArgs(["--base", "abc", "--report-dir", "out"]), {
+    ...defaults,
     base: "abc",
     reportDir: "out",
   });
   assert.deepEqual(parseArgs(["--base=v1.0.0", "--report-dir=a=b"]), {
+    ...defaults,
     base: "v1.0.0",
     reportDir: "a=b",
   });
+  assert.deepEqual(parseArgs(["--server", "git", "--server=time", "--list"]), {
+    ...defaults,
+    servers: ["git", "time"],
+    list: true,
+  });
+  assert.deepEqual(parseArgs(["--all"]), { ...defaults, all: true });
 });
 
-test("parseArgs refuses an unknown flag or a missing value", () => {
+test("parseArgs refuses an unknown flag or server, or a missing value", () => {
   assert.throws(() => parseArgs(["--fail-on-diff"]), /unknown argument/);
   assert.throws(() => parseArgs(["--base"]), /--base needs a value/);
   assert.throws(() => parseArgs(["--base="]), /--base needs a value/);
+  assert.throws(() => parseArgs(["--server"]), /--server needs a value/);
+  // A typo must not read as "nothing to diff".
+  assert.throws(() => parseArgs(["--server", "evrything"]), /unknown server/);
+  assert.throws(() => parseArgs(["--list=yes"]), /--list takes no value/);
+  assert.throws(
+    () => parseArgs(["--all", "--server", "git"]),
+    /cannot be combined/,
+  );
+});
+
+test("chooseServers: --all and --server need no history; bare selects by change", () => {
+  const noHistory = () => {
+    throw new Error("read the history");
+  };
+  assert.deepEqual(
+    chooseServers({ ...defaults, all: true }, noHistory).map((s) => s.server),
+    SERVERS.map((s) => s.name),
+  );
+  // The table's order, whatever order they were named in.
+  assert.deepEqual(
+    chooseServers({ ...defaults, servers: ["time", "fetch"] }, noHistory),
+    [
+      { server: "fetch", language: "py", reason: "it was named (`--server`)" },
+      { server: "time", language: "py", reason: "it was named (`--server`)" },
+    ],
+  );
+  assert.deepEqual(
+    chooseServers(defaults, () => ({
+      changedFiles: ["src/memory/index.ts", "README.md"],
+      baseLock: null,
+      headLock: null,
+    })).map((s) => s.server),
+    ["memory"],
+  );
+});
+
+test("startCommand launches each build from its own root, with its arguments", () => {
+  const byName = (n) => SERVERS.find((s) => s.name === n);
+  const dir = "node_modules/.cache/x/scratch/s";
+  assert.equal(
+    startCommand(byName("everything"), "", dir),
+    "node src/everything/dist/index.js stdio",
+  );
+  assert.equal(
+    startCommand(byName("filesystem"), "node_modules/.cache/x/base", dir),
+    `node node_modules/.cache/x/base/src/filesystem/dist/index.js ${dir}`,
+  );
+  // A Python head reads the synced environment; it never builds one.
+  assert.equal(
+    startCommand(byName("git"), "", dir),
+    `uv run --frozen --no-sync --project src/git mcp-server-git --repository ${dir}`,
+  );
+  assert.equal(
+    startCommand(byName("time"), "b", dir),
+    "uv run --frozen --no-sync --project b/src/time mcp-server-time --local-timezone UTC",
+  );
+  assert.equal(
+    startCommand(byName("sequentialthinking"), "", dir),
+    "node src/sequentialthinking/dist/index.js",
+  );
 });
 
 test("main exits 2 on a bad command line, before building anything", async (t) => {
@@ -107,7 +188,16 @@ test("fenceFor outruns any backticks in the content", () => {
 });
 
 test("the report leads with the verdict and shows each changed part", () => {
-  const labels = { base: "`base`", head: "`head`" };
+  const labels = {
+    server: "time",
+    base: "`base`",
+    head: "`head`",
+    reason: "`src/time/x.py` changed",
+  };
+  assert.match(
+    renderReport({ status: "unchanged", diffs: [] }, labels),
+    /^## `time`: MCP interface diff\n[\s\S]*Diffed because `src\/time\/x\.py` changed\./,
+  );
   assert.match(
     renderReport(
       {

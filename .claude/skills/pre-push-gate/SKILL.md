@@ -275,25 +275,35 @@ of the server's stderr. Re-run a subset with
 
 ### `interface-diff`
 
-The last stage diffs the `everything` server's MCP interface (capabilities,
-tools, prompts, resources, resource templates) in this checkout's build
-against the same server built from the merge-base with `origin/v2/main`, and
-prints the report. **A changed interface does not fail it**: the report is
+The last stage diffs the MCP interface (capabilities, tools, prompts,
+resources, resource templates) of each server the change touches, in this
+checkout's build, against the same server built from the merge-base with
+`origin/v2/main`, and prints one report per server. Each report says why that
+server was selected; a change that touches no server prints
+`no server changed` and passes. What selects a server is in
+[`docs/quality-gate.md`](../../../docs/quality-gate.md). **A changed interface does not fail it**: the report is
 what the PR's sticky comment will show, so read it, and if a change is not
 one you meant, that is the finding. It fails only when the diff cannot run,
 with `❌ The interface diff could not run` and the reason:
 
 - **"origin/v2/main is not available"**: `git fetch origin v2/main`.
-- **"src/everything/dist/index.js does not exist"**: you ran it on its own
-  before building: `npm run build -w src/everything`.
-- **An `npm ci` or `npm run build` failure**: the _base_ did not install or
-  build. Offline with a cold npm cache is the usual cause; otherwise name a
+- **"src/<server>/dist/index.js does not exist"**: you ran it on its own
+  before building: `npm run build -w src/<server>`.
+- **"src/<server>/.venv does not exist"**: a Python server was not synced:
+  `cd src/<server> && uv sync --frozen --all-extras --dev` (the gate's
+  `validate:py` does it).
+- **"does not exist at the base"**: the server is new on this branch, so
+  there is no base to diff it against.
+- **An `npm ci`, `npm run build` or `uv sync` failure**: the _base_ did not
+  install or build. Offline with a cold npm cache is the usual cause; otherwise name a
   base that builds with `npm run interface-diff -- --base <ref>`.
 - **"Base server probe failed" / "Target probe failed"**: a server did not
   answer the probe. A target failure is this checkout's server and is the
   real defect; the smoke stage before it usually fails first.
 
-Re-run it on its own with `npm run interface-diff` (about ten seconds). What
+Re-run it on its own with `npm run interface-diff` (about ten seconds for
+every server), `-- --server <name>` for one, or `-- --list` to see what it
+would select and why. What
 it compares against in CI, and why it is a script rather than an action, is
 in [`docs/quality-gate.md`](../../../docs/quality-gate.md) and the header of
 `scripts/interface-diff.mjs`.

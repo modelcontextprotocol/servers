@@ -13,7 +13,7 @@ out; everything else points here.
 | --- | --- | --- | --- |
 | Inner loop | `npm run validate -w src/<server>`, `npm run validate:py -- <server>` | Your machine | While iterating on one server |
 | Pre-push gate | `npm run local:gate` | Your machine, under a lease | Before every push |
-| CI | `.github/workflows/typescript.yml`, `python.yml`, `everything-mcp-diff.yml`; `dco.yml`; `main-source.yml` | GitHub, on every push and pull request (`everything-mcp-diff.yml`: when `everything` or what builds it changes); `dco.yml` on pull requests only; `main-source.yml` on pull requests into `main` only, and not mirrored by a gate stage, since no local push targets `main` | Before merge |
+| CI | `.github/workflows/typescript.yml`, `python.yml`, `everything-mcp-diff.yml`; `dco.yml`; `main-source.yml` | GitHub, on every push and pull request (`everything-mcp-diff.yml` diffs only the servers the change touches); `dco.yml` on pull requests only; `main-source.yml` on pull requests into `main` only, and not mirrored by a gate stage, since no local push targets `main` | Before merge |
 
 **`npm run local:gate` runs every check CI runs.** CI splits the same checks
 into parallel jobs on a fresh install; the gate runs them in sequence on your
@@ -57,7 +57,7 @@ in this order, and the first failure stops the run.
 | 7 | `coverage:py` | Per Python server: `uv sync --locked`, then `uv run --frozen pytest --cov --cov-report=term-missing --cov-report=json`; then **every file** in `coverage.json` must reach **90% on lines and 90% on branches** | `python.yml` → **Coverage \<server\>** (one leg each) |
 | 8 | `verify:skills:cli` | `claude plugin validate` on `.claude/skills`, at the pinned CLI version | `typescript.yml` → **Root guards** |
 | 9 | `smoke` | Every server boots over each transport it implements and answers one tool call | `typescript.yml` → **Boot smoke** |
-| 10 | `interface-diff` | The `everything` server's MCP interface (capabilities, tools, prompts, resources, resource templates) in this checkout's build, diffed against the same server built from the base. It fails only when the diff cannot run; a changed interface is reported, not failed | `everything-mcp-diff.yml` → **Diff Everything Server Interface** (and the PR comment) |
+| 10 | `interface-diff` | For each server the change touches, its MCP interface (capabilities, tools, prompts, resources, resource templates) in this checkout's build, diffed against the same server built from the base. It fails only when a diff cannot run; a changed interface is reported, not failed | `everything-mcp-diff.yml` → **Choose the servers to diff**, then **Diff \<server\>** (one leg each, and a PR comment each) |
 
 Notes on the stages:
 
@@ -101,7 +101,7 @@ Notes on the stages:
   `uv sync --locked` then downloads packages (and the pinned interpreter, if
   `uv` does not have it); `coverage:py` begins with the same sync, which is a
   no-op once `validate:py` has run; and `interface-diff` needs it for the
-  base's `npm ci`. With warm caches those are the only stages that can fail
+  base's `npm ci` and `uv sync`. With warm caches those are the only stages that can fail
   offline.
 - **`smoke` launches what a user launches**: the built `dist/index.js` for a
   TypeScript server, the console script through `uv run --no-sync` for a Python
@@ -116,12 +116,23 @@ Notes on the stages:
   locally (`-- --base <ref>` names another), and against the PR's base, the
   commit before the push, or the previous release's tag in CI. It builds the
   base from an export of that commit under `node_modules/.cache/` and removes
-  it afterwards; the head is the build `validate` made. It drives the
+  it afterwards; the head is the build `validate` made (and, for a Python
+  server, the environment `validate:py` synced). It drives the
   `mcp-server-diff` CLI, an exact-pinned root devDependency, which probes with
   the 2026-07-28 `server/discover` first and falls back to the `initialize`
   handshake, so it covers a server in either era. Its `npm ci` of the base
   needs the network when the npm cache is cold, and it needs
-  `origin/v2/main` fetched. Only `everything` is diffed today (#4860).
+  `origin/v2/main` fetched.
+- **`interface-diff` diffs only the servers the change touches** (#5428),
+  with the same selection in CI and the gate
+  (`scripts/lib/interface-diff-servers.mjs`): a file under `src/<server>/`;
+  for a TypeScript server, the root `tsconfig.json` or a `package-lock.json`
+  edit that changes a package the server resolves (its dependency tree is
+  walked in both lockfiles, so a lockfile rewrite that reaches no server
+  selects none); and every server when the diff tooling or the pinned
+  `mcp-server-diff` changes. A change that touches no server diffs nothing
+  and passes. `-- --server <name>` or `-- --all` diffs servers regardless,
+  and `-- --list` prints the selection without diffing.
 - `python.yml` also has a **Build \<server\>** job per server that re-runs
   pyright and `uv build` and uploads the built distribution. It checks nothing
   stage 6 does not.
