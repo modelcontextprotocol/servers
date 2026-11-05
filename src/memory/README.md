@@ -383,7 +383,42 @@ Docker:
 docker build -t mcp/memory -f src/memory/Dockerfile . 
 ```
 
-For Awareness: a prior mcp/memory volume contains an index.js file that could be overwritten by the new container. If you are using a docker volume for storage, delete the old docker volume's `index.js` file before starting the new container.
+### Upgrading a Docker install
+
+The [Docker](#docker) setup mounts the named volume `claude-memory` over `/app/dist`, the image's code directory, so the volume holds the server's code (`index.js`, `version.js`) next to your `memory.jsonl`. Docker copies an image's files into a named volume only while the volume is empty. Once the volume holds your graph, a newer image never reaches it: the container keeps running the code from the image that first filled the volume, which may not even start against the newer image's dependencies. Deleting `index.js` from the volume does not help; it leaves `/app/dist` with no entry point.
+
+To upgrade, build or pull the new `mcp/memory` image, quit the MCP clients that start it, then replace the code in the volume with the new image's, keeping `memory.jsonl`:
+
+```sh
+docker run --rm -v claude-memory:/volume --entrypoint sh mcp/memory \
+  -c 'rm -f /volume/*.js && cp /app/dist/*.js /volume/'
+```
+
+The volume is mounted at `/volume` rather than `/app/dist`, so the image's own `/app/dist` stays visible to copy from. Only the `.js` files are replaced; `memory.jsonl` (or a legacy `memory.json`) is left as it is. Repeat this after every image update.
+
+#### Alternative: keep the graph in a volume of its own
+
+Mounting a volume on a directory of its own and pointing `MEMORY_FILE_PATH` at it keeps the code out of the volume, so a new image takes effect with no copying step:
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "docker",
+      "args": ["run", "-i", "-v", "claude-memory-data:/data", "-e", "MEMORY_FILE_PATH=/data/memory.jsonl", "--rm", "mcp/memory"]
+    }
+  }
+}
+```
+
+To move an existing graph from the `claude-memory` volume into the new one, quit the MCP clients that start the server, then run:
+
+```sh
+docker run --rm -v claude-memory:/old -v claude-memory-data:/data \
+  --entrypoint cp mcp/memory /old/memory.jsonl /data/memory.jsonl
+```
+
+If the old volume holds only a legacy `memory.json`, copy `/old/memory.json` to `/data/memory.jsonl` instead. Once the server has started on the new volume with your graph, you can remove the old volume with `docker volume rm claude-memory`.
 
 ## License
 
