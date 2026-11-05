@@ -7,7 +7,10 @@ a page whose Content-Length is over the cap is refused before any of it is
 read, a page that streams past the cap is refused once it does, and a
 robots.txt is parsed from its first ``MAX_RESPONSE_BYTES``. Redirects are
 followed without reading the redirect's body, which httpx would otherwise read
-whole. These tests drive the real server through an MCP client
+whole. A gzip or deflate body is decoded by the server itself with each
+step's output bounded by the room left under the cap, since httpx inflates a
+whole network chunk at once (a compression bomb); any other content coding is
+refused. These tests drive the real server through an MCP client
 (``harness.connect``) with HTTP served by ``harness.FakeWeb``, under a small
 cap so a body over it stays cheap; endless bodies count the chunks they hand
 out, to show the read stopped.
@@ -16,6 +19,7 @@ out, to show the read stopped.
 from __future__ import annotations
 
 import gzip
+import zlib
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -242,3 +246,161 @@ async def test_the_prompt_reports_an_oversized_page(web: FakeWeb) -> None:
         result = await session.get_prompt("fetch", {"url": PAGE})
     message = result.model_dump(mode="json")["messages"][0]["content"]["text"]
     assert message == too_large().removeprefix(TOOL_ERROR)
+
+
+# --- content codings ----------------------------------------------------------
+
+
+def encoded(body: bytes, coding: str) -> httpx.Response:
+    # Over a stream, not `content=`, which httpx would decode while building it.
+    return httpx.Response(
+        200,
+        stream=httpx.ByteStream(body),
+        headers={"content-type": "text/plain", "content-encoding": coding},
+    )
+
+
+def raw_deflate(data: bytes) -> bytes:
+    compressor = zlib.compressobj(wbits=-zlib.MAX_WBITS)
+    return compressor.compress(data) + compressor.flush()
+
+
+async def test_a_compression_bomb_never_decodes_past_the_cap(
+    web: FakeWeb, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # One small network chunk that inflates to 10,000 times the cap. httpx
+    # would inflate it whole before any size check; the server's own decoder
+    # must never produce more than the room left plus one byte in a step.
+    outputs: list[int] = []
+    real = zlib.decompressobj
+
+    class Spy:
+        def __init__(self, *args: Any) -> None:
+            self._z = real(*args)
+
+        @property
+        def unconsumed_tail(self) -> bytes:
+            return self._z.unconsumed_tail
+
+        def decompress(self, data: bytes, max_length: int = 0) -> bytes:
+            out = self._z.decompress(data, max_length)
+            outputs.append(len(out))
+            return out
+
+    monkeypatch.setattr(zlib, "decompressobj", Spy)
+    bomb = gzip.compress(b"a" * (CAP * 10_000))
+    assert len(bomb) < CAP * 50
+    web.add(PAGE, encoded(bomb, "gzip"))
+    result = await call()
+    assert text_of(result) == too_large()
+    assert outputs and max(outputs) <= CAP + 1
+    assert sum(outputs) <= CAP + 1
+
+
+@pytest.mark.parametrize(
+    ("coding", "encode"),
+    [("gzip", gzip.compress), ("deflate", zlib.compress), ("deflate", raw_deflate)],
+)
+async def test_data_after_the_compressed_stream_is_not_read(
+    web: FakeWeb, coding: str, encode: Any
+) -> None:
+    # A complete compressed body, then endless trailing bytes: zlib would hold
+    # every one of them in `unused_data`, which no output cap sees, so the read
+    # stops where the compressed stream ends.
+    trailing = Body(fill=b"\x00")
+
+    async def stream() -> AsyncIterator[bytes]:
+        yield encode(b"t" * 10)
+        async for chunk in trailing.stream():
+            yield chunk
+
+    web.add(
+        PAGE,
+        httpx.Response(
+            200,
+            content=stream(),
+            headers={"content-type": "text/plain", "content-encoding": coding},
+        ),
+    )
+    result = await call()
+    assert wire(result)["isError"] is False
+    assert text_of(result).endswith("t" * 10)
+    assert trailing.chunks_sent <= 1
+
+
+async def test_robots_txt_stops_at_the_end_of_its_compressed_stream(
+    web: FakeWeb,
+) -> None:
+    trailing = Body(fill=b"\x00")
+
+    async def robots() -> AsyncIterator[bytes]:
+        yield gzip.compress(b"User-agent: *\nDisallow: /page\n")
+        async for chunk in trailing.stream():
+            yield chunk
+
+    web.add(
+        ROBOTS,
+        httpx.Response(
+            200,
+            content=robots(),
+            headers={"content-type": "text/plain", "content-encoding": "gzip"},
+        ),
+    )
+    async with connect() as (session, _):
+        result = await session.call_tool("fetch", {"url": PAGE})
+    assert "specifies that autonomous fetching of this page is not allowed" in (
+        text_of(result)
+    )
+    assert trailing.chunks_sent <= 1
+
+
+@pytest.mark.parametrize(
+    ("coding", "encode"),
+    [
+        ("gzip", gzip.compress),
+        ("x-gzip", gzip.compress),
+        ("GZIP", gzip.compress),
+        ("identity, gzip", gzip.compress),
+        ("deflate", zlib.compress),
+        ("deflate", raw_deflate),  # sent without zlib's wrapper
+    ],
+)
+async def test_a_gzip_or_deflate_body_is_decoded(
+    web: FakeWeb, coding: str, encode: Any
+) -> None:
+    web.add(PAGE, encoded(encode(b"d" * CAP), coding))
+    result = await call()
+    assert wire(result)["isError"] is False
+    assert text_of(result).endswith("d" * CAP)
+
+
+async def test_an_identity_coding_is_read_as_is(web: FakeWeb) -> None:
+    web.add(PAGE, encoded(b"plain", "identity"))
+    result = await call()
+    assert text_of(result).endswith("plain")
+
+
+@pytest.mark.parametrize("coding", ["br", "zstd", "gzip, gzip", "compress"])
+async def test_a_coding_the_server_cannot_bound_is_refused(
+    web: FakeWeb, coding: str
+) -> None:
+    web.add(PAGE, encoded(b"\x00\x01\x02", coding))
+    result = await call()
+    assert wire(result)["isError"] is True
+    assert "Unsupported content encoding" in text_of(result)
+    assert "this server decodes only gzip, deflate" in text_of(result)
+
+
+@pytest.mark.parametrize("coding", ["gzip", "deflate"])
+async def test_a_corrupt_body_is_a_decoding_error(web: FakeWeb, coding: str) -> None:
+    # Deflate is retried as raw deflate once, then fails like gzip.
+    web.add(PAGE, encoded(b"\xff" * 64, coding))
+    result = await call()
+    assert wire(result)["isError"] is True
+    assert "Error decoding the response body" in text_of(result)
+
+
+async def test_only_the_codings_it_decodes_are_asked_for(web: FakeWeb) -> None:
+    web.add(PAGE, httpx.Response(200, content=b"ok"))
+    await call()
+    assert web.requests[0].headers["accept-encoding"] == "gzip, deflate"
