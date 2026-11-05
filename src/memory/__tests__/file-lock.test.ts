@@ -251,8 +251,9 @@ describe("withFileLock", () => {
   });
 
   it("stops refreshing a lock that was broken and re-taken while it ran (#5418)", async () => {
-    // Heartbeat every 25 ms; the operation outlives several beats.
-    const opts = { staleMs: 50, timeoutMs: 5_000, retryMs: 5 };
+    // Heartbeat every 100 ms, wide enough that the replacement below finishes
+    // before the next beat; the operation outlives several beats.
+    const opts = { staleMs: 200, timeoutMs: 5_000, retryMs: 5 };
     const old = new Date(Date.now() - 60_000);
     const realUtimes = fs.utimes;
     let replaced!: () => void;
@@ -279,11 +280,11 @@ describe("withFileLock", () => {
         // Several heartbeats later, only the first one, on our own lock, has
         // touched the file: the next one read the new owner's token and stopped
         // the interval, so the beats after it do not even read the file.
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 250));
         expect(utimes).toHaveBeenCalledTimes(1);
         const reads = lockReads();
         expect(reads).toBeGreaterThan(0);
-        await new Promise((resolve) => setTimeout(resolve, 150));
+        await new Promise((resolve) => setTimeout(resolve, 350));
         expect(lockReads()).toBe(reads);
       },
       opts,
