@@ -1006,12 +1006,30 @@ export async function applyFileEdits(
       continue;
     }
 
-    // Otherwise, try line-by-line matching with flexibility for whitespace
-    const oldLines = normalizedOld.split("\n");
+    // Otherwise, try line-by-line matching with flexibility for whitespace.
+    // A trailing newline ends oldText's last line rather than adding an
+    // empty line after it (#5431), so it is dropped from the lines compared,
+    // and the match must instead be followed by a newline in the file, as
+    // exact matching would require. newText's trailing newline is handled to
+    // match: the newline after the matched lines stays when newText also
+    // ends with one; otherwise newText's last line joins the line after the
+    // match, as an exact replacement would leave it.
+    const oldEndsLine = normalizedOld.endsWith("\n");
+    const newEndsLine = normalizedNew.endsWith("\n");
+    const oldLines = (
+      oldEndsLine ? normalizedOld.slice(0, -1) : normalizedOld
+    ).split("\n");
+    const replacementLines = (
+      oldEndsLine && newEndsLine ? normalizedNew.slice(0, -1) : normalizedNew
+    ).split("\n");
     const contentLines = modifiedContent.split("\n");
+    // With a trailing newline, the last matched line needs an element after
+    // it in contentLines: that is what shows the file's newline is there.
+    const lastStart =
+      contentLines.length - oldLines.length - (oldEndsLine ? 1 : 0);
     let matchFound = false;
 
-    for (let i = 0; i <= contentLines.length - oldLines.length; i++) {
+    for (let i = 0; i <= lastStart; i++) {
       const potentialMatch = contentLines.slice(i, i + oldLines.length);
 
       // Compare lines with normalized whitespace
@@ -1025,12 +1043,9 @@ export async function applyFileEdits(
         // replaces, shifted by however much the edit indents or dedents it
         // relative to the matching oldText line (#4990). Lines beyond
         // oldText's length are placed relative to its last line.
-        const editUnit = indentUnit([
-          ...oldLines,
-          ...normalizedNew.split("\n"),
-        ]);
+        const editUnit = indentUnit([...oldLines, ...replacementLines]);
         const fileUnit = indentUnit(contentLines);
-        const newLines = normalizedNew.split("\n").map((line, j) => {
+        const newLines = replacementLines.map((line, j) => {
           const k = Math.min(j, oldLines.length - 1);
           return reindentLine(
             line,
@@ -1041,7 +1056,15 @@ export async function applyFileEdits(
           );
         });
 
-        contentLines.splice(i, oldLines.length, ...newLines);
+        if (oldEndsLine && !newEndsLine) {
+          // oldText took the newline after the matched lines and newText
+          // does not put one back, so newText's last line runs into the line
+          // that followed the match. An empty newText just removes the lines.
+          newLines[newLines.length - 1] += contentLines[i + oldLines.length];
+          contentLines.splice(i, oldLines.length + 1, ...newLines);
+        } else {
+          contentLines.splice(i, oldLines.length, ...newLines);
+        }
         modifiedContent = contentLines.join("\n");
         matchFound = true;
         break;

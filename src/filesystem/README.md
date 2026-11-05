@@ -189,7 +189,7 @@ Files inside the allowed directories are also [resources](https://modelcontextpr
       - `newText` (string): Text to replace with
     - `dryRun` (boolean): Preview changes without applying (default: false)
   - Returns detailed diff and match information for dry runs, otherwise applies changes
-  - Matching: `oldText` must match the file's text exactly, except that line endings never matter and, when there is no exact match, a run of whole lines matches if each line is equal once leading and trailing whitespace is ignored. Whitespace inside a line must match; nothing fuzzier is tried
+  - Matching: `oldText` must match the file's text exactly, except that line endings never matter and, when there is no exact match, a run of whole lines matches if each line is equal once leading and trailing whitespace is ignored. Whitespace inside a line must match; nothing fuzzier is tried. A newline at the end of `oldText` ends its last line rather than adding an empty one, so whole lines copied with their final newline still match when only indentation differs; the matched lines must then be followed by a newline in the file, and that newline is kept only if `newText` also ends with one
   - If any edit has no match, no edits are applied, and the error names the edit, quotes the closest lines of the file with line numbers, and shows the first line that differs (JSON-quoted, so tabs and trailing spaces are visible)
   - Best Practice: Always use dryRun first to preview changes before applying them
 
