@@ -6,7 +6,13 @@
 // properties (array items, object fields) as well as top-level ones.
 
 import { afterEach, describe, expect, it } from "vitest";
-import { ALL_CAPABILITIES, connect, type Session } from "./harness.js";
+import {
+  ALL_CAPABILITIES,
+  connect,
+  connectModern,
+  MODERN_CAPABILITIES,
+  type Session,
+} from "./harness.js";
 
 /** A JSON Schema node, as much of it as the walk reads. */
 type SchemaNode = {
@@ -56,10 +62,21 @@ afterEach(async () => {
   session = undefined;
 });
 
-describe("tool input descriptions (#3669)", () => {
+// Each era lists some tools the other does not (the task tools only on
+// 2026-07-28, the toggle-* tools only on the 2025 era), so both are checked.
+// Every capability is declared, so the tools gated on one are listed too.
+describe.each([
+  {
+    era: "2025-era",
+    open: () => connect({ capabilities: ALL_CAPABILITIES }),
+  },
+  {
+    era: "2026-07-28",
+    open: () => connectModern({ capabilities: MODERN_CAPABILITIES }),
+  },
+])("tool input descriptions on the $era surface (#3669)", ({ open }) => {
   it("describes every input property of every tool", async () => {
-    // Every capability, so the tools gated on one are listed too.
-    session = await connect({ capabilities: ALL_CAPABILITIES });
+    session = await open();
     const { tools } = await session.client.listTools();
     expect(tools.length).toBeGreaterThan(0);
     const missing = tools.flatMap((tool) =>
