@@ -1,11 +1,10 @@
 // Pins the path by which a version PR opened by automation gets CI (#5110),
-// DCO and the Everything diff (#5173).
+// DCO and the MCP interface diff (#5173, #5428).
 //
 // The Version Packages and Prepare Python Release workflows push their PR
 // branches with the workflow token, which starts no workflow (GitHub holds a
 // `pull_request` run as `action_required`), so they dispatch `typescript.yml`,
-// `python.yml` and `dco.yml` on the branch instead, and Version Packages
-// `everything-mcp-diff.yml` too. A dispatched run's checks are left out of the
+// `python.yml`, `dco.yml` and `mcp-interface-diff.yml` on the branch instead. A dispatched run's checks are left out of the
 // status rollup a pull request reads, so each dispatched workflow also mirrors
 // its run onto the commit as a status. Both version workflows run only from `v2/main`, so nothing
 // exercises this path before a release needs it; if any link here breaks,
@@ -49,13 +48,13 @@ const CI = [
     trigger: "pull_request",
   },
   {
-    file: "everything-mcp-diff.yml",
-    context: "Everything diff (dispatched)",
+    file: "mcp-interface-diff.yml",
+    context: "Interface diff (dispatched)",
     trigger: "pull_request",
   },
 ];
-// The Python stamps touch none of the Everything diff's paths, so its
-// `pull_request` run would never have started there.
+// Both dispatch the interface diff: the version stamps touch the servers it
+// diffs (#5428).
 const VERSION_WORKFLOWS = [
   {
     file: "version-packages.yml",
@@ -64,13 +63,18 @@ const VERSION_WORKFLOWS = [
       "typescript.yml",
       "python.yml",
       "dco.yml",
-      "everything-mcp-diff.yml",
+      "mcp-interface-diff.yml",
     ],
   },
   {
     file: "prepare-python-release.yml",
     job: "prepare",
-    dispatches: ["typescript.yml", "python.yml", "dco.yml"],
+    dispatches: [
+      "typescript.yml",
+      "python.yml",
+      "dco.yml",
+      "mcp-interface-diff.yml",
+    ],
   },
 ];
 

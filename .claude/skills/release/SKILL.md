@@ -206,17 +206,17 @@ Then, on the PR:
    ```
 2. **Wait for its CI to pass.** The workflow token's push starts no workflow,
    so the Version Packages workflow dispatches the TypeScript, Python, DCO and
-   Everything diff workflows on `changeset-release/v2/main` after each update.
+   MCP interface diff workflows on `changeset-release/v2/main` after each update.
    A PR does not list dispatched checks, so the result shows as four commit
    statuses: `TypeScript (dispatched)`, `Python (dispatched)`,
-   `DCO (dispatched)` and `Everything diff (dispatched)`. The PR may also
+   `DCO (dispatched)` and `Interface diff (dispatched)`. The PR may also
    list `DCO signoff` and the diff as pending or failed with no jobs: GitHub
    holds the token's `pull_request` runs (#5173), so read the statuses
    instead. Closing and reopening the PR does not start the CI workflows
    (that fires `pull_request`; they run on `push`). If a status does not
    appear, dispatch its workflow by hand:
    `gh workflow run typescript.yml --ref changeset-release/v2/main` (or
-   `python.yml`, `dco.yml`, `everything-mcp-diff.yml`).
+   `python.yml`, `dco.yml`, `mcp-interface-diff.yml`).
 3. **Read it**: each bump matches the semver policy in `RELEASING.md`, each
    `CHANGELOG.md` entry says what a user of the server needs to know, the
    consumed changeset files are deleted, and `package-lock.json` records the
@@ -255,8 +255,8 @@ gh workflow run prepare-python-release.yml --repo modelcontextprotocol/servers \
 
 It opens a PR that starts with `Closes #N`, on a branch named
 `v2/chore/<N>-python-calver-<date>`, labeled `v2`, and dispatches the
-TypeScript, Python and DCO workflows on that branch, as the Version Packages
-workflow does (not the Everything diff, whose paths it never touches).
+TypeScript, Python, DCO and MCP interface diff workflows on that branch, as
+the Version Packages workflow does.
 No PR means no Python server has a shipped change since its last stamp.
 
 Then, on the PR:
@@ -272,7 +272,7 @@ Then, on the PR:
      --json number,headRefName,url \
      | jq --arg p "v2/chore/$N-python-calver-" '.[] | select(.headRefName | startswith($p))'
    ```
-2. **Wait for its three `(dispatched)` statuses to pass**, check that each
+2. **Wait for its four `(dispatched)` statuses to pass**, check that each
    stamped package really changed, and a maintainer merges it.
 
 ⚠️ GitHub only dispatches a workflow that exists on the default branch. Until
