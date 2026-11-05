@@ -1,5 +1,86 @@
 import path from "path";
 
+// On Windows a colon may appear in a path only as a drive letter's
+// (`C:\dir`), optionally behind the `\\?\` or `\\.\` namespace prefix
+// (`\\?\C:\dir`). NTFS reads any other colon as an alternate data stream
+// (`file.txt:stream`, `file.txt::$DATA`): data stored inside the file that no
+// listing, diff or hash of the visible file shows, so the server refuses such
+// paths outright rather than let the tools read or write hidden streams
+// (#5375, prototyped in #4523). POSIX allows colons in
+// names, so the check runs only where `path` is the Windows implementation.
+const WINDOWS_DRIVE_PREFIX = /^(?:\\\\[?.]\\)?[A-Za-z]:/;
+
+/**
+ * True when `normalizedPath`, on Windows, holds a colon anywhere but the
+ * drive-letter prefix, so NTFS would read it as naming an alternate data
+ * stream. Always false on POSIX, where a colon is an ordinary name character.
+ */
+export function namesAlternateDataStream(normalizedPath: string): boolean {
+  if (path.sep !== "\\") {
+    return false;
+  }
+  const drive = WINDOWS_DRIVE_PREFIX.exec(normalizedPath);
+  const rest = drive ? normalizedPath.slice(drive[0].length) : normalizedPath;
+  return rest.includes(":");
+}
+
+// Two more classes of Windows path name something other than what the
+// containment check sees (#5444), so on Windows they are refused like an
+// alternate data stream:
+// - A component that is a reserved device name (CON, PRN, AUX, NUL, COM1-9,
+//   LPT1-9, and the superscript-digit COM¹-³ / LPT¹-³), in any case, alone or
+//   with an extension (`NUL.txt`), opens the device, in any directory, rather
+//   than a file inside the allowed one.
+// - Win32 strips trailing dots and spaces from a component, so `file.txt.`
+//   and `file.txt ` name `file.txt`: two spellings of one file, and a name
+//   created through `\\?\` that cannot be opened the ordinary way afterwards.
+// The `.` and `..` components are not "trailing dot" names (resolve has
+// already folded them away, and `\\.\` keeps a lone `.` as its prefix), and
+// the drive (`C:`) is neither, so only real names are judged. A UNC root's
+// server and share (`\\server\share`, `\\?\UNC\server\share`) are network
+// names, not path components Win32 maps or strips (an FQDN server may end in
+// a dot), so they are skipped too; `\\.\NUL` is a device target and is not.
+const WINDOWS_UNC_ROOT =
+  /^(?:\\\\[?.]\\UNC\\|\\\\(?![?.]\\))[^\\/]+[\\/][^\\/]+/i;
+
+const WINDOWS_DEVICE_NAME =
+  /^(?:CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³]) *(?:\..*)?$/is;
+
+function windowsNameComponents(normalizedPath: string): string[] {
+  return normalizedPath
+    .replace(WINDOWS_UNC_ROOT, "")
+    .split(/[\\/]/)
+    .filter((part) => part !== "" && part !== "." && part !== "..");
+}
+
+/**
+ * True when `normalizedPath`, on Windows, has a component that is a reserved
+ * device name (`CON`, `NUL.txt`, `com1`, …). Always false on POSIX, where
+ * those are ordinary names.
+ */
+export function namesWindowsDevice(normalizedPath: string): boolean {
+  if (path.sep !== "\\") {
+    return false;
+  }
+  return windowsNameComponents(normalizedPath).some((part) =>
+    WINDOWS_DEVICE_NAME.test(part),
+  );
+}
+
+/**
+ * True when `normalizedPath`, on Windows, has a component ending in a dot or
+ * a space, which Win32 would strip. `.` and `..` do not count. Always false on
+ * POSIX, where such names are distinct files.
+ */
+export function hasTrailingDotOrSpace(normalizedPath: string): boolean {
+  if (path.sep !== "\\") {
+    return false;
+  }
+  return windowsNameComponents(normalizedPath).some(
+    (part) => part.endsWith(".") || part.endsWith(" "),
+  );
+}
+
 /**
  * Checks if an absolute path is within any of the allowed directories.
  *
@@ -7,6 +88,11 @@ import path from "path";
  * @param allowedDirectories - Array of absolute allowed directory paths (will be normalized)
  * @returns true if the path is within an allowed directory, false otherwise
  * @throws Error if given relative paths after normalization
+ * @throws Error, on Windows, if `absolutePath` names an NTFS alternate data
+ *   stream (a colon anywhere but the drive prefix), so the caller reports
+ *   why it was refused rather than "outside allowed directories" (#5375).
+ * @throws Error, on Windows, if a component of `absolutePath` is a reserved
+ *   device name or ends in a dot or a space (#5444).
  */
 export function isPathWithinAllowedDirectories(
   absolutePath: string,
@@ -34,6 +120,24 @@ export function isPathWithinAllowedDirectories(
   } catch {
     /* v8 ignore next -- path.normalize/resolve throw only on a non-string, and the typeof check above already returned for one */
     return false;
+  }
+
+  if (namesAlternateDataStream(normalizedPath)) {
+    throw new Error(
+      `Access denied - NTFS alternate data stream paths are not supported (a colon is allowed only after a drive letter): ${absolutePath}`,
+    );
+  }
+
+  if (namesWindowsDevice(normalizedPath)) {
+    throw new Error(
+      `Access denied - Windows reserved device names (CON, PRN, AUX, NUL, COM1-9, LPT1-9, with or without an extension) are not supported as path components: ${absolutePath}`,
+    );
+  }
+
+  if (hasTrailingDotOrSpace(normalizedPath)) {
+    throw new Error(
+      `Access denied - Windows path components ending in a dot or a space are not supported (Windows strips them, so the name would refer to a different file): ${absolutePath}`,
+    );
   }
 
   // Verify it's absolute after normalization
