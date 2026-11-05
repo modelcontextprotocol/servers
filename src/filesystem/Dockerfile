@@ -11,10 +11,10 @@
 # Dockerfile.dockerignore (next to this file) keeps the context to what the
 # build reads. The shape is src/everything/Dockerfile's (#3309).
 #
-# Unlike that image, this one still runs as root. The server reads and writes
-# the host directories bind-mounted under /projects, and a non-root user can
-# only write to them when the host owner's uid matches, so the switch changes
-# what existing setups can do. It is decided with the other images in #4741.
+# Like that image, it runs as the unprivileged `node` user (#4741). The server
+# writes to the host directories bind-mounted under /projects, which a non-root
+# user can do only where the host lets its uid; the README covers `--user` for
+# a Linux host whose owner uid differs.
 
 FROM node:24-alpine AS builder
 
@@ -48,6 +48,13 @@ RUN --mount=type=cache,target=/root/.npm \
 COPY --from=builder /repo/src/filesystem/dist src/filesystem/dist
 
 WORKDIR /repo/src/filesystem
+
+# Run as the base image's unprivileged `node` user (UID 1000), not root
+# (#4741), so the image passes `runAsNonRoot` admission policies and files
+# it writes into a bind mount are not root-owned on the host.
+# It is named by number because Kubernetes cannot verify that a named user is
+# not root, and refuses to start the container under `runAsNonRoot`.
+USER 1000:1000
 
 # The allowed directories are the run arguments (`/projects` in the README).
 ENTRYPOINT ["node", "dist/index.js"]

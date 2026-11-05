@@ -390,11 +390,13 @@ The [Docker](#docker) setup mounts the named volume `claude-memory` over `/app/d
 To upgrade, build or pull the new `mcp/memory` image, quit the MCP clients that start it, then replace the code in the volume with the new image's, keeping `memory.jsonl`:
 
 ```sh
-docker run --rm -v claude-memory:/volume --entrypoint sh mcp/memory \
-  -c 'rm -f /volume/*.js && cp /app/dist/*.js /volume/'
+docker run --rm -v claude-memory:/volume --user root --entrypoint sh mcp/memory \
+  -c 'rm -f /volume/*.js && cp /app/dist/*.js /volume/ && chown -R node:node /volume'
 ```
 
 The volume is mounted at `/volume` rather than `/app/dist`, so the image's own `/app/dist` stays visible to copy from. Only the `.js` files are replaced; `memory.jsonl` (or a legacy `memory.json`) is left as it is. Repeat this after every image update.
+
+The image runs the server as the unprivileged `node` user, not root, so it must own the volume to save the graph. A volume an older image created, which ran as root, is owned by root, and without the `chown` above the server fails to save with `EACCES`. That is why this step runs as `--user root` and ends by giving the volume to `node`.
 
 #### Alternative: keep the graph in a volume of its own
 

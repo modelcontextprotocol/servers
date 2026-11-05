@@ -372,6 +372,8 @@ Note: you can provide sandboxed directories to the server by mounting them to `/
 ### Docker
 Note: all directories must be mounted to `/projects` by default.
 
+Note: the image runs as the unprivileged `node` user (UID 1000), not root. On a Linux host, where a bind mount keeps the host's file ownership, the server can write only where UID 1000 may, and files it creates are owned by UID 1000. If your own UID differs, add `"--user", "<uid>:<gid>"` (your `id -u` and `id -g`) before `mcp/filesystem` so it reads and writes as you. Docker Desktop on macOS and Windows maps ownership to your user and needs neither.
+
 ```json
 {
   "mcpServers": {
