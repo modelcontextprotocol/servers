@@ -106,7 +106,8 @@ const tasks = new Map<string, StoredTask>();
 export const MAX_TASKS = 100;
 
 /**
- * The most bytes of answers, serialized, one `tasks/update` may hand a task.
+ * The most bytes of answers, serialized as JSON and counted in UTF-8, one
+ * `tasks/update` may hand a task.
  * A task keeps its answers until its TTL, and a transport accepts messages
  * far larger than any of these tasks needs (10 MiB on stdio), so with
  * `MAX_TASKS` this bounds what the store holds.
@@ -413,7 +414,10 @@ export function registerTasksExtension(server: McpServer): void {
           outstanding.includes(key),
         ),
       );
-      const size = JSON.stringify(answered).length;
+      // The limit is in bytes, so count the UTF-8 encoding of the serialized
+      // answers: a string's length counts UTF-16 code units, which under-counts
+      // any non-ASCII text by up to 3x.
+      const size = Buffer.byteLength(JSON.stringify(answered), "utf8");
       if (size > MAX_ANSWER_BYTES) {
         throw new ProtocolError(
           ProtocolErrorCode.InvalidParams,
