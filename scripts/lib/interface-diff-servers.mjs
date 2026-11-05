@@ -1,7 +1,7 @@
 // The servers the MCP interface diff covers, how each is started for it, and
 // which of them a change touches (#5428).
 //
-// Two things live here, both shared by CI (`mcp-interface-diff.yml`) and the
+// Two things live here, both shared by CI (`everything-mcp-diff.yml`) and the
 // pre-push gate through `scripts/interface-diff.mjs`, so the two always agree
 // on what to diff:
 //
@@ -68,7 +68,7 @@ export const TOOLING_PATHS = [
   "scripts/interface-diff.mjs",
   "scripts/lib/interface-diff-servers.mjs",
   "scripts/lib/win-shell-args.mjs",
-  ".github/workflows/mcp-interface-diff.yml",
+  ".github/workflows/everything-mcp-diff.yml",
 ];
 
 /** Root files every TypeScript server's build reads. */

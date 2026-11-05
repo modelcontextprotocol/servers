@@ -13,7 +13,7 @@ out; everything else points here.
 | --- | --- | --- | --- |
 | Inner loop | `npm run validate -w src/<server>`, `npm run validate:py -- <server>` | Your machine | While iterating on one server |
 | Pre-push gate | `npm run local:gate` | Your machine, under a lease | Before every push |
-| CI | `.github/workflows/typescript.yml`, `python.yml`, `mcp-interface-diff.yml`; `dco.yml`; `main-source.yml` | GitHub, on every push and pull request (`mcp-interface-diff.yml` diffs only the servers the change touches); `dco.yml` on pull requests only; `main-source.yml` on pull requests into `main` only, and not mirrored by a gate stage, since no local push targets `main` | Before merge |
+| CI | `.github/workflows/typescript.yml`, `python.yml`, `everything-mcp-diff.yml`; `dco.yml`; `main-source.yml` | GitHub, on every push and pull request (`everything-mcp-diff.yml` diffs only the servers the change touches); `dco.yml` on pull requests only; `main-source.yml` on pull requests into `main` only, and not mirrored by a gate stage, since no local push targets `main` | Before merge |
 
 **`npm run local:gate` runs every check CI runs.** CI splits the same checks
 into parallel jobs on a fresh install; the gate runs them in sequence on your
@@ -57,7 +57,7 @@ in this order, and the first failure stops the run.
 | 7 | `coverage:py` | Per Python server: `uv sync --locked`, then `uv run --frozen pytest --cov --cov-report=term-missing --cov-report=json`; then **every file** in `coverage.json` must reach **90% on lines and 90% on branches** | `python.yml` → **Coverage \<server\>** (one leg each) |
 | 8 | `verify:skills:cli` | `claude plugin validate` on `.claude/skills`, at the pinned CLI version | `typescript.yml` → **Root guards** |
 | 9 | `smoke` | Every server boots over each transport it implements and answers one tool call | `typescript.yml` → **Boot smoke** |
-| 10 | `interface-diff` | For each server the change touches, its MCP interface (capabilities, tools, prompts, resources, resource templates) in this checkout's build, diffed against the same server built from the base. It fails only when a diff cannot run; a changed interface is reported, not failed | `mcp-interface-diff.yml` → **Choose the servers to diff**, then **Diff \<server\>** (one leg each, and a PR comment each) |
+| 10 | `interface-diff` | For each server the change touches, its MCP interface (capabilities, tools, prompts, resources, resource templates) in this checkout's build, diffed against the same server built from the base. It fails only when a diff cannot run; a changed interface is reported, not failed | `everything-mcp-diff.yml` → **Choose the servers to diff**, then **Diff \<server\>** (one leg each, and a PR comment each) |
 
 Notes on the stages:
 

@@ -63,7 +63,7 @@ servers/
 │                             overview of how the rules, skills, gates and sweeps fit together
 ├── .github/workflows/        typescript.yml, python.yml (per-package CI), release.yml (publishes on a GitHub Release),
 │                             version-packages.yml (the changesets PR), prepare-python-release.yml (the CalVer PR),
-│                             mcp-interface-diff.yml (each changed server's interface diff on PRs),
+│                             everything-mcp-diff.yml (each changed server's interface diff on PRs),
 │                             main-source.yml (a PR into main must bring nothing that is not on v2/main),
 │                             and the scheduled sweeps that file issues: dependency-refresh.yml, dependabot-alerts.yml, sdk-watch.yml
 ├── .github/ISSUE_TEMPLATE/   Bug and feature issue forms; config.yml routes security and new servers away

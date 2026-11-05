@@ -24,7 +24,7 @@
 //     `scripts/lib/workflow-gate.test.mjs` derives that from the npm scripts a
 //     workflow invokes. A check behind an action is invisible to it; a check
 //     behind `npm run interface-diff` is enforced by it. CI
-//     (`mcp-interface-diff.yml`) and the gate run this same file.
+//     (`everything-mcp-diff.yml`) and the gate run this same file.
 //   - The tool comes in as an exact-pinned root devDependency, so it is held
 //     by `package-lock.json`'s integrity hash, the way every other npm
 //     dependency here is, and no third-party action runs in CI at all.
@@ -345,7 +345,10 @@ function resolveBase(base) {
  * lockfile on each side (`null` where there is none).
  */
 function changesSince(sha) {
-  const lines = (text) => text.split("\n").filter(Boolean);
+  // NUL-delimited, so a path holding a non-ASCII character, a tab or a
+  // newline comes back as written rather than C-quoted (`"src/time/…`), which
+  // would match no server's directory.
+  const paths = (text) => text.split("\0").filter(Boolean);
   let baseLock = null;
   try {
     baseLock = JSON.parse(git("show", `${sha}:package-lock.json`));
@@ -355,8 +358,20 @@ function changesSince(sha) {
   const headFile = path.join(repoRoot, "package-lock.json");
   return {
     changedFiles: [
-      ...lines(git("diff", "--name-only", "--no-renames", sha)),
-      ...lines(git("ls-files", "--others", "--exclude-standard")),
+      ...paths(
+        run(
+          "git",
+          ["diff", "--name-only", "--no-renames", "-z", sha],
+          repoRoot,
+        ),
+      ),
+      ...paths(
+        run(
+          "git",
+          ["ls-files", "--others", "--exclude-standard", "-z"],
+          repoRoot,
+        ),
+      ),
     ],
     baseLock,
     headLock: existsSync(headFile)

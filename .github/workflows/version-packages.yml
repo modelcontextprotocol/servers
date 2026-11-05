@@ -91,6 +91,6 @@ jobs:
           PR: ${{ steps.changesets.outputs.pr-number }}
         run: |
           BRANCH=$(gh pr view "$PR" --json headRefName --jq .headRefName)
-          for workflow in typescript.yml python.yml dco.yml mcp-interface-diff.yml; do
+          for workflow in typescript.yml python.yml dco.yml everything-mcp-diff.yml; do
             gh workflow run "$workflow" --ref "$BRANCH"
           done

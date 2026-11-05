@@ -216,7 +216,7 @@ Then, on the PR:
    (that fires `pull_request`; they run on `push`). If a status does not
    appear, dispatch its workflow by hand:
    `gh workflow run typescript.yml --ref changeset-release/v2/main` (or
-   `python.yml`, `dco.yml`, `mcp-interface-diff.yml`).
+   `python.yml`, `dco.yml`, `everything-mcp-diff.yml`).
 3. **Read it**: each bump matches the semver policy in `RELEASING.md`, each
    `CHANGELOG.md` entry says what a user of the server needs to know, the
    consumed changeset files are deleted, and `package-lock.json` records the

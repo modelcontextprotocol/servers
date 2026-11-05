@@ -48,6 +48,11 @@
 # they do the CI workflows (#5110), and the `dispatch-status` jobs report the
 # dispatched run on the PR as a commit status.
 #
+# The file keeps its `everything-` name although it diffs every server: GitHub
+# dispatches only a workflow whose file exists on the default branch (`main`),
+# and both version workflows dispatch this one by file name from `v2/main`, so
+# renaming it here would break their dispatch until the next milestone merge.
+#
 # See: https://github.com/modelcontextprotocol/inspector/issues/1034
 name: MCP Interface Diff
 
@@ -288,7 +293,7 @@ jobs:
         run: |
           # A re-run keeps its run ID, so a newer run means this one is
           # superseded and the status is no longer its to set.
-          NEWER=$(gh run list --workflow mcp-interface-diff.yml --event workflow_dispatch \
+          NEWER=$(gh run list --workflow everything-mcp-diff.yml --event workflow_dispatch \
             --commit "$GITHUB_SHA" --json databaseId \
             --jq "[.[] | select(.databaseId > $GITHUB_RUN_ID)] | length") || NEWER=0
           if [ "${NEWER:-0}" -gt 0 ]; then
@@ -324,7 +329,7 @@ jobs:
           # nothing, whatever its jobs' results: the newer run owns the status
           # (#5178). A failed lookup counts as no newer run, so this run still
           # reports: a stale status is better than one left pending.
-          NEWER=$(gh run list --workflow mcp-interface-diff.yml --event workflow_dispatch \
+          NEWER=$(gh run list --workflow everything-mcp-diff.yml --event workflow_dispatch \
             --commit "$GITHUB_SHA" --json databaseId \
             --jq "[.[] | select(.databaseId > $GITHUB_RUN_ID)] | length") || NEWER=0
           if [ "${NEWER:-0}" -gt 0 ]; then

@@ -4,7 +4,7 @@
 // The Version Packages and Prepare Python Release workflows push their PR
 // branches with the workflow token, which starts no workflow (GitHub holds a
 // `pull_request` run as `action_required`), so they dispatch `typescript.yml`,
-// `python.yml`, `dco.yml` and `mcp-interface-diff.yml` on the branch instead. A dispatched run's checks are left out of the
+// `python.yml`, `dco.yml` and `everything-mcp-diff.yml` on the branch instead. A dispatched run's checks are left out of the
 // status rollup a pull request reads, so each dispatched workflow also mirrors
 // its run onto the commit as a status. Both version workflows run only from `v2/main`, so nothing
 // exercises this path before a release needs it; if any link here breaks,
@@ -48,7 +48,7 @@ const CI = [
     trigger: "pull_request",
   },
   {
-    file: "mcp-interface-diff.yml",
+    file: "everything-mcp-diff.yml",
     context: "Interface diff (dispatched)",
     trigger: "pull_request",
   },
@@ -63,7 +63,7 @@ const VERSION_WORKFLOWS = [
       "typescript.yml",
       "python.yml",
       "dco.yml",
-      "mcp-interface-diff.yml",
+      "everything-mcp-diff.yml",
     ],
   },
   {
@@ -73,7 +73,7 @@ const VERSION_WORKFLOWS = [
       "typescript.yml",
       "python.yml",
       "dco.yml",
-      "mcp-interface-diff.yml",
+      "everything-mcp-diff.yml",
     ],
   },
 ];
