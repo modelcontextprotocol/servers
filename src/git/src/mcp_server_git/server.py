@@ -549,7 +549,13 @@ def git_show(repo: git.Repo, revision: str) -> str:
 
 
 def validate_repo_path(repo_path: Path, allowed_repository: Path | None) -> None:
-    """Validate that repo_path is within the allowed repository path."""
+    """Validate that repo_path is within the allowed repository path.
+
+    `allowed_repository` is the repository root `--repository` resolved to at
+    startup. When it is None (the server was started without `--repository`),
+    no restriction is configured and this check passes for every path, so a
+    tool call may reach any repository the server process can reach.
+    """
     if allowed_repository is None:
         return  # No restriction configured
 
