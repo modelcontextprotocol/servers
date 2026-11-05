@@ -134,7 +134,13 @@ const expectedTools = [
       "Create multiple new entities in the knowledge graph. An entity whose name already exists, or repeats an earlier entity in the same call, is skipped and its observations are not added; the result lists the skipped names in `skipped`. Use add_observations to add observations to an existing entity.",
     inputSchema: {
       type: "object",
-      properties: { entities: { type: "array", items: entityItem(false) } },
+      properties: {
+        entities: {
+          type: "array",
+          items: entityItem(false),
+          description: "An array of entities to create",
+        },
+      },
       required: ["entities"],
       $schema: JSON_SCHEMA_2020_12,
     },
@@ -158,7 +164,13 @@ const expectedTools = [
       "Create multiple new relations between entities in the knowledge graph. Relations should be in active voice",
     inputSchema: {
       type: "object",
-      properties: { relations: { type: "array", items: relationItem(false) } },
+      properties: {
+        relations: {
+          type: "array",
+          items: relationItem(false),
+          description: "An array of relations to create",
+        },
+      },
       required: ["relations"],
       $schema: JSON_SCHEMA_2020_12,
     },
@@ -198,6 +210,8 @@ const expectedTools = [
             },
             required: ["entityName", "contents"],
           },
+          description:
+            "An array of entities and the observations to add to each",
         },
       },
       required: ["observations"],
@@ -273,6 +287,8 @@ const expectedTools = [
             },
             required: ["entityName", "observations"],
           },
+          description:
+            "An array of entities and the observations to delete from each",
         },
       },
       required: ["deletions"],
