@@ -650,10 +650,11 @@ export function createServer(
     {
       title: "List Directory",
       description:
-        "Get a detailed listing of all files and directories in a specified path. " +
-        "Results clearly distinguish between files and directories with [FILE] and [DIR] " +
-        "prefixes. This tool is essential for understanding directory structure and " +
-        "finding specific files within a directory. Only works within allowed directories.",
+        "List the files and directories directly inside a path, each marked [FILE] or [DIR]. " +
+        "Use it to see what a directory contains; when you also need each entry's size or " +
+        "want entries sorted by size, use list_directory_with_sizes instead, and for a " +
+        "recursive view use directory_tree. Returns one line per entry. Only works within " +
+        "allowed directories.",
       inputSchema: jsonSchema2020(ListDirectoryArgsSchema.shape),
       outputSchema: jsonSchema2020({ content: z.string() }),
       annotations: {
@@ -684,10 +685,11 @@ export function createServer(
     {
       title: "List Directory with Sizes",
       description:
-        "Get a detailed listing of all files and directories in a specified path, including sizes. " +
-        "Results clearly distinguish between files and directories with [FILE] and [DIR] " +
-        "prefixes. This tool is useful for understanding directory structure and " +
-        "finding specific files within a directory. Only works within allowed directories.",
+        "List the files and directories directly inside a path with each file's size, " +
+        "marked [FILE] or [DIR], sorted by name or by size, largest first (sortBy). Use it " +
+        "when sizes matter, such as finding the largest files; for names only, use " +
+        "list_directory, which returns less text. Returns one line per entry, followed by " +
+        "the totals. Only works within allowed directories.",
       inputSchema: jsonSchema2020(ListDirectoryWithSizesArgsSchema.shape),
       outputSchema: jsonSchema2020({ content: z.string() }),
       annotations: {
