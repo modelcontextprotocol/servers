@@ -1,8 +1,9 @@
+from unittest.mock import patch
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+import pytest
 from freezegun import freeze_time
 from mcp.server.mcpserver.exceptions import ToolError
-import pytest
-from unittest.mock import patch
-from zoneinfo import ZoneInfo
 
 from mcp_server_time.server import (
     TimeServer,
@@ -475,7 +476,7 @@ def test_get_local_tz_with_override():
 
 def test_get_local_tz_with_invalid_override():
     """Test that invalid timezone override raises an error."""
-    with pytest.raises(Exception):  # ZoneInfo will raise an exception
+    with pytest.raises(ZoneInfoNotFoundError):
         get_local_tz("Invalid/Timezone")
 
 
@@ -537,10 +538,12 @@ def test_get_zoneinfo_rejects_a_key_the_tz_database_does_not_list():
     # is not an exact IANA name. Simulate that on any platform: `ZoneInfo`
     # accepts "Europe/Warsaw", but the database's key list does not hold it.
     without_warsaw = known_timezones() - {"Europe/Warsaw"}
-    with patch("mcp_server_time.server.known_timezones", return_value=without_warsaw):
-        with pytest.raises(
+    with (
+        patch("mcp_server_time.server.known_timezones", return_value=without_warsaw),
+        pytest.raises(
             ToolError,
             match="Invalid timezone: 'No time zone found with key Europe/Warsaw'",
-        ):
-            get_zoneinfo("Europe/Warsaw")
+        ),
+    ):
+        get_zoneinfo("Europe/Warsaw")
     assert str(get_zoneinfo("Europe/Warsaw")) == "Europe/Warsaw"

@@ -1,25 +1,27 @@
-import pytest
 from pathlib import Path
+from unittest import mock
+
 import git
+import pytest
 from git.exc import BadName
 from mcp.server import Server
+
 from mcp_server_git.server import (
-    git_checkout,
-    git_branch,
     git_add,
-    git_status,
-    git_diff_unstaged,
-    git_diff_staged,
-    git_diff,
+    git_branch,
+    git_checkout,
     git_commit,
-    git_reset,
-    git_log,
     git_create_branch,
+    git_diff,
+    git_diff_staged,
+    git_diff_unstaged,
+    git_log,
+    git_reset,
     git_show,
-    validate_repo_path,
+    git_status,
     serve,
+    validate_repo_path,
 )
-import unittest.mock as mock
 
 
 def test_git_checkout_existing_branch(test_repository):

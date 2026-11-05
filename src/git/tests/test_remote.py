@@ -14,11 +14,10 @@ from unittest import mock
 
 import git
 import pytest
+from conftest import connect, make_repo, text_result, tool_error, wire
 
 from mcp_server_git import server
 from mcp_server_git.server import git_remote, redact_url
-
-from conftest import connect, make_repo, text_result, tool_error, wire
 
 
 async def call_remote(repository: Path | None, repo: git.Repo) -> dict[str, Any]:

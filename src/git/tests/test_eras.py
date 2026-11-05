@@ -26,6 +26,7 @@ from unittest.mock import patch
 import anyio
 import git
 import pytest
+from conftest import make_repo
 from mcp import Client
 from mcp.client._transport import TransportStreams
 from mcp.shared.exceptions import MCPError
@@ -39,8 +40,6 @@ from mcp.types import (
 )
 
 from mcp_server_git.server import serve
-
-from conftest import make_repo
 
 MODERN = "2026-07-28"
 LEGACY = "2025-11-25"
