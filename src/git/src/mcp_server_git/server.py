@@ -293,6 +293,11 @@ def git_log(
             f"Invalid end_timestamp: '{end_timestamp}' - cannot start with '-'"
         )
 
+    # Defense in depth: git reads a negative -n as "no limit" and 0 as nothing,
+    # so a count below 1 would silently return the wrong set of commits
+    if max_count < 1:
+        raise ValueError(f"Invalid max_count: {max_count} - must be at least 1")
+
     kwargs: dict[str, Any] = {"max_count": max_count}
     if start_timestamp:
         kwargs["since"] = start_timestamp
@@ -549,7 +554,13 @@ def git_show(repo: git.Repo, revision: str) -> str:
 
 
 def validate_repo_path(repo_path: Path, allowed_repository: Path | None) -> None:
-    """Validate that repo_path is within the allowed repository path."""
+    """Validate that repo_path is within the allowed repository path.
+
+    `allowed_repository` is the repository root `--repository` resolved to at
+    startup. When it is None (the server was started without `--repository`),
+    no restriction is configured and this check passes for every path, so a
+    tool call may reach any repository the server process can reach.
+    """
     if allowed_repository is None:
         return  # No restriction configured
 
@@ -1112,7 +1123,13 @@ def create_server(repository: Path | None) -> MCPServer:
     @reports_failures
     def log(
         repo_path: str,
-        max_count: int = 10,
+        max_count: Annotated[
+            int,
+            Field(
+                ge=1,
+                description="Maximum number of commits to show. Must be at least 1.",
+            ),
+        ] = 10,
         start_timestamp: Annotated[
             Optional[str],
             Field(

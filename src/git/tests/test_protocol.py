@@ -655,6 +655,36 @@ async def test_git_log_max_count(repo: git.Repo):
     assert result == text_result("Commit history:\n" + log_entry(commits[2]))
 
 
+@pytest.mark.parametrize("max_count", [-1, 0])
+async def test_git_log_rejects_non_positive_max_count(repo: git.Repo, max_count: int):
+    # #5214: git reads a negative -n as "no limit" and 0 as nothing, so either
+    # used to succeed with the wrong commits. The schema's minimum makes
+    # MCPServer reject them before the tool runs.
+    add_commits(repo, 3)
+    result = await call(
+        None, "git_log", {"repo_path": str(root_of(repo)), "max_count": max_count}
+    )
+    assert result["isError"] is True
+    assert result["content"][0]["text"].startswith(
+        "Error executing tool git_log: 1 validation error for logArguments\n"
+        "max_count\n  Input should be greater than or equal to 1"
+    )
+
+
+async def test_git_log_max_count_beyond_history_returns_all(repo: git.Repo):
+    # #5214: the bound is a minimum only; a count above the history's length
+    # still returns every commit rather than an error.
+    commits = add_commits(repo, 2)
+    initial = repo.head.commit.parents[0].parents[0]
+    result = await call(
+        None, "git_log", {"repo_path": str(root_of(repo)), "max_count": 100}
+    )
+    assert result == text_result(
+        "Commit history:\n"
+        + "\n".join(log_entry(c) for c in [commits[1], commits[0], initial])
+    )
+
+
 async def test_git_log_timestamps_filter(repo: git.Repo):
     root = str(root_of(repo))
     future = await call(
