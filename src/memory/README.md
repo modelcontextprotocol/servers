@@ -381,6 +381,12 @@ Docker:
 docker build -t mcp/memory -f src/memory/Dockerfile . 
 ```
 
+The image runs as the unprivileged `node` user, not root. A new named volume mounted at `/app/dist` takes its ownership from the image, but a volume created by an older image, which ran as root, is owned by root, and the server fails to save with `EACCES`. Give such a volume to `node` once (the graph in it is kept):
+
+```sh
+docker run --rm -v claude-memory:/app/dist --user root --entrypoint chown mcp/memory -R node:node /app/dist
+```
+
 For Awareness: a prior mcp/memory volume contains an index.js file that could be overwritten by the new container. If you are using a docker volume for storage, delete the old docker volume's `index.js` file before starting the new container.
 
 ## License

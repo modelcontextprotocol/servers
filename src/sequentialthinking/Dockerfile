@@ -21,4 +21,8 @@ WORKDIR /app
 
 RUN npm ci --ignore-scripts --omit-dev
 
+# Run as the base image's unprivileged `node` user (UID 1000), not root
+# (#4741), so the image passes `runAsNonRoot` admission policies.
+USER node
+
 ENTRYPOINT ["node", "dist/index.js"]

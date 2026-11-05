@@ -22,4 +22,9 @@ ENV NODE_ENV=production
 
 RUN npm ci --ignore-scripts --omit-dev
 
+# Run as the base image's unprivileged `node` user (UID 1000), not root
+# (#4741), so the image passes `runAsNonRoot` admission policies and files
+# it writes into a bind mount are not root-owned on the host.
+USER node
+
 ENTRYPOINT ["node", "/app/dist/index.js"]
