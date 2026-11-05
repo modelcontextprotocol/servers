@@ -476,7 +476,8 @@ async function resolveUnicodeEquivalentPath(
 // checked against the allowed directories only. A "write" must also be handed
 // the read-only directories, and is refused when the resolved path falls in
 // one, so a write tool cannot skip the check: the mode is required, and the
-// "write" overload does not compile without the list.
+// "write" overload does not compile without the list. A "move" (move_file's
+// two ends) is a write that is also refused when the path contains one.
 export async function validatePath(
   requestedPath: string,
   allowedDirectories: readonly string[],
@@ -485,17 +486,19 @@ export async function validatePath(
 export async function validatePath(
   requestedPath: string,
   allowedDirectories: readonly string[],
-  access: "write",
+  access: "write" | "move",
   readOnlyDirectories: readonly string[],
 ): Promise<string>;
 export async function validatePath(
   requestedPath: string,
   allowedDirectories: readonly string[],
-  access: "read" | "write",
+  access: "read" | "write" | "move",
   readOnlyDirectories: readonly string[] = [],
 ): Promise<string> {
   const resolved = await resolveAllowedPath(requestedPath, allowedDirectories);
-  if (access === "write") assertWritable(resolved, readOnlyDirectories);
+  if (access !== "read") {
+    assertWritable(resolved, readOnlyDirectories, access);
+  }
   return resolved;
 }
 

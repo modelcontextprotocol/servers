@@ -19,7 +19,9 @@ Published on npm as [`@modelcontextprotocol/server-filesystem`](https://www.npmj
 The server may touch only its **allowed directories**. Pass them on the command line. A 2025-era client that supports [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots) can also replace them at runtime, but Roots is [deprecated as of protocol version 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/deprecated) and a 2026-07-28 connection cannot use it.
 
 ### Method 1: Command-line Arguments (Recommended)
+
 Specify Allowed directories when starting the server:
+
 ```bash
 mcp-server-filesystem /path/to/dir1 /path/to/dir2
 ```
@@ -29,7 +31,9 @@ Options may come before, between or after the directories: `--read-only`, `--rea
 This is the only method that works on every protocol version, so it is the one to use.
 
 ### Read-only Mode
+
 Add `--read-only` to serve only the tools that cannot change the filesystem:
+
 ```bash
 mcp-server-filesystem --read-only /path/to/dir1 /path/to/dir2
 ```
@@ -41,14 +45,16 @@ The flag may appear anywhere among the arguments. `--` ends the options, so a di
 Read-only mode covers every allowed directory. To make only some of them read-only, use `--read-only-dir` below.
 
 #### Read-only directories
+
 Add `--read-only-dir <path>` to make one directory read-only while the others stay writable. Repeat it for each directory to protect:
+
 ```bash
 mcp-server-filesystem --read-only-dir /path/to/reference /path/to/workspace
 ```
 
 - A read-only directory is an allowed directory too, so it need not also be listed on its own.
-- Every write tool (`write_file`, `append_file`, `edit_file`, `create_directory`, `move_file` and `copy_file`) stays listed, since the other directories are writable, but refuses a target inside a read-only directory with an error such as `Access denied - read-only directory: /path/to/reference/notes.md is in /path/to/reference, which the server was started with --read-only-dir`. `move_file` is refused when either its source or its destination is inside one; `copy_file` may copy out of one, never into it. `edit_file` is refused there even with `dryRun`.
-- The check runs on a path's resolved location, so a symlink in a writable directory cannot route a write into a read-only one.
+- Every write tool (`write_file`, `append_file`, `edit_file`, `create_directory`, `move_file` and `copy_file`) stays listed, since the other directories are writable, but refuses a target inside a read-only directory with an error such as `Access denied - read-only directory: /path/to/reference/notes.md is in /path/to/reference, which the server was started with --read-only-dir`. `move_file` is refused when either its source or its destination is inside one or contains one, so a protected directory cannot be carried away by moving its parent; `copy_file` may copy out of one, never into it. `edit_file` is refused there even with `dryRun`.
+- The check runs on a path's resolved location, so a symlink in a writable directory cannot route a write into a read-only one. A read-only directory that does not exist yet is still protected: it is resolved through its nearest existing ancestor, so it covers the path a write would create.
 - A path inside any read-only directory is refused, so a directory nested inside a read-only one is read-only too, even if it is also given as a writable directory.
 - The marking is fixed at startup and holds on both protocol eras. A 2025-era client's Roots can replace the allowed directories (see Method 2), but Roots say nothing about writing, so they never lift it: a write into a read-only directory is refused whichever directories are in force, with or without `--confine-roots`.
 - `list_allowed_directories` lists the read-only directories after the allowed ones, and the server logs them to stderr at startup.
@@ -56,12 +62,15 @@ mcp-server-filesystem --read-only-dir /path/to/reference /path/to/workspace
 The option may appear anywhere among the arguments, and takes the next argument as its directory, whatever it is. `--` ends the options, so after it `--read-only-dir` is a directory name. With `--read-only` as well, every write tool is withheld anyway. For defence in depth, make the protected directories read-only at the operating-system level as well, with file permissions or, with Docker, a bind mount's `ro` flag.
 
 ### Method 2: MCP Roots (Deprecated, 2025-era clients only)
+
 A client that connects with a 2025-era protocol version (the `initialize` handshake) and supports [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots) can dynamically update the Allowed directories.
 
 Roots notified by Client to Server, completely replace any server-side Allowed directories when provided.
 
 #### Confining Roots to the command-line directories
+
 To keep a client's Roots inside the directories you gave on the command line, add `--confine-roots`:
+
 ```bash
 mcp-server-filesystem --confine-roots /path/to/dir1 /path/to/dir2
 ```
@@ -92,7 +101,6 @@ The server's directory access control follows this flow:
    - The client's first message picks the protocol era of the connection
    - A **2026-07-28** client sends `server/discover` (or any request carrying the per-request `_meta` envelope): the server uses the command-line directories, and steps 3 and 4 do not apply
    - A **2025-era** client sends `initialize` with its capabilities, and the server checks whether it supports roots (`capabilities.roots`)
-   
 3. **Roots Protocol Handling** (2025-era clients that support roots)
    - **On initialization**: Server requests roots from client via `roots/list`
    - Client responds with its configured roots
@@ -119,8 +127,6 @@ The server's directory access control follows this flow:
    - Server requires at least ONE allowed directory to operate
 
 **Note**: The server will only allow operations within directories specified either via `args` or, for a 2025-era client, via Roots.
-
-
 
 ## API
 
@@ -295,7 +301,6 @@ Files inside the allowed directories are also [resources](https://modelcontextpr
     entries below it do not count toward the 100,000-entry bound
   - Output is formatted with 2-space indentation for readability
   - Bounded: see [Slow and very large trees](#slow-and-very-large-trees)
-    
 - **get_file_info**
   - Get detailed file/directory metadata
   - Input: `path` (string)
@@ -326,11 +331,11 @@ request from stalling the server:
 - **Resolving a path (in any tool), and each directory read in `search_files`
   and `directory_tree`, waits at most 15 seconds.** A call that takes longer ends
   the request with an error naming the path (`Filesystem call timed out after
-  15000 ms: ...`). A path whose real location cannot be read in time is
+15000 ms: ...`). A path whose real location cannot be read in time is
   refused, never admitted.
 - **`search_files` and `directory_tree` visit at most 100,000 entries.** A walk
   that reaches the cap ends with an error (`... stopped after visiting 100000
-  entries ...`) rather than a partial result. Excluded entries do not count.
+entries ...`) rather than a partial result. Excluded entries do not count.
 
 Either error means: narrow `path`, or name the slow or large folder in
 `excludePatterns`. A timed-out call cannot be cancelled and finishes in the
@@ -349,23 +354,23 @@ on each tool so clients can:
 
 The mapping for filesystem tools is:
 
-| Tool                        | readOnlyHint | idempotentHint | destructiveHint | Notes                                            |
-|-----------------------------|--------------|----------------|-----------------|--------------------------------------------------|
-| `read_file`                 | `true`       | `true`         | `false`         | Deprecated alias of `read_text_file`            |
-| `read_text_file`            | `true`       | `true`         | `false`         | Pure read                                       |
-| `read_media_file`           | `true`       | `true`         | `false`         | Pure read                                       |
-| `read_multiple_files`       | `true`       | `true`         | `false`         | Pure read                                       |
-| `list_directory`            | `true`       | `true`         | `false`         | Pure read                                       |
-| `list_directory_with_sizes` | `true`       | `true`         | `false`         | Pure read                                       |
-| `directory_tree`            | `true`       | `true`         | `false`         | Pure read                                       |
-| `search_files`              | `true`       | `true`         | `false`         | Pure read                                       |
-| `get_file_info`             | `true`       | `true`         | `false`         | Pure read                                       |
-| `list_allowed_directories`  | `true`       | `true`         | `false`         | Pure read                                       |
-| `create_directory`          | `false`      | `true`         | `false`         | Re‑creating the same dir is a no‑op             |
-| `write_file`                | `false`      | `true`         | `true`          | Overwrites existing files                       |
-| `append_file`               | `false`      | `false`        | `false`         | Adds to a file; repeating it appends again      |
-| `edit_file`                 | `false`      | `false`        | `true`          | Re‑applying edits can fail or double‑apply      |
-| `move_file`                 | `false`      | `false`        | `true`          | Deletes source file                             |
+| Tool                        | readOnlyHint | idempotentHint | destructiveHint | Notes                                              |
+| --------------------------- | ------------ | -------------- | --------------- | -------------------------------------------------- |
+| `read_file`                 | `true`       | `true`         | `false`         | Deprecated alias of `read_text_file`               |
+| `read_text_file`            | `true`       | `true`         | `false`         | Pure read                                          |
+| `read_media_file`           | `true`       | `true`         | `false`         | Pure read                                          |
+| `read_multiple_files`       | `true`       | `true`         | `false`         | Pure read                                          |
+| `list_directory`            | `true`       | `true`         | `false`         | Pure read                                          |
+| `list_directory_with_sizes` | `true`       | `true`         | `false`         | Pure read                                          |
+| `directory_tree`            | `true`       | `true`         | `false`         | Pure read                                          |
+| `search_files`              | `true`       | `true`         | `false`         | Pure read                                          |
+| `get_file_info`             | `true`       | `true`         | `false`         | Pure read                                          |
+| `list_allowed_directories`  | `true`       | `true`         | `false`         | Pure read                                          |
+| `create_directory`          | `false`      | `true`         | `false`         | Re‑creating the same dir is a no‑op                |
+| `write_file`                | `false`      | `true`         | `true`          | Overwrites existing files                          |
+| `append_file`               | `false`      | `false`        | `false`         | Adds to a file; repeating it appends again         |
+| `edit_file`                 | `false`      | `false`        | `true`          | Re‑applying edits can fail or double‑apply         |
+| `move_file`                 | `false`      | `false`        | `true`          | Deletes source file                                |
 | `copy_file`                 | `false`      | `true`         | `false`         | Never overwrites; a repeat fails, changing nothing |
 
 > Note: the MCP spec gives `idempotentHint` and `destructiveHint` meaning only when `readOnlyHint` is `false`, but every tool sets them anyway, so a client that reads them without checking `readOnlyHint` first still sees the truth: a read can be repeated safely and changes nothing. Every tool also sets `openWorldHint: false` — this server only accesses the local filesystem within its allowed directories, never an open or external world.
@@ -375,11 +380,13 @@ The mapping for filesystem tools is:
 Node.js 24 or later, when the server runs through `npx` or from source.
 
 ## Usage with Claude Desktop
+
 Add this to your `claude_desktop_config.json`:
 
 Note: you can provide sandboxed directories to the server by mounting them to `/projects`. Adding the `ro` flag will make the directory readonly by the server.
 
 ### Docker
+
 Note: all directories must be mounted to `/projects` by default.
 
 ```json
@@ -391,9 +398,12 @@ Note: all directories must be mounted to `/projects` by default.
         "run",
         "-i",
         "--rm",
-        "--mount", "type=bind,src=/Users/username/Desktop,dst=/projects/Desktop",
-        "--mount", "type=bind,src=/path/to/other/allowed/dir,dst=/projects/other/allowed/dir,ro",
-        "--mount", "type=bind,src=/path/to/file.txt,dst=/projects/path/to/file.txt",
+        "--mount",
+        "type=bind,src=/Users/username/Desktop,dst=/projects/Desktop",
+        "--mount",
+        "type=bind,src=/path/to/other/allowed/dir,dst=/projects/other/allowed/dir,ro",
+        "--mount",
+        "type=bind,src=/path/to/file.txt,dst=/projects/path/to/file.txt",
         "mcp/filesystem",
         "/projects"
       ]
@@ -461,7 +471,8 @@ Alternatively, you can add the configuration to a file called `.vscode/mcp.json`
 You can provide sandboxed directories to the server by mounting them to `/projects`. Adding the `ro` flag will make the directory readonly by the server.
 
 ### Docker
-Note: all directories must be mounted to `/projects` by default. 
+
+Note: all directories must be mounted to `/projects` by default.
 
 ```json
 {
@@ -472,7 +483,8 @@ Note: all directories must be mounted to `/projects` by default.
         "run",
         "-i",
         "--rm",
-        "--mount", "type=bind,src=${workspaceFolder},dst=/projects/workspace",
+        "--mount",
+        "type=bind,src=${workspaceFolder},dst=/projects/workspace",
         "mcp/filesystem",
         "/projects"
       ]

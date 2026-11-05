@@ -960,13 +960,13 @@ export function createServer(
       const validSourcePath = await validatePath(
         args.source,
         allowedDirectories,
-        "write",
+        "move",
         readOnlyDirectories,
       );
       const validDestPath = await validatePath(
         args.destination,
         allowedDirectories,
-        "write",
+        "move",
         readOnlyDirectories,
       );
       await moveFile(validSourcePath, validDestPath);

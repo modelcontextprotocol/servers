@@ -233,6 +233,37 @@ describe.each([
     expect(beside.isError).toBeFalsy();
   });
 
+  it("refuses to move a directory that contains a read-only one, and keeps protecting it", async () => {
+    const vault = path.join(writable, "bundle", "vault");
+    await fs.mkdir(vault, { recursive: true });
+    const client = await connect(mode, [writable], [vault]);
+    const moved = await call(client, "move_file", {
+      source: path.join(writable, "bundle"),
+      destination: path.join(writable, "renamed"),
+    });
+    expect(moved.isError).toBe(true);
+    expect(textOf(moved)).toContain(`contains ${vault}`);
+    await expect(fs.access(path.join(writable, "renamed"))).rejects.toThrow();
+    await expectRefused(
+      client,
+      "write_file",
+      { path: path.join(vault, "x.txt"), content: "x" },
+      vault,
+    );
+  });
+
+  it("refuses to move a directory to where a read-only one would be inside it", async () => {
+    const later = path.join(writable, "dest", "vault");
+    await fs.mkdir(path.join(writable, "src", "vault"), { recursive: true });
+    const client = await connect(mode, [writable], [later]);
+    const moved = await call(client, "move_file", {
+      source: path.join(writable, "src"),
+      destination: path.join(writable, "dest"),
+    });
+    expect(moved.isError).toBe(true);
+    expect(textOf(moved)).toContain(`contains ${later}`);
+  });
+
   it("names the read-only directories in list_allowed_directories", async () => {
     const client = await connect(mode);
     const text = textOf(await call(client, "list_allowed_directories"));
@@ -326,6 +357,32 @@ describe("resolveReadOnlyDirectories", () => {
   it("keeps a directory that does not exist yet", async () => {
     const missing = path.join(writable, "later");
     expect(await resolveReadOnlyDirectories([missing])).toEqual([missing]);
+  });
+
+  it("resolves a missing directory through a symlinked ancestor", async () => {
+    const alias = path.join(protectedDir, "alias");
+    await fs.symlink(writable, alias);
+    expect(
+      await resolveReadOnlyDirectories([path.join(alias, "later", "deep")]),
+    ).toEqual([
+      path.join(alias, "later", "deep"),
+      path.join(writable, "later", "deep"),
+    ]);
+  });
+
+  it("protects a directory created later under a symlinked ancestor", async () => {
+    const alias = path.join(protectedDir, "alias");
+    await fs.symlink(writable, alias);
+    const marked = await resolveReadOnlyDirectories([
+      path.join(alias, "later"),
+    ]);
+    const client = await connect("legacy", [writable], marked);
+    const created = await call(client, "create_directory", {
+      path: path.join(writable, "later"),
+    });
+    expect(created.isError).toBe(true);
+    expect(textOf(created)).toContain("Access denied - read-only directory");
+    await expect(fs.access(path.join(writable, "later"))).rejects.toThrow();
   });
 });
 
