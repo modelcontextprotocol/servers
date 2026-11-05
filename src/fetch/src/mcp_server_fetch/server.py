@@ -2,7 +2,8 @@
 # URL and convert HTML to Markdown for a model. The network policy lives here
 # beside the handlers because every request path (tool, prompt and robots.txt
 # check) must go through it: the private-address guard on each request and
-# redirect hop, robots.txt for autonomous fetches, and proxy normalization.
+# redirect hop, robots.txt for autonomous fetches, the cap on how much of a
+# response body is read (#5370), and proxy normalization.
 #
 # Built on the MCP Python SDK's high-level `MCPServer` (#5174), as the example
 # to follow: the tool and the prompt are plain decorated functions, whose type
@@ -25,7 +26,8 @@ import asyncio
 import ipaddress
 import os
 import socket
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
+from contextlib import asynccontextmanager
 from typing import Annotated, Any, Tuple
 from importlib.metadata import version
 from urllib.parse import urlparse, urlunparse
@@ -397,7 +399,86 @@ def make_client(proxy_url: str | None) -> httpx.AsyncClient:
         )
 
 
-def decode_page(response: httpx.Response) -> str:
+# The most body bytes the server reads from one response (#5370). A body is
+# streamed and the read stops at this cap, so a very large or endless response
+# cannot make the server buffer all of it. `max_length` cannot do this: it
+# limits what is returned, after the whole page has been read and converted.
+# The cap counts decoded bytes (after gzip, deflate or brotli), so a small
+# compressed body that expands enormously is stopped too.
+MAX_RESPONSE_BYTES = 5 * 1024 * 1024
+
+
+@asynccontextmanager
+async def stream_get(
+    client: httpx.AsyncClient, url: str, user_agent: str, **kwargs: Any
+) -> AsyncIterator[httpx.Response]:
+    """GET ``url`` with redirects followed, yielding the final response unread.
+
+    httpx's own redirect handling reads each redirect's body whole before it
+    follows it, so a redirect with an endless body would get round the cap.
+    Here each hop is closed unread instead. The request hooks still run before
+    every hop, since they run on each ``send``. ``kwargs`` go to
+    ``build_request`` (the timeout).
+    """
+    request = client.build_request(
+        "GET", url, headers={"User-Agent": user_agent}, **kwargs
+    )
+    response = await client.send(request, stream=True, follow_redirects=False)
+    try:
+        hops = 0
+        while response.next_request is not None:
+            hops += 1
+            if hops > client.max_redirects:
+                raise httpx.TooManyRedirects(
+                    "Exceeded maximum allowed redirects.",
+                    request=response.next_request,
+                )
+            next_request = response.next_request
+            await response.aclose()
+            response = await client.send(
+                next_request, stream=True, follow_redirects=False
+            )
+        yield response
+    finally:
+        await response.aclose()
+
+
+async def read_capped(response: httpx.Response, limit: int) -> tuple[bytes, bool]:
+    """Read a streamed response's body, stopping once it passes ``limit`` bytes.
+
+    Returns the body, at most ``limit`` bytes of it, and whether it was cut
+    short. Whatever the server has not sent yet is never read: closing the
+    response (leaving `stream_get`) closes the connection.
+    """
+    body = bytearray()
+    async for chunk in response.aiter_bytes():
+        room = limit - len(body)
+        if len(chunk) > room:
+            body += chunk[:room]
+            return bytes(body), True
+        body += chunk
+    return bytes(body), False
+
+
+def declared_length(response: httpx.Response) -> int | None:
+    """The body size a response's Content-Length declares, or None without one."""
+    try:
+        return int(response.headers["content-length"])
+    except (KeyError, ValueError):
+        return None
+
+
+def decode_text(response: httpx.Response, content: bytes) -> str:
+    """Decode ``content`` as httpx's ``response.text`` would.
+
+    The header's charset when Python knows it, UTF-8 otherwise, with undecodable
+    bytes replaced. A streamed response has no ``.text`` until its whole body is
+    read through httpx, which is the read the cap exists to avoid.
+    """
+    return content.decode(response.encoding or "utf-8", errors="replace")
+
+
+def decode_page(response: httpx.Response, content: bytes) -> str:
     """Decode a fetched body, honoring a charset the HTML declares (#5199).
 
     httpx's ``response.text`` uses the Content-Type header's charset, and
@@ -413,13 +494,15 @@ def decode_page(response: httpx.Response) -> str:
     unrelated attribute (``data-charset``) is not mistaken for a declaration.
     A declaration Python does not know, or one that names a codec that is not
     a web text encoding, is ignored, and the body is decoded as before.
+
+    ``content`` is the body as read by `read_capped`; the response supplies
+    the headers.
     """
     # Imported here so the helper stays one self-contained block of this file.
     import codecs
     import re
     from html.parser import HTMLParser
 
-    content = response.content
     media_type = (
         response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
     )
@@ -430,7 +513,7 @@ def decode_page(response: httpx.Response) -> str:
             (codecs.BOM_UTF8, codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)
         )
     ):
-        return response.text
+        return decode_text(response, content)
 
     class MetaCharset(HTMLParser):
         declared: str | None = None
@@ -458,7 +541,7 @@ def decode_page(response: httpx.Response) -> str:
     scan = MetaCharset()
     scan.feed(content[:1024].decode("latin-1"))
     if scan.declared is None:
-        return response.text
+        return decode_text(response, content)
     try:
         name = codecs.lookup(scan.declared).name
         # A UTF-16/32 declaration in an ASCII-compatible document cannot be
@@ -468,20 +551,20 @@ def decode_page(response: httpx.Response) -> str:
         # Python codecs that are not web text encodings: decoding a page with
         # them would mangle it rather than fix it.
         if name in ("idna", "punycode", "unicode-escape", "raw-unicode-escape"):
-            return response.text
+            return decode_text(response, content)
         # A declaration found in ASCII bytes is only believable for an
         # ASCII-compatible encoding. UTF-7, HZ and the EBCDIC code pages
         # (cp037, cp500, …) would rewrite the markup itself, so they fail this
         # probe (by a different result or a decode error) and are ignored.
         probe = b"\t\n\r" + bytes(range(0x20, 0x7F))
         if probe.decode(name) != probe.decode("ascii"):
-            return response.text
+            return decode_text(response, content)
         return content.decode(name, errors="replace")
     except (LookupError, ValueError):  # UnicodeError is a ValueError
         # An unknown charset, a name Python refuses outright (one holding a
         # NUL), a non-text codec (base64, rot13, …), one that refuses to
         # decode at all (``undefined``), or one the probe cannot decode.
-        return response.text
+        return decode_text(response, content)
 
 
 async def check_may_autonomously_fetch_url(
@@ -507,24 +590,25 @@ async def check_may_autonomously_fetch_url(
             hooks.append(_refuse_private_destination)
         client.event_hooks = {"request": hooks}
         try:
-            response = await client.get(
-                robot_txt_url,
-                follow_redirects=True,
-                headers={"User-Agent": user_agent},
-            )
+            async with stream_get(client, robot_txt_url, user_agent) as response:
+                # A 5xx robots.txt is "unreachable" (RFC 9309 section 2.3.1.4),
+                # which means complete disallow: the error page is never parsed
+                # as rules.
+                if response.status_code in (401, 403) or response.status_code >= 500:
+                    raise ToolError(
+                        f"When fetching robots.txt ({robot_txt_url}), received status {response.status_code} so assuming that autonomous fetching is not allowed, the user can try manually fetching by using the fetch prompt"
+                    )
+                elif 400 <= response.status_code < 500:
+                    return
+                # Read up to the same cap as a page (#5370). RFC 9309 section
+                # 2.5 lets a crawler stop parsing past a limit of at least
+                # 500 KiB, so the rules in the first part are used as they are.
+                content, _ = await read_capped(response, MAX_RESPONSE_BYTES)
         except HTTPError:
             raise ToolError(
                 f"Failed to fetch robots.txt {robot_txt_url} due to a connection issue"
             )
-        # A 5xx robots.txt is "unreachable" (RFC 9309 section 2.3.1.4), which
-        # means complete disallow: the error page is never parsed as rules.
-        if response.status_code in (401, 403) or response.status_code >= 500:
-            raise ToolError(
-                f"When fetching robots.txt ({robot_txt_url}), received status {response.status_code} so assuming that autonomous fetching is not allowed, the user can try manually fetching by using the fetch prompt"
-            )
-        elif 400 <= response.status_code < 500:
-            return
-        robot_txt = response.text
+        robot_txt = decode_text(response, content)
     processed_robot_txt = "\n".join(
         line for line in robot_txt.splitlines() if not line.strip().startswith("#")
     )
@@ -609,25 +693,34 @@ async def fetch_url(
         # default representation (a page's HTML), as before this negotiation.
         if not force_raw:
             client.headers["Accept"] = MARKDOWN_ACCEPT
+        too_large = (
+            f"Failed to fetch {url}: the response body is larger than the "
+            f"{MAX_RESPONSE_BYTES} byte limit this server reads"
+        )
         try:
-            response = await client.get(
-                url,
-                follow_redirects=True,
-                headers={"User-Agent": user_agent},
-                timeout=timeout_ms / 1000,
-            )
+            async with stream_get(
+                client, url, user_agent, timeout=timeout_ms / 1000
+            ) as response:
+                if response.status_code >= 400:
+                    raise ToolError(
+                        f"Failed to fetch {url} - status code {response.status_code}"
+                    )
+                # Refused before reading anything when the size is declared;
+                # otherwise the streamed read stops at the cap (#5370).
+                length = declared_length(response)
+                if length is not None and length > MAX_RESPONSE_BYTES:
+                    raise ToolError(f"{too_large} (it declares {length} bytes)")
+                content, truncated = await read_capped(response, MAX_RESPONSE_BYTES)
+                if truncated:
+                    raise ToolError(too_large)
         except httpx.TimeoutException as e:
             raise ToolError(
                 f"Failed to fetch {url}: timed out after {timeout_ms} ms: {e!r}"
             )
         except HTTPError as e:
             raise ToolError(f"Failed to fetch {url}: {e!r}")
-        if response.status_code >= 400:
-            raise ToolError(
-                f"Failed to fetch {url} - status code {response.status_code}"
-            )
 
-        page_raw = decode_page(response)
+        page_raw = decode_page(response, content)
 
     content_type = response.headers.get("content-type", "")
     # Markdown is already what this tool returns, so it is not simplified, and

@@ -36,11 +36,15 @@ The markdown of an HTML page opens with the page's title as a `#` heading (its `
 
 ### Errors
 
-- A failed fetch (a robots.txt refusal, an unreachable page, an HTTP error status, a refused private address, an unusable proxy setting) and arguments that do not match the tool's schema are returned as a tool result with `isError: true`, whose text starts `Error executing tool fetch:` and says what went wrong, so the model can read it and decide what to do.
+- A failed fetch (a robots.txt refusal, an unreachable page, an HTTP error status, a refused private address, an unusable proxy setting, a response body over the [size limit](#response-size)) and arguments that do not match the tool's schema are returned as a tool result with `isError: true`, whose text starts `Error executing tool fetch:` and says what went wrong, so the model can read it and decide what to do.
 - Calling a tool the server does not have is a JSON-RPC protocol error, `-32602` (`Unknown tool: <name>`), as the specification requires. So is getting a prompt it does not have (`Unknown prompt: <name>`), or the `fetch` prompt without its `url` (`URL is required`) or with a `url` that is not a valid URL (`Invalid URL '<url>': <reason>`).
 - When the `fetch` prompt's fetch fails, the prompt still returns: its message holds the reason the fetch failed.
 
 The server is built on the MCP Python SDK's high-level `MCPServer`: the tool and the prompt are decorated functions, and their type hints and field descriptions are the input schema and the prompt's arguments.
+
+### Response size
+
+The server reads at most 5 MiB (5,242,880 bytes) of a response body, so a very large or endless response cannot exhaust its memory. The limit is fixed and counts the body after any `gzip`, `deflate` or `br` content encoding is decoded. A page whose `Content-Length` is over it is refused before any of the body is read; a page that streams past it is refused once it does. Either way the tool returns an error saying so (and the `fetch` prompt returns that message), rather than part of the page. A robots.txt over the limit is not refused: its rules are read from the first 5 MiB. Each redirect is followed without reading the redirect response's own body. `max_length` and `start_index` page through what was read, so they are not affected by this limit and do not raise it.
 
 ### Content negotiation
 
