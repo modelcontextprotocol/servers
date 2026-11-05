@@ -984,7 +984,11 @@ export function createServer(
       description:
         "Create multiple new entities in the knowledge graph. An entity whose name already exists, or repeats an earlier entity in the same call, is skipped and its observations are not added; the result lists the skipped names in `skipped`. Use add_observations to add observations to an existing entity.",
       inputSchema: z.object({
-        entities: z.array(EntitySchema),
+        entities: z
+          .array(EntitySchema)
+          .describe(
+            "The entities to create, each with a name unique in the graph",
+          ),
       }),
       outputSchema: z.object({
         entities: z.array(EntitySchema),
@@ -1031,7 +1035,11 @@ export function createServer(
       description:
         "Create multiple new relations between entities in the knowledge graph. Relations should be in active voice",
       inputSchema: z.object({
-        relations: z.array(RelationSchema),
+        relations: z
+          .array(RelationSchema)
+          .describe(
+            "The relations to create. Both ends must name existing entities; a relation already in the graph is not added again",
+          ),
       }),
       outputSchema: z.object({
         relations: z.array(RelationSchema),
@@ -1063,16 +1071,20 @@ export function createServer(
       description:
         "Add new observations to existing entities in the knowledge graph",
       inputSchema: z.object({
-        observations: z.array(
-          z.object({
-            entityName: z
-              .string()
-              .describe("The name of the entity to add the observations to"),
-            contents: z
-              .array(z.string())
-              .describe("An array of observation contents to add"),
-          }),
-        ),
+        observations: z
+          .array(
+            z.object({
+              entityName: z
+                .string()
+                .describe("The name of the entity to add the observations to"),
+              contents: z
+                .array(z.string())
+                .describe("An array of observation contents to add"),
+            }),
+          )
+          .describe(
+            "The observations to add, grouped by entity. Each entity must already exist; an observation it already has is not added again",
+          ),
       }),
       outputSchema: z.object({
         results: z.array(
@@ -1147,16 +1159,20 @@ export function createServer(
       description:
         "Delete specific observations from entities in the knowledge graph",
       inputSchema: z.object({
-        deletions: z.array(
-          z.object({
-            entityName: z
-              .string()
-              .describe("The name of the entity containing the observations"),
-            observations: z
-              .array(z.string())
-              .describe("An array of observations to delete"),
-          }),
-        ),
+        deletions: z
+          .array(
+            z.object({
+              entityName: z
+                .string()
+                .describe("The name of the entity containing the observations"),
+              observations: z
+                .array(z.string())
+                .describe("An array of observations to delete"),
+            }),
+          )
+          .describe(
+            "The observations to delete, grouped by entity, each matched by its exact text",
+          ),
       }),
       outputSchema: z.object({
         success: z.boolean(),

@@ -53,9 +53,19 @@ function jsonSchema2020<Shape extends z.ZodRawShape>(shape: Shape) {
   return z.object(shape).meta({ $schema: JSON_SCHEMA_DIALECT });
 }
 
+// How every path argument is resolved, appended to its description: a model
+// that is told only "the file" guesses at relative paths and at the sandbox.
+const PATH_RULE =
+  "Absolute, or relative to an allowed directory; it must resolve inside the allowed directories.";
+
+/** A path argument, described as `what` followed by how it is resolved. */
+function pathArg(what: string) {
+  return z.string().describe(`${what}. ${PATH_RULE}`);
+}
+
 // Schema definitions
 const ReadTextFileArgsSchema = z.object({
-  path: z.string(),
+  path: pathArg("The file to read as text"),
   tail: z
     .number()
     .int()
@@ -71,7 +81,7 @@ const ReadTextFileArgsSchema = z.object({
 });
 
 const ReadMediaFileArgsSchema = z.object({
-  path: z.string(),
+  path: pathArg("The image, audio or other file to read as base64"),
 });
 
 const ReadMultipleFilesArgsSchema = z.object({
@@ -84,12 +94,16 @@ const ReadMultipleFilesArgsSchema = z.object({
 });
 
 const WriteFileArgsSchema = z.object({
-  path: z.string(),
-  content: z.string(),
+  path: pathArg(
+    "The file to create, or to overwrite if it exists; its parent directory must exist",
+  ),
+  content: z
+    .string()
+    .describe("The complete text the file will contain, replacing any it had"),
 });
 
 const AppendFileArgsSchema = z.object({
-  path: z.string(),
+  path: pathArg("The file to append to; it is created if it does not exist"),
   content: z
     .string()
     .describe(
@@ -103,8 +117,13 @@ const EditOperation = z.object({
 });
 
 const EditFileArgsSchema = z.object({
-  path: z.string(),
-  edits: z.array(EditOperation),
+  path: pathArg("The text file to edit"),
+  edits: z
+    .array(EditOperation)
+    .describe(
+      "The replacements to make, applied in order, each to the result of the ones before it. " +
+        "If any one has no match, none is written.",
+    ),
   dryRun: z
     .boolean()
     .default(false)
@@ -112,15 +131,17 @@ const EditFileArgsSchema = z.object({
 });
 
 const CreateDirectoryArgsSchema = z.object({
-  path: z.string(),
+  path: pathArg(
+    "The directory to create, with any missing parents; an existing directory is left as is",
+  ),
 });
 
 const ListDirectoryArgsSchema = z.object({
-  path: z.string(),
+  path: pathArg("The directory to list"),
 });
 
 const ListDirectoryWithSizesArgsSchema = z.object({
-  path: z.string(),
+  path: pathArg("The directory to list"),
   sortBy: z
     .enum(["name", "size"])
     .optional()
@@ -129,8 +150,15 @@ const ListDirectoryWithSizesArgsSchema = z.object({
 });
 
 const DirectoryTreeArgsSchema = z.object({
-  path: z.string(),
-  excludePatterns: z.array(z.string()).optional().default([]),
+  path: pathArg("The directory at the root of the tree"),
+  excludePatterns: z
+    .array(z.string())
+    .optional()
+    .default([])
+    .describe(
+      "Glob patterns for entries to leave out, with their contents, matched against each entry's path relative to path. " +
+        "A pattern with no '*' also matches that name at any depth, so 'node_modules' leaves out every node_modules directory.",
+    ),
   depth: z
     .number()
     .int()
@@ -143,8 +171,10 @@ const DirectoryTreeArgsSchema = z.object({
 });
 
 const MoveFileArgsSchema = z.object({
-  source: z.string(),
-  destination: z.string(),
+  source: pathArg("The file or directory to move or rename"),
+  destination: pathArg(
+    "Its new path, including the name; nothing may exist there yet",
+  ),
 });
 
 const CopyFileArgsSchema = z.object({
@@ -155,13 +185,25 @@ const CopyFileArgsSchema = z.object({
 });
 
 const SearchFilesArgsSchema = z.object({
-  path: z.string(),
-  pattern: z.string(),
-  excludePatterns: z.array(z.string()).optional().default([]),
+  path: pathArg("The directory to search under"),
+  pattern: z
+    .string()
+    .describe(
+      "Glob matched against each entry's path relative to path, never its content: " +
+        "'*.ts' matches directly under path, '**/*.ts' at any depth.",
+    ),
+  excludePatterns: z
+    .array(z.string())
+    .optional()
+    .default([])
+    .describe(
+      "Glob patterns for entries to skip, matched like pattern; a skipped directory is not searched. " +
+        "Use '**/node_modules' to skip that name at any depth.",
+    ),
 });
 
 const GetFileInfoArgsSchema = z.object({
-  path: z.string(),
+  path: pathArg("The file or directory to describe"),
 });
 
 // Reads a file as a stream of buffers, concatenates them, and then encodes
@@ -380,21 +422,7 @@ export function createServer(
         "the first N lines of a file, or the 'tail' parameter to read only " +
         "the last N lines of a file. Operates on the file as text regardless of extension. " +
         "Only works within allowed directories.",
-      inputSchema: jsonSchema2020({
-        path: z.string(),
-        tail: z
-          .number()
-          .int()
-          .min(0)
-          .optional()
-          .describe("If provided, returns only the last N lines of the file"),
-        head: z
-          .number()
-          .int()
-          .min(0)
-          .optional()
-          .describe("If provided, returns only the first N lines of the file"),
-      }),
+      inputSchema: jsonSchema2020(ReadTextFileArgsSchema.shape),
       outputSchema: jsonSchema2020({ content: z.string() }),
       annotations: {
         readOnlyHint: true,
