@@ -250,6 +250,51 @@ describe("withFileLock", () => {
     expect(order).toEqual(["long start", "long end", "waiter"]);
   });
 
+  it("stops refreshing a lock that was broken and re-taken while it ran (#5418)", async () => {
+    // Heartbeat every 25 ms; the operation outlives several beats.
+    const opts = { staleMs: 50, timeoutMs: 5_000, retryMs: 5 };
+    const old = new Date(Date.now() - 60_000);
+    const realUtimes = fs.utimes;
+    let replaced!: () => void;
+    const replacement = new Promise<void>((resolve) => (replaced = resolve));
+    // Our first heartbeat refreshes our own lock; right after it, another
+    // process breaks the lock as stale and re-takes it with its own token.
+    const utimes = vi
+      .spyOn(fs, "utimes")
+      .mockImplementationOnce(async (...args) => {
+        await realUtimes(...args);
+        await fs.writeFile(lockPath, "someone else");
+        await realUtimes(lockPath, old, old);
+        replaced();
+      });
+    const readFile = vi.spyOn(fs, "readFile");
+    const lockReads = () =>
+      readFile.mock.calls.filter(([file]) => file === lockPath).length;
+
+    await withFileLock(
+      lockPath,
+      async () => {
+        await replacement;
+        readFile.mockClear();
+        // Several heartbeats later, only the first one, on our own lock, has
+        // touched the file: the next one read the new owner's token and stopped
+        // the interval, so the beats after it do not even read the file.
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        expect(utimes).toHaveBeenCalledTimes(1);
+        const reads = lockReads();
+        expect(reads).toBeGreaterThan(0);
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        expect(lockReads()).toBe(reads);
+      },
+      opts,
+    );
+
+    expect(utimes).toHaveBeenCalledTimes(1);
+    expect(await fs.readFile(lockPath, "utf-8")).toBe("someone else");
+    const { mtimeMs } = await fs.stat(lockPath);
+    expect(mtimeMs).toBeLessThan(Date.now() - 30_000);
+  });
+
   it("removes the lock it created when writing it fails", async () => {
     const realOpen = fs.open;
     vi.spyOn(fs, "open").mockImplementationOnce(async (...args) => {
