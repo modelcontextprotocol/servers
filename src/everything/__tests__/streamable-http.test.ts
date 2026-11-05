@@ -614,7 +614,11 @@ describe("startStreamableHttpServer", () => {
   async function start() {
     vi.resetModules();
     const listenOrExit = vi.fn(() => "the http server");
-    vi.doMock("../transports/listen.js", () => ({ listenOrExit }));
+    // Only the bind is stubbed; the host is resolved by the real module.
+    vi.doMock("../transports/listen.js", async (importOriginal) => ({
+      ...(await importOriginal<typeof import("../transports/listen.js")>()),
+      listenOrExit,
+    }));
     const { startStreamableHttpServer } =
       await import("../transports/streamableHttp.js");
     const before = process.listeners("SIGINT").length;
@@ -626,24 +630,40 @@ describe("startStreamableHttpServer", () => {
 
   it("binds PORT when it is set and installs the shutdown handler for SIGINT", async () => {
     vi.stubEnv("PORT", "4568");
+    vi.stubEnv("HOST", "");
     const { listenOrExit, server, added } = await start();
     expect(log).toHaveBeenCalledWith("Starting Streamable HTTP server...");
     expect(listenOrExit).toHaveBeenCalledWith(
       expect.any(Function),
       "4568",
-      "MCP Streamable HTTP Server listening on port 4568",
+      "127.0.0.1",
+      "MCP Streamable HTTP Server listening on 127.0.0.1:4568",
     );
     expect(server).toBe("the http server");
     expect(added).toHaveLength(1);
   });
 
-  it("binds 3001 by default", async () => {
+  it("binds 3001 on loopback by default", async () => {
     vi.stubEnv("PORT", "");
+    vi.stubEnv("HOST", "");
     const { listenOrExit } = await start();
     expect(listenOrExit).toHaveBeenCalledWith(
       expect.any(Function),
       3001,
-      "MCP Streamable HTTP Server listening on port 3001",
+      "127.0.0.1",
+      "MCP Streamable HTTP Server listening on 127.0.0.1:3001",
+    );
+  });
+
+  it("binds HOST when it is set, and names it in the listening line", async () => {
+    vi.stubEnv("PORT", "");
+    vi.stubEnv("HOST", "0.0.0.0");
+    const { listenOrExit } = await start();
+    expect(listenOrExit).toHaveBeenCalledWith(
+      expect.any(Function),
+      3001,
+      "0.0.0.0",
+      "MCP Streamable HTTP Server listening on 0.0.0.0:3001",
     );
   });
 });

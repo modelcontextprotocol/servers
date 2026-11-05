@@ -63,7 +63,7 @@ servers/
 │                             overview of how the rules, skills, gates and sweeps fit together
 ├── .github/workflows/        typescript.yml, python.yml (per-package CI), release.yml (publishes on a GitHub Release),
 │                             version-packages.yml (the changesets PR), prepare-python-release.yml (the CalVer PR),
-│                             everything-mcp-diff.yml (everything's interface diff on PRs),
+│                             everything-mcp-diff.yml (each changed server's interface diff on PRs),
 │                             main-source.yml (a PR into main must bring nothing that is not on v2/main),
 │                             and the scheduled sweeps that file issues: dependency-refresh.yml, dependabot-alerts.yml, sdk-watch.yml
 ├── .github/ISSUE_TEMPLATE/   Bug and feature issue forms; config.yml routes security and new servers away
@@ -134,8 +134,8 @@ TypeScript workspace's per-file coverage gate), `validate:py`
 (each Python server's locked sync, `ruff check`, `ruff format --check`,
 pyright, pytest and build), `coverage:py` (each Python server's per-file
 coverage gate), `verify:skills:cli`, `smoke` (every server booted over each
-transport it implements), and `interface-diff` (the `everything` server's MCP
-interface diffed against the base it branched from). The stage-by-stage
+transport it implements), and `interface-diff` (the MCP interface of each
+server the change touches, diffed against the base it branched from). The stage-by-stage
 reference, and what CI runs where, is [`docs/quality-gate.md`](./docs/quality-gate.md);
 diagnosing a red stage is the `pre-push-gate` skill.
 

@@ -126,12 +126,14 @@ Add to your Zed settings.json:
 <summary>Using uvx</summary>
 
 ```json
-"context_servers": [
-  "mcp-server-time": {
-    "command": "uvx",
-    "args": ["mcp-server-time"]
+{
+  "context_servers": {
+    "mcp-server-time": {
+      "command": "uvx",
+      "args": ["mcp-server-time"]
+    }
   }
-],
+}
 ```
 </details>
 
@@ -139,12 +141,14 @@ Add to your Zed settings.json:
 <summary>Using pip installation</summary>
 
 ```json
-"context_servers": {
-  "mcp-server-time": {
-    "command": "python",
-    "args": ["-m", "mcp_server_time"]
+{
+  "context_servers": {
+    "mcp-server-time": {
+      "command": "python",
+      "args": ["-m", "mcp_server_time"]
+    }
   }
-},
+}
 ```
 </details>
 
