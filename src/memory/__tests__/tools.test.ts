@@ -134,7 +134,14 @@ const expectedTools = [
       "Create multiple new entities in the knowledge graph. An entity whose name already exists, or repeats an earlier entity in the same call, is skipped and its observations are not added; the result lists the skipped names in `skipped`. Use add_observations to add observations to an existing entity.",
     inputSchema: {
       type: "object",
-      properties: { entities: { type: "array", items: entityItem(false) } },
+      properties: {
+        entities: {
+          type: "array",
+          items: entityItem(false),
+          description:
+            "The entities to create, each with a name unique in the graph",
+        },
+      },
       required: ["entities"],
       $schema: JSON_SCHEMA_2020_12,
     },
@@ -158,7 +165,14 @@ const expectedTools = [
       "Create multiple new relations between entities in the knowledge graph. Relations should be in active voice",
     inputSchema: {
       type: "object",
-      properties: { relations: { type: "array", items: relationItem(false) } },
+      properties: {
+        relations: {
+          type: "array",
+          items: relationItem(false),
+          description:
+            "The relations to create. Both ends must name existing entities; a relation already in the graph is not added again",
+        },
+      },
       required: ["relations"],
       $schema: JSON_SCHEMA_2020_12,
     },
@@ -182,6 +196,8 @@ const expectedTools = [
       properties: {
         observations: {
           type: "array",
+          description:
+            "The observations to add, grouped by entity. Each entity must already exist; an observation it already has is not added again",
           items: {
             type: "object",
             properties: {
@@ -257,6 +273,8 @@ const expectedTools = [
       properties: {
         deletions: {
           type: "array",
+          description:
+            "The observations to delete, grouped by entity, each matched by its exact text",
           items: {
             type: "object",
             properties: {
