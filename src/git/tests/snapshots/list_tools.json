@@ -206,6 +206,8 @@
           },
           "max_count": {
             "default": 10,
+            "description": "Maximum number of commits to show. Must be at least 1.",
+            "minimum": 1,
             "title": "Max Count",
             "type": "integer"
           },
