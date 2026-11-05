@@ -350,9 +350,24 @@ export async function withFileLock<T>(
 
   // Keep the lock fresh while the operation runs, so a mutation that outlasts
   // staleMs (a large graph, a slow disk) is not mistaken for an abandoned one.
+  // Refresh only our own lock, as the release below does: once it is broken
+  // as stale and re-taken, the file belongs to another process, and keeping
+  // it fresh would stop a crashed new owner's lock from ever going stale.
   const heartbeat = setInterval(() => {
     const now = new Date();
-    fs.utimes(lockPath, now, now).catch(ignoreError);
+    // Not awaited: an interval callback has no caller to await it, and every
+    // failure (the lock already gone) is caught and ignored here.
+    void fs
+      .readFile(lockPath, "utf-8")
+      .then((current) => {
+        if (current !== token) {
+          // The lock changed hands: stop refreshing it, for good.
+          clearInterval(heartbeat);
+          return;
+        }
+        return fs.utimes(lockPath, now, now);
+      })
+      .catch(ignoreError);
   }, staleMs / 2);
   heartbeat.unref();
 
