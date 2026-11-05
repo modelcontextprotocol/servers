@@ -18,10 +18,11 @@ from __future__ import annotations
 import ipaddress
 import socket
 import tempfile
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, AsyncIterator, Callable, Union
+from typing import Any
 from unittest.mock import patch
 
 import anyio
@@ -41,7 +42,7 @@ from mcp.types import (
 import mcp_server_fetch.server as server_module
 from mcp_server_fetch import readability_js
 
-Responder = Union[httpx.Response, Callable[[httpx.Request], httpx.Response]]
+Responder = httpx.Response | Callable[[httpx.Request], httpx.Response]
 
 # A globally routable address (documentation ranges are not global, so they
 # would be refused by the private-address guard).
@@ -178,7 +179,7 @@ def private_tempdir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 
 async def raw_request(
     method: str, params: dict[str, Any]
-) -> Union[JSONRPCResponse, JSONRPCError]:
+) -> JSONRPCResponse | JSONRPCError:
     """Send one request exactly as given, bypassing the client's own checks.
 
     `ClientSession` validates what it sends, so a malformed request (a list as
@@ -194,7 +195,7 @@ async def raw_request(
         async def fake_stdio_server() -> AsyncIterator[Any]:
             yield server_streams
 
-        async def receive(request_id: int) -> Union[JSONRPCResponse, JSONRPCError]:
+        async def receive(request_id: int) -> JSONRPCResponse | JSONRPCError:
             async for item in client_read:
                 assert isinstance(item, SessionMessage)
                 message = item.message

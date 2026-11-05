@@ -15,7 +15,6 @@ from typing import Any
 
 import git
 import pytest
-
 from conftest import connect, text_result, tool_error, wire
 
 

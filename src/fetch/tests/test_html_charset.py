@@ -182,7 +182,7 @@ async def test_a_declaration_past_the_first_1024_bytes_is_ignored(
     body = (
         f"<html><head>{padding}<meta charset=windows-1251></head>"
         f"<body><p>{JAPANESE}</p></body></html>"
-    ).encode("utf-8")
+    ).encode()
     assert JAPANESE in await fetch(web, page(body), raw=True)
 
 

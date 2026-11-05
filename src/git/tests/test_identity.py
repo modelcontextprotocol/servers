@@ -15,7 +15,6 @@ from pathlib import Path
 
 import git
 import pytest
-
 from conftest import connect, disable_autocrlf, text_result, wire
 
 IDENTITY_VARS = (

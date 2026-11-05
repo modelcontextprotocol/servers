@@ -41,7 +41,7 @@ dev-dependencies = [
     "pytest>=8.3.3",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
-    "ruff>=0.8.1",
+    "ruff>=0.17.3",
 ]
 
 [tool.pytest.ini_options]

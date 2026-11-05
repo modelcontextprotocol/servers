@@ -9,8 +9,8 @@ means changing that test.
 """
 
 import json
-import shutil
 import re
+import shutil
 import threading
 import time
 from collections.abc import AsyncIterator
@@ -24,6 +24,7 @@ from unittest.mock import patch
 import anyio
 import git
 import pytest
+from conftest import connect, make_repo, text_result, tool_error, wire
 from mcp.client.session import ClientRequestContext
 from mcp.shared.exceptions import MCPError
 from mcp.shared.memory import create_client_server_memory_streams
@@ -32,8 +33,6 @@ from mcp.types import INVALID_PARAMS, JSONRPCRequest, ListRootsResult, Root
 from pydantic import FileUrl
 
 from mcp_server_git.server import serve
-
-from conftest import connect, make_repo, text_result, tool_error, wire
 
 SNAPSHOTS = Path(__file__).parent / "snapshots"
 
@@ -356,8 +355,10 @@ async def test_git_diff_accepts_revision_range(repo: git.Repo, target: str):
         ("nope...main", "Ref 'nope' did not resolve to an object"),
         (
             "main..-output=/tmp/evil",
-            "Invalid target: 'main..-output=/tmp/evil' - range endpoint "
-            "'-output=/tmp/evil' cannot start with '-'",
+            (
+                "Invalid target: 'main..-output=/tmp/evil' - range endpoint "
+                "'-output=/tmp/evil' cannot start with '-'"
+            ),
         ),
         ("..", "Ref '..' did not resolve to an object"),
     ],
@@ -863,10 +864,9 @@ async def test_overlapping_tool_calls_run_one_at_a_time(repo: git.Repo):
 
     root = str(root_of(repo))
     with mock.patch("mcp_server_git.server.git_status", side_effect=slow_status):
-        async with connect(None) as session:
-            async with anyio.create_task_group() as tg:
-                for _ in range(3):
-                    tg.start_soon(session.call_tool, "git_status", {"repo_path": root})
+        async with connect(None) as session, anyio.create_task_group() as tg:
+            for _ in range(3):
+                tg.start_soon(session.call_tool, "git_status", {"repo_path": root})
     assert peak == 1
 
 
@@ -1223,8 +1223,7 @@ async def test_git_branch_rejects_flag_injection(repo: git.Repo):
 def outside_error(repo_path: Path | str, allowed: Path) -> dict[str, Any]:
     return tool_error(
         "git_status",
-        f"Repository path '{repo_path}' is outside the allowed repository "
-        f"'{allowed}'",
+        f"Repository path '{repo_path}' is outside the allowed repository '{allowed}'",
     )
 
 

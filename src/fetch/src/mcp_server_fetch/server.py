@@ -29,31 +29,30 @@ import socket
 import zlib
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
-from typing import Annotated, Any, Tuple
 from importlib.metadata import version
+from typing import Annotated, Any
 from urllib.parse import urlparse, urlunparse
 
 import httpx
-from pydantic import TypeAdapter, ValidationError
 import markdownify
 import readabilipy.simple_json
-from .readability_js import extract_article
 from bs4 import BeautifulSoup, Tag
-from .allowlist import normalize_allowed_hosts, refuse_unlisted_destination
 from mcp.server import MCPServer, ServerRequestContext
 from mcp.server.context import CallNext, HandlerResult, ServerMiddleware
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.shared.exceptions import MCPError
+from mcp.types import INVALID_PARAMS, ToolAnnotations
+from protego import Protego
+from pydantic import AnyUrl, Field, TypeAdapter, ValidationError
+
+from .allowlist import normalize_allowed_hosts, refuse_unlisted_destination
+from .readability_js import extract_article
 from .timeout import (
     DEFAULT_TIMEOUT_MS,
     MAX_TIMEOUT_MS,
     MIN_TIMEOUT_MS,
     timeout_ms_from_env,
 )
-from mcp.types import INVALID_PARAMS, ToolAnnotations
-from protego import Protego
-from pydantic import AnyUrl, Field
-
 from .title import with_page_title
 
 # The version this server reports in serverInfo, read from the installed
@@ -751,7 +750,7 @@ async def fetch_url(
     allowed_hosts: tuple[str, ...] = (),
     check_robots_txt: bool = False,
     use_readability_js: bool = True,
-) -> Tuple[str, str]:
+) -> tuple[str, str]:
     """
     Fetch the URL and return the content in a form ready for the LLM, as well as a prefix string with status information.
 

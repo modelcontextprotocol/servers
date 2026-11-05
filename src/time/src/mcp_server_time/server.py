@@ -14,15 +14,13 @@
 # handshake, and a 2026-07-28 client sessionlessly. No tool reads the session
 # or calls back to the client, so nothing differs between them.
 
+import sys
 from datetime import datetime, timedelta
+from enum import Enum
 from functools import cache
 from importlib.metadata import version
-from enum import Enum
-import sys
 from typing import Annotated, Any
-
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError, available_timezones
-from tzlocal import get_localzone_name  # ← returns "Europe/Paris", etc.
 
 from mcp.server.context import CallNext, HandlerResult, ServerRequestContext
 from mcp.server.mcpserver import MCPServer
@@ -30,6 +28,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.shared.exceptions import MCPError
 from mcp.types import INVALID_PARAMS, ToolAnnotations
 from pydantic import BaseModel, Field
+from tzlocal import get_localzone_name  # ← returns "Europe/Paris", etc.
 
 # The version this server reports in serverInfo, read from the installed
 # distribution's metadata (pyproject.toml) so it cannot drift from the
@@ -120,7 +119,7 @@ def get_zoneinfo(timezone_name: str) -> ZoneInfo:
     try:
         return load_zoneinfo(timezone_name)
     except Exception as e:
-        raise ToolError(f"Invalid timezone: {str(e)}") from e
+        raise ToolError(f"Invalid timezone: {e!s}") from e
 
 
 class TimeServer:

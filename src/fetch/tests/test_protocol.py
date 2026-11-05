@@ -726,14 +726,18 @@ async def test_url_is_normalized_by_pydantic(web: FakeWeb) -> None:
         (
             0,
             10,
-            "abcdefghij\n\n<error>Content truncated. Call the fetch tool with a "
-            "start_index of 10 to get more content.</error>",
+            (
+                "abcdefghij\n\n<error>Content truncated. Call the fetch tool with a "
+                "start_index of 10 to get more content.</error>"
+            ),
         ),
         (
             10,
             10,
-            "klmnopqrst\n\n<error>Content truncated. Call the fetch tool with a "
-            "start_index of 20 to get more content.</error>",
+            (
+                "klmnopqrst\n\n<error>Content truncated. Call the fetch tool with a "
+                "start_index of 20 to get more content.</error>"
+            ),
         ),
         # A window that ends exactly at the end: full length, nothing remains.
         (16, 10, "qrstuvwxyz"),

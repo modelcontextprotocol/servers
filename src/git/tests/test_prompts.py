@@ -16,14 +16,13 @@ import git
 import pytest
 from mcp.shared.exceptions import MCPError
 from mcp.types import INVALID_PARAMS, GetPromptResult, TextContent
+from test_eras import ERAS, MODERN, connect
 
 from mcp_server_git.server import (
     _fenced,
     commit_message_prompt,
     summarize_changes_prompt,
 )
-
-from test_eras import ERAS, MODERN, connect
 
 COMMIT_MESSAGE = "git_commit_message"
 SUMMARIZE_CHANGES = "git_summarize_changes"

@@ -27,7 +27,7 @@ from enum import Enum
 from functools import wraps
 from importlib.metadata import version
 from pathlib import Path
-from typing import Annotated, Any, Optional, ParamSpec
+from typing import Annotated, Any, ParamSpec
 
 import git
 from git.exc import BadName
@@ -280,8 +280,8 @@ def git_reset(repo: git.Repo) -> str:
 def git_log(
     repo: git.Repo,
     max_count: int = 10,
-    start_timestamp: Optional[str] = None,
-    end_timestamp: Optional[str] = None,
+    start_timestamp: str | None = None,
+    end_timestamp: str | None = None,
 ) -> list[str]:
     # Defense in depth: reject timestamps starting with '-' to prevent flag injection
     if start_timestamp and start_timestamp.startswith("-"):
@@ -1025,7 +1025,7 @@ def create_server(repository: Path | None) -> MCPServer:
     def summarize_changes(
         repo_path: Annotated[str, Field(description="The path to the Git repository.")],
         target: Annotated[
-            Optional[str],
+            str | None,
             Field(
                 description=(
                     "Branch or commit to diff against. Defaults to the working "
@@ -1131,13 +1131,13 @@ def create_server(repository: Path | None) -> MCPServer:
             ),
         ] = 10,
         start_timestamp: Annotated[
-            Optional[str],
+            str | None,
             Field(
                 description=f"Start timestamp for filtering commits. {TIMESTAMP_FORMATS}"
             ),
         ] = None,
         end_timestamp: Annotated[
-            Optional[str],
+            str | None,
             Field(
                 description=f"End timestamp for filtering commits. {TIMESTAMP_FORMATS}"
             ),
@@ -1238,13 +1238,13 @@ def create_server(repository: Path | None) -> MCPServer:
             ),
         ],
         contains: Annotated[
-            Optional[str],
+            str | None,
             Field(
                 description="The commit sha that branch should contain. Do not pass anything to this param if no commit sha is specified"
             ),
         ] = None,
         not_contains: Annotated[
-            Optional[str],
+            str | None,
             Field(
                 description="The commit sha that branch should NOT contain. Do not pass anything to this param if no commit sha is specified"
             ),
