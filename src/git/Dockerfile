@@ -44,13 +44,13 @@ COPY --from=uv /python /python
 # The server runs as the unprivileged `app` user, not root (#4741), so files it
 # writes into a bind mount are not root-owned on the host and the image passes
 # `runAsNonRoot` admission policies. The user gets a home directory, where
-# HOME points, for any per-user configuration a tool reads.
-RUN if ! id -u app >/dev/null 2>&1; then \
-      useradd -rUm -d /home/app -s /usr/sbin/nologin app; \
-    fi
+# HOME points, for any per-user configuration a tool reads, and a fixed UID:
+# USER names it by number, since Kubernetes cannot verify that a named user is
+# not root and refuses to start the container under `runAsNonRoot`.
+RUN useradd -rUm -u 999 -d /home/app -s /usr/sbin/nologin app
 COPY --from=uv --chown=app:app /app/.venv /app/.venv
 
-USER app
+USER 999:999
 
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"

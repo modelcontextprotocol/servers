@@ -25,6 +25,8 @@ RUN npm ci --ignore-scripts --omit-dev
 # Run as the base image's unprivileged `node` user (UID 1000), not root
 # (#4741), so the image passes `runAsNonRoot` admission policies and files
 # it writes into a bind mount are not root-owned on the host.
-USER node
+# It is named by number because Kubernetes cannot verify that a named user is
+# not root, and refuses to start the container under `runAsNonRoot`.
+USER 1000:1000
 
 ENTRYPOINT ["node", "/app/dist/index.js"]

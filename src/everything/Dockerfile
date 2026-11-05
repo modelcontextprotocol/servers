@@ -50,7 +50,10 @@ COPY --from=builder /repo/src/everything/dist src/everything/dist
 
 WORKDIR /repo/src/everything
 
-USER node
+# The base image's unprivileged `node` user, named by number: Kubernetes cannot
+# verify that a named user is not root, and refuses to start the container
+# under `runAsNonRoot` (#4741).
+USER 1000:1000
 
 # The Streamable HTTP (and deprecated HTTP+SSE) transports' default port.
 ENV PORT=3001
