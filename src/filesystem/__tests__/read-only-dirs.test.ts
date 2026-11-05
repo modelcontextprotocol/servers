@@ -354,35 +354,44 @@ describe("resolveReadOnlyDirectories", () => {
     ).toEqual([protectedDir]);
   });
 
-  it("keeps a directory that does not exist yet", async () => {
+  it("refuses a directory that does not exist", async () => {
     const missing = path.join(writable, "later");
-    expect(await resolveReadOnlyDirectories([missing])).toEqual([missing]);
+    await expect(resolveReadOnlyDirectories([missing])).rejects.toThrow(
+      `--read-only-dir ${missing} is not an existing directory`,
+    );
   });
 
-  it("resolves a missing directory through a symlinked ancestor", async () => {
-    const alias = path.join(protectedDir, "alias");
-    await fs.symlink(writable, alias);
-    expect(
-      await resolveReadOnlyDirectories([path.join(alias, "later", "deep")]),
-    ).toEqual([
-      path.join(alias, "later", "deep"),
-      path.join(writable, "later", "deep"),
-    ]);
+  it("refuses a dangling symlink", async () => {
+    const alias = path.join(writable, "alias");
+    await fs.symlink(path.join(writable, "vault"), alias);
+    await expect(resolveReadOnlyDirectories([alias])).rejects.toThrow(
+      `--read-only-dir ${alias} is not an existing directory`,
+    );
   });
 
-  it("protects a directory created later under a symlinked ancestor", async () => {
-    const alias = path.join(protectedDir, "alias");
-    await fs.symlink(writable, alias);
-    const marked = await resolveReadOnlyDirectories([
-      path.join(alias, "later"),
-    ]);
-    const client = await connect("legacy", [writable], marked);
-    const created = await call(client, "create_directory", {
-      path: path.join(writable, "later"),
-    });
-    expect(created.isError).toBe(true);
-    expect(textOf(created)).toContain("Access denied - read-only directory");
-    await expect(fs.access(path.join(writable, "later"))).rejects.toThrow();
+  it("refuses a file", async () => {
+    const file = path.join(writable, "scratch.txt");
+    await expect(resolveReadOnlyDirectories([file])).rejects.toThrow(
+      "not a directory",
+    );
+  });
+
+  it("refuses a name the disk does not hold, such as another Unicode normalization", async () => {
+    // On a file system that keeps both forms apart, the NFD spelling of an
+    // NFC-named directory is a different, missing name; where they are one
+    // name, it resolves to the directory itself. Either way the marking is
+    // never recorded under a spelling write validation would not produce.
+    const nfc = path.join(writable, "caf\u00e9");
+    await fs.mkdir(nfc);
+    const nfd = path.join(writable, "cafe\u0301");
+    const resolved = await resolveReadOnlyDirectories([nfd]).catch(
+      (error: Error) => error,
+    );
+    if (resolved instanceof Error) {
+      expect(resolved.message).toContain("is not an existing directory");
+    } else {
+      expect(resolved).toContain(await fs.realpath(nfd));
+    }
   });
 });
 
@@ -463,6 +472,19 @@ describe("main() with --read-only-dir", () => {
       "Access denied - read-only directory",
     );
     expect(await keepContent()).toBe("original\n");
+  });
+
+  it("refuses to start when a read-only directory cannot be resolved", async () => {
+    const missing = path.join(writable, "missing");
+    await expect(
+      main(
+        ["--read-only-dir", missing, writable],
+        new PassThrough(),
+        new PassThrough(),
+      ),
+    ).rejects.toThrow(
+      `--read-only-dir ${missing} is not an existing directory`,
+    );
   });
 
   it("does not print usage when only --read-only-dir names a directory", async () => {

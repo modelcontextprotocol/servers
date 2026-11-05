@@ -14,16 +14,19 @@
 // The read-only list is the operator's and is fixed at startup. A 2025-era
 // client's Roots can replace the allowed directories, but Roots carry no
 // access mode, so they never lift the marking: whatever directories are in
-// force, a write into a read-only directory is refused. The directories here
-// are resolved like the allowed ones (each spelling of a symlinked directory
-// is kept) but are not filtered for existence: a marking that does not exist
-// yet is resolved through its nearest existing ancestor, so it still protects
-// the path a write would resolve to once it appears.
+// force, a write into a read-only directory is refused. Each directory must
+// exist when the server starts, and is resolved with the same realpath that
+// write validation uses (each spelling of a symlinked directory is kept). A
+// marking that cannot be resolved (missing, a dangling symlink, a name the
+// disk spells differently) refuses startup rather than guessing where it
+// will be, since a guess that differs from what write validation resolves
+// would leave the directory writable.
 //
 // move_file validates both ends in "move" mode, which also refuses a path that
 // contains a read-only directory: moving an ancestor would carry the protected
 // subtree to a path the marking no longer names.
 
+import fs from "fs/promises";
 import path from "path";
 import {
   expandHome,
@@ -35,7 +38,8 @@ import { isPathWithinAllowedDirectories } from "./path-validation.js";
 /**
  * The read-only directories as given on the command line, in the forms they
  * are compared in: each one absolute and normalized, plus its resolved form
- * when it is a symlink (as macOS /tmp is for /private/tmp).
+ * when it is a symlink (as macOS /tmp is for /private/tmp). Rejects when one
+ * of them is not an existing directory.
  */
 export async function resolveReadOnlyDirectories(
   directories: readonly string[],
@@ -43,37 +47,22 @@ export async function resolveReadOnlyDirectories(
   const resolved = await Promise.all(
     directories.map(async (dir) => {
       const absolute = path.resolve(expandHome(dir));
-      return [
-        normalizePathFormat(absolute),
-        normalizePathFormat(await resolveThroughExistingAncestor(absolute)),
-      ];
+      let resolved: string;
+      try {
+        resolved = await realpathWithRetry(absolute);
+        if (!(await fs.stat(resolved)).isDirectory()) {
+          throw new Error("not a directory");
+        }
+      } catch (error) {
+        throw new Error(
+          `--read-only-dir ${dir} is not an existing directory (${error instanceof Error ? error.message : String(error)}); a read-only directory must exist when the server starts`,
+          { cause: error },
+        );
+      }
+      return [normalizePathFormat(absolute), normalizePathFormat(resolved)];
     }),
   );
   return [...new Set(resolved.flat())];
-}
-
-/**
- * `absolute` with its longest existing ancestor realpath'd and the missing
- * components appended, so a directory that does not exist yet resolves to
- * where a write would put it: with `/alias` a symlink to `/work`, a missing
- * `/alias/later` resolves to `/work/later`.
- */
-async function resolveThroughExistingAncestor(
-  absolute: string,
-): Promise<string> {
-  const missing: string[] = [];
-  let current = absolute;
-  for (;;) {
-    try {
-      return path.join(await realpathWithRetry(current), ...missing);
-    } catch {
-      const parent = path.dirname(current);
-      /* v8 ignore next -- the file system root always resolves, so the walk ends before it */
-      if (parent === current) return absolute;
-      missing.unshift(path.basename(current));
-      current = parent;
-    }
-  }
 }
 
 /**

@@ -185,6 +185,8 @@ export async function main(
     ...directories,
     ...readOnlyDirectories,
   ]);
+  // Rejects, so the server does not start, when a read-only directory
+  // cannot be resolved: it could not be protected reliably.
   const resolvedReadOnlyDirectories =
     await resolveReadOnlyDirectories(readOnlyDirectories);
   // With no directories and a 2025-era client without Roots, the server
