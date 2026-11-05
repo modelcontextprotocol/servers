@@ -1,5 +1,29 @@
 import path from "path";
 
+// On Windows a colon may appear in a path only as a drive letter's
+// (`C:\dir`), optionally behind the `\\?\` or `\\.\` namespace prefix
+// (`\\?\C:\dir`). NTFS reads any other colon as an alternate data stream
+// (`file.txt:stream`, `file.txt::$DATA`): data stored inside the file that no
+// listing, diff or hash of the visible file shows, so the server refuses such
+// paths outright rather than let the tools read or write hidden streams
+// (#5375, prototyped in #4523). POSIX allows colons in
+// names, so the check runs only where `path` is the Windows implementation.
+const WINDOWS_DRIVE_PREFIX = /^(?:\\\\[?.]\\)?[A-Za-z]:/;
+
+/**
+ * True when `normalizedPath`, on Windows, holds a colon anywhere but the
+ * drive-letter prefix, so NTFS would read it as naming an alternate data
+ * stream. Always false on POSIX, where a colon is an ordinary name character.
+ */
+export function namesAlternateDataStream(normalizedPath: string): boolean {
+  if (path.sep !== "\\") {
+    return false;
+  }
+  const drive = WINDOWS_DRIVE_PREFIX.exec(normalizedPath);
+  const rest = drive ? normalizedPath.slice(drive[0].length) : normalizedPath;
+  return rest.includes(":");
+}
+
 /**
  * Checks if an absolute path is within any of the allowed directories.
  *
@@ -7,6 +31,9 @@ import path from "path";
  * @param allowedDirectories - Array of absolute allowed directory paths (will be normalized)
  * @returns true if the path is within an allowed directory, false otherwise
  * @throws Error if given relative paths after normalization
+ * @throws Error, on Windows, if `absolutePath` names an NTFS alternate data
+ *   stream (a colon anywhere but the drive prefix), so the caller reports
+ *   why it was refused rather than "outside allowed directories" (#5375).
  */
 export function isPathWithinAllowedDirectories(
   absolutePath: string,
@@ -34,6 +61,12 @@ export function isPathWithinAllowedDirectories(
   } catch {
     /* v8 ignore next -- path.normalize/resolve throw only on a non-string, and the typeof check above already returned for one */
     return false;
+  }
+
+  if (namesAlternateDataStream(normalizedPath)) {
+    throw new Error(
+      `Access denied - NTFS alternate data stream paths are not supported (a colon is allowed only after a drive letter): ${absolutePath}`,
+    );
   }
 
   // Verify it's absolute after normalization

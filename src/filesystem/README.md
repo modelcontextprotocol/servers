@@ -100,6 +100,7 @@ The server's directory access control follows this flow:
        /Users/username/project
      ```
    - Server requires at least ONE allowed directory to operate
+   - On Windows, a path naming an NTFS alternate data stream (`file.txt:stream`, `file.txt::$DATA`) is refused with "Access denied - NTFS alternate data stream paths are not supported", even inside an allowed directory: a colon is accepted only as a drive letter's (`C:\`, `\\?\C:\`). A stream holds data that no directory listing or diff of the file shows. On macOS and Linux a colon is an ordinary file-name character and is not refused
 
 **Note**: The server will only allow operations within directories specified either via `args` or, for a 2025-era client, via Roots.
 
