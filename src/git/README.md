@@ -324,14 +324,14 @@ Add to your Zed settings.json:
 <summary>Using uvx</summary>
 
 ```json
-"context_servers": [
-  "mcp-server-git": {
-    "command": {
-      "path": "uvx",
+{
+  "context_servers": {
+    "mcp-server-git": {
+      "command": "uvx",
       "args": ["mcp-server-git"]
     }
   }
-],
+}
 ```
 </details>
 
@@ -339,14 +339,14 @@ Add to your Zed settings.json:
 <summary>Using pip installation</summary>
 
 ```json
-"context_servers": {
-  "mcp-server-git": {
-    "command": {
-      "path": "python",
+{
+  "context_servers": {
+    "mcp-server-git": {
+      "command": "python",
       "args": ["-m", "mcp_server_git"]
     }
   }
-},
+}
 ```
 </details>
 
