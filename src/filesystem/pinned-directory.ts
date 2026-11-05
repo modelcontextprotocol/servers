@@ -162,8 +162,31 @@ function verifyWorkingDirectory(directory: string): void {
   }
 }
 
+/**
+ * The error for a directory the process could not enter (#5432). Node's chdir
+ * error names the working directory it left, which is wherever the server was
+ * launched from and none of the client's business, and names chdir, an
+ * implementation detail of the anchor. A missing directory (ENOENT, or
+ * ENOTDIR for a file in its place) is the parent of the entry being written,
+ * so it gets validatePath's message for a missing parent; anything else keeps
+ * its code and names only the directory. The code stays on the error, so a
+ * caller that branches on it (createDirectoryInPlace) still can.
+ */
+function cannotEnterError(directory: string, error: unknown): Error {
+  const code = (error as NodeJS.ErrnoException).code;
+  const message =
+    code === "ENOENT" || code === "ENOTDIR"
+      ? `Parent directory does not exist: ${directory}`
+      : `${code ?? "Error"}: cannot enter directory: ${directory}`;
+  return Object.assign(new Error(message), { code });
+}
+
 function enterDirectory(directory: string): void {
-  process.chdir(directory);
+  try {
+    process.chdir(directory);
+  } catch (error) {
+    throw cannotEnterError(directory, error);
+  }
   verifyWorkingDirectory(directory);
 }
 
