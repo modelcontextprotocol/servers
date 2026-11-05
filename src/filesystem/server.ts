@@ -868,7 +868,10 @@ export function createServer(
             rootPath,
             path.join(currentPath, entry.name),
           );
-          if (isExcludedPath(relativePath, excludePatterns)) continue;
+          if (
+            isExcludedPath(relativePath, excludePatterns, entry.isDirectory())
+          )
+            continue;
           // Counted after the exclude check, so excluded subtrees cost
           // nothing; the cap and the readdir timeout keep one call from
           // walking an unbounded or stalled tree (#4162).

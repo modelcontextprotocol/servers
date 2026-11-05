@@ -4,7 +4,8 @@
 // directory_tree used to realpath and readdir an excluded node_modules (breaking
 // the #4162 promise that an excluded slow folder is never touched) and could
 // still return it: search_files listed the directory, directory_tree showed it
-// empty. isExcludedPath now also matches such a pattern with the "/**" removed.
+// empty. isExcludedPath now also matches such a pattern with the "/**" removed,
+// for directory entries only, so a file of the same name is kept.
 // These tests drive both tools through a real client and assert the directory
 // is neither touched nor returned, then pin the predicate's rule directly.
 
@@ -169,29 +170,41 @@ describe('excludePatterns ending in "/**" (#5445)', () => {
       ].map(p),
     );
   });
+
+  it("keeps a file the suffix-less pattern would match, in both tools", async () => {
+    // "*/**" names every top-level directory; index.js is a file, so it stays.
+    expect(await search("**/*", ["*/**"])).toEqual(["index.js"]);
+    expect(await treeEntries(["*/**"])).toEqual(["index.js"]);
+  });
 });
 
 describe('isExcludedPath with a "/**" pattern', () => {
+  const dirPattern = ["**/node_modules/**"];
+
   it("matches the named directory as well as the paths below it", () => {
-    expect(isExcludedPath("node_modules", ["**/node_modules/**"])).toBe(true);
+    expect(isExcludedPath("node_modules", dirPattern, true)).toBe(true);
     expect(
-      isExcludedPath(p("packages/app/node_modules"), ["**/node_modules/**"]),
+      isExcludedPath(p("packages/app/node_modules"), dirPattern, true),
     ).toBe(true);
-    expect(
-      isExcludedPath(p("node_modules/dep.js"), ["**/node_modules/**"]),
-    ).toBe(true);
+    expect(isExcludedPath(p("node_modules/dep.js"), dirPattern)).toBe(true);
+  });
+
+  it("does not exclude a file the suffix-less pattern would match", () => {
+    expect(isExcludedPath("node_modules", dirPattern)).toBe(false);
+    expect(isExcludedPath("node_modules", dirPattern, false)).toBe(false);
+    expect(isExcludedPath("index.js", ["*/**"], false)).toBe(false);
   });
 
   it("keeps whole-name matching and the rest of wildcard semantics", () => {
-    expect(isExcludedPath("node_modules_old", ["**/node_modules/**"])).toBe(
-      false,
-    );
-    expect(isExcludedPath(p("a/node_modules"), ["node_modules/**"])).toBe(
+    expect(isExcludedPath("node_modules_old", dirPattern, true)).toBe(false);
+    expect(isExcludedPath(p("a/node_modules"), ["node_modules/**"], true)).toBe(
       false,
     );
     // Only a trailing "/**" is stripped: "**" alone still matches everything,
     // and a pattern without the suffix is matched as written.
     expect(isExcludedPath("anything", ["**"])).toBe(true);
-    expect(isExcludedPath("node_modules", ["**/node_modules/*"])).toBe(false);
+    expect(isExcludedPath("node_modules", ["**/node_modules/*"], true)).toBe(
+      false,
+    );
   });
 });
