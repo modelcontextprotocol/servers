@@ -8,14 +8,14 @@ real server through a client (`conftest.connect`) and checks both the reply
 and the repository afterwards.
 """
 
-import stat
-import sys
 from pathlib import Path
 from typing import Any
 
 import git
 import pytest
 from conftest import connect, text_result, tool_error, wire
+
+from mcp_server_git.server import _merge_failure
 
 
 def root_of(repo: git.Repo) -> Path:
@@ -203,28 +203,23 @@ async def test_fetch_head_merges_only_the_commit_it_resolves_to(repo: git.Repo):
     assert not (root_of(repo) / "second.txt").exists()
 
 
-@pytest.mark.skipif(
-    sys.platform == "win32", reason="git for Windows runs hooks through sh"
-)
-async def test_failed_merge_commit_is_aborted(repo: git.Repo):
-    # A merge with no conflicts can still fail to commit; here a
-    # pre-merge-commit hook refuses it, which leaves MERGE_HEAD behind.
+def test_failed_merge_commit_is_aborted(repo: git.Repo):
+    # A merge with no conflicts can still fail to commit (a ref lock held by
+    # another process, say), which leaves MERGE_HEAD behind. No hook can make
+    # it fail here, since the server runs none, so the merge is stopped before
+    # its commit with --no-commit and the failure is handed to _merge_failure.
     diverge(repo, conflicting=False)
     head = repo.head.commit.hexsha
-    hook = Path(repo.git_dir) / "hooks" / "pre-merge-commit"
-    hook.parent.mkdir(exist_ok=True)
-    hook.write_text("#!/bin/sh\necho 'merge refused by hook' >&2\nexit 1\n")
-    hook.chmod(hook.stat().st_mode | stat.S_IEXEC)
+    repo.git.merge("--no-ff", "--no-commit", "feature")
+    assert (Path(repo.git_dir) / "MERGE_HEAD").exists()
+    error = git.GitCommandError(["git", "merge"], 128, "fatal: merge refused")
 
-    result = await merge(repo, "feature", fast_forward_only=False)
+    message = _merge_failure(repo, error, "Merge of 'feature' into 'main'")
 
-    assert result["isError"] is True
-    text = result["content"][0]["text"]
-    assert text.startswith(
-        "Error executing tool git_merge: Merge of 'feature' into 'main' failed. "
-        "The merge was aborted and the repository is unchanged. Git reported:\n"
+    assert message == (
+        "Merge of 'feature' into 'main' failed. The merge was aborted and the "
+        "repository is unchanged. Git reported:\nfatal: merge refused"
     )
-    assert "merge refused by hook" in text
     assert_untouched(repo, head)
 
 
