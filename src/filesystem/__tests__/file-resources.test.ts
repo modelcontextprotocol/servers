@@ -5,6 +5,7 @@
 // the roots barrier on 2025-11-25, the no-directories error on 2026-07-28).
 
 import fs from "fs/promises";
+import fsSync from "fs";
 import path from "path";
 import { pathToFileURL } from "url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -216,9 +217,14 @@ describe("resources/read", () => {
     const file = path.join(allowed, "locked.txt");
     await fs.writeFile(file, "x");
     const client = await connectTo([allowed]);
-    vi.spyOn(fs, "readFile").mockRejectedValueOnce(
-      Object.assign(new Error("permission denied"), { code: "EACCES" }),
-    );
+    // The read goes through the descriptor the anchored open returned.
+    vi.spyOn(fsSync, "readFile").mockImplementationOnce(((
+      _fd: number,
+      callback: (error: Error) => void,
+    ) =>
+      callback(
+        Object.assign(new Error("permission denied"), { code: "EACCES" }),
+      )) as typeof fsSync.readFile);
     const error = await readError(client, uriOf(file));
     expect(error.code).toBe(-32603);
     expect(error.message).toContain("permission denied");

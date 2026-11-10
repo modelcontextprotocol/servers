@@ -14,8 +14,11 @@ import {
   isChildDirectory,
   isSameDirectory,
   moveFileAcrossDevices,
+  openFileForReading,
   overwriteFileInDirectory,
+  readFileInDirectory,
   renameIntoDirectory,
+  statInDirectory,
 } from "../pinned-directory.js";
 import { makeTempDir } from "./helpers.js";
 
@@ -962,5 +965,98 @@ describe("the borrowed working directory", () => {
     });
     await createFileInDirectory(path.join(dir, "x.txt"), "x");
     expect(fs.realpathSync(".")).toBe(fs.realpathSync(path.parse(dir).root));
+  });
+});
+
+describe("the anchored reads", () => {
+  it("reads a whole file and restores the working directory", async () => {
+    const file = path.join(dir, "r.txt");
+    fs.writeFileSync(file, "content");
+    expect((await readFileInDirectory(file)).toString()).toBe("content");
+    expect(process.cwd()).toBe(cwd);
+  });
+
+  it("reads at a position through the opened file, which knows its size", async () => {
+    const file = path.join(dir, "r.txt");
+    fs.writeFileSync(file, "0123456789");
+    const handle = await openFileForReading(file);
+    try {
+      expect(handle.size).toBe(10);
+      const buffer = Buffer.alloc(3);
+      expect(await handle.read(buffer, 0, 3, 4)).toEqual({ bytesRead: 3 });
+      expect(buffer.toString()).toBe("456");
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it("reports a read failure, and closes the file", async () => {
+    const file = path.join(dir, "r.txt");
+    fs.writeFileSync(file, "content");
+    vi.spyOn(fs, "readFile").mockImplementationOnce(((
+      _fd: number,
+      callback: (error: Error) => void,
+    ) => callback(errno("EIO"))) as typeof fs.readFile);
+    const close = vi.spyOn(fs, "close");
+    await expect(readFileInDirectory(file)).rejects.toThrow("EIO");
+    expect(close).toHaveBeenCalled();
+  });
+
+  it("reports a positioned read failure", async () => {
+    const file = path.join(dir, "r.txt");
+    fs.writeFileSync(file, "content");
+    const handle = await openFileForReading(file);
+    vi.spyOn(fs, "read").mockImplementationOnce(((...args: unknown[]) => {
+      (args[args.length - 1] as (error: Error) => void)(errno("EIO"));
+    }) as typeof fs.read);
+    try {
+      await expect(handle.read(Buffer.alloc(1), 0, 1, 0)).rejects.toThrow(
+        "EIO",
+      );
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it("refuses a file other than the one lstat saw, and closes it", async () => {
+    const file = path.join(dir, "r.txt");
+    fs.writeFileSync(file, "content");
+    const realLstat = fs.lstatSync;
+    vi.spyOn(fs, "lstatSync").mockImplementationOnce((p) => ({
+      ...realLstat(p, { bigint: true }),
+      isDirectory: () => false,
+      isFile: () => true,
+      ino: -1n,
+    }));
+    const closeSync = vi.spyOn(fs, "closeSync");
+    await expect(readFileInDirectory(file)).rejects.toThrow(
+      `Refusing to read: ${file} was replaced while it was being opened`,
+    );
+    expect(closeSync).toHaveBeenCalled();
+  });
+
+  it.skipIf(!symlinks)(
+    "refuses a directory that resolves somewhere else",
+    async () => {
+      fs.writeFileSync(path.join(outside, "s.txt"), "SECRET");
+      fs.symlinkSync(outside, path.join(dir, "link"));
+      await expect(
+        readFileInDirectory(path.join(dir, "link", "s.txt")),
+      ).rejects.toThrow(
+        "Access denied - a directory on the path changed during the operation",
+      );
+      expect(() => statInDirectory(path.join(dir, "link", "s.txt"))).toThrow(
+        "Access denied - a directory on the path changed during the operation",
+      );
+    },
+  );
+
+  it("stats the entry in its directory, and a filesystem root as is", () => {
+    const file = path.join(dir, "r.txt");
+    fs.writeFileSync(file, "content");
+    expect(statInDirectory(file).size).toBe(7);
+    const root = path.parse(dir).root;
+    expect(statInDirectory(root).isDirectory()).toBe(true);
+    expect(process.cwd()).toBe(cwd);
   });
 });
