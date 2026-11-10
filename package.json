@@ -77,6 +77,7 @@
     "brace-expansion": "^5.0.12",
     "fast-uri": "^3.1.9",
     "nanoid": "^3.3.18",
-    "source-map-js": "^1.2.2"
+    "source-map-js": "^1.2.2",
+    "minimatch": "^11.0.1"
   }
 }
