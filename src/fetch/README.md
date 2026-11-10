@@ -182,7 +182,10 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 
 By default, the server will obey a websites robots.txt file if the request came from the model (via a tool), but not if
 the request was user initiated (via a prompt). Every redirect hop of a tool fetch is checked against the robots.txt of
-the host it leads to, the same way as the requested URL. If the robots.txt request fails to connect, or is answered
+the host it leads to, the same way as the requested URL. A path is matched against the rules both as it is spelled and
+as an origin typically resolves it (`%2F` and `%2E` decoded, repeated slashes merged, `.` and `..` segments removed),
+and the fetch is refused if either is disallowed, so `//private` or `/x/../private` cannot get past `Disallow: /private`.
+Matching stays case-sensitive, as RFC 9309 specifies. If the robots.txt request fails to connect, or is answered
 with 401, 403 or a server error (5xx), the tool refuses the fetch rather than reading the response as rules (RFC 9309
 treats a 5xx robots.txt as complete disallow); any other 4xx is treated as no rules. This can be disabled by adding the
 argument `--ignore-robots-txt` to the `args` list in the configuration.
@@ -192,9 +195,11 @@ argument `--ignore-robots-txt` to the `args` list in the configuration.
 By default, the server refuses any request, including a redirect hop or a robots.txt fetch, whose host resolves to an
 address that is not globally routable: loopback (`127.0.0.0/8`, `::1`), private (`10.0.0.0/8`, `172.16.0.0/12`,
 `192.168.0.0/16`, `fc00::/7`), link-local (`169.254.0.0/16`, `fe80::/10`), shared address space (`100.64.0.0/10`),
-multicast, unspecified, documentation and the other IANA special-purpose ranges. An IPv4-mapped (`::ffff:0:0/96`) or
-well-known NAT64 (`64:ff9b::/96`) address is judged by the IPv4 address it carries; a deprecated IPv4-compatible
-address (`::/96`, such as `::127.0.0.1`) is refused whatever IPv4 it carries. A hostname is refused if any one of its addresses is in those ranges.
+multicast, unspecified, documentation and the other IANA special-purpose ranges, including deprecated site-local
+(`fec0::/10`). An IPv6 address outside global unicast (`2000::/3`) is refused unless it carries an IPv4 address: an
+IPv4-mapped (`::ffff:0:0/96`), IPv4-translated (`::ffff:0:0:0/96`) or well-known NAT64 (`64:ff9b::/96`) address is
+judged by the IPv4 address it carries; a deprecated IPv4-compatible address (`::/96`, such as `::127.0.0.1`) is
+refused whatever IPv4 it carries. A hostname is refused if any one of its addresses is in those ranges.
 The client receives an error naming the refused address.
 
 To fetch from local or internal hosts (a development server, an intranet page), add the argument

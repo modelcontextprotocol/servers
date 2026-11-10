@@ -25,13 +25,14 @@
 import asyncio
 import ipaddress
 import os
+import re
 import socket
 import zlib
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from importlib.metadata import version
 from typing import Annotated, Any
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlparse, urlsplit, urlunparse, urlunsplit
 
 import httpx
 import markdownify
@@ -104,8 +105,13 @@ _NON_PUBLIC_NETWORKS = tuple(
         "2001::/23",
         "2001:db8::/32",
         "2002::/16",
+        # IPv6 documentation (RFC 9637), absent from older is_global tables.
+        "3fff::/20",
         "fc00::/7",
         "fe80::/10",
+        # Deprecated site-local (RFC 3879), which is_global reads as global.
+        # Outside 2000::/3 as well, but listed so it is refused by name.
+        "fec0::/10",
     )
 )
 
@@ -131,6 +137,17 @@ _PUBLIC_EXCEPTIONS = tuple(
 # in it to the IPv4 held in its low 32 bits, so that IPv4 is the destination.
 _NAT64_WELL_KNOWN = ipaddress.IPv6Network("64:ff9b::/96")
 
+# IPv4-translated addresses (RFC 2765, RFC 6145), which a stateless translator
+# forwards to the IPv4 held in their low 32 bits, like NAT64.
+_IPV4_TRANSLATED = ipaddress.IPv6Network("::ffff:0:0:0/96")
+
+# IPv6 global unicast (RFC 4291 2.4, IANA's IPv6 address space registry). The
+# rest of the IPv6 space is reserved by the IETF, unique or site-local,
+# link-local or multicast, none of it a public destination, while is_global
+# reads most of it as global. Deny-by-default there means a range missing from
+# the list above cannot pass as public.
+_IPV6_GLOBAL_UNICAST = ipaddress.IPv6Network("2000::/3")
+
 
 def _is_public_address(address: str) -> bool:
     """True when ``address`` is a globally routable unicast address.
@@ -139,17 +156,23 @@ def _is_public_address(address: str) -> bool:
     cloud metadata endpoints), shared address space (100.64.0.0/10, which holds
     Alibaba Cloud's 100.100.100.200), unique local IPv6 (AWS's fd00:ec2::254),
     multicast, unspecified, documentation and other special-purpose ranges.
-    An IPv4-mapped or well-known NAT64 address is judged by the IPv4 it wraps;
-    a deprecated IPv4-compatible address (``::/96``) is refused whatever it holds.
+    An IPv4-mapped, IPv4-translated or well-known NAT64 address is judged by
+    the IPv4 it wraps; a deprecated IPv4-compatible address (``::/96``) is
+    refused whatever it holds. Any other IPv6 address outside global unicast
+    (``2000::/3``) is refused.
     """
     ip = ipaddress.ip_address(address)
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
         ip = ip.ipv4_mapped
-    elif isinstance(ip, ipaddress.IPv6Address) and ip in _NAT64_WELL_KNOWN:
+    elif isinstance(ip, ipaddress.IPv6Address) and (
+        ip in _NAT64_WELL_KNOWN or ip in _IPV4_TRANSLATED
+    ):
         ip = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
     if any(ip in network for network in _PUBLIC_EXCEPTIONS):
         return True
     if any(ip in network for network in _NON_PUBLIC_NETWORKS):
+        return False
+    if isinstance(ip, ipaddress.IPv6Address) and ip not in _IPV6_GLOBAL_UNICAST:
         return False
     return ip.is_global and not ip.is_multicast
 
@@ -660,6 +683,48 @@ def decode_page(response: httpx.Response, content: bytes) -> str:
         return decode_text(response, content)
 
 
+# Escapes of the path separator and of the dot, which an origin may decode
+# before it resolves the path. Other escapes (such as %20) are left alone.
+_ENCODED_SLASH = re.compile("%2f", re.IGNORECASE)
+_ENCODED_DOT = re.compile("%2e", re.IGNORECASE)
+_REPEATED_SLASHES = re.compile("/{2,}")
+
+
+def _remove_dot_segments(path: str) -> str:
+    """``path`` with its ``.`` and ``..`` segments resolved (RFC 3986 5.2.4).
+
+    The result is always absolute, as robots.txt rules are: an empty path
+    becomes ``/``.
+    """
+    segments = path.split("/")
+    resolved: list[str] = []
+    for segment in segments[1:]:
+        if segment == "..":
+            if resolved:
+                resolved.pop()
+        elif segment != ".":
+            resolved.append(segment)
+    # A path ending in a dot segment names a directory: "/a/b/.." is "/a/".
+    trailing = "/" if resolved and segments[-1] in (".", "..") else ""
+    return "/" + "/".join(resolved) + trailing
+
+
+def _resolved_path_url(url: str) -> str:
+    """``url`` with its path spelled the way a typical origin resolves it.
+
+    robots.txt rules match the path a crawler requests, but an origin such as
+    nginx or Apache serves ``//private``, ``/x/../private`` and ``/%2Fprivate``
+    as ``/private``. So the path's separator and dot escapes are decoded,
+    repeated slashes merged and dot segments removed before rules are matched
+    against it, as well as against the path as spelled. The query is kept as
+    it is, and matching stays case-sensitive (RFC 9309 2.2.2).
+    """
+    parts = urlsplit(url)
+    path = _ENCODED_DOT.sub(".", _ENCODED_SLASH.sub("/", parts.path))
+    path = _remove_dot_segments(_REPEATED_SLASHES.sub("/", path))
+    return urlunsplit(parts._replace(path=path))
+
+
 async def check_may_autonomously_fetch_url(
     url: str,
     user_agent: str,
@@ -706,7 +771,12 @@ async def check_may_autonomously_fetch_url(
         line for line in robot_txt.splitlines() if not line.strip().startswith("#")
     )
     robot_parser = Protego.parse(processed_robot_txt)
-    if not robot_parser.can_fetch(str(url), user_agent):
+    # Refused when either spelling of the path is disallowed: resolving the
+    # path only ever adds refusals.
+    if not (
+        robot_parser.can_fetch(url, user_agent)
+        and robot_parser.can_fetch(_resolved_path_url(url), user_agent)
+    ):
         raise ToolError(
             f"The sites robots.txt ({robot_txt_url}), specifies that autonomous fetching of this page is not allowed, "
             f"<useragent>{user_agent}</useragent>\n"
