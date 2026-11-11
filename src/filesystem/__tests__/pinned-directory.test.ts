@@ -1382,4 +1382,16 @@ describe("the anchored reads", () => {
     expect(statInDirectory(root).isDirectory()).toBe(true);
     expect(process.cwd()).toBe(cwd);
   });
+
+  it("stats a UNC share root directly on Windows, as it does any root", () => {
+    Object.defineProperty(process, "platform", { value: "win32" });
+    const stats = fs.lstatSync(dir);
+    const lstat = vi.spyOn(fs, "lstatSync").mockReturnValue(stats);
+    const chdir = vi.spyOn(process, "chdir");
+    for (const root of ["\\\\server\\share", "\\\\?\\UNC\\server\\share\\"]) {
+      expect(statInDirectory(root)).toBe(stats);
+      expect(lstat).toHaveBeenLastCalledWith(root);
+    }
+    expect(chdir).not.toHaveBeenCalled();
+  });
 });
