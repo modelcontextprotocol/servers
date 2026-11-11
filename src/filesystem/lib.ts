@@ -13,8 +13,11 @@ import {
   createFileInDirectory,
   moveFileAcrossDevices,
   copyFileInDirectory,
+  openFileForReading,
   overwriteFileInDirectory,
+  readFileInDirectory,
   renameIntoDirectory,
+  statInDirectory,
 } from "./pinned-directory.js";
 
 // Type definitions
@@ -593,8 +596,13 @@ async function resolveAllowedPath(
 }
 
 // File Operations
+//
+// Every read below, of content or of metadata, goes through
+// pinned-directory.ts, as every write does: the path was validated before it
+// runs, and a directory on it swapped for a symlink since then must not
+// redirect the read outside the allowed directories (TOCTOU).
 export async function getFileStats(filePath: string): Promise<FileInfo> {
-  const stats = await fs.stat(filePath);
+  const stats = statInDirectory(filePath);
   return {
     size: stats.size,
     created: stats.birthtime,
@@ -613,7 +621,9 @@ export async function readFileContent(
   filePath: string,
   encoding: string = "utf-8",
 ): Promise<string> {
-  return await fs.readFile(filePath, encoding as BufferEncoding);
+  return (await readFileInDirectory(filePath)).toString(
+    encoding as BufferEncoding,
+  );
 }
 
 export async function writeFileContent(
@@ -1021,7 +1031,7 @@ export async function applyFileEdits(
 ): Promise<string> {
   // Read file content and normalize line endings, remembering which ending
   // the file uses so the edited file is written back with it (#4991).
-  const rawContent = await fs.readFile(filePath, "utf-8");
+  const rawContent = await readFileContent(filePath);
   const eol = detectLineEnding(rawContent);
   const content = normalizeLineEndings(rawContent);
 
@@ -1145,15 +1155,13 @@ export async function tailFile(
   numLines: number,
 ): Promise<string> {
   const CHUNK_SIZE = 1024; // Read 1KB at a time
-  const stats = await fs.stat(filePath);
-  const fileSize = stats.size;
-
-  // Zero lines is an empty result; slice(-0) below would return every line.
-  if (fileSize === 0 || numLines === 0) return "";
-
-  // Open file for reading
-  const fileHandle = await fs.open(filePath, "r");
+  // Open file for reading; its size is the opened file's.
+  const fileHandle = await openFileForReading(filePath);
   try {
+    const fileSize = fileHandle.size;
+    // Zero lines is an empty result; slice(-0) below would return every line.
+    if (fileSize === 0 || numLines === 0) return "";
+
     const chunks: Buffer[] = [];
     let position = fileSize;
     const chunk = Buffer.alloc(CHUNK_SIZE);
@@ -1197,7 +1205,7 @@ export async function headFile(
   filePath: string,
   numLines: number,
 ): Promise<string> {
-  const fileHandle = await fs.open(filePath, "r");
+  const fileHandle = await openFileForReading(filePath);
   try {
     const lines: string[] = [];
     let buffer = "";

@@ -1,9 +1,10 @@
-// Write operations anchored to their directory, so a directory swapped out
-// from under them cannot redirect them.
+// Filesystem operations anchored to their directory, so a directory swapped
+// out from under them cannot redirect them: every write, and every read that
+// returns a file's content or metadata.
 //
 // validatePath() checks a path and returns its canonical form, but the write
-// that follows resolves that path again. A directory on it swapped for a
-// symlink in between would redirect the write outside the allowed directories,
+// or read that follows resolves that path again. A directory on it swapped
+// for a symlink in between would redirect it outside the allowed directories,
 // because the kernel follows the symlink at use. Checking again afterwards
 // cannot close that (the racer swaps back in time), and openat() is not in
 // Node. The substitute here: chdir() into the directory, read back where the
@@ -11,15 +12,21 @@
 // the string it was given), refuse unless that is the validated directory,
 // and only then act on the final component relative to it. The working
 // directory holds the directory's inode, so swapping the path afterwards
-// cannot move the operation. Every check happens before a byte is written,
-// so nothing ever needs rolling back, except in the cross-device move, which
-// copies and so removes its copy if a later step fails.
+// cannot move the operation. A read opens the file that way and then reads
+// only through the descriptor, which stays bound to the file it opened, so
+// the read is anchored however long it takes. Every check happens before a
+// byte is written or read, so nothing ever needs rolling back, except in two
+// moves: the cross-device move copies, and so removes its copy if a later
+// step fails; the same-device move can anchor only its destination (rename
+// takes two paths), so it pins its source by identity and puts back an entry
+// that is not the one it checked.
 //
 // On Windows the working directory is a string and relative paths resolve
 // against it, so reading it back proves nothing; there the leaf is lstat'd
 // relative to the anchor and must be the file the descriptor opened, which
 // narrows the race without closing it.
 
+import { randomBytes } from "crypto";
 import fs from "fs";
 import path from "path";
 
@@ -345,17 +352,68 @@ export async function appendFileInDirectory(
   }
 }
 
+/** A name in the destination directory to stage a rename under. */
+function stagingName(destinationPath: string): string {
+  return `.${path.basename(destinationPath)}.${randomBytes(8).toString("hex")}.moving`;
+}
+
 /**
- * Rename `sourcePath` (absolute, outside this fix's scope) to the final
- * component of `destinationPath`, relative to its anchored directory.
+ * Put back an entry a rename staged at `staged` (relative to the anchored
+ * destination directory) that turned out not to be the source: at
+ * `sourcePath`, where it came from, without overwriting anything there. A
+ * hard link refuses an existing name; a directory, which cannot be linked,
+ * is renamed back only while nothing is at `sourcePath`. If neither is
+ * possible it stays at its staged name, which is never the destination.
+ */
+function returnStaged(staged: string, sourcePath: string): void {
+  try {
+    fs.linkSync(staged, sourcePath);
+    fs.unlinkSync(staged);
+    return;
+  } catch {
+    // Not linkable (a directory), or something is at sourcePath now.
+  }
+  try {
+    fs.lstatSync(sourcePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      fs.renameSync(staged, sourcePath);
+    }
+  }
+}
+
+/**
+ * Rename `sourcePath` to the final component of `destinationPath`, both
+ * anchored. rename() takes two paths and Node has no renameat(), so only one
+ * side can be resolved relative to an anchor: the destination is, and the
+ * source is pinned by identity instead. Its entry is read relative to its own
+ * anchored directory first, the rename then stages whatever the kernel
+ * resolved `sourcePath` to under a fresh name in the destination directory,
+ * and only an entry that is the one read moves on to the destination name.
+ * Anything else (a directory on the source path was swapped in between) is
+ * put back and the move refused, so it is never at the destination name.
  */
 export function renameIntoDirectory(
   sourcePath: string,
   destinationPath: string,
 ): void {
-  inDirectory(path.dirname(destinationPath), () =>
-    fs.renameSync(sourcePath, path.basename(destinationPath)),
-  );
+  const name = path.basename(sourcePath);
+  const expected = inDirectory(path.dirname(sourcePath), () => {
+    try {
+      return fs.lstatSync(name, { bigint: true });
+    } catch (error) {
+      throw namingPath(error, name, sourcePath);
+    }
+  });
+  inDirectory(path.dirname(destinationPath), () => {
+    const staged = stagingName(destinationPath);
+    fs.renameSync(sourcePath, staged);
+    if (!isSameEntry(fs.lstatSync(staged, { bigint: true }), expected)) {
+      returnStaged(staged, sourcePath);
+      throw directoryChangedError(path.dirname(sourcePath));
+    }
+    fs.renameSync(staged, path.basename(destinationPath));
+  });
 }
 
 // The cross-device move below (#5188). rename() cannot cross a device
@@ -408,40 +466,93 @@ function keepModeAndTimes(fd: number, source: fs.BigIntStats): Promise<void> {
   );
 }
 
+/** What opening a regular file for reading is for, named in its refusals. */
+type ReadOperation = "move" | "copy" | "read";
+
+function directoryRefusal(sourcePath: string, operation: ReadOperation): Error {
+  switch (operation) {
+    case "move":
+      return new Error(
+        `Cannot move a directory across filesystems: ${sourcePath}. ` +
+          "Create the directory at the destination and move its files one at a time.",
+      );
+    case "copy":
+      return new Error(
+        `Cannot copy a directory: ${sourcePath}. copy_file copies one regular file; ` +
+          "create the directory at the destination and copy its files one at a time.",
+      );
+    case "read":
+      // The code a read of a directory has always failed with, which callers
+      // (resources/read) branch on.
+      return Object.assign(
+        new Error(
+          `EISDIR: illegal operation on a directory, read '${sourcePath}'`,
+        ),
+        { code: "EISDIR" },
+      );
+  }
+}
+
+function notRegularRefusal(
+  sourcePath: string,
+  operation: ReadOperation,
+): Error {
+  switch (operation) {
+    case "move":
+      return new Error(
+        `Cannot move across filesystems: not a regular file: ${sourcePath}`,
+      );
+    case "copy":
+      return new Error(`Cannot copy: not a regular file: ${sourcePath}`);
+    case "read":
+      return new Error(`Cannot read: not a regular file: ${sourcePath}`);
+  }
+}
+
+/**
+ * An errno error from a call on the anchor-relative `name` names that bare
+ * name; name `filePath` instead, as the call on the absolute path would have.
+ */
+function namingPath(error: unknown, name: string, filePath: string): unknown {
+  const errno = error as NodeJS.ErrnoException;
+  if (error instanceof Error && errno.path === name) {
+    error.message = error.message.replace(`'${name}'`, `'${filePath}'`);
+    errno.path = filePath;
+  }
+  return error;
+}
+
 /**
  * Open the regular file at `sourcePath` for reading, relative to its anchored
  * directory. A directory, a symlink or anything else that is not a regular
  * file is refused: a symlink is not followed or recreated, since its target
- * could name anything, and a directory is not copied recursively. `operation`
- * names the caller in those refusals: a cross-device move, or copy_file.
+ * could name anything, a directory is not copied recursively, and a FIFO or
+ * device is never read, so a read cannot block on one. `operation` names the
+ * caller in those refusals: a cross-device move, copy_file, or a read.
  */
 function openSourceInDirectory(
   sourcePath: string,
-  operation: "move" | "copy",
+  operation: ReadOperation,
 ): {
   fd: number;
   opened: fs.BigIntStats;
 } {
   const name = path.basename(sourcePath);
   return inDirectory(path.dirname(sourcePath), () => {
-    const found = fs.lstatSync(name, { bigint: true });
-    if (found.isDirectory()) {
-      throw new Error(
-        operation === "move"
-          ? `Cannot move a directory across filesystems: ${sourcePath}. ` +
-              "Create the directory at the destination and move its files one at a time."
-          : `Cannot copy a directory: ${sourcePath}. copy_file copies one regular file; ` +
-              "create the directory at the destination and copy its files one at a time.",
-      );
+    let found: fs.BigIntStats;
+    let fd: number;
+    try {
+      found = fs.lstatSync(name, { bigint: true });
+      if (found.isDirectory()) {
+        throw directoryRefusal(sourcePath, operation);
+      }
+      if (!found.isFile()) {
+        throw notRegularRefusal(sourcePath, operation);
+      }
+      fd = fs.openSync(name, readFlags());
+    } catch (error) {
+      throw namingPath(error, name, sourcePath);
     }
-    if (!found.isFile()) {
-      throw new Error(
-        operation === "move"
-          ? `Cannot move across filesystems: not a regular file: ${sourcePath}`
-          : `Cannot copy: not a regular file: ${sourcePath}`,
-      );
-    }
-    const fd = fs.openSync(name, readFlags());
     try {
       const opened = fs.fstatSync(fd, { bigint: true });
       if (!opened.isFile() || !isSameEntry(found, opened)) {
@@ -638,6 +749,94 @@ export async function copyFileInDirectory(
     }
     throw error;
   }
+}
+
+// Reads. The file is opened as the copy source above
+// is, and everything read from it is read through that one descriptor.
+
+function readWhole(fd: number): Promise<Buffer> {
+  return new Promise((resolve, reject) =>
+    fs.readFile(fd, (error, data) => (error ? reject(error) : resolve(data))),
+  );
+}
+
+function readAt(
+  fd: number,
+  buffer: Buffer,
+  offset: number,
+  length: number,
+  position: number,
+): Promise<{ bytesRead: number }> {
+  return new Promise((resolve, reject) =>
+    fs.read(fd, buffer, offset, length, position, (error, bytesRead) =>
+      error ? reject(error) : resolve({ bytesRead }),
+    ),
+  );
+}
+
+/** A regular file opened for reading by openFileForReading. */
+export interface ReadableFile {
+  /** The size of the file opened, from its descriptor. */
+  readonly size: number;
+  /** Read up to `length` bytes at `position` into `buffer` at `offset`. */
+  read(
+    buffer: Buffer,
+    offset: number,
+    length: number,
+    position: number,
+  ): Promise<{ bytesRead: number }>;
+  close(): Promise<void>;
+}
+
+/**
+ * Open the regular file at `filePath` for reading, relative to its anchored
+ * directory, refusing anything else (see openSourceInDirectory). The caller
+ * reads through the result and closes it.
+ */
+export async function openFileForReading(
+  filePath: string,
+): Promise<ReadableFile> {
+  const { fd, opened } = openSourceInDirectory(filePath, "read");
+  return {
+    size: Number(opened.size),
+    read: (buffer, offset, length, position) =>
+      readAt(fd, buffer, offset, length, position),
+    close: () => close(fd),
+  };
+}
+
+/**
+ * Read the whole of the regular file at `filePath`, opened relative to its
+ * anchored directory.
+ */
+export async function readFileInDirectory(filePath: string): Promise<Buffer> {
+  const { fd } = openSourceInDirectory(filePath, "read");
+  try {
+    return await readWhole(fd);
+  } finally {
+    await close(fd);
+  }
+}
+
+/**
+ * The lstat of `filePath`, taken relative to its anchored directory, so it
+ * describes the entry validation resolved rather than whatever a swapped
+ * directory now leads to. validatePath returns a resolved path, so its last
+ * component is not a symlink, and this reports what stat() would. A
+ * filesystem root has no directory above it to swap, and is lstat'd as is.
+ */
+export function statInDirectory(filePath: string): fs.Stats {
+  const name = path.basename(filePath);
+  if (name === "") {
+    return fs.lstatSync(filePath);
+  }
+  return inDirectory(path.dirname(filePath), () => {
+    try {
+      return fs.lstatSync(name);
+    } catch (error) {
+      throw namingPath(error, name, filePath);
+    }
+  });
 }
 
 /**

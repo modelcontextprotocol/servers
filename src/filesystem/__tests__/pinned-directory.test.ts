@@ -14,8 +14,11 @@ import {
   isChildDirectory,
   isSameDirectory,
   moveFileAcrossDevices,
+  openFileForReading,
   overwriteFileInDirectory,
+  readFileInDirectory,
   renameIntoDirectory,
+  statInDirectory,
 } from "../pinned-directory.js";
 import { makeTempDir } from "./helpers.js";
 
@@ -428,6 +431,111 @@ describe("renameIntoDirectory", () => {
       expect(fs.existsSync(path.join(dir, "a.txt"))).toBe(true);
     },
   );
+
+  // The source's directory swapped for a link to an outside one between the
+  // source's identity check and the rename: the rename resolves the swapped
+  // path and stages the outside entry, which must go back, never through.
+  const swapSourceOnRename = (after?: () => void) => {
+    const realRename = fs.renameSync;
+    let swapped = false;
+    vi.spyOn(fs, "renameSync").mockImplementation((from, to) => {
+      if (!swapped) {
+        swapped = true;
+        realRename(path.join(dir, "sub"), path.join(dir, "sub-real"));
+        fs.symlinkSync(outside, path.join(dir, "sub"));
+        realRename(from, to);
+        after?.();
+        return;
+      }
+      realRename(from, to);
+    });
+  };
+
+  it.skipIf(!symlinks)(
+    "puts back an outside file a swapped source directory redirected the rename to",
+    () => {
+      fs.mkdirSync(path.join(dir, "sub"));
+      fs.writeFileSync(path.join(dir, "sub", "x.conf"), "inside");
+      fs.writeFileSync(path.join(outside, "x.conf"), "secret");
+      swapSourceOnRename();
+      expect(() =>
+        renameIntoDirectory(
+          path.join(dir, "sub", "x.conf"),
+          path.join(dir, "moved.conf"),
+        ),
+      ).toThrow("Access denied");
+      expect(fs.readFileSync(path.join(outside, "x.conf"), "utf-8")).toBe(
+        "secret",
+      );
+      expect(fs.readdirSync(dir).sort()).toEqual(["sub", "sub-real"]);
+      expect(process.cwd()).toBe(cwd);
+    },
+  );
+
+  it.skipIf(!symlinks)(
+    "puts back an outside directory, which cannot be linked, by renaming it",
+    () => {
+      fs.mkdirSync(path.join(dir, "sub"));
+      fs.mkdirSync(path.join(dir, "sub", "d"));
+      fs.mkdirSync(path.join(outside, "d"));
+      fs.writeFileSync(path.join(outside, "d", "f"), "secret");
+      swapSourceOnRename();
+      expect(() =>
+        renameIntoDirectory(path.join(dir, "sub", "d"), path.join(dir, "e")),
+      ).toThrow("Access denied");
+      expect(fs.readFileSync(path.join(outside, "d", "f"), "utf-8")).toBe(
+        "secret",
+      );
+      expect(fs.readdirSync(dir).sort()).toEqual(["sub", "sub-real"]);
+    },
+  );
+
+  it.skipIf(!symlinks)(
+    "leaves an outside directory staged when the source name is taken again",
+    () => {
+      fs.mkdirSync(path.join(dir, "sub"));
+      fs.mkdirSync(path.join(dir, "sub", "d"));
+      fs.mkdirSync(path.join(outside, "d"));
+      swapSourceOnRename(() => fs.mkdirSync(path.join(outside, "d")));
+      expect(() =>
+        renameIntoDirectory(path.join(dir, "sub", "d"), path.join(dir, "e")),
+      ).toThrow("Access denied");
+      const names = fs.readdirSync(dir);
+      expect(names).not.toContain("e");
+      expect(names.filter((n) => n.endsWith(".moving"))).toHaveLength(1);
+    },
+  );
+
+  it.skipIf(!symlinks)(
+    "leaves the staged entry when the source name cannot be checked",
+    () => {
+      fs.mkdirSync(path.join(dir, "sub"));
+      fs.mkdirSync(path.join(dir, "sub", "d"));
+      fs.mkdirSync(path.join(outside, "d"));
+      const realLstat = fs.lstatSync;
+      swapSourceOnRename(() => {
+        vi.spyOn(fs, "lstatSync").mockImplementation(((
+          p: fs.PathLike,
+          options?: fs.StatSyncOptions,
+        ) => {
+          if (p === path.join(dir, "sub", "d")) {
+            throw errno("EACCES");
+          }
+          return realLstat(p, options);
+        }) as never);
+      });
+      expect(() =>
+        renameIntoDirectory(path.join(dir, "sub", "d"), path.join(dir, "e")),
+      ).toThrow("Access denied");
+      expect(fs.readdirSync(dir)).not.toContain("e");
+    },
+  );
+
+  it("names the source when it is missing", () => {
+    expect(() =>
+      renameIntoDirectory(path.join(dir, "gone.txt"), path.join(dir, "b.txt")),
+    ).toThrow(path.join(dir, "gone.txt"));
+  });
 });
 
 // Each test here runs on one device: the helper is what moveFile falls back
@@ -962,5 +1070,98 @@ describe("the borrowed working directory", () => {
     });
     await createFileInDirectory(path.join(dir, "x.txt"), "x");
     expect(fs.realpathSync(".")).toBe(fs.realpathSync(path.parse(dir).root));
+  });
+});
+
+describe("the anchored reads", () => {
+  it("reads a whole file and restores the working directory", async () => {
+    const file = path.join(dir, "r.txt");
+    fs.writeFileSync(file, "content");
+    expect((await readFileInDirectory(file)).toString()).toBe("content");
+    expect(process.cwd()).toBe(cwd);
+  });
+
+  it("reads at a position through the opened file, which knows its size", async () => {
+    const file = path.join(dir, "r.txt");
+    fs.writeFileSync(file, "0123456789");
+    const handle = await openFileForReading(file);
+    try {
+      expect(handle.size).toBe(10);
+      const buffer = Buffer.alloc(3);
+      expect(await handle.read(buffer, 0, 3, 4)).toEqual({ bytesRead: 3 });
+      expect(buffer.toString()).toBe("456");
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it("reports a read failure, and closes the file", async () => {
+    const file = path.join(dir, "r.txt");
+    fs.writeFileSync(file, "content");
+    vi.spyOn(fs, "readFile").mockImplementationOnce(((
+      _fd: number,
+      callback: (error: Error) => void,
+    ) => callback(errno("EIO"))) as typeof fs.readFile);
+    const close = vi.spyOn(fs, "close");
+    await expect(readFileInDirectory(file)).rejects.toThrow("EIO");
+    expect(close).toHaveBeenCalled();
+  });
+
+  it("reports a positioned read failure", async () => {
+    const file = path.join(dir, "r.txt");
+    fs.writeFileSync(file, "content");
+    const handle = await openFileForReading(file);
+    vi.spyOn(fs, "read").mockImplementationOnce(((...args: unknown[]) => {
+      (args[args.length - 1] as (error: Error) => void)(errno("EIO"));
+    }) as typeof fs.read);
+    try {
+      await expect(handle.read(Buffer.alloc(1), 0, 1, 0)).rejects.toThrow(
+        "EIO",
+      );
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it("refuses a file other than the one lstat saw, and closes it", async () => {
+    const file = path.join(dir, "r.txt");
+    fs.writeFileSync(file, "content");
+    const realLstat = fs.lstatSync;
+    vi.spyOn(fs, "lstatSync").mockImplementationOnce((p) => ({
+      ...realLstat(p, { bigint: true }),
+      isDirectory: () => false,
+      isFile: () => true,
+      ino: -1n,
+    }));
+    const closeSync = vi.spyOn(fs, "closeSync");
+    await expect(readFileInDirectory(file)).rejects.toThrow(
+      `Refusing to read: ${file} was replaced while it was being opened`,
+    );
+    expect(closeSync).toHaveBeenCalled();
+  });
+
+  it.skipIf(!symlinks)(
+    "refuses a directory that resolves somewhere else",
+    async () => {
+      fs.writeFileSync(path.join(outside, "s.txt"), "SECRET");
+      fs.symlinkSync(outside, path.join(dir, "link"));
+      await expect(
+        readFileInDirectory(path.join(dir, "link", "s.txt")),
+      ).rejects.toThrow(
+        "Access denied - a directory on the path changed during the operation",
+      );
+      expect(() => statInDirectory(path.join(dir, "link", "s.txt"))).toThrow(
+        "Access denied - a directory on the path changed during the operation",
+      );
+    },
+  );
+
+  it("stats the entry in its directory, and a filesystem root as is", () => {
+    const file = path.join(dir, "r.txt");
+    fs.writeFileSync(file, "content");
+    expect(statInDirectory(file).size).toBe(7);
+    const root = path.parse(dir).root;
+    expect(statInDirectory(root).isDirectory()).toBe(true);
+    expect(process.cwd()).toBe(cwd);
   });
 });

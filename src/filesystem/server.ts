@@ -7,7 +7,6 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import type { Root } from "@modelcontextprotocol/server";
 import fs from "fs/promises";
-import { createReadStream } from "fs";
 import path from "path";
 import { pathToFileURL } from "url";
 import { z } from "zod";
@@ -208,24 +207,6 @@ const SearchFilesArgsSchema = z.object({
 const GetFileInfoArgsSchema = z.object({
   path: pathArg("The file or directory to describe"),
 });
-
-// Reads a file as a stream of buffers, concatenates them, and then encodes
-// the result to a Base64 string. This is a memory-efficient way to handle
-// binary data from a stream before the final encoding.
-async function readFileAsBase64Stream(filePath: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const stream = createReadStream(filePath);
-    const chunks: Buffer[] = [];
-    stream.on("data", (chunk) => {
-      chunks.push(chunk as Buffer);
-    });
-    stream.on("end", () => {
-      const finalBuffer = Buffer.concat(chunks);
-      resolve(finalBuffer.toString("base64"));
-    });
-    stream.on("error", (err) => reject(err));
-  });
-}
 
 /**
  * Why the server cannot operate when it has no allowed directories from either
@@ -503,7 +484,8 @@ export function createServer(
         ".flac": "audio/flac",
       };
       const mimeType = mimeTypes[extension] || "application/octet-stream";
-      const data = await readFileAsBase64Stream(validPath);
+      // Read through the anchored descriptor, as every read is (lib.ts).
+      const data = await readFileContent(validPath, "base64");
 
       // Map the MIME type to a valid MCP content block. The spec only allows
       // text, image, audio, resource_link, and resource — so non-image/audio
@@ -790,15 +772,16 @@ export function createServer(
         entries.map(async (entry): Promise<SizedEntry> => {
           const entryPath = path.join(validPath, entry.name);
           try {
-            // fs.stat follows symlinks, so validate each entry first: a
-            // symlink whose target is outside the allowed directories is
-            // listed with no size rather than the target's.
+            // Validate each entry, so a symlink whose target is outside the
+            // allowed directories is listed with no size rather than the
+            // target's; the size is then read from the resolved entry,
+            // anchored to its directory (lib.ts).
             const validEntryPath = await validatePath(
               entryPath,
               allowedDirectories,
               "read",
             );
-            const stats = await fs.stat(validEntryPath);
+            const stats = await getFileStats(validEntryPath);
             return {
               name: entry.name,
               isDirectory: entry.isDirectory(),

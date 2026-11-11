@@ -153,12 +153,14 @@ Files inside the allowed directories are also [resources](https://modelcontextpr
     - `tail` (non-negative integer, optional): Last N lines; `0` returns no lines
   - Always treats the file as UTF-8 text regardless of extension
   - Cannot specify both `head` and `tail` simultaneously
+  - Reads only a regular file: a FIFO, socket or device is refused rather
+    than read, as it is by every tool and by `resources/read`
 
 - **read_media_file**
   - Read a file and return it as a base64-encoded content block with its MIME type
   - Inputs:
     - `path` (string)
-  - Streams the file and returns base64 data with the corresponding MIME type. Image and
+  - Reads the file and returns base64 data with the corresponding MIME type. Image and
     audio files are returned as `image`/`audio` content; any other file type is returned as
     an embedded `resource` (a valid MCP content block for arbitrary binary data)
 
