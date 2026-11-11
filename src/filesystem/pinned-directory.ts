@@ -15,15 +15,18 @@
 // cannot move the operation. A read opens the file that way and then reads
 // only through the descriptor, which stays bound to the file it opened, so
 // the read is anchored however long it takes. Every check happens before a
-// byte is written or read, so nothing ever needs rolling back, except in the
-// cross-device move, which copies and so removes its copy if a later step
-// fails.
+// byte is written or read, so nothing ever needs rolling back, except in two
+// moves: the cross-device move copies, and so removes its copy if a later
+// step fails; the same-device move can anchor only its destination (rename
+// takes two paths), so it pins its source by identity and puts back an entry
+// that is not the one it checked.
 //
 // On Windows the working directory is a string and relative paths resolve
 // against it, so reading it back proves nothing; there the leaf is lstat'd
 // relative to the anchor and must be the file the descriptor opened, which
 // narrows the race without closing it.
 
+import { randomBytes } from "crypto";
 import fs from "fs";
 import path from "path";
 
@@ -349,17 +352,68 @@ export async function appendFileInDirectory(
   }
 }
 
+/** A name in the destination directory to stage a rename under. */
+function stagingName(destinationPath: string): string {
+  return `.${path.basename(destinationPath)}.${randomBytes(8).toString("hex")}.moving`;
+}
+
 /**
- * Rename `sourcePath` (absolute, outside this fix's scope) to the final
- * component of `destinationPath`, relative to its anchored directory.
+ * Put back an entry a rename staged at `staged` (relative to the anchored
+ * destination directory) that turned out not to be the source: at
+ * `sourcePath`, where it came from, without overwriting anything there. A
+ * hard link refuses an existing name; a directory, which cannot be linked,
+ * is renamed back only while nothing is at `sourcePath`. If neither is
+ * possible it stays at its staged name, which is never the destination.
+ */
+function returnStaged(staged: string, sourcePath: string): void {
+  try {
+    fs.linkSync(staged, sourcePath);
+    fs.unlinkSync(staged);
+    return;
+  } catch {
+    // Not linkable (a directory), or something is at sourcePath now.
+  }
+  try {
+    fs.lstatSync(sourcePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      fs.renameSync(staged, sourcePath);
+    }
+  }
+}
+
+/**
+ * Rename `sourcePath` to the final component of `destinationPath`, both
+ * anchored. rename() takes two paths and Node has no renameat(), so only one
+ * side can be resolved relative to an anchor: the destination is, and the
+ * source is pinned by identity instead. Its entry is read relative to its own
+ * anchored directory first, the rename then stages whatever the kernel
+ * resolved `sourcePath` to under a fresh name in the destination directory,
+ * and only an entry that is the one read moves on to the destination name.
+ * Anything else (a directory on the source path was swapped in between) is
+ * put back and the move refused, so it is never at the destination name.
  */
 export function renameIntoDirectory(
   sourcePath: string,
   destinationPath: string,
 ): void {
-  inDirectory(path.dirname(destinationPath), () =>
-    fs.renameSync(sourcePath, path.basename(destinationPath)),
-  );
+  const name = path.basename(sourcePath);
+  const expected = inDirectory(path.dirname(sourcePath), () => {
+    try {
+      return fs.lstatSync(name, { bigint: true });
+    } catch (error) {
+      throw namingPath(error, name, sourcePath);
+    }
+  });
+  inDirectory(path.dirname(destinationPath), () => {
+    const staged = stagingName(destinationPath);
+    fs.renameSync(sourcePath, staged);
+    if (!isSameEntry(fs.lstatSync(staged, { bigint: true }), expected)) {
+      returnStaged(staged, sourcePath);
+      throw directoryChangedError(path.dirname(sourcePath));
+    }
+    fs.renameSync(staged, path.basename(destinationPath));
+  });
 }
 
 // The cross-device move below (#5188). rename() cannot cross a device

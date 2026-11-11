@@ -431,6 +431,111 @@ describe("renameIntoDirectory", () => {
       expect(fs.existsSync(path.join(dir, "a.txt"))).toBe(true);
     },
   );
+
+  // The source's directory swapped for a link to an outside one between the
+  // source's identity check and the rename: the rename resolves the swapped
+  // path and stages the outside entry, which must go back, never through.
+  const swapSourceOnRename = (after?: () => void) => {
+    const realRename = fs.renameSync;
+    let swapped = false;
+    vi.spyOn(fs, "renameSync").mockImplementation((from, to) => {
+      if (!swapped) {
+        swapped = true;
+        realRename(path.join(dir, "sub"), path.join(dir, "sub-real"));
+        fs.symlinkSync(outside, path.join(dir, "sub"));
+        realRename(from, to);
+        after?.();
+        return;
+      }
+      realRename(from, to);
+    });
+  };
+
+  it.skipIf(!symlinks)(
+    "puts back an outside file a swapped source directory redirected the rename to",
+    () => {
+      fs.mkdirSync(path.join(dir, "sub"));
+      fs.writeFileSync(path.join(dir, "sub", "x.conf"), "inside");
+      fs.writeFileSync(path.join(outside, "x.conf"), "secret");
+      swapSourceOnRename();
+      expect(() =>
+        renameIntoDirectory(
+          path.join(dir, "sub", "x.conf"),
+          path.join(dir, "moved.conf"),
+        ),
+      ).toThrow("Access denied");
+      expect(fs.readFileSync(path.join(outside, "x.conf"), "utf-8")).toBe(
+        "secret",
+      );
+      expect(fs.readdirSync(dir).sort()).toEqual(["sub", "sub-real"]);
+      expect(process.cwd()).toBe(cwd);
+    },
+  );
+
+  it.skipIf(!symlinks)(
+    "puts back an outside directory, which cannot be linked, by renaming it",
+    () => {
+      fs.mkdirSync(path.join(dir, "sub"));
+      fs.mkdirSync(path.join(dir, "sub", "d"));
+      fs.mkdirSync(path.join(outside, "d"));
+      fs.writeFileSync(path.join(outside, "d", "f"), "secret");
+      swapSourceOnRename();
+      expect(() =>
+        renameIntoDirectory(path.join(dir, "sub", "d"), path.join(dir, "e")),
+      ).toThrow("Access denied");
+      expect(fs.readFileSync(path.join(outside, "d", "f"), "utf-8")).toBe(
+        "secret",
+      );
+      expect(fs.readdirSync(dir).sort()).toEqual(["sub", "sub-real"]);
+    },
+  );
+
+  it.skipIf(!symlinks)(
+    "leaves an outside directory staged when the source name is taken again",
+    () => {
+      fs.mkdirSync(path.join(dir, "sub"));
+      fs.mkdirSync(path.join(dir, "sub", "d"));
+      fs.mkdirSync(path.join(outside, "d"));
+      swapSourceOnRename(() => fs.mkdirSync(path.join(outside, "d")));
+      expect(() =>
+        renameIntoDirectory(path.join(dir, "sub", "d"), path.join(dir, "e")),
+      ).toThrow("Access denied");
+      const names = fs.readdirSync(dir);
+      expect(names).not.toContain("e");
+      expect(names.filter((n) => n.endsWith(".moving"))).toHaveLength(1);
+    },
+  );
+
+  it.skipIf(!symlinks)(
+    "leaves the staged entry when the source name cannot be checked",
+    () => {
+      fs.mkdirSync(path.join(dir, "sub"));
+      fs.mkdirSync(path.join(dir, "sub", "d"));
+      fs.mkdirSync(path.join(outside, "d"));
+      const realLstat = fs.lstatSync;
+      swapSourceOnRename(() => {
+        vi.spyOn(fs, "lstatSync").mockImplementation(((
+          p: fs.PathLike,
+          options?: fs.StatSyncOptions,
+        ) => {
+          if (p === path.join(dir, "sub", "d")) {
+            throw errno("EACCES");
+          }
+          return realLstat(p, options);
+        }) as never);
+      });
+      expect(() =>
+        renameIntoDirectory(path.join(dir, "sub", "d"), path.join(dir, "e")),
+      ).toThrow("Access denied");
+      expect(fs.readdirSync(dir)).not.toContain("e");
+    },
+  );
+
+  it("names the source when it is missing", () => {
+    expect(() =>
+      renameIntoDirectory(path.join(dir, "gone.txt"), path.join(dir, "b.txt")),
+    ).toThrow(path.join(dir, "gone.txt"));
+  });
 });
 
 // Each test here runs on one device: the helper is what moveFile falls back
