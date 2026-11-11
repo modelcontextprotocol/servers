@@ -1,11 +1,14 @@
 """The private-address guard on IPv6 forms that carry an IPv4 address (#5181).
 
-Two /96 prefixes embed an IPv4 in their low 32 bits, and Python's
-``is_global`` reads both as global whatever that IPv4 is:
+Three /96 prefixes embed an IPv4 in their low 32 bits, and Python's
+``is_global`` reads each as global whatever that IPv4 is:
 
 - the well-known NAT64 prefix ``64:ff9b::/96`` (RFC 6052), which a NAT64
   gateway forwards to the embedded IPv4, so the guard judges it by that IPv4
   (fixed by #5238; pinned here so #5181 is covered end to end);
+- the IPv4-translated prefix ``::ffff:0:0:0/96`` (RFC 2765, RFC 6145), which a
+  stateless translator forwards to the embedded IPv4, so it is judged by that
+  IPv4 the same way;
 - the IPv4-compatible prefix ``::/96`` (RFC 4291 2.5.5.1), deprecated and
   never routed, so the guard refuses it outright, even around a public IPv4.
 
@@ -33,6 +36,9 @@ IPV4_COMPATIBLE = ["::7f00:1", "::a9fe:a9fe", "::a00:1", "::808:808"]
 # Well-known NAT64 (64:ff9b::/96) addresses wrapping non-public IPv4s.
 NAT64_NON_PUBLIC = ["64:ff9b::7f00:1", "64:ff9b::a9fe:a9fe", "64:ff9b::a00:1"]
 
+# IPv4-translated (::ffff:0:0:0/96, RFC 2765) addresses wrapping non-public IPv4s.
+TRANSLATED_NON_PUBLIC = ["::ffff:0:7f00:1", "::ffff:0:a9fe:a9fe", "::ffff:0:a00:1"]
+
 
 def wire(result: CallToolResult) -> dict[str, Any]:
     return result.model_dump(
@@ -46,7 +52,9 @@ def text_of(result: CallToolResult) -> str:
     return data["content"][0]["text"]
 
 
-@pytest.mark.parametrize("address", IPV4_COMPATIBLE + NAT64_NON_PUBLIC)
+@pytest.mark.parametrize(
+    "address", IPV4_COMPATIBLE + NAT64_NON_PUBLIC + TRANSLATED_NON_PUBLIC
+)
 async def test_ip_literal_is_refused_before_any_request(
     web: FakeWeb, address: str
 ) -> None:
@@ -62,7 +70,9 @@ async def test_ip_literal_is_refused_before_any_request(
     assert web.requests == []
 
 
-@pytest.mark.parametrize("address", IPV4_COMPATIBLE + NAT64_NON_PUBLIC)
+@pytest.mark.parametrize(
+    "address", IPV4_COMPATIBLE + NAT64_NON_PUBLIC + TRANSLATED_NON_PUBLIC
+)
 async def test_hostname_resolving_to_the_address_is_refused(
     web: FakeWeb, address: str
 ) -> None:
@@ -84,6 +94,22 @@ async def test_nat64_address_wrapping_a_public_ipv4_is_allowed(
     # The contrast with ::808:808 above: through NAT64, 8.8.8.8 is reachable.
     web.dns["nat64.example.com"] = ["64:ff9b::808:808"]
     url = "https://nat64.example.com/"
+    web.add(
+        url,
+        httpx.Response(200, content=b"ok", headers={"content-type": "text/plain"}),
+    )
+    async with connect(ignore_robots_txt=True) as (session, _):
+        result = await session.call_tool("fetch", {"url": url})
+    assert wire(result)["isError"] is False
+    assert web.urls() == [url]
+
+
+async def test_translated_address_wrapping_a_public_ipv4_is_allowed(
+    web: FakeWeb,
+) -> None:
+    # Judged by its IPv4 like NAT64: ::ffff:0:808:808 stands for 8.8.8.8.
+    web.dns["translated.example.com"] = ["::ffff:0:808:808"]
+    url = "https://translated.example.com/"
     web.add(
         url,
         httpx.Response(200, content=b"ok", headers={"content-type": "text/plain"}),
