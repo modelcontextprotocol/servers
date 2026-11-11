@@ -383,9 +383,11 @@ async def test_invalid_local_timezone_fails_before_the_transport_opens(
     def unexpected_stdio_server():
         raise AssertionError("stdio_server must not be reached")
 
-    with patch("mcp.server.mcpserver.server.stdio_server", unexpected_stdio_server):
-        with pytest.raises(SystemExit) as exit_info:
-            await serve(local_timezone)
+    with (
+        patch("mcp.server.mcpserver.server.stdio_server", unexpected_stdio_server),
+        pytest.raises(SystemExit) as exit_info,
+    ):
+        await serve(local_timezone)
     assert exit_info.value.code == (
         f"Error: invalid --local-timezone {local_timezone!r}: "
         "not a known IANA timezone name"

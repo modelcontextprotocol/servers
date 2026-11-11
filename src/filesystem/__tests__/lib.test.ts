@@ -7,7 +7,7 @@ import {
   vi,
   type Mock,
 } from "vitest";
-import fs, { type FileHandle } from "fs/promises";
+import fs from "fs/promises";
 import type { BigIntStats, Dirent, PathLike, Stats } from "fs";
 import path from "path";
 import {
@@ -32,6 +32,7 @@ import {
   headFile,
 } from "../lib.js";
 import * as pinned from "../pinned-directory.js";
+import type { ReadableFile } from "../pinned-directory.js";
 
 // Mock fs module
 vi.mock("fs/promises");
@@ -39,6 +40,9 @@ vi.mock("fs/promises");
 // covers them, so here only what lib.ts hands them is checked.
 vi.mock("../pinned-directory.js");
 const mockPinned = vi.mocked(pinned);
+// What the anchored read (readFileInDirectory) returns for the file's text.
+const mockReadFile = (text: string) =>
+  mockPinned.readFileInDirectory.mockResolvedValue(Buffer.from(text));
 const mockFs = vi.mocked(fs);
 // fs.readdir is overloaded and vi.mocked types the mock against its last
 // (Buffer) overload; the code under test calls the withFileTypes overload.
@@ -68,12 +72,10 @@ interface MockFileHandle {
   close: Mock;
 }
 
-function asFileHandle(handle: MockFileHandle): FileHandle {
-  // Double cast is safe here: tailFile/headFile only ever call read() and
-  // close() on the handle, which this test double provides; FileHandle's
-  // overloaded read() signatures cannot be matched by a vi.fn() mock, so no
-  // single cast or structural type relates the two.
-  return handle as unknown as FileHandle;
+function asFileHandle(handle: MockFileHandle, size: number = 0): ReadableFile {
+  // What openFileForReading hands tailFile/headFile: the opened file's size,
+  // and read() and close() on its descriptor.
+  return { size, read: handle.read, close: handle.close };
 }
 
 function createMockFileHandle(content: Buffer) {
@@ -288,7 +290,7 @@ describe("Lib Functions", () => {
         if (process.platform === "win32") return;
 
         await expect(
-          validatePath("C:\\Users\\me\\notes\\file.md", allowedDirs),
+          validatePath("C:\\Users\\me\\notes\\file.md", allowedDirs, "read"),
         ).rejects.toThrow("Windows-style path received on a POSIX host");
       });
 
@@ -308,7 +310,7 @@ describe("Lib Functions", () => {
           process.platform === "win32"
             ? "C:\\Users\\test\\file.txt"
             : "/home/user/file.txt";
-        const result = await validatePath(testPath, allowedDirs);
+        const result = await validatePath(testPath, allowedDirs, "read");
         expect(result).toBe(testPath);
       });
 
@@ -317,9 +319,9 @@ describe("Lib Functions", () => {
           process.platform === "win32"
             ? "C:\\Windows\\System32\\file.txt"
             : "/etc/passwd";
-        await expect(validatePath(testPath, allowedDirs)).rejects.toThrow(
-          "Access denied - path outside allowed directories",
-        );
+        await expect(
+          validatePath(testPath, allowedDirs, "read"),
+        ).rejects.toThrow("Access denied - path outside allowed directories");
       });
 
       it("handles non-existent files by checking parent directory", async () => {
@@ -338,7 +340,7 @@ describe("Lib Functions", () => {
           .mockRejectedValueOnce(enoentError)
           .mockResolvedValueOnce(parentPath);
 
-        const result = await validatePath(newFilePath, allowedDirs);
+        const result = await validatePath(newFilePath, allowedDirs, "read");
         expect(result).toBe(path.resolve(newFilePath));
       });
 
@@ -360,7 +362,7 @@ describe("Lib Functions", () => {
         // undefined, so every component below it counts as missing.
         mockFs.realpath.mockRejectedValueOnce(enoentError);
 
-        const result = await validatePath(newFilePath, allowedDirs);
+        const result = await validatePath(newFilePath, allowedDirs, "read");
         expect(result).toBe(path.resolve(newFilePath));
       });
 
@@ -381,7 +383,7 @@ describe("Lib Functions", () => {
         mockFs.lstat.mockResolvedValueOnce({} as Stats);
 
         await expect(
-          validatePath(path.join(base, "LINK", "a"), allowedDirs),
+          validatePath(path.join(base, "LINK", "a"), allowedDirs, "read"),
         ).rejects.toThrow(
           `Access denied - symlink target outside allowed directories: ${outsideDir}`,
         );
@@ -398,7 +400,7 @@ describe("Lib Functions", () => {
         mockFs.lstat.mockRejectedValueOnce(new Error("EACCES lstat"));
 
         await expect(
-          validatePath(path.join(base, "new", "f.txt"), allowedDirs),
+          validatePath(path.join(base, "new", "f.txt"), allowedDirs, "read"),
         ).rejects.toThrow("EACCES lstat");
       });
 
@@ -416,7 +418,7 @@ describe("Lib Functions", () => {
         mockReaddirNames.mockResolvedValueOnce(["link"]);
 
         await expect(
-          validatePath(path.join(base, "link", "a"), allowedDirs),
+          validatePath(path.join(base, "link", "a"), allowedDirs, "read"),
         ).rejects.toThrow("EACCES realpath");
       });
 
@@ -432,9 +434,9 @@ describe("Lib Functions", () => {
         // Every ancestor, all the way up to the filesystem root, is missing.
         mockFs.realpath.mockRejectedValue(enoentError);
 
-        await expect(validatePath(newFilePath, allowedDirs)).rejects.toThrow(
-          "Parent directory does not exist",
-        );
+        await expect(
+          validatePath(newFilePath, allowedDirs, "read"),
+        ).rejects.toThrow("Parent directory does not exist");
       });
 
       it("resolves relative paths against allowed directories instead of process.cwd()", async () => {
@@ -447,7 +449,7 @@ describe("Lib Functions", () => {
         process.cwd = vi.fn(() => disallowedCwd);
 
         try {
-          const result = await validatePath(relativePath, allowedDirs);
+          const result = await validatePath(relativePath, allowedDirs, "read");
 
           // Result should be resolved against first allowed directory, not process.cwd()
           const expectedPath =
@@ -499,9 +501,9 @@ describe("Lib Functions", () => {
 
         it("respells the request onto the allowed directory when the file system folds case", async () => {
           foldingLstat();
-          await expect(validatePath(requestedFile, allowedDirs)).resolves.toBe(
-            respelled,
-          );
+          await expect(
+            validatePath(requestedFile, allowedDirs, "read"),
+          ).resolves.toBe(respelled);
         });
 
         it("refuses when a directory holds two entries differing only in case", async () => {
@@ -512,14 +514,14 @@ describe("Lib Functions", () => {
             p.toString() === parent ? [first, first.toUpperCase()] : [second],
           );
           await expect(
-            validatePath(requestedFile, allowedDirs),
+            validatePath(requestedFile, allowedDirs, "read"),
           ).rejects.toThrow("Access denied - path outside allowed directories");
         });
 
         it("refuses when the requested spelling does not exist (a case-sensitive directory)", async () => {
           // beforeEach makes every lstat ENOENT.
           await expect(
-            validatePath(requestedFile, allowedDirs),
+            validatePath(requestedFile, allowedDirs, "read"),
           ).rejects.toThrow("Access denied - path outside allowed directories");
         });
 
@@ -529,7 +531,7 @@ describe("Lib Functions", () => {
             async () => ({ dev: 1n, ino: ++ino }) as BigIntStats,
           );
           await expect(
-            validatePath(requestedFile, allowedDirs),
+            validatePath(requestedFile, allowedDirs, "read"),
           ).rejects.toThrow("Access denied - path outside allowed directories");
         });
 
@@ -537,16 +539,16 @@ describe("Lib Functions", () => {
           foldingLstat();
           mockReaddirNames.mockRejectedValue(new Error("EACCES readdir"));
           await expect(
-            validatePath(requestedFile, allowedDirs),
+            validatePath(requestedFile, allowedDirs, "read"),
           ).rejects.toThrow("Access denied - path outside allowed directories");
         });
 
         it("still refuses a name that only folds onto part of an allowed directory", async () => {
           foldingLstat();
           const parentOnly = win ? "C:\\USERS\\x.txt" : "/HOME/x.txt";
-          await expect(validatePath(parentOnly, allowedDirs)).rejects.toThrow(
-            "Access denied - path outside allowed directories",
-          );
+          await expect(
+            validatePath(parentOnly, allowedDirs, "read"),
+          ).rejects.toThrow("Access denied - path outside allowed directories");
         });
       });
     });
@@ -566,7 +568,7 @@ describe("Lib Functions", () => {
           nlink: 2,
         };
 
-        mockFs.stat.mockResolvedValueOnce(mockStats as Stats);
+        mockPinned.statInDirectory.mockReturnValueOnce(mockStats as Stats);
 
         const result = await getFileStats("/test/file.txt");
 
@@ -593,7 +595,7 @@ describe("Lib Functions", () => {
           mode: 0o755,
         };
 
-        mockFs.stat.mockResolvedValueOnce(mockStats as Stats);
+        mockPinned.statInDirectory.mockReturnValueOnce(mockStats as Stats);
 
         const result = await getFileStats("/test/dir");
 
@@ -605,21 +607,26 @@ describe("Lib Functions", () => {
 
     describe("readFileContent", () => {
       it("reads file with default encoding", async () => {
-        mockFs.readFile.mockResolvedValueOnce("file content");
+        mockPinned.readFileInDirectory.mockResolvedValueOnce(
+          Buffer.from("file content"),
+        );
 
         const result = await readFileContent("/test/file.txt");
 
         expect(result).toBe("file content");
-        expect(mockFs.readFile).toHaveBeenCalledWith("/test/file.txt", "utf-8");
+        expect(mockPinned.readFileInDirectory).toHaveBeenCalledWith(
+          "/test/file.txt",
+        );
       });
 
       it("reads file with custom encoding", async () => {
-        mockFs.readFile.mockResolvedValueOnce("file content");
+        mockPinned.readFileInDirectory.mockResolvedValueOnce(
+          Buffer.from("file content"),
+        );
 
-        const result = await readFileContent("/test/file.txt", "ascii");
+        const result = await readFileContent("/test/file.txt", "base64");
 
-        expect(result).toBe("file content");
-        expect(mockFs.readFile).toHaveBeenCalledWith("/test/file.txt", "ascii");
+        expect(result).toBe(Buffer.from("file content").toString("base64"));
       });
     });
 
@@ -873,7 +880,7 @@ describe("Lib Functions", () => {
   describe("File Editing Functions", () => {
     describe("applyFileEdits", () => {
       beforeEach(() => {
-        mockFs.readFile.mockResolvedValue("line1\nline2\nline3\n");
+        mockReadFile("line1\nline2\nline3\n");
         mockFs.lstat.mockResolvedValue(REGULAR_FILE);
       });
 
@@ -937,7 +944,7 @@ describe("Lib Functions", () => {
       });
 
       it("handles whitespace-flexible matching", async () => {
-        mockFs.readFile.mockResolvedValue("  line1\n    line2\n  line3\n");
+        mockReadFile("  line1\n    line2\n  line3\n");
 
         const edits = [{ oldText: "line2", newText: "modified line2" }];
 
@@ -982,7 +989,7 @@ describe("Lib Functions", () => {
       });
 
       it("handles complex multi-line edits with indentation", async () => {
-        mockFs.readFile.mockResolvedValue(
+        mockReadFile(
           'function test() {\n  console.log("hello");\n  return true;\n}',
         );
 
@@ -1004,9 +1011,7 @@ describe("Lib Functions", () => {
       });
 
       it("handles edits with different indentation patterns", async () => {
-        mockFs.readFile.mockResolvedValue(
-          "    if (condition) {\n        doSomething();\n    }",
-        );
+        mockReadFile("    if (condition) {\n        doSomething();\n    }");
 
         const edits = [
           {
@@ -1025,7 +1030,7 @@ describe("Lib Functions", () => {
       });
 
       it("handles CRLF line endings in file content", async () => {
-        mockFs.readFile.mockResolvedValue("line1\r\nline2\r\nline3\r\n");
+        mockReadFile("line1\r\nline2\r\nline3\r\n");
 
         const edits = [{ oldText: "line2", newText: "modified line2" }];
 
@@ -1041,17 +1046,19 @@ describe("Lib Functions", () => {
 
     describe("tailFile", () => {
       it("handles empty files", async () => {
-        mockFs.stat.mockResolvedValue({ size: 0 } as Stats);
+        const mockFileHandle = createMockFileHandle(Buffer.alloc(0));
+        mockPinned.openFileForReading.mockResolvedValue(
+          asFileHandle(mockFileHandle, 0),
+        );
 
         const result = await tailFile("/test/empty.txt", 5);
 
         expect(result).toBe("");
-        expect(mockFs.open).not.toHaveBeenCalled();
+        expect(mockFileHandle.read).not.toHaveBeenCalled();
+        expect(mockFileHandle.close).toHaveBeenCalled();
       });
 
-      it("calls stat to check file size", async () => {
-        mockFs.stat.mockResolvedValue({ size: 100 } as Stats);
-
+      it("opens the file through its pinned directory", async () => {
         // Mock file handle with proper typing
         const mockFileHandle = {
           read: vi.fn(),
@@ -1061,17 +1068,18 @@ describe("Lib Functions", () => {
         mockFileHandle.read.mockResolvedValue({ bytesRead: 0 });
         mockFileHandle.close.mockResolvedValue(undefined);
 
-        mockFs.open.mockResolvedValue(asFileHandle(mockFileHandle));
+        mockPinned.openFileForReading.mockResolvedValue(
+          asFileHandle(mockFileHandle, 100),
+        );
 
         await tailFile("/test/file.txt", 2);
 
-        expect(mockFs.stat).toHaveBeenCalledWith("/test/file.txt");
-        expect(mockFs.open).toHaveBeenCalledWith("/test/file.txt", "r");
+        expect(mockPinned.openFileForReading).toHaveBeenCalledWith(
+          "/test/file.txt",
+        );
       });
 
       it("handles files with content and returns last lines", async () => {
-        mockFs.stat.mockResolvedValue({ size: 50 } as Stats);
-
         const mockFileHandle = {
           read: vi.fn(),
           close: vi.fn(),
@@ -1086,7 +1094,9 @@ describe("Lib Functions", () => {
           .mockResolvedValueOnce({ bytesRead: 0 });
         mockFileHandle.close.mockResolvedValue(undefined);
 
-        mockFs.open.mockResolvedValue(asFileHandle(mockFileHandle));
+        mockPinned.openFileForReading.mockResolvedValue(
+          asFileHandle(mockFileHandle, 50),
+        );
 
         await tailFile("/test/file.txt", 2);
 
@@ -1101,9 +1111,9 @@ describe("Lib Functions", () => {
           Buffer.from("\nlast"),
         ]);
         const mockFileHandle = createMockFileHandle(content);
-
-        mockFs.stat.mockResolvedValue({ size: content.length } as Stats);
-        mockFs.open.mockResolvedValue(asFileHandle(mockFileHandle));
+        mockPinned.openFileForReading.mockResolvedValue(
+          asFileHandle(mockFileHandle, content.length),
+        );
 
         const result = await tailFile("/test/file.txt", 2);
 
@@ -1111,8 +1121,6 @@ describe("Lib Functions", () => {
       });
 
       it("handles read errors gracefully", async () => {
-        mockFs.stat.mockResolvedValue({ size: 100 } as Stats);
-
         const mockFileHandle = {
           read: vi.fn(),
           close: vi.fn(),
@@ -1121,7 +1129,9 @@ describe("Lib Functions", () => {
         mockFileHandle.read.mockResolvedValue({ bytesRead: 0 });
         mockFileHandle.close.mockResolvedValue(undefined);
 
-        mockFs.open.mockResolvedValue(asFileHandle(mockFileHandle));
+        mockPinned.openFileForReading.mockResolvedValue(
+          asFileHandle(mockFileHandle, 100),
+        );
 
         await tailFile("/test/file.txt", 5);
 
@@ -1140,11 +1150,15 @@ describe("Lib Functions", () => {
         mockFileHandle.read.mockResolvedValue({ bytesRead: 0 });
         mockFileHandle.close.mockResolvedValue(undefined);
 
-        mockFs.open.mockResolvedValue(asFileHandle(mockFileHandle));
+        mockPinned.openFileForReading.mockResolvedValue(
+          asFileHandle(mockFileHandle),
+        );
 
         await headFile("/test/file.txt", 2);
 
-        expect(mockFs.open).toHaveBeenCalledWith("/test/file.txt", "r");
+        expect(mockPinned.openFileForReading).toHaveBeenCalledWith(
+          "/test/file.txt",
+        );
       });
 
       it("handles files with content and returns first lines", async () => {
@@ -1162,7 +1176,9 @@ describe("Lib Functions", () => {
           .mockResolvedValueOnce({ bytesRead: 0 });
         mockFileHandle.close.mockResolvedValue(undefined);
 
-        mockFs.open.mockResolvedValue(asFileHandle(mockFileHandle));
+        mockPinned.openFileForReading.mockResolvedValue(
+          asFileHandle(mockFileHandle),
+        );
 
         await headFile("/test/file.txt", 2);
 
@@ -1176,7 +1192,9 @@ describe("Lib Functions", () => {
         ]);
         const mockFileHandle = createMockFileHandle(content);
 
-        mockFs.open.mockResolvedValue(asFileHandle(mockFileHandle));
+        mockPinned.openFileForReading.mockResolvedValue(
+          asFileHandle(mockFileHandle),
+        );
 
         const result = await headFile("/test/file.txt", 1);
 
@@ -1198,7 +1216,9 @@ describe("Lib Functions", () => {
           .mockResolvedValueOnce({ bytesRead: 0 });
         mockFileHandle.close.mockResolvedValue(undefined);
 
-        mockFs.open.mockResolvedValue(asFileHandle(mockFileHandle));
+        mockPinned.openFileForReading.mockResolvedValue(
+          asFileHandle(mockFileHandle),
+        );
 
         await headFile("/test/file.txt", 5);
 
@@ -1220,7 +1240,9 @@ describe("Lib Functions", () => {
           .mockResolvedValueOnce({ bytesRead: 0 });
         mockFileHandle.close.mockResolvedValue(undefined);
 
-        mockFs.open.mockResolvedValue(asFileHandle(mockFileHandle));
+        mockPinned.openFileForReading.mockResolvedValue(
+          asFileHandle(mockFileHandle),
+        );
 
         await headFile("/test/file.txt", 2);
 

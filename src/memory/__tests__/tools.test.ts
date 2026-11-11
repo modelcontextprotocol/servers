@@ -134,7 +134,14 @@ const expectedTools = [
       "Create multiple new entities in the knowledge graph. An entity whose name already exists, or repeats an earlier entity in the same call, is skipped and its observations are not added; the result lists the skipped names in `skipped`. Use add_observations to add observations to an existing entity.",
     inputSchema: {
       type: "object",
-      properties: { entities: { type: "array", items: entityItem(false) } },
+      properties: {
+        entities: {
+          type: "array",
+          items: entityItem(false),
+          description:
+            "The entities to create, each with a name unique in the graph",
+        },
+      },
       required: ["entities"],
       $schema: JSON_SCHEMA_2020_12,
     },
@@ -158,7 +165,14 @@ const expectedTools = [
       "Create multiple new relations between entities in the knowledge graph. Relations should be in active voice",
     inputSchema: {
       type: "object",
-      properties: { relations: { type: "array", items: relationItem(false) } },
+      properties: {
+        relations: {
+          type: "array",
+          items: relationItem(false),
+          description:
+            "The relations to create. Both ends must name existing entities; a relation already in the graph is not added again",
+        },
+      },
       required: ["relations"],
       $schema: JSON_SCHEMA_2020_12,
     },
@@ -182,6 +196,8 @@ const expectedTools = [
       properties: {
         observations: {
           type: "array",
+          description:
+            "The observations to add, grouped by entity. Each entity must already exist; an observation it already has is not added again",
           items: {
             type: "object",
             properties: {
@@ -230,7 +246,7 @@ const expectedTools = [
     name: "delete_entities",
     title: "Delete Entities",
     description:
-      "Delete multiple entities and their associated relations from the knowledge graph",
+      "Delete whole entities from the knowledge graph, together with every relation that points to or from them and all their observations. Use it only to remove an entity entirely; to remove a link between two entities and keep both, use delete_relations, and to remove facts from an entity, use delete_observations. Cannot be undone.",
     inputSchema: {
       type: "object",
       properties: {
@@ -257,6 +273,8 @@ const expectedTools = [
       properties: {
         deletions: {
           type: "array",
+          description:
+            "The observations to delete, grouped by entity, each matched by its exact text",
           items: {
             type: "object",
             properties: {
@@ -285,7 +303,8 @@ const expectedTools = [
   {
     name: "delete_relations",
     title: "Delete Relations",
-    description: "Delete multiple relations from the knowledge graph",
+    description:
+      "Delete specific relations (from, to, relationType) from the knowledge graph and keep the entities they connect. Each relation must match an existing one exactly on all three fields; if unsure, call open_nodes (or search_nodes) first to read the stored relationType. Use it to remove a link between two entities; to remove an entity itself, use delete_entities. Cannot be undone.",
     inputSchema: {
       type: "object",
       properties: {

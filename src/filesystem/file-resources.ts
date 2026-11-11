@@ -17,7 +17,6 @@
 // the live allow-list, the roots barrier and the reason a 2026-07-28
 // connection with no directories cannot operate, so a read sees the same
 // directories, at the same moment, as a tool call would.
-import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import {
@@ -29,6 +28,7 @@ import {
 } from "@modelcontextprotocol/server";
 import type { ReadResourceResult } from "@modelcontextprotocol/server";
 import { FsTimeoutError, validatePath } from "./lib.js";
+import { readFileInDirectory } from "./pinned-directory.js";
 
 /** The URI template every file resource matches (RFC 6570 reserved expansion). */
 export const FILE_RESOURCE_TEMPLATE = "file://{+path}";
@@ -199,6 +199,7 @@ export function registerFileResources(
         validPath = await validatePath(
           requestedPath,
           context.allowedDirectories(),
+          "read",
         );
       } catch (error) {
         // A path that does not exist (a dangling symlink, a missing parent, a
@@ -225,7 +226,9 @@ export function registerFileResources(
 
       let bytes: Buffer;
       try {
-        bytes = await fs.readFile(validPath);
+        // Anchored to the validated file's directory, as the tools' reads
+        // are (pinned-directory.ts).
+        bytes = await readFileInDirectory(validPath);
       } catch (error) {
         if (isMissingPathError(error)) {
           throw new ResourceNotFoundError(uri.href);

@@ -9,8 +9,8 @@ means changing that test.
 """
 
 import json
-import shutil
 import re
+import shutil
 import threading
 import time
 from collections.abc import AsyncIterator
@@ -24,6 +24,7 @@ from unittest.mock import patch
 import anyio
 import git
 import pytest
+from conftest import connect, make_repo, rmtree, text_result, tool_error, wire
 from mcp.client.session import ClientRequestContext
 from mcp.shared.exceptions import MCPError
 from mcp.shared.memory import create_client_server_memory_streams
@@ -32,8 +33,6 @@ from mcp.types import INVALID_PARAMS, JSONRPCRequest, ListRootsResult, Root
 from pydantic import FileUrl
 
 from mcp_server_git.server import serve
-
-from conftest import connect, make_repo, text_result, tool_error, wire
 
 SNAPSHOTS = Path(__file__).parent / "snapshots"
 
@@ -356,8 +355,10 @@ async def test_git_diff_accepts_revision_range(repo: git.Repo, target: str):
         ("nope...main", "Ref 'nope' did not resolve to an object"),
         (
             "main..-output=/tmp/evil",
-            "Invalid target: 'main..-output=/tmp/evil' - range endpoint "
-            "'-output=/tmp/evil' cannot start with '-'",
+            (
+                "Invalid target: 'main..-output=/tmp/evil' - range endpoint "
+                "'-output=/tmp/evil' cannot start with '-'"
+            ),
         ),
         ("..", "Ref '..' did not resolve to an object"),
     ],
@@ -655,6 +656,36 @@ async def test_git_log_max_count(repo: git.Repo):
     assert result == text_result("Commit history:\n" + log_entry(commits[2]))
 
 
+@pytest.mark.parametrize("max_count", [-1, 0])
+async def test_git_log_rejects_non_positive_max_count(repo: git.Repo, max_count: int):
+    # #5214: git reads a negative -n as "no limit" and 0 as nothing, so either
+    # used to succeed with the wrong commits. The schema's minimum makes
+    # MCPServer reject them before the tool runs.
+    add_commits(repo, 3)
+    result = await call(
+        None, "git_log", {"repo_path": str(root_of(repo)), "max_count": max_count}
+    )
+    assert result["isError"] is True
+    assert result["content"][0]["text"].startswith(
+        "Error executing tool git_log: 1 validation error for logArguments\n"
+        "max_count\n  Input should be greater than or equal to 1"
+    )
+
+
+async def test_git_log_max_count_beyond_history_returns_all(repo: git.Repo):
+    # #5214: the bound is a minimum only; a count above the history's length
+    # still returns every commit rather than an error.
+    commits = add_commits(repo, 2)
+    initial = repo.head.commit.parents[0].parents[0]
+    result = await call(
+        None, "git_log", {"repo_path": str(root_of(repo)), "max_count": 100}
+    )
+    assert result == text_result(
+        "Commit history:\n"
+        + "\n".join(log_entry(c) for c in [commits[1], commits[0], initial])
+    )
+
+
 async def test_git_log_timestamps_filter(repo: git.Repo):
     root = str(root_of(repo))
     future = await call(
@@ -833,10 +864,9 @@ async def test_overlapping_tool_calls_run_one_at_a_time(repo: git.Repo):
 
     root = str(root_of(repo))
     with mock.patch("mcp_server_git.server.git_status", side_effect=slow_status):
-        async with connect(None) as session:
-            async with anyio.create_task_group() as tg:
-                for _ in range(3):
-                    tg.start_soon(session.call_tool, "git_status", {"repo_path": root})
+        async with connect(None) as session, anyio.create_task_group() as tg:
+            for _ in range(3):
+                tg.start_soon(session.call_tool, "git_status", {"repo_path": root})
     assert peak == 1
 
 
@@ -1193,8 +1223,7 @@ async def test_git_branch_rejects_flag_injection(repo: git.Repo):
 def outside_error(repo_path: Path | str, allowed: Path) -> dict[str, Any]:
     return tool_error(
         "git_status",
-        f"Repository path '{repo_path}' is outside the allowed repository "
-        f"'{allowed}'",
+        f"Repository path '{repo_path}' is outside the allowed repository '{allowed}'",
     )
 
 
@@ -1370,6 +1399,182 @@ async def test_restricted_server_serves_a_linked_worktree(tmp_path: Path):
     try:
         result = await call(worktree, "git_status", {"repo_path": str(worktree)})
         assert result["isError"] is False
+    finally:
+        main.close()
+
+
+@pytest.mark.parametrize("name", ["alternates", "http-alternates"])
+async def test_restricted_server_rejects_alternate_object_stores(
+    tmp_path: Path, repo: git.Repo, name: str
+):
+    # `objects/info/alternates` names more object stores git reads as the
+    # repository's own: a nested repository naming an outside one would show
+    # that repository's commits and files by id.
+    root = root_of(repo)
+    other = make_repo(tmp_path / "other")
+    secret = other.head.commit.hexsha
+    nested = make_repo(root / "nested")
+    alternates = Path(nested.git_dir) / "objects" / "info" / name
+    alternates.parent.mkdir(parents=True, exist_ok=True)
+    alternates.write_text(f"# a comment\n\n{Path(other.git_dir) / 'objects'}\n")
+    nested.close()
+    try:
+        shown = await call(
+            root, "git_show", {"repo_path": str(root / "nested"), "revision": secret}
+        )
+        assert shown["isError"] is True
+        text = shown["content"][0]["text"]
+        assert f"uses '{alternates}'" in text
+        assert "alternate object stores are not allowed with --repository" in text
+        assert "line 1" not in text
+    finally:
+        other.close()
+
+
+async def test_restricted_server_accepts_empty_alternates(repo: git.Repo):
+    # An alternates file holding only comments and blank lines names nothing.
+    root = root_of(repo)
+    alternates = Path(repo.git_dir) / "objects" / "info" / "alternates"
+    alternates.parent.mkdir(parents=True, exist_ok=True)
+    alternates.write_text("# no alternates\n\n")
+    result = await call(root, "git_status", {"repo_path": str(root)})
+    assert result["isError"] is False
+
+
+@pytest.mark.parametrize("entry", ["objects", "refs", "index", "packed-refs"])
+async def test_restricted_server_rejects_git_dir_symlink_pointing_outside(
+    tmp_path: Path, repo: git.Repo, entry: str
+):
+    # A symbolic link inside a nested repository's `.git` is followed by git,
+    # for reading (objects, refs) and for writing (a linked index takes
+    # git_add's writes to the repository it names).
+    root = root_of(repo)
+    other = make_repo(tmp_path / "other")
+    other.git.pack_refs("--all")
+    nested = make_repo(root / "nested")
+    nested_git = Path(nested.git_dir)
+    nested.close()
+    link = nested_git / entry
+    if link.is_dir():
+        rmtree(link)
+    else:
+        link.unlink(missing_ok=True)
+    link.symlink_to(
+        Path(other.git_dir) / entry,
+        target_is_directory=link.name in ("objects", "refs"),
+    )
+    index_before = (Path(other.git_dir) / "index").read_bytes()
+    (root / "nested" / "new.txt").write_text("new\n")
+    try:
+        for tool, arguments in (
+            ("git_show", {"revision": other.head.commit.hexsha}),
+            ("git_branch", {"branch_type": "local"}),
+            ("git_add", {"files": ["new.txt"]}),
+        ):
+            result = await call(
+                root, tool, {"repo_path": str(root / "nested"), **arguments}
+            )
+            assert uses_outside(
+                result, (Path(other.git_dir) / entry).resolve(), root
+            ), (tool, result)
+        assert (Path(other.git_dir) / "index").read_bytes() == index_before
+    finally:
+        other.close()
+
+
+async def test_restricted_server_follows_an_allowed_git_dir_symlink(
+    tmp_path: Path, repo: git.Repo
+):
+    # A link that stays inside the allowed repository is followed by git, so
+    # what it leads to is checked too: here `.git/objects` names an object
+    # store in the working tree holding a link outside.
+    root = root_of(repo)
+    other = make_repo(tmp_path / "other")
+    nested = make_repo(root / "nested")
+    nested_git = Path(nested.git_dir)
+    nested.close()
+    store = root / "store"
+    shutil.copytree(nested_git / "objects", store, symlinks=True)
+    rmtree(nested_git / "objects")
+    (nested_git / "objects").symlink_to(store, target_is_directory=True)
+    escape = Path(other.git_dir) / "objects"
+    (store / "elsewhere").symlink_to(escape, target_is_directory=True)
+    # A cycle of allowed links ends rather than being walked forever.
+    (store / "loop").symlink_to(store, target_is_directory=True)
+    try:
+        result = await call(root, "git_status", {"repo_path": str(root / "nested")})
+        assert uses_outside(result, escape.resolve(), root), result
+    finally:
+        other.close()
+
+
+async def test_restricted_server_accepts_git_dir_symlinks_that_stay_inside(
+    tmp_path: Path, repo: git.Repo
+):
+    # A link within the git directory, or to elsewhere in the allowed
+    # repository, leads nowhere new; nor does a hooks directory linked to a
+    # shared one outside, since no hook runs.
+    root = root_of(repo)
+    git_dir = Path(repo.git_dir)
+    (git_dir / "head-link").symlink_to(git_dir / "HEAD")
+    (git_dir / "readme-link").symlink_to(root / "test.txt")
+    shared_hooks = tmp_path / "shared-hooks"
+    shared_hooks.mkdir()
+    hooks = git_dir / "hooks"
+    if hooks.exists():
+        rmtree(hooks)
+    hooks.symlink_to(shared_hooks, target_is_directory=True)
+    result = await call(root, "git_status", {"repo_path": str(root)})
+    assert result["isError"] is False
+
+
+async def test_restricted_server_rejects_nested_gitdir_naming_main_of_worktree(
+    tmp_path: Path,
+):
+    # With a linked worktree as the allowed repository, the main repository's
+    # git directory is the worktree's common directory, outside it. A `.git`
+    # file nested in the worktree naming that directory must not reach the
+    # main repository's index, HEAD or branches.
+    main = make_repo(tmp_path / "main")
+    worktree = tmp_path / "worktree"
+    main.git.worktree("add", str(worktree))
+    (tmp_path / "main" / "test.txt").write_text("staged in main\n")
+    main.git.add("test.txt")
+    staged_before = main.git.diff("--cached", "--name-only")
+    main_head = main.head.commit.hexsha
+    nested = worktree / "nested"
+    nested.mkdir()
+    (nested / ".git").write_text(f"gitdir: {main.git_dir}\n")
+    try:
+        for tool, arguments in (
+            ("git_reset", {}),
+            ("git_log", {}),
+            ("git_commit", {"message": "escaped"}),
+        ):
+            result = await call(worktree, tool, {"repo_path": str(nested), **arguments})
+            assert uses_outside(result, Path(main.git_dir), worktree), (tool, result)
+        assert main.git.diff("--cached", "--name-only") == staged_before
+        assert main.head.commit.hexsha == main_head
+    finally:
+        main.close()
+
+
+async def test_restricted_server_rejects_nested_gitdir_naming_worktree_git_dir(
+    tmp_path: Path,
+):
+    # The linked worktree's own git directory, named from a repository nested
+    # in it, is the allowed repository's, but not opened from the allowed
+    # repository: refused too.
+    main = make_repo(tmp_path / "main")
+    worktree = tmp_path / "worktree"
+    main.git.worktree("add", str(worktree))
+    worktree_git_dir = Path(main.git_dir) / "worktrees" / "worktree"
+    nested = worktree / "nested"
+    nested.mkdir()
+    (nested / ".git").write_text(f"gitdir: {worktree_git_dir}\n")
+    try:
+        result = await call(worktree, "git_status", {"repo_path": str(nested)})
+        assert uses_outside(result, worktree_git_dir, worktree), result
     finally:
         main.close()
 

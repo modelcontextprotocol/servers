@@ -36,11 +36,15 @@ The markdown of an HTML page opens with the page's title as a `#` heading (its `
 
 ### Errors
 
-- A failed fetch (a robots.txt refusal, an unreachable page, an HTTP error status, a refused private address, an unusable proxy setting) and arguments that do not match the tool's schema are returned as a tool result with `isError: true`, whose text starts `Error executing tool fetch:` and says what went wrong, so the model can read it and decide what to do.
+- A failed fetch (a robots.txt refusal, an unreachable page, an HTTP error status, a refused private address, an unusable proxy setting, a response body over the [size limit](#response-size)) and arguments that do not match the tool's schema are returned as a tool result with `isError: true`, whose text starts `Error executing tool fetch:` and says what went wrong, so the model can read it and decide what to do.
 - Calling a tool the server does not have is a JSON-RPC protocol error, `-32602` (`Unknown tool: <name>`), as the specification requires. So is getting a prompt it does not have (`Unknown prompt: <name>`), or the `fetch` prompt without its `url` (`URL is required`) or with a `url` that is not a valid URL (`Invalid URL '<url>': <reason>`).
 - When the `fetch` prompt's fetch fails, the prompt still returns: its message holds the reason the fetch failed.
 
 The server is built on the MCP Python SDK's high-level `MCPServer`: the tool and the prompt are decorated functions, and their type hints and field descriptions are the input schema and the prompt's arguments.
+
+### Response size
+
+The server reads at most 5 MiB (5,242,880 bytes) of a response body, so a very large or endless response cannot exhaust its memory. The limit is fixed and counts the body after its content encoding is decoded, and decoding itself stops at the limit, so a small compressed body that expands enormously is stopped without being expanded. The server asks for, and decodes, only `gzip` and `deflate` (`Accept-Encoding: gzip, deflate`); a response in any other content encoding (`br`, `zstd`, or more than one encoding applied in turn) is refused with an error. A page whose `Content-Length` is over it is refused before any of the body is read; a page that streams past it is refused once it does. Either way the tool returns an error saying so (and the `fetch` prompt returns that message), rather than part of the page. A robots.txt over the limit is not refused: its rules are read from the first 5 MiB. Each redirect is followed without reading the redirect response's own body. `max_length` and `start_index` page through what was read, so they are not affected by this limit and do not raise it.
 
 ### Content negotiation
 
@@ -178,7 +182,10 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 
 By default, the server will obey a websites robots.txt file if the request came from the model (via a tool), but not if
 the request was user initiated (via a prompt). Every redirect hop of a tool fetch is checked against the robots.txt of
-the host it leads to, the same way as the requested URL. If the robots.txt request fails to connect, or is answered
+the host it leads to, the same way as the requested URL. A path is matched against the rules both as it is spelled and
+as an origin typically resolves it (`%2F` and `%2E` decoded, repeated slashes merged, `.` and `..` segments removed),
+and the fetch is refused if either is disallowed, so `//private` or `/x/../private` cannot get past `Disallow: /private`.
+Matching stays case-sensitive, as RFC 9309 specifies. If the robots.txt request fails to connect, or is answered
 with 401, 403 or a server error (5xx), the tool refuses the fetch rather than reading the response as rules (RFC 9309
 treats a 5xx robots.txt as complete disallow); any other 4xx is treated as no rules. This can be disabled by adding the
 argument `--ignore-robots-txt` to the `args` list in the configuration.
@@ -188,9 +195,11 @@ argument `--ignore-robots-txt` to the `args` list in the configuration.
 By default, the server refuses any request, including a redirect hop or a robots.txt fetch, whose host resolves to an
 address that is not globally routable: loopback (`127.0.0.0/8`, `::1`), private (`10.0.0.0/8`, `172.16.0.0/12`,
 `192.168.0.0/16`, `fc00::/7`), link-local (`169.254.0.0/16`, `fe80::/10`), shared address space (`100.64.0.0/10`),
-multicast, unspecified, documentation and the other IANA special-purpose ranges. An IPv4-mapped (`::ffff:0:0/96`) or
-well-known NAT64 (`64:ff9b::/96`) address is judged by the IPv4 address it carries; a deprecated IPv4-compatible
-address (`::/96`, such as `::127.0.0.1`) is refused whatever IPv4 it carries. A hostname is refused if any one of its addresses is in those ranges.
+multicast, unspecified, documentation and the other IANA special-purpose ranges, including deprecated site-local
+(`fec0::/10`). An IPv6 address outside global unicast (`2000::/3`) is refused unless it carries an IPv4 address: an
+IPv4-mapped (`::ffff:0:0/96`), IPv4-translated (`::ffff:0:0:0/96`) or well-known NAT64 (`64:ff9b::/96`) address is
+judged by the IPv4 address it carries; a deprecated IPv4-compatible address (`::/96`, such as `::127.0.0.1`) is
+refused whatever IPv4 it carries. A hostname is refused if any one of its addresses is in those ranges.
 The client receives an error naming the refused address.
 
 To fetch from local or internal hosts (a development server, an intranet page), add the argument

@@ -15,12 +15,11 @@ from unittest import mock
 import git
 import pytest
 from click.testing import CliRunner
+from conftest import connect
 
 import mcp_server_git
 from mcp_server_git import main
 from mcp_server_git.server import serve
-
-from conftest import connect
 
 # --------------------------------------------------------------------------
 # serve() with --repository
@@ -95,9 +94,9 @@ async def test_serve_exits_for_nonexistent_repository(
     with (
         mock.patch("mcp.server.mcpserver.server.stdio_server", stdio),
         caplog.at_level(logging.ERROR, logger="mcp_server_git.server"),
+        pytest.raises(SystemExit) as exc,
     ):
-        with pytest.raises(SystemExit) as exc:
-            await serve(missing)
+        await serve(missing)
     assert exc.value.code == 1
     stdio.assert_not_called()
     assert f"{missing} does not exist" in caplog.text
@@ -111,7 +110,7 @@ async def test_serve_exits_for_nonexistent_repository(
 @pytest.mark.parametrize(
     ("flags", "level"),
     [
-        ([], logging.WARN),
+        ([], logging.WARNING),
         (["-v"], logging.INFO),
         (["--verbose"], logging.INFO),
         (["-vv"], logging.DEBUG),
@@ -173,6 +172,14 @@ def test_main_help():
     assert "MCP Git Server - Git functionality for MCP" in result.output
     assert "-r, --repository PATH" in result.output
     assert "-v, --verbose" in result.output
+    # Click wraps option help to the terminal width, so compare with the
+    # whitespace collapsed rather than against one rendered line.
+    help_text = " ".join(result.output.split())
+    assert "Git repository to confine operations to" in help_text
+    assert (
+        "Without this option, every repository the server process can reach is in scope."
+        in help_text
+    )
 
 
 # --------------------------------------------------------------------------
@@ -197,6 +204,7 @@ def test_console_script_nonexistent_repository_exits_with_one_line_error(
     missing = tmp_path / "missing"
     proc = subprocess.run(
         [script, "--repository", str(missing)],
+        check=False,  # the non-zero exit is what this test asserts
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,

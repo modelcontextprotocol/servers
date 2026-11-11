@@ -1,25 +1,27 @@
-import pytest
 from pathlib import Path
+from unittest import mock
+
 import git
+import pytest
 from git.exc import BadName
 from mcp.server import Server
+
 from mcp_server_git.server import (
-    git_checkout,
-    git_branch,
     git_add,
-    git_status,
-    git_diff_unstaged,
-    git_diff_staged,
-    git_diff,
+    git_branch,
+    git_checkout,
     git_commit,
-    git_reset,
-    git_log,
     git_create_branch,
+    git_diff,
+    git_diff_staged,
+    git_diff_unstaged,
+    git_log,
+    git_reset,
     git_show,
-    validate_repo_path,
+    git_status,
     serve,
+    validate_repo_path,
 )
-import unittest.mock as mock
 
 
 def test_git_checkout_existing_branch(test_repository):
@@ -961,6 +963,16 @@ def test_git_log_rejects_timestamp_flag_injection(test_repository):
 
     with pytest.raises(ValueError):
         git_log(test_repository, end_timestamp="--exec=evil")
+
+
+def test_git_log_rejects_non_positive_max_count(test_repository):
+    """git_log should reject a max_count below 1 (#5214): git reads a negative
+    -n as "no limit" and 0 as nothing."""
+    with pytest.raises(ValueError, match="Invalid max_count: 0 - must be at least 1"):
+        git_log(test_repository, max_count=0)
+
+    with pytest.raises(ValueError, match="Invalid max_count: -1 - must be at least 1"):
+        git_log(test_repository, max_count=-1)
 
 
 def test_git_branch_rejects_contains_flag_injection(test_repository):

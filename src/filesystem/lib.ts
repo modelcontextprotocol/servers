@@ -6,14 +6,18 @@ import { createTwoFilesPatch } from "diff";
 import { minimatch } from "minimatch";
 import { normalizePathFormat, expandHome } from "./path-utils.js";
 import { isPathWithinAllowedDirectories } from "./path-validation.js";
+import { assertWritable } from "./read-only-directories.js";
 import {
   appendFileInDirectory,
   createDirectoryInPlace,
   createFileInDirectory,
   moveFileAcrossDevices,
   copyFileInDirectory,
+  openFileForReading,
   overwriteFileInDirectory,
+  readFileInDirectory,
   renameIntoDirectory,
+  statInDirectory,
 } from "./pinned-directory.js";
 
 // Type definitions
@@ -470,7 +474,40 @@ async function resolveUnicodeEquivalentPath(
 // The allow-list is passed in rather than read from module state, so each
 // server instance (see server.ts) validates against its own directories and two
 // instances can coexist in one process (#4854).
+//
+// Every caller states what it will do with the path (#5348). A "read" is
+// checked against the allowed directories only. A "write" must also be handed
+// the read-only directories, and is refused when the resolved path falls in
+// one, so a write tool cannot skip the check: the mode is required, and the
+// "write" overload does not compile without the list. A "move" (move_file's
+// two ends) is a write that is also refused when the path contains one.
 export async function validatePath(
+  requestedPath: string,
+  allowedDirectories: readonly string[],
+  access: "read",
+): Promise<string>;
+export async function validatePath(
+  requestedPath: string,
+  allowedDirectories: readonly string[],
+  access: "write" | "move",
+  readOnlyDirectories: readonly string[],
+): Promise<string>;
+export async function validatePath(
+  requestedPath: string,
+  allowedDirectories: readonly string[],
+  access: "read" | "write" | "move",
+  readOnlyDirectories: readonly string[] = [],
+): Promise<string> {
+  const resolved = await resolveAllowedPath(requestedPath, allowedDirectories);
+  if (access !== "read") {
+    assertWritable(resolved, readOnlyDirectories, access);
+  }
+  return resolved;
+}
+
+// The allow-list half of validatePath: the requested path resolved to its real
+// location and checked to be inside the allowed directories.
+async function resolveAllowedPath(
   requestedPath: string,
   allowedDirectories: readonly string[],
 ): Promise<string> {
@@ -559,8 +596,13 @@ export async function validatePath(
 }
 
 // File Operations
+//
+// Every read below, of content or of metadata, goes through
+// pinned-directory.ts, as every write does: the path was validated before it
+// runs, and a directory on it swapped for a symlink since then must not
+// redirect the read outside the allowed directories (TOCTOU).
 export async function getFileStats(filePath: string): Promise<FileInfo> {
-  const stats = await fs.stat(filePath);
+  const stats = statInDirectory(filePath);
   return {
     size: stats.size,
     created: stats.birthtime,
@@ -579,7 +621,9 @@ export async function readFileContent(
   filePath: string,
   encoding: string = "utf-8",
 ): Promise<string> {
-  return await fs.readFile(filePath, encoding as BufferEncoding);
+  return (await readFileInDirectory(filePath)).toString(
+    encoding as BufferEncoding,
+  );
 }
 
 export async function writeFileContent(
@@ -987,7 +1031,7 @@ export async function applyFileEdits(
 ): Promise<string> {
   // Read file content and normalize line endings, remembering which ending
   // the file uses so the edited file is written back with it (#4991).
-  const rawContent = await fs.readFile(filePath, "utf-8");
+  const rawContent = await readFileContent(filePath);
   const eol = detectLineEnding(rawContent);
   const content = normalizeLineEndings(rawContent);
 
@@ -1006,12 +1050,30 @@ export async function applyFileEdits(
       continue;
     }
 
-    // Otherwise, try line-by-line matching with flexibility for whitespace
-    const oldLines = normalizedOld.split("\n");
+    // Otherwise, try line-by-line matching with flexibility for whitespace.
+    // A trailing newline ends oldText's last line rather than adding an
+    // empty line after it (#5431), so it is dropped from the lines compared,
+    // and the match must instead be followed by a newline in the file, as
+    // exact matching would require. newText's trailing newline is handled to
+    // match: the newline after the matched lines stays when newText also
+    // ends with one; otherwise newText's last line joins the line after the
+    // match, as an exact replacement would leave it.
+    const oldEndsLine = normalizedOld.endsWith("\n");
+    const newEndsLine = normalizedNew.endsWith("\n");
+    const oldLines = (
+      oldEndsLine ? normalizedOld.slice(0, -1) : normalizedOld
+    ).split("\n");
+    const replacementLines = (
+      oldEndsLine && newEndsLine ? normalizedNew.slice(0, -1) : normalizedNew
+    ).split("\n");
     const contentLines = modifiedContent.split("\n");
+    // With a trailing newline, the last matched line needs an element after
+    // it in contentLines: that is what shows the file's newline is there.
+    const lastStart =
+      contentLines.length - oldLines.length - (oldEndsLine ? 1 : 0);
     let matchFound = false;
 
-    for (let i = 0; i <= contentLines.length - oldLines.length; i++) {
+    for (let i = 0; i <= lastStart; i++) {
       const potentialMatch = contentLines.slice(i, i + oldLines.length);
 
       // Compare lines with normalized whitespace
@@ -1025,12 +1087,9 @@ export async function applyFileEdits(
         // replaces, shifted by however much the edit indents or dedents it
         // relative to the matching oldText line (#4990). Lines beyond
         // oldText's length are placed relative to its last line.
-        const editUnit = indentUnit([
-          ...oldLines,
-          ...normalizedNew.split("\n"),
-        ]);
+        const editUnit = indentUnit([...oldLines, ...replacementLines]);
         const fileUnit = indentUnit(contentLines);
-        const newLines = normalizedNew.split("\n").map((line, j) => {
+        const newLines = replacementLines.map((line, j) => {
           const k = Math.min(j, oldLines.length - 1);
           return reindentLine(
             line,
@@ -1041,7 +1100,15 @@ export async function applyFileEdits(
           );
         });
 
-        contentLines.splice(i, oldLines.length, ...newLines);
+        if (oldEndsLine && !newEndsLine) {
+          // oldText took the newline after the matched lines and newText
+          // does not put one back, so newText's last line runs into the line
+          // that followed the match. An empty newText just removes the lines.
+          newLines[newLines.length - 1] += contentLines[i + oldLines.length];
+          contentLines.splice(i, oldLines.length + 1, ...newLines);
+        } else {
+          contentLines.splice(i, oldLines.length, ...newLines);
+        }
         modifiedContent = contentLines.join("\n");
         matchFound = true;
         break;
@@ -1088,15 +1155,13 @@ export async function tailFile(
   numLines: number,
 ): Promise<string> {
   const CHUNK_SIZE = 1024; // Read 1KB at a time
-  const stats = await fs.stat(filePath);
-  const fileSize = stats.size;
-
-  // Zero lines is an empty result; slice(-0) below would return every line.
-  if (fileSize === 0 || numLines === 0) return "";
-
-  // Open file for reading
-  const fileHandle = await fs.open(filePath, "r");
+  // Open file for reading; its size is the opened file's.
+  const fileHandle = await openFileForReading(filePath);
   try {
+    const fileSize = fileHandle.size;
+    // Zero lines is an empty result; slice(-0) below would return every line.
+    if (fileSize === 0 || numLines === 0) return "";
+
     const chunks: Buffer[] = [];
     let position = fileSize;
     const chunk = Buffer.alloc(CHUNK_SIZE);
@@ -1140,7 +1205,7 @@ export async function headFile(
   filePath: string,
   numLines: number,
 ): Promise<string> {
-  const fileHandle = await fs.open(filePath, "r");
+  const fileHandle = await openFileForReading(filePath);
   try {
     const lines: string[] = [];
     let buffer = "";
@@ -1183,6 +1248,49 @@ export async function headFile(
   }
 }
 
+// Whether an entry is excluded by an `excludePatterns` list, given its path
+// relative to the root of the walk. `directory_tree` and `search_files` take the
+// same argument, so they share this one predicate and read it the same way
+// (#5216). A pattern containing `*` is a glob matched against the relative path
+// as written. A bare name also matches an entry of that name at any depth
+// (`**/<name>`) and everything below it (`**/<name>/**`), so `["node_modules"]`
+// prunes every `node_modules` directory, not only one at the root. Names are
+// matched whole: `node_modules` does not exclude `node_modules_old`.
+//
+// A wildcard pattern ending in `/**` also excludes the directory it names
+// (#5445): minimatch matches `**/node_modules/**` only against paths below a
+// `node_modules`, never the directory entry itself, so without this the walk
+// would still resolve and read the directory and only drop its children. The
+// pattern is matched a second time with that suffix removed (`**/node_modules`),
+// for directory entries only: a file is not a directory a pattern can name, so a
+// file called `build` stays under `**/build/**`, and `index.js` under `*/**`.
+//
+// Callers check it before validating an entry, so an excluded subtree is never
+// realpath'd or read (#4162).
+export function isExcludedPath(
+  relativePath: string,
+  excludePatterns: readonly string[],
+  isDirectory = false,
+): boolean {
+  return excludePatterns.some((pattern) => {
+    if (pattern.includes("*")) {
+      return (
+        minimatch(relativePath, pattern, { dot: true }) ||
+        (isDirectory &&
+          pattern.endsWith("/**") &&
+          minimatch(relativePath, pattern.slice(0, -"/**".length), {
+            dot: true,
+          }))
+      );
+    }
+    return (
+      minimatch(relativePath, pattern, { dot: true }) ||
+      minimatch(relativePath, `**/${pattern}`, { dot: true }) ||
+      minimatch(relativePath, `**/${pattern}/**`, { dot: true })
+    );
+  });
+}
+
 export async function searchFilesWithValidation(
   rootPath: string,
   pattern: string,
@@ -1216,10 +1324,8 @@ export async function searchFilesWithValidation(
       // excluded subtree is never realpath'd or read (#4162): excluding a slow
       // provider folder keeps the walk from touching it at all.
       const relativePath = path.relative(rootPath, fullPath);
-      const shouldExclude = excludePatterns.some((excludePattern) =>
-        minimatch(relativePath, excludePattern, { dot: true }),
-      );
-      if (shouldExclude) continue;
+      if (isExcludedPath(relativePath, excludePatterns, entry.isDirectory()))
+        continue;
 
       visit();
 
@@ -1228,7 +1334,7 @@ export async function searchFilesWithValidation(
       // timeout still ends the whole search rather than returning partial
       // results as if they were complete.
       try {
-        await validatePath(fullPath, allowedDirectories);
+        await validatePath(fullPath, allowedDirectories, "read");
       } catch (error) {
         if (error instanceof FsTimeoutError) {
           throw error;

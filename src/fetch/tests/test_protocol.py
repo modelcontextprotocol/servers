@@ -457,6 +457,108 @@ async def test_ignore_robots_txt_skips_the_check(web: FakeWeb) -> None:
     assert web.urls() == [PAGE]
 
 
+PRIVATE_ROBOTS = "User-agent: *\nDisallow: /private"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        # An origin that merges slashes, decodes %2F, or removes dot segments
+        # serves /private for each of these spellings.
+        "//private",
+        "///private",
+        "/./private",
+        "/x/../private",
+        "/%2Fprivate",
+        "/%2fprivate",
+        "/a%2f..%2fprivate",
+        "/%2e/private",
+        "/x/%2E%2E/private",
+        "//private//report",
+    ],
+)
+async def test_robots_disallow_matches_the_resolved_path(
+    web: FakeWeb, path: str
+) -> None:
+    url = f"https://example.com{path}"
+    web.add(ROBOTS, plain(PRIVATE_ROBOTS))
+    web.add(url, plain("private-page"))
+    async with connect() as (session, _):
+        result = await call(session, {"url": url})
+    assert wire(result)["isError"] is True
+    text = text_of(result)
+    assert text.startswith(
+        f"{TOOL_ERROR}The sites robots.txt ({ROBOTS}), specifies that "
+        "autonomous fetching of this page is not allowed, "
+    )
+    assert "private-page" not in text
+    assert web.urls() == [ROBOTS]
+
+
+@pytest.mark.parametrize(
+    "location",
+    [
+        "/%2e%2e/private",
+        "/%2E/private",
+        "/x/..%2Fprivate",
+        "/x/%2e%2e//private",
+        "/x//%2e%2e/private",
+    ],
+)
+async def test_redirect_to_a_disallowed_path_spelled_otherwise_is_refused(
+    web: FakeWeb, location: str
+) -> None:
+    web.add(ROBOTS, plain(PRIVATE_ROBOTS))
+    web.add(PAGE, httpx.Response(302, headers={"location": location}))
+    web.add(f"https://example.com{location}", plain("private-page"))
+    async with connect() as (session, _):
+        result = await call(session, {"url": PAGE})
+    assert wire(result)["isError"] is True
+    assert "private-page" not in text_of(result)
+    assert web.urls() == [ROBOTS, PAGE, ROBOTS]
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        # Resolving never widens a rule: these resolve to allowed paths.
+        "//public",
+        "/%2Fpublic",
+        # Only separator and dot escapes are decoded; %20 stays as it is.
+        "/pri%20vate",
+        # Matching stays case-sensitive (RFC 9309 2.2.2).
+        "//Private",
+    ],
+)
+async def test_robots_allows_a_path_that_resolves_outside_the_rule(
+    web: FakeWeb, path: str
+) -> None:
+    url = f"https://example.com{path}"
+    web.add(ROBOTS, plain(PRIVATE_ROBOTS))
+    web.add(url, plain("public-page"))
+    async with connect() as (session, _):
+        result = await call(session, {"url": url})
+    assert wire(result)["isError"] is False
+    assert "public-page" in text_of(result)
+    assert web.urls() == [ROBOTS, url]
+
+
+async def test_robots_disallow_still_matches_the_literal_spelling(
+    web: FakeWeb,
+) -> None:
+    # A rule written for the unresolved spelling still refuses it, though the
+    # path resolves somewhere the rule does not cover. A redirect carries the
+    # spelling as it is; a tool argument would have its dots resolved first.
+    location = "/a/%2e%2e/public"
+    web.add(ROBOTS, plain("User-agent: *\nDisallow: /a/"))
+    web.add(PAGE, httpx.Response(302, headers={"location": location}))
+    web.add(f"https://example.com{location}", plain("public-page"))
+    async with connect() as (session, _):
+        result = await call(session, {"url": PAGE})
+    assert wire(result)["isError"] is True
+    assert web.urls() == [ROBOTS, PAGE, ROBOTS]
+
+
 OTHER_ROBOTS = "https://other.example.org/robots.txt"
 OTHER_PAGE = "https://other.example.org/secret"
 
@@ -726,14 +828,18 @@ async def test_url_is_normalized_by_pydantic(web: FakeWeb) -> None:
         (
             0,
             10,
-            "abcdefghij\n\n<error>Content truncated. Call the fetch tool with a "
-            "start_index of 10 to get more content.</error>",
+            (
+                "abcdefghij\n\n<error>Content truncated. Call the fetch tool with a "
+                "start_index of 10 to get more content.</error>"
+            ),
         ),
         (
             10,
             10,
-            "klmnopqrst\n\n<error>Content truncated. Call the fetch tool with a "
-            "start_index of 20 to get more content.</error>",
+            (
+                "klmnopqrst\n\n<error>Content truncated. Call the fetch tool with a "
+                "start_index of 20 to get more content.</error>"
+            ),
         ),
         # A window that ends exactly at the end: full length, nothing remains.
         (16, 10, "qrstuvwxyz"),
@@ -854,6 +960,14 @@ async def test_redirect_to_private_address_is_refused(web: FakeWeb) -> None:
         "2001:2::1",
         # Multicast, which is_global does not exclude.
         "224.0.0.251",
+        # Deprecated site-local (RFC 3879), which is_global reads as global.
+        "fec0::1",
+        # IPv6 documentation (RFC 9637), missing from older is_global tables.
+        "3fff::1",
+        # Outside IPv6 global unicast (2000::/3): SRv6 SIDs, IETF-reserved.
+        "5f00::1",
+        "feff::1",
+        "4000::1",
     ],
 )
 async def test_private_address_is_refused_before_any_request(

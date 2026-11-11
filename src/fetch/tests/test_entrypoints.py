@@ -10,7 +10,9 @@ from __future__ import annotations
 import os
 import runpy
 import sys
+from collections.abc import Iterator
 from pathlib import Path
+from typing import TextIO
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -99,15 +101,24 @@ def console_script() -> Path:
     return bin_dir / name
 
 
-async def test_console_script_serves_over_stdio() -> None:
+@pytest.fixture
+def devnull() -> Iterator[TextIO]:
+    # The server's stderr sink, opened here rather than in the async test,
+    # where a blocking open() would stall the event loop (ruff ASYNC230).
+    with open(os.devnull, "w") as sink:
+        yield sink
+
+
+async def test_console_script_serves_over_stdio(devnull: TextIO) -> None:
     # The one subprocess smoke: the installed console script boots and answers
     # tools/list over real stdio. Everything else runs in-process.
     script = console_script()
     assert script.exists(), f"console script not installed at {script}"
     params = StdioServerParameters(command=str(script), args=[])
-    with open(os.devnull, "w") as devnull:
-        async with stdio_client(params, errlog=devnull) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                tools = await session.list_tools()
+    async with (
+        stdio_client(params, errlog=devnull) as (read, write),
+        ClientSession(read, write) as session,
+    ):
+        await session.initialize()
+        tools = await session.list_tools()
     assert [t.name for t in tools.tools] == ["fetch"]

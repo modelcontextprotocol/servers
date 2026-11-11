@@ -230,7 +230,11 @@ describe("server identity and tool list", () => {
     expect(strip(byName.read_text_file.inputSchema)).toEqual({
       type: "object",
       properties: {
-        path: { type: "string" },
+        path: {
+          type: "string",
+          description:
+            "The file to read as text. Absolute, or relative to an allowed directory; it must resolve inside the allowed directories.",
+        },
         tail: {
           type: "integer",
           minimum: 0,
@@ -247,12 +251,23 @@ describe("server identity and tool list", () => {
       },
       required: ["path"],
     });
+    // The deprecated alias advertises read_text_file's schema, not a copy.
+    expect(byName.read_file.inputSchema).toEqual(
+      byName.read_text_file.inputSchema,
+    );
     expect(strip(byName.edit_file.inputSchema)).toEqual({
       type: "object",
       properties: {
-        path: { type: "string" },
+        path: {
+          type: "string",
+          description:
+            "The text file to edit. Absolute, or relative to an allowed directory; it must resolve inside the allowed directories.",
+        },
         edits: {
           type: "array",
+          description:
+            "The replacements to make, applied in order, each to the result of the ones before it. " +
+            "If any one has no match, none is written.",
           items: {
             type: "object",
             properties: {
@@ -645,7 +660,11 @@ describe("read_multiple_files", () => {
   it("reports a non-Error read failure by its string form", async () => {
     const a = path.join(dir, "a.txt");
     await fs.writeFile(a, "alpha");
-    vi.spyOn(fs, "readFile").mockRejectedValueOnce("disk on fire");
+    // The read goes through the descriptor the anchored open returned.
+    vi.spyOn(fsSync, "readFile").mockImplementationOnce(((
+      _fd: number,
+      callback: (error: unknown) => void,
+    ) => callback("disk on fire")) as typeof fsSync.readFile);
     const result = await call(client, "read_multiple_files", { paths: [a] });
     expect(textOf(result)).toBe(`${a}: Error - disk on fire`);
   });
@@ -854,13 +873,15 @@ describe("write_file", () => {
     expect(textOf(result)).toBe("EIO: i/o error");
   });
 
-  it("reports a missing parent directory as ENOENT", async () => {
+  it("reports a missing parent directory (#5432)", async () => {
     const result = await call(client, "write_file", {
       path: path.join(dir, "no", "such", "file.txt"),
       content: "x",
     });
     expect(result.isError).toBe(true);
-    expect(textOf(result)).toMatch(/^ENOENT: no such file or directory/);
+    expect(textOf(result)).toBe(
+      `Parent directory does not exist: ${path.join(dir, "no", "such")}`,
+    );
   });
 });
 

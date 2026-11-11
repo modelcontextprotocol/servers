@@ -2,7 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as path from "path";
 import * as fs from "fs/promises";
 import * as os from "os";
-import { isPathWithinAllowedDirectories } from "../path-validation.js";
+import {
+  isPathWithinAllowedDirectories,
+  isWindowsUncRoot,
+} from "../path-validation.js";
 
 /**
  * Check if the current environment supports symlink creation
@@ -479,9 +482,16 @@ describe("Path Validation", () => {
       expect(
         isPathWithinAllowedDirectories("/home/user/project/..test", allowed),
       ).toBe(true); // Not traversal
-      expect(
-        isPathWithinAllowedDirectories("/home/user/project/test..", allowed),
-      ).toBe(true); // Not traversal
+      // On Windows a trailing dot is refused instead (#5444): Win32 strips it.
+      if (path.sep === "\\") {
+        expect(() =>
+          isPathWithinAllowedDirectories("/home/user/project/test..", allowed),
+        ).toThrow(/ending in a dot or a space/);
+      } else {
+        expect(
+          isPathWithinAllowedDirectories("/home/user/project/test..", allowed),
+        ).toBe(true); // Not traversal
+      }
       expect(
         isPathWithinAllowedDirectories("/home/user/project/te..st", allowed),
       ).toBe(true); // Not traversal
@@ -716,12 +726,18 @@ describe("Path Validation", () => {
       expect(
         isPathWithinAllowedDirectories("/home/user/project/..", allowed),
       ).toBe(false); // This normalizes to parent
-      expect(
-        isPathWithinAllowedDirectories("/home/user/project/...", allowed),
-      ).toBe(true); // Three dots is a valid filename
-      expect(
-        isPathWithinAllowedDirectories("/home/user/project/....", allowed),
-      ).toBe(true); // Four dots is a valid filename
+      // Three and four dots are valid filenames on POSIX; on Windows they end
+      // in a dot, which Win32 strips, so they are refused (#5444).
+      for (const name of ["...", "...."]) {
+        const p = `/home/user/project/${name}`;
+        if (path.sep === "\\") {
+          expect(() => isPathWithinAllowedDirectories(p, allowed)).toThrow(
+            /ending in a dot or a space/,
+          );
+        } else {
+          expect(isPathWithinAllowedDirectories(p, allowed)).toBe(true);
+        }
+      }
     });
 
     it("handles UNC paths on Windows", () => {
@@ -1366,5 +1382,27 @@ describe("Path Validation", () => {
       expect(targetContent).toBe("NEW CONTENT");
       expect(forbiddenContent).toBe("ORIGINAL CONTENT"); // Unchanged
     });
+  });
+});
+
+describe("isWindowsUncRoot", () => {
+  it.each([
+    "\\\\server\\share",
+    "\\\\server\\share\\",
+    "\\\\?\\UNC\\server\\share",
+    "\\\\.\\UNC\\server\\share\\",
+  ])("is true for the share root %s", (root) => {
+    expect(isWindowsUncRoot(root)).toBe(true);
+  });
+
+  it.each([
+    "\\\\server\\share\\f.txt",
+    "\\\\server",
+    "\\\\?\\UNC\\server",
+    "\\\\?\\C:\\",
+    "C:\\",
+    "/srv/share",
+  ])("is false for %s", (notRoot) => {
+    expect(isWindowsUncRoot(notRoot)).toBe(false);
   });
 });

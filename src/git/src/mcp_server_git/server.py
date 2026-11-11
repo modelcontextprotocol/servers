@@ -1,9 +1,10 @@
 # The git MCP server: tools that read and change a Git repository through
 # GitPython, and prompts that embed a repository's changes in a message for the
 # model (#5195). Repository confinement (`--repository`, `validate_repo_path` on
-# the path given, `validate_opened_repo` on the directories git then uses) and
-# the flag-injection guards live beside the handlers because every tool call and
-# prompt must pass them before any git command runs.
+# the path given, `validate_opened_repo` on the directories git then uses), the
+# overrides that keep a repository's own configuration from running programs
+# (`harden_repo`), and the flag-injection guards live beside the handlers
+# because every tool call and prompt must pass them before any git command runs.
 #
 # Built on the MCP Python SDK's high-level `MCPServer` (#5174), the API these
 # reference servers are meant to teach: each tool is a typed function, and the
@@ -19,6 +20,7 @@
 # logging), so nothing differs between them.
 
 import logging
+import os
 import re
 import threading
 from collections.abc import Callable, Iterator
@@ -27,7 +29,7 @@ from enum import Enum
 from functools import wraps
 from importlib.metadata import version
 from pathlib import Path
-from typing import Annotated, Any, Optional, ParamSpec
+from typing import Annotated, Any, ParamSpec
 
 import git
 from git.exc import BadName
@@ -107,18 +109,139 @@ def _git_text(repo: git.Repo, command: str, *args: str) -> str:
     return output.decode("utf-8", errors="replace")
 
 
+# Configuration that names a program git would run, overridden for every git
+# command the server runs in a repository it opens (`harden_repo`). A
+# repository's own `.git/config` is not trusted: it travels with the
+# repository (an unpacked archive, a shared folder, a vendored tree), so
+# honoring it would let the repository run code as the server's user on a
+# read-only call such as git_status. The overrides go in through
+# GIT_CONFIG_COUNT (git 2.31+), which outranks every config file and is
+# inherited by the git processes git itself starts, submodules included.
+#
+# - `core.fsmonitor` is run on every index refresh (status, diff, add).
+# - `core.hooksPath` pointing at the null device leaves no hook to find, so
+#   no hook runs (post-checkout, pre-merge-commit, reference-transaction, ...).
+#   GitPython's `index.commit` runs hooks itself; git_commit skips them.
+# - `core.pager` is never started without a terminal; pinned all the same.
+# - `commit.gpgSign` and `merge.verifySignatures` would run `gpg.program` on
+#   a merge commit or a merge.
+# - `submodule.recurse` would carry checkout and merge into submodules, whose
+#   own configuration this override cannot neutralize (see `_LISTED_KEYS`).
+# - `merge.autoStash` keeps git_merge from stashing behind the tool's back.
+#
+# External diff programs and textconv filters are turned off per command
+# (`_DIFF_FLAGS`), and filter and merge drivers per repository (`_LISTED_KEYS`).
+HARDENED_CONFIG: tuple[tuple[str, str], ...] = (
+    ("core.fsmonitor", "false"),
+    ("core.hooksPath", os.devnull),
+    ("core.pager", "cat"),
+    ("commit.gpgSign", "false"),
+    ("merge.verifySignatures", "false"),
+    ("submodule.recurse", "false"),
+    ("status.submoduleSummary", "false"),
+    ("merge.autoStash", "false"),
+)
+
+# A filter driver (`filter.<name>.clean`/`smudge`/`process`, applied by
+# `.gitattributes` on add, checkout and status) or merge driver
+# (`merge.<name>.driver`) is a command too, under a name the repository
+# chooses, so each one the repository's own configuration defines is
+# overridden with an empty command, which git skips (a filter) or reports as
+# a conflict (a merge driver). `branch.<name>.mergeOptions` is emptied the
+# same way: git merge reads it as command-line options, which outrank the
+# overrides above (`--gpg-sign` there would run `gpg.program` whatever
+# `commit.gpgSign` says). Drivers and options from the user's global or
+# system configuration (git-lfs, say) are the user's own and keep working.
+# `harden_repo` lists these keys, and `core.hooksPath`, whose command-scope
+# value shows that git applied the overrides.
+_LISTED_KEYS = (
+    r"^(core\.hookspath|filter\..+\.(clean|smudge|process)|merge\..+\.driver"
+    r"|branch\..+\.mergeoptions)$"
+)
+
+# Scopes whose configuration the user wrote rather than the repository.
+_TRUSTED_SCOPES = frozenset({"system", "global", "command"})
+
+# For every diff whose output is the patch: `--no-ext-diff` turns off
+# `diff.external` and `diff.<driver>.command`, `--no-textconv` the
+# `diff.<driver>.textconv` filters git diff applies by default.
+_DIFF_FLAGS = ("--no-ext-diff", "--no-textconv")
+
+# A command that compares the working tree looks inside each submodule by
+# running `git status` there, under the submodule's own configuration, whose
+# filter drivers `harden_repo` never sees. `dirty` still reports a submodule
+# whose checked-out commit moved, without that look inside. The flag outranks
+# `submodule.<name>.ignore`, which the repository could set to `none`.
+_NO_SUBMODULE_STATUS = "--ignore-submodules=dirty"
+
+
+def _config_env(entries: list[tuple[str, str]]) -> dict[str, str]:
+    """GIT_CONFIG_COUNT variables for `entries`, after any the user set."""
+    base = int(os.environ.get("GIT_CONFIG_COUNT", "0"))
+    env = {"GIT_CONFIG_COUNT": str(base + len(entries))}
+    for i, (key, value) in enumerate(entries, start=base):
+        env[f"GIT_CONFIG_KEY_{i}"] = key
+        env[f"GIT_CONFIG_VALUE_{i}"] = value
+    return env
+
+
+def harden_repo(repo: git.Repo) -> None:
+    """Keep every git command run for `repo` from running a program it names.
+
+    Sets `HARDENED_CONFIG` on the repository's git, then reads which filter
+    and merge drivers the repository's own configuration (its `.git/config`,
+    a worktree's `config.worktree`, and files they include) defines, and
+    overrides each with an empty command. The same read checks that git
+    applied the overrides: git older than 2.31 ignores GIT_CONFIG_COUNT, and
+    is refused rather than run unprotected.
+    """
+    entries = list(HARDENED_CONFIG)
+    repo.git.update_environment(**_config_env(entries))
+    try:
+        listed = repo.git.config("--show-scope", "-z", "--get-regexp", _LISTED_KEYS)
+    except git.GitCommandError as e:
+        # Exit 1 is "nothing matched", which a git that applied the
+        # overrides never reports, since core.hooksPath always matches.
+        if e.status != 1:
+            raise
+        listed = ""
+    applied = False
+    drivers: set[str] = set()
+    # -z prints `<scope>\0<key>\n<value>\0` for each entry.
+    fields = listed.split("\0")
+    for scope, entry in zip(fields[0::2], fields[1::2]):
+        key, _, value = entry.partition("\n")
+        if key == "core.hookspath":
+            applied = applied or (scope == "command" and value == os.devnull)
+        elif scope not in _TRUSTED_SCOPES:
+            drivers.add(key)
+    if not applied:
+        raise git.GitError(
+            "Git 2.31 or later is required: this git ignores the configuration "
+            "overrides that keep a repository's own configuration from running "
+            "programs"
+        )
+    if drivers:
+        entries += [(key, "") for key in sorted(drivers)]
+        repo.git.update_environment(**_config_env(entries))
+
+
 def git_status(repo: git.Repo) -> str:
-    return _git_text(repo, "status")
+    return _git_text(repo, "status", _NO_SUBMODULE_STATUS)
 
 
 def git_diff_unstaged(
     repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES
 ) -> str:
-    return _git_text(repo, "diff", f"--unified={context_lines}")
+    return _git_text(
+        repo, "diff", *_DIFF_FLAGS, _NO_SUBMODULE_STATUS, f"--unified={context_lines}"
+    )
 
 
 def git_diff_staged(repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
-    return _git_text(repo, "diff", f"--unified={context_lines}", "--cached")
+    return _git_text(
+        repo, "diff", *_DIFF_FLAGS, f"--unified={context_lines}", "--cached"
+    )
 
 
 def _validate_diff_target(repo: git.Repo, target: str) -> None:
@@ -161,7 +284,14 @@ def git_diff(
         raise FlagInjectionError(f"Invalid target: '{target}' - cannot start with '-'")
     # Validates target is a real revision or range, throws BadName if not
     _validate_diff_target(repo, target)
-    return _git_text(repo, "diff", f"--unified={context_lines}", target)
+    return _git_text(
+        repo,
+        "diff",
+        *_DIFF_FLAGS,
+        _NO_SUBMODULE_STATUS,
+        f"--unified={context_lines}",
+        target,
+    )
 
 
 def _has_staged_changes(repo: git.Repo) -> bool:
@@ -196,12 +326,14 @@ def git_commit(repo: git.Repo, message: str) -> str:
         parents = [repo.head.commit] + [
             repo.commit(sha) for sha in merge_head.read_text().split()
         ]
-        commit = repo.index.commit(message, parent_commits=parents)
+        commit = repo.index.commit(message, parent_commits=parents, skip_hooks=True)
         for name in ("MERGE_HEAD", "MERGE_MSG", "MERGE_MODE", "AUTO_MERGE"):
             (git_dir / name).unlink(missing_ok=True)
         autostash_note = _apply_merge_autostash(repo)
     else:
-        commit = repo.index.commit(message)
+        # skip_hooks: GitPython runs the repository's hooks itself, ignoring
+        # the core.hooksPath override (`harden_repo`).
+        commit = repo.index.commit(message, skip_hooks=True)
         autostash_note = ""
     return f"Changes committed successfully with hash {commit.hexsha}{autostash_note}"
 
@@ -280,8 +412,8 @@ def git_reset(repo: git.Repo) -> str:
 def git_log(
     repo: git.Repo,
     max_count: int = 10,
-    start_timestamp: Optional[str] = None,
-    end_timestamp: Optional[str] = None,
+    start_timestamp: str | None = None,
+    end_timestamp: str | None = None,
 ) -> list[str]:
     # Defense in depth: reject timestamps starting with '-' to prevent flag injection
     if start_timestamp and start_timestamp.startswith("-"):
@@ -292,6 +424,11 @@ def git_log(
         raise ValueError(
             f"Invalid end_timestamp: '{end_timestamp}' - cannot start with '-'"
         )
+
+    # Defense in depth: git reads a negative -n as "no limit" and 0 as nothing,
+    # so a count below 1 would silently return the wrong set of commits
+    if max_count < 1:
+        raise ValueError(f"Invalid max_count: {max_count} - must be at least 1")
 
     kwargs: dict[str, Any] = {"max_count": max_count}
     if start_timestamp:
@@ -405,7 +542,9 @@ def _merge_failure(repo: git.Repo, error: git.GitCommandError, what: str) -> str
         return f"{what} failed. {unchanged} Git reported:\n{_git_stderr(error)}"
     # Through _git_text, so a non-ASCII name prints as written, not as
     # core.quotepath's octal escapes.
-    conflicts = _git_text(repo, "diff", "--name-only", "--diff-filter=U").splitlines()
+    conflicts = _git_text(
+        repo, "diff", _NO_SUBMODULE_STATUS, "--name-only", "--diff-filter=U"
+    ).splitlines()
     repo.git.merge("--abort")
     if conflicts:
         return (
@@ -444,7 +583,9 @@ def git_merge(
         raise ValueError(
             "A merge is already in progress; conclude it with git_commit first"
         )
-    if repo.is_dirty():
+    # Not `repo.is_dirty()`, whose `git diff` looks inside submodules
+    # (_NO_SUBMODULE_STATUS); a merge never touches a submodule's working tree.
+    if repo.git.status("--porcelain", "--untracked-files=no", _NO_SUBMODULE_STATUS):
         raise ValueError(
             f"Cannot merge into '{target}': the working tree has uncommitted "
             "changes. Commit or discard them first, so a failed merge can be "
@@ -466,7 +607,9 @@ def git_merge(
     # config says (merge.ff, branch.<name>.mergeOptions): --ff/--ff-only
     # choose fast-forwarding, --commit and --no-squash make a merge that
     # succeeds a completed one that moves HEAD, and --no-edit keeps git from
-    # opening an editor for the message. --no-overwrite-ignore refuses to
+    # opening an editor for the message. --no-gpg-sign and
+    # --no-verify-signatures keep `gpg.program` from running whatever asks
+    # for it (see `_LISTED_KEYS`). --no-overwrite-ignore refuses to
     # replace an ignored local file (a `.env`, say) that the source tracks:
     # `is_dirty()` cannot see one, and git would overwrite it unrecoverably.
     #
@@ -482,6 +625,8 @@ def git_merge(
             "--commit",
             "--no-squash",
             "--no-edit",
+            "--no-gpg-sign",
+            "--no-verify-signatures",
             "--no-overwrite-ignore",
             "-m",
             f"Merge '{source_branch}' into '{target}'",
@@ -549,7 +694,13 @@ def git_show(repo: git.Repo, revision: str) -> str:
 
 
 def validate_repo_path(repo_path: Path, allowed_repository: Path | None) -> None:
-    """Validate that repo_path is within the allowed repository path."""
+    """Validate that repo_path is within the allowed repository path.
+
+    `allowed_repository` is the repository root `--repository` resolved to at
+    startup. When it is None (the server was started without `--repository`),
+    no restriction is configured and this check passes for every path, so a
+    tool call may reach any repository the server process can reach.
+    """
     if allowed_repository is None:
         return  # No restriction configured
 
@@ -578,13 +729,19 @@ def validate_opened_repo(
     follow a `.git` file (`gitdir:`), a `commondir` file or `core.worktree` to
     a directory anywhere else, so the working tree, git directory and common
     directory git actually uses are checked too. The working tree must lie
-    inside the allowed repository. The two git directories must lie inside it
-    or be the allowed repository's own: a linked worktree's git directory
-    lives under the main repository's `.git`, outside the worktree it serves.
+    inside the allowed repository. The two git directories must lie inside it,
+    or be the allowed repository's own as a pair, opened from the allowed
+    repository itself: a linked worktree's git directory lives under the main
+    repository's `.git`, outside the worktree it serves, and only that
+    worktree may use it. A repository nested inside a linked worktree whose
+    `.git` names the main repository's git directory is refused.
 
     Both git's answer (`rev-parse`, which the tools' git commands follow) and
     GitPython's (which some tools read directly) are checked: GitPython does
     not apply `core.worktree`, so the two can differ.
+
+    Git also reaches past those directories from inside them, so
+    `_check_git_dir_contents` holds what they contain to the same boundary.
     """
     if allowed_repository is None:
         return
@@ -610,21 +767,90 @@ def validate_opened_repo(
         if not working_tree.resolve().is_relative_to(allowed):
             raise outside(working_tree)
 
+    git_dirs = [Path(git_dir), Path(repo.git_dir)]
+    common_dirs = [Path(common_dir), Path(repo.common_dir)]
     escaped = [
-        p
-        for p in map(Path, (git_dir, common_dir, repo.git_dir, repo.common_dir))
-        if not p.resolve().is_relative_to(allowed)
+        p for p in git_dirs + common_dirs if not p.resolve().is_relative_to(allowed)
     ]
-    if not escaped:
-        return
-    with git.Repo(allowed) as allowed_repo:
-        own = {
-            Path(allowed_repo.git_dir).resolve(),
-            Path(allowed_repo.common_dir).resolve(),
-        }
-    for p in escaped:
-        if p.resolve() not in own:
-            raise outside(p)
+    if escaped:
+        with git.Repo(allowed) as allowed_repo:
+            own_git_dir = Path(allowed_repo.git_dir).resolve()
+            own_common_dir = Path(allowed_repo.common_dir).resolve()
+        is_own = (
+            bool(working_trees)
+            and all(Path(w).resolve() == allowed for w in working_trees)
+            and all(p.resolve() == own_git_dir for p in git_dirs)
+            and all(p.resolve() == own_common_dir for p in common_dirs)
+        )
+        if not is_own:
+            raise outside(escaped[0])
+
+    for directory in {p.resolve() for p in git_dirs + common_dirs}:
+        _check_git_dir_contents(repo_path, directory, allowed, outside)
+
+
+# Files in a git directory that name more object stores for git to read: an
+# alternate's objects are read as the repository's own, from wherever it is.
+_ALTERNATES = ("alternates", "http-alternates")
+
+
+def _check_git_dir_contents(
+    repo_path: Path,
+    directory: Path,
+    allowed: Path,
+    outside: Callable[[Path], ValueError],
+) -> None:
+    """Refuse what in a git directory leads git outside the allowed repository.
+
+    - An alternate object store (`objects/info/alternates`, and
+      `http-alternates`), of any kind: under `--repository`, a repository
+      reads only its own objects.
+    - A symbolic link that resolves outside both the allowed repository and
+      `directory` itself: a link at `objects`, `refs`, `index`, `HEAD` or
+      anything else in a git directory is followed by git, for reading and
+      for writing (a linked `index` takes git_add's writes elsewhere).
+
+    A link that is allowed and names a directory is walked too, since git
+    follows it into that directory and on into any link inside it; each
+    directory is walked once, so a cycle of links ends.
+
+    `hooks` is not walked: no hook runs (`HARDENED_CONFIG`), so a hooks
+    directory linked to a shared one elsewhere is harmless.
+    """
+    for name in _ALTERNATES:
+        alternates = directory / "objects" / "info" / name
+        if alternates.is_file():
+            lines = alternates.read_text(encoding="utf-8", errors="replace")
+            if any(
+                line.strip() and not line.startswith("#") for line in lines.split("\n")
+            ):
+                raise ValueError(
+                    f"Repository path '{repo_path}' uses '{alternates}': "
+                    "alternate object stores are not allowed with --repository"
+                )
+    pending = [directory]
+    visited = {directory}
+    while pending:
+        current = pending.pop()
+        with os.scandir(current) as entries:
+            for entry in entries:
+                if current == directory and entry.name == "hooks":
+                    continue
+                if entry.is_symlink():
+                    target = Path(entry.path).resolve()
+                    if not (
+                        target.is_relative_to(allowed)
+                        or target.is_relative_to(directory)
+                    ):
+                        raise outside(target)
+                    if target.is_dir() and target not in visited:
+                        visited.add(target)
+                        pending.append(target)
+                elif entry.is_dir():
+                    real = Path(entry.path).resolve()
+                    if real not in visited:
+                        visited.add(real)
+                        pending.append(real)
 
 
 def git_branch(
@@ -921,7 +1147,7 @@ def summarize_changes_prompt(repo: git.Repo, target: str | None = None) -> str:
             parts.append(f"Unstaged changes:\n{_fenced(unstaged)}")
         # The porcelain status is empty only on a clean tree; an untracked file
         # alone leaves both diffs empty but is still a change to summarize.
-        clean = not repo.git.status("--porcelain").strip()
+        clean = not repo.git.status("--porcelain", _NO_SUBMODULE_STATUS).strip()
         changes = "" if clean else "\n\n".join(parts)
     if not changes:
         return f"There are no changes {scope} to summarize. Tell the user so."
@@ -983,6 +1209,9 @@ def create_server(repository: Path | None) -> MCPServer:
         validate_repo_path(path, repository)
         repo = git.Repo(path)
         try:
+            # First, so that no git command run for the repository, the
+            # confinement checks' included, runs a program it names.
+            harden_repo(repo)
             validate_opened_repo(repo, path, repository)
         except Exception:
             repo.close()
@@ -1014,7 +1243,7 @@ def create_server(repository: Path | None) -> MCPServer:
     def summarize_changes(
         repo_path: Annotated[str, Field(description="The path to the Git repository.")],
         target: Annotated[
-            Optional[str],
+            str | None,
             Field(
                 description=(
                     "Branch or commit to diff against. Defaults to the working "
@@ -1112,15 +1341,21 @@ def create_server(repository: Path | None) -> MCPServer:
     @reports_failures
     def log(
         repo_path: str,
-        max_count: int = 10,
+        max_count: Annotated[
+            int,
+            Field(
+                ge=1,
+                description="Maximum number of commits to show. Must be at least 1.",
+            ),
+        ] = 10,
         start_timestamp: Annotated[
-            Optional[str],
+            str | None,
             Field(
                 description=f"Start timestamp for filtering commits. {TIMESTAMP_FORMATS}"
             ),
         ] = None,
         end_timestamp: Annotated[
-            Optional[str],
+            str | None,
             Field(
                 description=f"End timestamp for filtering commits. {TIMESTAMP_FORMATS}"
             ),
@@ -1221,13 +1456,13 @@ def create_server(repository: Path | None) -> MCPServer:
             ),
         ],
         contains: Annotated[
-            Optional[str],
+            str | None,
             Field(
                 description="The commit sha that branch should contain. Do not pass anything to this param if no commit sha is specified"
             ),
         ] = None,
         not_contains: Annotated[
-            Optional[str],
+            str | None,
             Field(
                 description="The commit sha that branch should NOT contain. Do not pass anything to this param if no commit sha is specified"
             ),

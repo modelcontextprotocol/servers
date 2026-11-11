@@ -1,6 +1,6 @@
 {
   "name": "@modelcontextprotocol/server-everything",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "description": "MCP server that exercises all the features of the MCP protocol",
   "license": "SEE LICENSE IN LICENSE",
   "mcpName": "io.github.modelcontextprotocol/server-everything",
@@ -41,8 +41,7 @@
     "@modelcontextprotocol/server": "^2.3.1",
     "@modelcontextprotocol/server-legacy": "^2.3.1",
     "cors": "^2.8.5",
-    "express": "^5.2.1",
-    "jszip": "^3.10.1",
+    "express": "^5.3.0",
     "zod": "^4.2.0"
   },
   "devDependencies": {

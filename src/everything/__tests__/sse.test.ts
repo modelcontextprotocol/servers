@@ -284,30 +284,50 @@ describe("startSseServer", () => {
   async function start() {
     vi.resetModules();
     const listenOrExit = vi.fn(() => "the http server");
-    vi.doMock("../transports/listen.js", () => ({ listenOrExit }));
+    // Only the bind is stubbed; the host is resolved by the real module.
+    vi.doMock("../transports/listen.js", async (importOriginal) => ({
+      ...(await importOriginal<typeof import("../transports/listen.js")>()),
+      listenOrExit,
+    }));
     const { startSseServer } = await import("../transports/sse.js");
     return { listenOrExit, server: startSseServer() };
   }
 
   it("binds PORT when it is set", async () => {
     vi.stubEnv("PORT", "4567");
+    vi.stubEnv("HOST", "");
     const { listenOrExit, server } = await start();
     expect(error).toHaveBeenCalledWith("Starting SSE server...");
     expect(listenOrExit).toHaveBeenCalledWith(
       expect.any(Function),
       "4567",
-      "Server is running on port 4567",
+      "127.0.0.1",
+      "Server is running on 127.0.0.1:4567",
     );
     expect(server).toBe("the http server");
   });
 
-  it("binds 3001 by default", async () => {
+  it("binds 3001 on loopback by default", async () => {
     vi.stubEnv("PORT", "");
+    vi.stubEnv("HOST", "");
     const { listenOrExit } = await start();
     expect(listenOrExit).toHaveBeenCalledWith(
       expect.any(Function),
       3001,
-      "Server is running on port 3001",
+      "127.0.0.1",
+      "Server is running on 127.0.0.1:3001",
+    );
+  });
+
+  it("binds HOST when it is set, and names it in the listening line", async () => {
+    vi.stubEnv("PORT", "");
+    vi.stubEnv("HOST", "0.0.0.0");
+    const { listenOrExit } = await start();
+    expect(listenOrExit).toHaveBeenCalledWith(
+      expect.any(Function),
+      3001,
+      "0.0.0.0",
+      "Server is running on 0.0.0.0:3001",
     );
   });
 });

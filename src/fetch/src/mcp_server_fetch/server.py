@@ -2,7 +2,8 @@
 # URL and convert HTML to Markdown for a model. The network policy lives here
 # beside the handlers because every request path (tool, prompt and robots.txt
 # check) must go through it: the private-address guard on each request and
-# redirect hop, robots.txt for autonomous fetches, and proxy normalization.
+# redirect hop, robots.txt for autonomous fetches, the cap on how much of a
+# response body is read (#5370), and proxy normalization.
 #
 # Built on the MCP Python SDK's high-level `MCPServer` (#5174), as the example
 # to follow: the tool and the prompt are plain decorated functions, whose type
@@ -24,33 +25,35 @@
 import asyncio
 import ipaddress
 import os
+import re
 import socket
-from collections.abc import Awaitable, Callable, Mapping, Sequence
-from typing import Annotated, Any, Tuple
+import zlib
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
+from contextlib import asynccontextmanager
 from importlib.metadata import version
-from urllib.parse import urlparse, urlunparse
+from typing import Annotated, Any
+from urllib.parse import urlparse, urlsplit, urlunparse, urlunsplit
 
 import httpx
-from pydantic import TypeAdapter, ValidationError
 import markdownify
 import readabilipy.simple_json
-from .readability_js import extract_article
 from bs4 import BeautifulSoup, Tag
-from .allowlist import normalize_allowed_hosts, refuse_unlisted_destination
 from mcp.server import MCPServer, ServerRequestContext
 from mcp.server.context import CallNext, HandlerResult, ServerMiddleware
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.shared.exceptions import MCPError
+from mcp.types import INVALID_PARAMS, ToolAnnotations
+from protego import Protego
+from pydantic import AnyUrl, Field, TypeAdapter, ValidationError
+
+from .allowlist import normalize_allowed_hosts, refuse_unlisted_destination
+from .readability_js import extract_article
 from .timeout import (
     DEFAULT_TIMEOUT_MS,
     MAX_TIMEOUT_MS,
     MIN_TIMEOUT_MS,
     timeout_ms_from_env,
 )
-from mcp.types import INVALID_PARAMS, ToolAnnotations
-from protego import Protego
-from pydantic import AnyUrl, Field
-
 from .title import with_page_title
 
 # The version this server reports in serverInfo, read from the installed
@@ -102,8 +105,13 @@ _NON_PUBLIC_NETWORKS = tuple(
         "2001::/23",
         "2001:db8::/32",
         "2002::/16",
+        # IPv6 documentation (RFC 9637), absent from older is_global tables.
+        "3fff::/20",
         "fc00::/7",
         "fe80::/10",
+        # Deprecated site-local (RFC 3879), which is_global reads as global.
+        # Outside 2000::/3 as well, but listed so it is refused by name.
+        "fec0::/10",
     )
 )
 
@@ -129,6 +137,17 @@ _PUBLIC_EXCEPTIONS = tuple(
 # in it to the IPv4 held in its low 32 bits, so that IPv4 is the destination.
 _NAT64_WELL_KNOWN = ipaddress.IPv6Network("64:ff9b::/96")
 
+# IPv4-translated addresses (RFC 2765, RFC 6145), which a stateless translator
+# forwards to the IPv4 held in their low 32 bits, like NAT64.
+_IPV4_TRANSLATED = ipaddress.IPv6Network("::ffff:0:0:0/96")
+
+# IPv6 global unicast (RFC 4291 2.4, IANA's IPv6 address space registry). The
+# rest of the IPv6 space is reserved by the IETF, unique or site-local,
+# link-local or multicast, none of it a public destination, while is_global
+# reads most of it as global. Deny-by-default there means a range missing from
+# the list above cannot pass as public.
+_IPV6_GLOBAL_UNICAST = ipaddress.IPv6Network("2000::/3")
+
 
 def _is_public_address(address: str) -> bool:
     """True when ``address`` is a globally routable unicast address.
@@ -137,17 +156,23 @@ def _is_public_address(address: str) -> bool:
     cloud metadata endpoints), shared address space (100.64.0.0/10, which holds
     Alibaba Cloud's 100.100.100.200), unique local IPv6 (AWS's fd00:ec2::254),
     multicast, unspecified, documentation and other special-purpose ranges.
-    An IPv4-mapped or well-known NAT64 address is judged by the IPv4 it wraps;
-    a deprecated IPv4-compatible address (``::/96``) is refused whatever it holds.
+    An IPv4-mapped, IPv4-translated or well-known NAT64 address is judged by
+    the IPv4 it wraps; a deprecated IPv4-compatible address (``::/96``) is
+    refused whatever it holds. Any other IPv6 address outside global unicast
+    (``2000::/3``) is refused.
     """
     ip = ipaddress.ip_address(address)
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
         ip = ip.ipv4_mapped
-    elif isinstance(ip, ipaddress.IPv6Address) and ip in _NAT64_WELL_KNOWN:
+    elif isinstance(ip, ipaddress.IPv6Address) and (
+        ip in _NAT64_WELL_KNOWN or ip in _IPV4_TRANSLATED
+    ):
         ip = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
     if any(ip in network for network in _PUBLIC_EXCEPTIONS):
         return True
     if any(ip in network for network in _NON_PUBLIC_NETWORKS):
+        return False
+    if isinstance(ip, ipaddress.IPv6Address) and ip not in _IPV6_GLOBAL_UNICAST:
         return False
     return ip.is_global and not ip.is_multicast
 
@@ -397,7 +422,179 @@ def make_client(proxy_url: str | None) -> httpx.AsyncClient:
         )
 
 
-def decode_page(response: httpx.Response) -> str:
+# The most body bytes the server reads from one response (#5370). A body is
+# streamed and the read stops at this cap, so a very large or endless response
+# cannot make the server buffer all of it. `max_length` cannot do this: it
+# limits what is returned, after the whole page has been read and converted.
+# The cap counts decoded bytes, so a small compressed body that expands
+# enormously is stopped too, and decoding itself is bounded by it (see
+# `read_capped`).
+MAX_RESPONSE_BYTES = 5 * 1024 * 1024
+
+# The content codings the server asks for, and the only ones it decodes. They
+# are named explicitly because httpx would also offer br and zstd whenever
+# their packages happen to be installed, and decode them with no output limit.
+ACCEPT_ENCODING = "gzip, deflate"
+
+
+class BoundedInflater:
+    """Incremental gzip or deflate decoding whose output per call is bounded.
+
+    httpx's decoders inflate each network chunk whole, so one small chunk of a
+    compression bomb could allocate far past the cap before any check saw it
+    (#5370). zlib's ``max_length`` stops each call at the room left instead,
+    and keeps the input it did not get to in ``unconsumed_tail``.
+    """
+
+    def __init__(self, coding: str) -> None:
+        self._gzip = coding in ("gzip", "x-gzip")
+        self._first = True
+        self._z = zlib.decompressobj(
+            zlib.MAX_WBITS | 16 if self._gzip else zlib.MAX_WBITS
+        )
+
+    @property
+    def unconsumed_tail(self) -> bytes:
+        return self._z.unconsumed_tail
+
+    @property
+    def eof(self) -> bool:
+        """Whether the compressed stream has ended."""
+        return self._z.eof
+
+    def decompress(self, data: bytes, max_length: int) -> bytes:
+        try:
+            out = self._z.decompress(data, max_length)
+        except zlib.error as e:
+            if self._first and not self._gzip:
+                # Servers often send deflate raw, without zlib's wrapper; httpx
+                # retries the same way.
+                self._first = False
+                self._z = zlib.decompressobj(-zlib.MAX_WBITS)
+                return self.decompress(data, max_length)
+            raise httpx.DecodingError(f"Error decoding the response body: {e}")
+        self._first = False
+        return out
+
+    def flush(self) -> bytes:
+        return self._z.flush()
+
+
+def inflater_for(response: httpx.Response) -> BoundedInflater | None:
+    """The decoder a response's Content-Encoding needs, or None for none.
+
+    Only a single gzip or deflate coding is decoded. Any other (br, zstd, a
+    chain of codings) is refused rather than handed over undecoded or decoded
+    without a bound.
+    """
+    codings = [
+        coding.strip().lower()
+        for coding in response.headers.get("content-encoding", "").split(",")
+    ]
+    codings = [coding for coding in codings if coding not in ("", "identity")]
+    if not codings:
+        return None
+    if len(codings) == 1 and codings[0] in ("gzip", "x-gzip", "deflate"):
+        return BoundedInflater(codings[0])
+    raise httpx.DecodingError(
+        f"Unsupported content encoding {', '.join(codings)}: this server "
+        f"decodes only {ACCEPT_ENCODING}"
+    )
+
+
+@asynccontextmanager
+async def stream_get(
+    client: httpx.AsyncClient, url: str, user_agent: str, **kwargs: Any
+) -> AsyncIterator[httpx.Response]:
+    """GET ``url`` with redirects followed, yielding the final response unread.
+
+    httpx's own redirect handling reads each redirect's body whole before it
+    follows it, so a redirect with an endless body would get round the cap.
+    Here each hop is closed unread instead. The request hooks still run before
+    every hop, since they run on each ``send``. ``kwargs`` go to
+    ``build_request`` (the timeout).
+    """
+    request = client.build_request(
+        "GET",
+        url,
+        headers={"User-Agent": user_agent, "Accept-Encoding": ACCEPT_ENCODING},
+        **kwargs,
+    )
+    response = await client.send(request, stream=True, follow_redirects=False)
+    try:
+        hops = 0
+        while response.next_request is not None:
+            hops += 1
+            if hops > client.max_redirects:
+                raise httpx.TooManyRedirects(
+                    "Exceeded maximum allowed redirects.",
+                    request=response.next_request,
+                )
+            next_request = response.next_request
+            await response.aclose()
+            response = await client.send(
+                next_request, stream=True, follow_redirects=False
+            )
+        yield response
+    finally:
+        await response.aclose()
+
+
+async def read_capped(response: httpx.Response, limit: int) -> tuple[bytes, bool]:
+    """Read a streamed response's body, stopping once it passes ``limit`` bytes.
+
+    Returns the body, at most ``limit`` bytes of it, and whether it was cut
+    short. Whatever the server has not sent yet is never read: closing the
+    response (leaving `stream_get`) closes the connection. The raw bytes are
+    decoded here rather than by httpx, so no single step produces more than
+    one byte past the room left under ``limit`` (see `BoundedInflater`).
+    """
+    inflater = inflater_for(response)
+    body = bytearray()
+    async for raw in response.aiter_raw():
+        pending = raw
+        while pending:
+            room = limit - len(body)
+            if inflater is None:
+                out, pending = pending[: room + 1], b""
+            else:
+                out = inflater.decompress(pending, room + 1)
+                pending = inflater.unconsumed_tail
+            body += out
+            if len(body) > limit:
+                return bytes(body[:limit]), True
+            if inflater is not None and inflater.eof:
+                # The compressed stream is complete. Whatever follows it is not
+                # part of the body (httpx's decoders drop it too), and zlib
+                # would keep all of it in `unused_data`, so reading stops here.
+                return bytes(body), False
+    if inflater is not None:
+        # All input is consumed by now, so zlib has at most a few bytes left.
+        body += inflater.flush()
+    if len(body) > limit:
+        return bytes(body[:limit]), True
+    return bytes(body), False
+
+
+def declared_length(response: httpx.Response) -> int | None:
+    """The body size a response's Content-Length declares, or None without one."""
+    try:
+        return int(response.headers["content-length"])
+    except (KeyError, ValueError):
+        return None
+
+
+def decode_text(response: httpx.Response, content: bytes) -> str:
+    """Decode ``content`` as httpx's ``response.text`` would.
+
+    The header's charset when Python knows it, UTF-8 otherwise, with undecodable
+    bytes replaced. A streamed response has no ``.text`` until its whole body is
+    read through httpx, which is the read the cap exists to avoid.
+    """
+    return content.decode(response.encoding or "utf-8", errors="replace")
+
+
+def decode_page(response: httpx.Response, content: bytes) -> str:
     """Decode a fetched body, honoring a charset the HTML declares (#5199).
 
     httpx's ``response.text`` uses the Content-Type header's charset, and
@@ -413,13 +610,15 @@ def decode_page(response: httpx.Response) -> str:
     unrelated attribute (``data-charset``) is not mistaken for a declaration.
     A declaration Python does not know, or one that names a codec that is not
     a web text encoding, is ignored, and the body is decoded as before.
+
+    ``content`` is the body as read by `read_capped`; the response supplies
+    the headers.
     """
     # Imported here so the helper stays one self-contained block of this file.
     import codecs
     import re
     from html.parser import HTMLParser
 
-    content = response.content
     media_type = (
         response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
     )
@@ -430,7 +629,7 @@ def decode_page(response: httpx.Response) -> str:
             (codecs.BOM_UTF8, codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)
         )
     ):
-        return response.text
+        return decode_text(response, content)
 
     class MetaCharset(HTMLParser):
         declared: str | None = None
@@ -458,7 +657,7 @@ def decode_page(response: httpx.Response) -> str:
     scan = MetaCharset()
     scan.feed(content[:1024].decode("latin-1"))
     if scan.declared is None:
-        return response.text
+        return decode_text(response, content)
     try:
         name = codecs.lookup(scan.declared).name
         # A UTF-16/32 declaration in an ASCII-compatible document cannot be
@@ -468,20 +667,62 @@ def decode_page(response: httpx.Response) -> str:
         # Python codecs that are not web text encodings: decoding a page with
         # them would mangle it rather than fix it.
         if name in ("idna", "punycode", "unicode-escape", "raw-unicode-escape"):
-            return response.text
+            return decode_text(response, content)
         # A declaration found in ASCII bytes is only believable for an
         # ASCII-compatible encoding. UTF-7, HZ and the EBCDIC code pages
         # (cp037, cp500, …) would rewrite the markup itself, so they fail this
         # probe (by a different result or a decode error) and are ignored.
         probe = b"\t\n\r" + bytes(range(0x20, 0x7F))
         if probe.decode(name) != probe.decode("ascii"):
-            return response.text
+            return decode_text(response, content)
         return content.decode(name, errors="replace")
     except (LookupError, ValueError):  # UnicodeError is a ValueError
         # An unknown charset, a name Python refuses outright (one holding a
         # NUL), a non-text codec (base64, rot13, …), one that refuses to
         # decode at all (``undefined``), or one the probe cannot decode.
-        return response.text
+        return decode_text(response, content)
+
+
+# Escapes of the path separator and of the dot, which an origin may decode
+# before it resolves the path. Other escapes (such as %20) are left alone.
+_ENCODED_SLASH = re.compile("%2f", re.IGNORECASE)
+_ENCODED_DOT = re.compile("%2e", re.IGNORECASE)
+_REPEATED_SLASHES = re.compile("/{2,}")
+
+
+def _remove_dot_segments(path: str) -> str:
+    """``path`` with its ``.`` and ``..`` segments resolved (RFC 3986 5.2.4).
+
+    The result is always absolute, as robots.txt rules are: an empty path
+    becomes ``/``.
+    """
+    segments = path.split("/")
+    resolved: list[str] = []
+    for segment in segments[1:]:
+        if segment == "..":
+            if resolved:
+                resolved.pop()
+        elif segment != ".":
+            resolved.append(segment)
+    # A path ending in a dot segment names a directory: "/a/b/.." is "/a/".
+    trailing = "/" if resolved and segments[-1] in (".", "..") else ""
+    return "/" + "/".join(resolved) + trailing
+
+
+def _resolved_path_url(url: str) -> str:
+    """``url`` with its path spelled the way a typical origin resolves it.
+
+    robots.txt rules match the path a crawler requests, but an origin such as
+    nginx or Apache serves ``//private``, ``/x/../private`` and ``/%2Fprivate``
+    as ``/private``. So the path's separator and dot escapes are decoded,
+    repeated slashes merged and dot segments removed before rules are matched
+    against it, as well as against the path as spelled. The query is kept as
+    it is, and matching stays case-sensitive (RFC 9309 2.2.2).
+    """
+    parts = urlsplit(url)
+    path = _ENCODED_DOT.sub(".", _ENCODED_SLASH.sub("/", parts.path))
+    path = _remove_dot_segments(_REPEATED_SLASHES.sub("/", path))
+    return urlunsplit(parts._replace(path=path))
 
 
 async def check_may_autonomously_fetch_url(
@@ -507,29 +748,35 @@ async def check_may_autonomously_fetch_url(
             hooks.append(_refuse_private_destination)
         client.event_hooks = {"request": hooks}
         try:
-            response = await client.get(
-                robot_txt_url,
-                follow_redirects=True,
-                headers={"User-Agent": user_agent},
-            )
+            async with stream_get(client, robot_txt_url, user_agent) as response:
+                # A 5xx robots.txt is "unreachable" (RFC 9309 section 2.3.1.4),
+                # which means complete disallow: the error page is never parsed
+                # as rules.
+                if response.status_code in (401, 403) or response.status_code >= 500:
+                    raise ToolError(
+                        f"When fetching robots.txt ({robot_txt_url}), received status {response.status_code} so assuming that autonomous fetching is not allowed, the user can try manually fetching by using the fetch prompt"
+                    )
+                elif 400 <= response.status_code < 500:
+                    return
+                # Read up to the same cap as a page (#5370). RFC 9309 section
+                # 2.5 lets a crawler stop parsing past a limit of at least
+                # 500 KiB, so the rules in the first part are used as they are.
+                content, _ = await read_capped(response, MAX_RESPONSE_BYTES)
         except HTTPError:
             raise ToolError(
                 f"Failed to fetch robots.txt {robot_txt_url} due to a connection issue"
             )
-        # A 5xx robots.txt is "unreachable" (RFC 9309 section 2.3.1.4), which
-        # means complete disallow: the error page is never parsed as rules.
-        if response.status_code in (401, 403) or response.status_code >= 500:
-            raise ToolError(
-                f"When fetching robots.txt ({robot_txt_url}), received status {response.status_code} so assuming that autonomous fetching is not allowed, the user can try manually fetching by using the fetch prompt"
-            )
-        elif 400 <= response.status_code < 500:
-            return
-        robot_txt = response.text
+        robot_txt = decode_text(response, content)
     processed_robot_txt = "\n".join(
         line for line in robot_txt.splitlines() if not line.strip().startswith("#")
     )
     robot_parser = Protego.parse(processed_robot_txt)
-    if not robot_parser.can_fetch(str(url), user_agent):
+    # Refused when either spelling of the path is disallowed: resolving the
+    # path only ever adds refusals.
+    if not (
+        robot_parser.can_fetch(url, user_agent)
+        and robot_parser.can_fetch(_resolved_path_url(url), user_agent)
+    ):
         raise ToolError(
             f"The sites robots.txt ({robot_txt_url}), specifies that autonomous fetching of this page is not allowed, "
             f"<useragent>{user_agent}</useragent>\n"
@@ -573,7 +820,7 @@ async def fetch_url(
     allowed_hosts: tuple[str, ...] = (),
     check_robots_txt: bool = False,
     use_readability_js: bool = True,
-) -> Tuple[str, str]:
+) -> tuple[str, str]:
     """
     Fetch the URL and return the content in a form ready for the LLM, as well as a prefix string with status information.
 
@@ -609,25 +856,34 @@ async def fetch_url(
         # default representation (a page's HTML), as before this negotiation.
         if not force_raw:
             client.headers["Accept"] = MARKDOWN_ACCEPT
+        too_large = (
+            f"Failed to fetch {url}: the response body is larger than the "
+            f"{MAX_RESPONSE_BYTES} byte limit this server reads"
+        )
         try:
-            response = await client.get(
-                url,
-                follow_redirects=True,
-                headers={"User-Agent": user_agent},
-                timeout=timeout_ms / 1000,
-            )
+            async with stream_get(
+                client, url, user_agent, timeout=timeout_ms / 1000
+            ) as response:
+                if response.status_code >= 400:
+                    raise ToolError(
+                        f"Failed to fetch {url} - status code {response.status_code}"
+                    )
+                # Refused before reading anything when the size is declared;
+                # otherwise the streamed read stops at the cap (#5370).
+                length = declared_length(response)
+                if length is not None and length > MAX_RESPONSE_BYTES:
+                    raise ToolError(f"{too_large} (it declares {length} bytes)")
+                content, truncated = await read_capped(response, MAX_RESPONSE_BYTES)
+                if truncated:
+                    raise ToolError(too_large)
         except httpx.TimeoutException as e:
             raise ToolError(
                 f"Failed to fetch {url}: timed out after {timeout_ms} ms: {e!r}"
             )
         except HTTPError as e:
             raise ToolError(f"Failed to fetch {url}: {e!r}")
-        if response.status_code >= 400:
-            raise ToolError(
-                f"Failed to fetch {url} - status code {response.status_code}"
-            )
 
-        page_raw = decode_page(response)
+        page_raw = decode_page(response, content)
 
     content_type = response.headers.get("content-type", "")
     # Markdown is already what this tool returns, so it is not simplified, and

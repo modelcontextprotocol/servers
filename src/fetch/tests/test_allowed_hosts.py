@@ -14,7 +14,7 @@ from typing import Any
 
 import httpx
 import pytest
-from mcp.types import CallToolResult
+from mcp.types import CallToolResult, TextContent
 
 import mcp_server_fetch
 from mcp_server_fetch.allowlist import (
@@ -268,8 +268,9 @@ async def test_prompt_refuses_unlisted_host_and_its_redirects(web: FakeWeb) -> N
         direct = await session.get_prompt("fetch", {"url": OTHER})
         redirected = await session.get_prompt("fetch", {"url": PAGE})
     for prompt in (direct, redirected):
-        text = prompt.messages[0].content
-        assert getattr(text, "text") == refused(OTHER, "other.example.org")
+        content = prompt.messages[0].content
+        assert isinstance(content, TextContent)
+        assert content.text == refused(OTHER, "other.example.org")
     assert web.urls() == [PAGE]
 
 

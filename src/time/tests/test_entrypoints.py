@@ -12,7 +12,9 @@ import runpy
 import shutil
 import subprocess
 import sys
+from collections.abc import Iterator
 from pathlib import Path
+from typing import TextIO
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -94,7 +96,15 @@ def test_init_module_run_as_main_calls_main() -> None:
     serve.assert_awaited_once_with("UTC")
 
 
-async def test_console_script_boots_over_stdio() -> None:
+@pytest.fixture
+def devnull() -> Iterator[TextIO]:
+    # The server's stderr sink, opened here rather than in the async test,
+    # where a blocking open() would stall the event loop (ruff ASYNC230).
+    with open(os.devnull, "w") as sink:
+        yield sink
+
+
+async def test_console_script_boots_over_stdio(devnull: TextIO) -> None:
     script = shutil.which("mcp-server-time", path=str(Path(sys.executable).parent))
     assert script is not None, "the console script is not installed in this venv"
     params = StdioServerParameters(
@@ -102,14 +112,13 @@ async def test_console_script_boots_over_stdio() -> None:
         args=["--local-timezone", "UTC"],
         env={**os.environ},
     )
-    with open(os.devnull, "w") as errlog:
-        async with stdio_client(params, errlog=errlog) as (read, write):
-            async with ClientSession(read, write) as session:
-                init = await session.initialize()
-                tools = await session.list_tools()
-                result = await session.call_tool(
-                    "get_current_time", {"timezone": "UTC"}
-                )
+    async with (
+        stdio_client(params, errlog=devnull) as (read, write),
+        ClientSession(read, write) as session,
+    ):
+        init = await session.initialize()
+        tools = await session.list_tools()
+        result = await session.call_tool("get_current_time", {"timezone": "UTC"})
     assert init.model_dump(by_alias=True, mode="json")["serverInfo"]["name"] == (
         "mcp-time"
     )
@@ -128,6 +137,7 @@ def test_console_script_rejects_an_invalid_local_timezone() -> None:
     assert script is not None, "the console script is not installed in this venv"
     proc = subprocess.run(
         [script, "--local-timezone", "Not/AZone"],
+        check=False,  # the non-zero exit is what this test asserts
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
