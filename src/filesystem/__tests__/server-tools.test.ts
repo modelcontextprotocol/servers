@@ -660,7 +660,11 @@ describe("read_multiple_files", () => {
   it("reports a non-Error read failure by its string form", async () => {
     const a = path.join(dir, "a.txt");
     await fs.writeFile(a, "alpha");
-    vi.spyOn(fs, "readFile").mockRejectedValueOnce("disk on fire");
+    // The read goes through the descriptor the anchored open returned.
+    vi.spyOn(fsSync, "readFile").mockImplementationOnce(((
+      _fd: number,
+      callback: (error: unknown) => void,
+    ) => callback("disk on fire")) as typeof fsSync.readFile);
     const result = await call(client, "read_multiple_files", { paths: [a] });
     expect(textOf(result)).toBe(`${a}: Error - disk on fire`);
   });

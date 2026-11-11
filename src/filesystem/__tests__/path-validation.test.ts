@@ -2,7 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as path from "path";
 import * as fs from "fs/promises";
 import * as os from "os";
-import { isPathWithinAllowedDirectories } from "../path-validation.js";
+import {
+  isPathWithinAllowedDirectories,
+  isWindowsUncRoot,
+} from "../path-validation.js";
 
 /**
  * Check if the current environment supports symlink creation
@@ -1379,5 +1382,27 @@ describe("Path Validation", () => {
       expect(targetContent).toBe("NEW CONTENT");
       expect(forbiddenContent).toBe("ORIGINAL CONTENT"); // Unchanged
     });
+  });
+});
+
+describe("isWindowsUncRoot", () => {
+  it.each([
+    "\\\\server\\share",
+    "\\\\server\\share\\",
+    "\\\\?\\UNC\\server\\share",
+    "\\\\.\\UNC\\server\\share\\",
+  ])("is true for the share root %s", (root) => {
+    expect(isWindowsUncRoot(root)).toBe(true);
+  });
+
+  it.each([
+    "\\\\server\\share\\f.txt",
+    "\\\\server",
+    "\\\\?\\UNC\\server",
+    "\\\\?\\C:\\",
+    "C:\\",
+    "/srv/share",
+  ])("is false for %s", (notRoot) => {
+    expect(isWindowsUncRoot(notRoot)).toBe(false);
   });
 });
