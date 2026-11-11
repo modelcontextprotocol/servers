@@ -1482,6 +1482,32 @@ async def test_restricted_server_rejects_git_dir_symlink_pointing_outside(
         other.close()
 
 
+async def test_restricted_server_follows_an_allowed_git_dir_symlink(
+    tmp_path: Path, repo: git.Repo
+):
+    # A link that stays inside the allowed repository is followed by git, so
+    # what it leads to is checked too: here `.git/objects` names an object
+    # store in the working tree holding a link outside.
+    root = root_of(repo)
+    other = make_repo(tmp_path / "other")
+    nested = make_repo(root / "nested")
+    nested_git = Path(nested.git_dir)
+    nested.close()
+    store = root / "store"
+    shutil.copytree(nested_git / "objects", store, symlinks=True)
+    rmtree(nested_git / "objects")
+    (nested_git / "objects").symlink_to(store, target_is_directory=True)
+    escape = Path(other.git_dir) / "objects"
+    (store / "elsewhere").symlink_to(escape, target_is_directory=True)
+    # A cycle of allowed links ends rather than being walked forever.
+    (store / "loop").symlink_to(store, target_is_directory=True)
+    try:
+        result = await call(root, "git_status", {"repo_path": str(root / "nested")})
+        assert uses_outside(result, escape.resolve(), root), result
+    finally:
+        other.close()
+
+
 async def test_restricted_server_accepts_git_dir_symlinks_that_stay_inside(
     tmp_path: Path, repo: git.Repo
 ):

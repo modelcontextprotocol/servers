@@ -347,6 +347,40 @@ async def test_signing_program_never_runs(repo: git.Repo, payload: Payload):
 
 
 @posix_only
+async def test_merge_options_never_run_the_signing_program(
+    repo: git.Repo, payload: Payload
+):
+    # `branch.<name>.mergeOptions` reaches git merge as command-line options,
+    # which outrank `commit.gpgSign=false`: `--gpg-sign` there would sign the
+    # merge commit with the repository's `gpg.program`.
+    gpg = payload.script.parent / "gpg.sh"
+    gpg.write_text(f"#!/bin/sh\n{payload.command('gpg')}\nexit 1\n")
+    gpg.chmod(gpg.stat().st_mode | stat.S_IEXEC)
+    repo.git.checkout("-b", "feature")
+    commit_file(repo, "feature.txt", "feature\n")
+    repo.git.checkout("main")
+    commit_file(repo, "main.txt", "main\n")
+    set_config(
+        repo,
+        branch__main__mergeOptions="--gpg-sign --verify-signatures",
+        user__signingKey="ABCDEF",
+        gpg__program=str(gpg),
+    )
+
+    result = await call(
+        "git_merge",
+        {
+            "repo_path": str(root_of(repo)),
+            "source_branch": "feature",
+            "fast_forward_only": False,
+        },
+    )
+
+    assert result["isError"] is False, result
+    assert payload.runs() == []
+
+
+@posix_only
 async def test_submodule_configuration_is_not_reached(
     tmp_path: Path, repo: git.Repo, payload: Payload
 ):
@@ -407,6 +441,7 @@ def test_harden_repo_keeps_the_users_own_drivers(
         filter__lfs__clean="evil",
         filter__Evil__process="evil",
         merge__evil__driver="evil",
+        branch__main__mergeOptions="--gpg-sign",
     )
 
     harden_repo(repo)
@@ -415,6 +450,7 @@ def test_harden_repo_keeps_the_users_own_drivers(
     assert config_value(repo, "filter.lfs.clean") == ""
     assert config_value(repo, "filter.Evil.process") == ""
     assert config_value(repo, "merge.evil.driver") == ""
+    assert config_value(repo, "branch.main.mergeOptions") == ""
 
 
 def test_harden_repo_keeps_the_users_command_line_configuration(
