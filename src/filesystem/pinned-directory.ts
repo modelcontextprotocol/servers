@@ -452,21 +452,41 @@ export function renameIntoDirectory(
       fs.renameSync(landing, path.basename(destinationPath));
     });
   } catch (error) {
-    const from = landed ? path.join(destinationDirectory, landing) : held;
+    // Named by its directory as validated: if that directory was swapped,
+    // the entry is in the directory that was moved away, under this name.
+    let left = landed
+      ? `${landing} in ${destinationDirectory}`
+      : `${held} in ${sourceDirectory}`;
     let restored = false;
     try {
-      restored = inDirectory(sourceDirectory, () => returnStaged(from, name));
+      restored = inDirectory(sourceDirectory, () => {
+        let staged = held;
+        if (landed) {
+          // The destination's directory is reached by path here, and could
+          // have been swapped since step 3 failed, with an entry planted
+          // under the landing name it showed. So the entry comes back under
+          // a fresh name and must be the source before it takes the source's
+          // name; anything else goes back the way it came.
+          staged = stagingName();
+          try {
+            fs.renameSync(path.join(destinationDirectory, landing), staged);
+          } catch {
+            return false;
+          }
+          if (!isSameEntry(fs.lstatSync(staged, { bigint: true }), expected)) {
+            returnStaged(staged, path.join(destinationDirectory, landing));
+            return false;
+          }
+          left = `${staged} in ${sourceDirectory}`;
+        }
+        return returnStaged(staged, name);
+      });
     } catch {
       // The source's directory cannot be entered as validated.
     }
     if (restored) {
       throw error;
     }
-    // Named by its directory as validated: if that directory was swapped,
-    // the entry is in the directory that was moved away, under this name.
-    const left = landed
-      ? `${landing} in ${destinationDirectory}`
-      : `${held} in ${sourceDirectory}`;
     throw Object.assign(
       new Error(
         `${(error as Error).message}. The entry being moved could not be ` +

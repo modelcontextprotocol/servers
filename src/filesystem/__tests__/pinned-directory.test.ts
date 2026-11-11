@@ -589,14 +589,72 @@ describe("renameIntoDirectory", () => {
     } catch (caught) {
       error = caught;
     }
-    const [left] = movingNames(path.join(dir, "sub"));
+    // Brought back into the source's directory, and checked, but its name
+    // was taken, so it stays there under the fresh name.
+    const [left] = movingNames(dir);
     expect(error).toMatchObject({
       code: "EISDIR",
-      message: expect.stringContaining(
-        `was left as ${left} in ${path.join(dir, "sub")}`,
-      ),
+      message: expect.stringContaining(`was left as ${left} in ${dir}`),
     });
-    expect(fs.readFileSync(path.join(dir, "sub", left), "utf-8")).toBe("a");
+    expect(fs.readFileSync(path.join(dir, left), "utf-8")).toBe("a");
+    expect(movingNames(path.join(dir, "sub"))).toEqual([]);
+  });
+
+  it.skipIf(!symlinks)(
+    "never restores an entry planted where the destination's directory was swapped",
+    () => {
+      fs.mkdirSync(path.join(dir, "sub"));
+      fs.writeFileSync(path.join(dir, "a.txt"), "a");
+      let landing = "";
+      onRename((call, from, to, real) => {
+        if (call === 3) {
+          landing = String(from);
+          real(path.join(dir, "sub"), path.join(dir, "sub-real"));
+          fs.symlinkSync(outside, path.join(dir, "sub"));
+          fs.writeFileSync(path.join(outside, landing), "secret");
+          throw errno("EISDIR");
+        }
+        real(from, to);
+      });
+      let error: unknown;
+      try {
+        renameIntoDirectory(
+          path.join(dir, "a.txt"),
+          path.join(dir, "sub", "b.txt"),
+        );
+      } catch (caught) {
+        error = caught;
+      }
+      expect(String(error)).toContain(
+        `was left as ${landing} in ${path.join(dir, "sub")}`,
+      );
+      expect(fs.existsSync(path.join(dir, "a.txt"))).toBe(false);
+      expect(movingNames(dir)).toEqual([]);
+      expect(fs.readFileSync(path.join(outside, landing), "utf-8")).toBe(
+        "secret",
+      );
+      expect(
+        fs.readFileSync(path.join(dir, "sub-real", landing), "utf-8"),
+      ).toBe("a");
+    },
+  );
+
+  it("reports the source left when the destination's entry cannot be brought back", () => {
+    fs.mkdirSync(path.join(dir, "sub"));
+    fs.writeFileSync(path.join(dir, "a.txt"), "a");
+    onRename((call, from, to, real) => {
+      if (call === 3 || call === 4) {
+        throw errno(call === 3 ? "EISDIR" : "EIO");
+      }
+      real(from, to);
+    });
+    expect(() =>
+      renameIntoDirectory(
+        path.join(dir, "a.txt"),
+        path.join(dir, "sub", "b.txt"),
+      ),
+    ).toThrow(/was left as \.mcp-[0-9a-f]{16}\.moving in /);
+    expect(movingNames(path.join(dir, "sub"))).toHaveLength(1);
   });
 
   it("says where a directory source was left when its name was taken", () => {
