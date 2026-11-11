@@ -1,5 +1,15 @@
 # @modelcontextprotocol/server-memory
 
+## 2.1.1
+
+### Patch Changes
+
+- [#5475](https://github.com/modelcontextprotocol/servers/pull/5475) [`2a73097`](https://github.com/modelcontextprotocol/servers/commit/2a7309707ce00d340bc8c29288084a1408f14efb) [@cliffhall](https://github.com/cliffhall) - Describe every tool input property in tools/list ([#3669](https://github.com/modelcontextprotocol/servers/issues/3669)). Every filesystem path argument now says how it is resolved and that it must stay inside the allowed directories, and `excludePatterns` says how its globs match (which differs between `directory_tree` and `search_files`). The memory server's top-level array arguments, and the everything server's `resourceType`, gain descriptions, and `get-resource-reference`'s `resourceId` no longer claims to fetch only text resources.
+
+- [#5460](https://github.com/modelcontextprotocol/servers/pull/5460) [`5bfe0ae`](https://github.com/modelcontextprotocol/servers/commit/5bfe0ae7301e0d0902a6a18f945c4b9d5c02ec24) [@cliffhall](https://github.com/cliffhall) - The `delete_entities` and `delete_relations` descriptions now say when to use each one and name the other: `delete_entities` removes whole entities with their observations and every relation that touches them, while `delete_relations` removes a link and keeps both entities. `delete_relations` also states that a relation is deleted only on an exact match of `from`, `to` and `relationType`, and points to `open_nodes` for reading the stored type first.
+
+- [#5462](https://github.com/modelcontextprotocol/servers/pull/5462) [`b17b76a`](https://github.com/modelcontextprotocol/servers/commit/b17b76ac3be801b0edf9b7554dbd9e1eeea434cf) [@cliffhall](https://github.com/cliffhall) - Fix the file lock's heartbeat refreshing a lock file this process no longer owns: once a lock is broken as stale and re-taken by another process, the previous holder stops refreshing it, so a crashed new owner's lock can still go stale and be broken.
+
 ## 2.1.0
 
 ### Minor Changes
