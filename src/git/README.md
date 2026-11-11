@@ -173,7 +173,22 @@ python -m mcp_server_git
 
 `--repository` (`-r`) accepts any path inside a Git working tree. At startup the server walks up to the enclosing repository root, the way `git rev-parse --show-toplevel` does, so `--repository .` works when a shared config is launched from any subdirectory of the repository. A path inside the repository therefore allows tool calls anywhere in that repository, not only under the subdirectory given. A path that does not exist, or is not inside a Git repository, is logged as a one-line error at startup.
 
-A tool call's `repo_path` must be inside that repository, and so must the directories Git then uses for it: a repository nested inside whose `.git` file, `commondir` or `core.worktree` points outside is refused. A linked worktree can still be the `--repository`, though its Git directory lives under the main repository's `.git`.
+A tool call's `repo_path` must be inside that repository, and so must the directories Git then uses for it: a repository nested inside whose `.git` file, `commondir` or `core.worktree` points outside is refused. A linked worktree can still be the `--repository`, though its Git directory lives under the main repository's `.git`; only the worktree itself may use that directory, so a repository nested in the worktree whose `.git` names it, or the main repository's `.git`, is refused. With `--repository` set, the server also refuses a repository whose Git directory:
+
+- names alternate object stores (`objects/info/alternates` or `objects/info/http-alternates` with any entry), wherever they are. A clone made with `--reference` or `--shared` therefore cannot be used under `--repository`; `git repack -a -d` and then deleting `objects/info/alternates` makes it self-contained.
+- holds a symbolic link (at `objects`, `refs`, `index`, `HEAD` or anywhere else in it) that resolves outside both the allowed repository and that Git directory. A `hooks` directory linked elsewhere is allowed, since no hook runs.
+
+### A repository's own programs
+
+A repository's configuration and hooks travel with it (an unpacked archive, a shared folder, a vendored tree), so the server never runs a program they name, with or without `--repository`. Every Git command it runs overrides, through `GIT_CONFIG_COUNT`, the settings that would start one:
+
+- `core.fsmonitor` is `false`, and `core.hooksPath` points at the null device, so no hook runs; `git_commit` also skips the hooks GitPython would run itself (`pre-commit`, `commit-msg`, `post-commit`).
+- Diffs pass `--no-ext-diff` and `--no-textconv`, so `diff.external`, `diff.<driver>.command` and `diff.<driver>.textconv` are ignored.
+- Each filter driver (`filter.<name>.clean`, `smudge`, `process`) and merge driver (`merge.<name>.driver`) that the repository's own configuration defines is emptied: files are staged and checked out unfiltered, and a file a merge driver would have merged is a conflict, which `git_merge` aborts. Drivers from your global or system configuration, such as Git LFS's, keep working.
+- `commit.gpgSign` and `merge.verifySignatures` are `false`, `submodule.recurse` and `merge.autoStash` are `false`, and `core.pager` is `cat`.
+- `git_status`, `git_diff_unstaged` and `git_diff` pass `--ignore-submodules=dirty`, because looking for changes inside a submodule runs Git under the submodule's own configuration. A submodule whose checked-out commit moved is still reported; changes inside one are not, so run the tool on the submodule's path to see them.
+
+This needs Git 2.31 or later; with an older Git every tool call fails with an error saying so, rather than run unprotected.
 
 ### Commit identity
 

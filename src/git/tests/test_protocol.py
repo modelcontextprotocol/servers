@@ -24,7 +24,7 @@ from unittest.mock import patch
 import anyio
 import git
 import pytest
-from conftest import connect, make_repo, text_result, tool_error, wire
+from conftest import connect, make_repo, rmtree, text_result, tool_error, wire
 from mcp.client.session import ClientRequestContext
 from mcp.shared.exceptions import MCPError
 from mcp.shared.memory import create_client_server_memory_streams
@@ -1399,6 +1399,156 @@ async def test_restricted_server_serves_a_linked_worktree(tmp_path: Path):
     try:
         result = await call(worktree, "git_status", {"repo_path": str(worktree)})
         assert result["isError"] is False
+    finally:
+        main.close()
+
+
+@pytest.mark.parametrize("name", ["alternates", "http-alternates"])
+async def test_restricted_server_rejects_alternate_object_stores(
+    tmp_path: Path, repo: git.Repo, name: str
+):
+    # `objects/info/alternates` names more object stores git reads as the
+    # repository's own: a nested repository naming an outside one would show
+    # that repository's commits and files by id.
+    root = root_of(repo)
+    other = make_repo(tmp_path / "other")
+    secret = other.head.commit.hexsha
+    nested = make_repo(root / "nested")
+    alternates = Path(nested.git_dir) / "objects" / "info" / name
+    alternates.parent.mkdir(parents=True, exist_ok=True)
+    alternates.write_text(f"# a comment\n\n{Path(other.git_dir) / 'objects'}\n")
+    nested.close()
+    try:
+        shown = await call(
+            root, "git_show", {"repo_path": str(root / "nested"), "revision": secret}
+        )
+        assert shown["isError"] is True
+        text = shown["content"][0]["text"]
+        assert f"uses '{alternates}'" in text
+        assert "alternate object stores are not allowed with --repository" in text
+        assert "line 1" not in text
+    finally:
+        other.close()
+
+
+async def test_restricted_server_accepts_empty_alternates(repo: git.Repo):
+    # An alternates file holding only comments and blank lines names nothing.
+    root = root_of(repo)
+    alternates = Path(repo.git_dir) / "objects" / "info" / "alternates"
+    alternates.parent.mkdir(parents=True, exist_ok=True)
+    alternates.write_text("# no alternates\n\n")
+    result = await call(root, "git_status", {"repo_path": str(root)})
+    assert result["isError"] is False
+
+
+@pytest.mark.parametrize("entry", ["objects", "refs", "index", "packed-refs"])
+async def test_restricted_server_rejects_git_dir_symlink_pointing_outside(
+    tmp_path: Path, repo: git.Repo, entry: str
+):
+    # A symbolic link inside a nested repository's `.git` is followed by git,
+    # for reading (objects, refs) and for writing (a linked index takes
+    # git_add's writes to the repository it names).
+    root = root_of(repo)
+    other = make_repo(tmp_path / "other")
+    other.git.pack_refs("--all")
+    nested = make_repo(root / "nested")
+    nested_git = Path(nested.git_dir)
+    nested.close()
+    link = nested_git / entry
+    if link.is_dir():
+        rmtree(link)
+    else:
+        link.unlink(missing_ok=True)
+    link.symlink_to(
+        Path(other.git_dir) / entry,
+        target_is_directory=link.name in ("objects", "refs"),
+    )
+    index_before = (Path(other.git_dir) / "index").read_bytes()
+    (root / "nested" / "new.txt").write_text("new\n")
+    try:
+        for tool, arguments in (
+            ("git_show", {"revision": other.head.commit.hexsha}),
+            ("git_branch", {"branch_type": "local"}),
+            ("git_add", {"files": ["new.txt"]}),
+        ):
+            result = await call(
+                root, tool, {"repo_path": str(root / "nested"), **arguments}
+            )
+            assert uses_outside(
+                result, (Path(other.git_dir) / entry).resolve(), root
+            ), (tool, result)
+        assert (Path(other.git_dir) / "index").read_bytes() == index_before
+    finally:
+        other.close()
+
+
+async def test_restricted_server_accepts_git_dir_symlinks_that_stay_inside(
+    tmp_path: Path, repo: git.Repo
+):
+    # A link within the git directory, or to elsewhere in the allowed
+    # repository, leads nowhere new; nor does a hooks directory linked to a
+    # shared one outside, since no hook runs.
+    root = root_of(repo)
+    git_dir = Path(repo.git_dir)
+    (git_dir / "head-link").symlink_to(git_dir / "HEAD")
+    (git_dir / "readme-link").symlink_to(root / "test.txt")
+    shared_hooks = tmp_path / "shared-hooks"
+    shared_hooks.mkdir()
+    hooks = git_dir / "hooks"
+    if hooks.exists():
+        rmtree(hooks)
+    hooks.symlink_to(shared_hooks, target_is_directory=True)
+    result = await call(root, "git_status", {"repo_path": str(root)})
+    assert result["isError"] is False
+
+
+async def test_restricted_server_rejects_nested_gitdir_naming_main_of_worktree(
+    tmp_path: Path,
+):
+    # With a linked worktree as the allowed repository, the main repository's
+    # git directory is the worktree's common directory, outside it. A `.git`
+    # file nested in the worktree naming that directory must not reach the
+    # main repository's index, HEAD or branches.
+    main = make_repo(tmp_path / "main")
+    worktree = tmp_path / "worktree"
+    main.git.worktree("add", str(worktree))
+    (tmp_path / "main" / "test.txt").write_text("staged in main\n")
+    main.git.add("test.txt")
+    staged_before = main.git.diff("--cached", "--name-only")
+    main_head = main.head.commit.hexsha
+    nested = worktree / "nested"
+    nested.mkdir()
+    (nested / ".git").write_text(f"gitdir: {main.git_dir}\n")
+    try:
+        for tool, arguments in (
+            ("git_reset", {}),
+            ("git_log", {}),
+            ("git_commit", {"message": "escaped"}),
+        ):
+            result = await call(worktree, tool, {"repo_path": str(nested), **arguments})
+            assert uses_outside(result, Path(main.git_dir), worktree), (tool, result)
+        assert main.git.diff("--cached", "--name-only") == staged_before
+        assert main.head.commit.hexsha == main_head
+    finally:
+        main.close()
+
+
+async def test_restricted_server_rejects_nested_gitdir_naming_worktree_git_dir(
+    tmp_path: Path,
+):
+    # The linked worktree's own git directory, named from a repository nested
+    # in it, is the allowed repository's, but not opened from the allowed
+    # repository: refused too.
+    main = make_repo(tmp_path / "main")
+    worktree = tmp_path / "worktree"
+    main.git.worktree("add", str(worktree))
+    worktree_git_dir = Path(main.git_dir) / "worktrees" / "worktree"
+    nested = worktree / "nested"
+    nested.mkdir()
+    (nested / ".git").write_text(f"gitdir: {worktree_git_dir}\n")
+    try:
+        result = await call(worktree, "git_status", {"repo_path": str(nested)})
+        assert uses_outside(result, worktree_git_dir, worktree), result
     finally:
         main.close()
 
