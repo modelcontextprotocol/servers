@@ -657,6 +657,30 @@ describe("renameIntoDirectory", () => {
     expect(movingNames(path.join(dir, "sub"))).toHaveLength(1);
   });
 
+  it("drops EXDEV when the source cannot be put back, so no copy follows", () => {
+    fs.mkdirSync(path.join(dir, "sub"));
+    fs.writeFileSync(path.join(dir, "a.txt"), "a");
+    onRename((call, from, to, real) => {
+      if (call === 2) {
+        fs.writeFileSync(path.join(dir, "a.txt"), "someone else's");
+        throw errno("EXDEV");
+      }
+      real(from, to);
+    });
+    let error: unknown;
+    try {
+      renameIntoDirectory(
+        path.join(dir, "a.txt"),
+        path.join(dir, "sub", "b.txt"),
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect((error as NodeJS.ErrnoException).code).toBeUndefined();
+    expect((error as Error).cause).toMatchObject({ code: "EXDEV" });
+    expect((error as Error).message).toContain("was left as");
+  });
+
   it("says where a directory source was left when its name was taken", () => {
     fs.mkdirSync(path.join(dir, "d"));
     fs.mkdirSync(path.join(dir, "sub"));

@@ -487,12 +487,16 @@ export function renameIntoDirectory(
     if (restored) {
       throw error;
     }
+    // EXDEV is dropped: it sends moveFile to copy whatever is at sourcePath
+    // now, which is not the source. The step's error stays as the cause.
+    const code = (error as NodeJS.ErrnoException).code;
     throw Object.assign(
       new Error(
         `${(error as Error).message}. The entry being moved could not be ` +
           `put back at ${sourcePath} and was left as ${left}`,
+        { cause: error },
       ),
-      { code: (error as NodeJS.ErrnoException).code },
+      { code: code === "EXDEV" ? undefined : code },
     );
   }
 }
