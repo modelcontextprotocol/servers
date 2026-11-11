@@ -147,12 +147,16 @@ HARDENED_CONFIG: tuple[tuple[str, str], ...] = (
 # (`merge.<name>.driver`) is a command too, under a name the repository
 # chooses, so each one the repository's own configuration defines is
 # overridden with an empty command, which git skips (a filter) or reports as
-# a conflict (a merge driver). Drivers from the user's global or system
-# configuration (git-lfs, say) are the user's own and keep working.
+# a conflict (a merge driver). `branch.<name>.mergeOptions` is emptied the
+# same way: git merge reads it as command-line options, which outrank the
+# overrides above (`--gpg-sign` there would run `gpg.program` whatever
+# `commit.gpgSign` says). Drivers and options from the user's global or
+# system configuration (git-lfs, say) are the user's own and keep working.
 # `harden_repo` lists these keys, and `core.hooksPath`, whose command-scope
 # value shows that git applied the overrides.
 _LISTED_KEYS = (
-    r"^(core\.hookspath|filter\..+\.(clean|smudge|process)|merge\..+\.driver)$"
+    r"^(core\.hookspath|filter\..+\.(clean|smudge|process)|merge\..+\.driver"
+    r"|branch\..+\.mergeoptions)$"
 )
 
 # Scopes whose configuration the user wrote rather than the repository.
@@ -603,7 +607,9 @@ def git_merge(
     # config says (merge.ff, branch.<name>.mergeOptions): --ff/--ff-only
     # choose fast-forwarding, --commit and --no-squash make a merge that
     # succeeds a completed one that moves HEAD, and --no-edit keeps git from
-    # opening an editor for the message. --no-overwrite-ignore refuses to
+    # opening an editor for the message. --no-gpg-sign and
+    # --no-verify-signatures keep `gpg.program` from running whatever asks
+    # for it (see `_LISTED_KEYS`). --no-overwrite-ignore refuses to
     # replace an ignored local file (a `.env`, say) that the source tracks:
     # `is_dirty()` cannot see one, and git would overwrite it unrecoverably.
     #
@@ -619,6 +625,8 @@ def git_merge(
             "--commit",
             "--no-squash",
             "--no-edit",
+            "--no-gpg-sign",
+            "--no-verify-signatures",
             "--no-overwrite-ignore",
             "-m",
             f"Merge '{source_branch}' into '{target}'",
@@ -802,6 +810,10 @@ def _check_git_dir_contents(
       anything else in a git directory is followed by git, for reading and
       for writing (a linked `index` takes git_add's writes elsewhere).
 
+    A link that is allowed and names a directory is walked too, since git
+    follows it into that directory and on into any link inside it; each
+    directory is walked once, so a cycle of links ends.
+
     `hooks` is not walked: no hook runs (`HARDENED_CONFIG`), so a hooks
     directory linked to a shared one elsewhere is harmless.
     """
@@ -817,6 +829,7 @@ def _check_git_dir_contents(
                     "alternate object stores are not allowed with --repository"
                 )
     pending = [directory]
+    visited = {directory}
     while pending:
         current = pending.pop()
         with os.scandir(current) as entries:
@@ -830,8 +843,14 @@ def _check_git_dir_contents(
                         or target.is_relative_to(directory)
                     ):
                         raise outside(target)
+                    if target.is_dir() and target not in visited:
+                        visited.add(target)
+                        pending.append(target)
                 elif entry.is_dir():
-                    pending.append(Path(entry.path))
+                    real = Path(entry.path).resolve()
+                    if real not in visited:
+                        visited.add(real)
+                        pending.append(real)
 
 
 def git_branch(
