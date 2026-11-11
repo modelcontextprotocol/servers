@@ -17,9 +17,10 @@
 // the read is anchored however long it takes. Every check happens before a
 // byte is written or read, so nothing ever needs rolling back, except in two
 // moves: the cross-device move copies, and so removes its copy if a later
-// step fails; the same-device move can anchor only its destination (rename
-// takes two paths), so it pins its source by identity and puts back an entry
-// that is not the one it checked.
+// step fails; the same-device move can anchor only one side of each rename
+// (rename takes two paths), so it first moves its source to a fresh random
+// name inside the anchored source directory, renames only that name across,
+// checks it arrived by identity, and puts the source back if anything fails.
 //
 // On Windows the working directory is a string and relative paths resolve
 // against it, so reading it back proves nothing; there the leaf is lstat'd
@@ -352,68 +353,128 @@ export async function appendFileInDirectory(
   }
 }
 
-/** A name in the destination directory to stage a rename under. */
-function stagingName(destinationPath: string): string {
-  return `.${path.basename(destinationPath)}.${randomBytes(8).toString("hex")}.moving`;
+/**
+ * A fresh name to stage a rename under. It is random, so nothing at it can
+ * have been prepared in advance, and its length is fixed (30 bytes), so it
+ * fits a filesystem's name limit whatever the entry's own name is.
+ */
+function stagingName(): string {
+  return `.mcp-${randomBytes(8).toString("hex")}.moving`;
 }
 
 /**
- * Put back an entry a rename staged at `staged` (relative to the anchored
- * destination directory) that turned out not to be the source: at
- * `sourcePath`, where it came from, without overwriting anything there. A
- * hard link refuses an existing name; a directory, which cannot be linked,
- * is renamed back only while nothing is at `sourcePath`. If neither is
- * possible it stays at its staged name, which is never the destination.
+ * Rename `staged` to `name` without replacing anything at `name`, and say
+ * whether it did. A hard link refuses an existing name; a directory, which
+ * cannot be linked, is renamed only while nothing is at `name`.
  */
-function returnStaged(staged: string, sourcePath: string): void {
+function returnStaged(staged: string, name: string): boolean {
   try {
-    fs.linkSync(staged, sourcePath);
+    fs.linkSync(staged, name);
     fs.unlinkSync(staged);
-    return;
+    return true;
   } catch {
-    // Not linkable (a directory), or something is at sourcePath now.
+    // Not linkable (a directory), or something is at `name` now.
   }
   try {
-    fs.lstatSync(sourcePath);
+    fs.lstatSync(name);
+    return false;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      fs.renameSync(staged, sourcePath);
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      return false;
     }
   }
+  try {
+    fs.renameSync(staged, name);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
- * Rename `sourcePath` to the final component of `destinationPath`, both
- * anchored. rename() takes two paths and Node has no renameat(), so only one
- * side can be resolved relative to an anchor: the destination is, and the
- * source is pinned by identity instead. Its entry is read relative to its own
- * anchored directory first, the rename then stages whatever the kernel
- * resolved `sourcePath` to under a fresh name in the destination directory,
- * and only an entry that is the one read moves on to the destination name.
- * Anything else (a directory on the source path was swapped in between) is
- * put back and the move refused, so it is never at the destination name.
+ * Rename `sourcePath` to `destinationPath`, keeping both inside their
+ * validated directories. rename() takes two paths and Node has no
+ * renameat(), so each rename can resolve only one side relative to an
+ * anchor. The other side always names a fresh random name (`stagingName`),
+ * so a directory swapped on that side's path leads to a name nothing holds,
+ * and the rename fails, rather than to an entry that was waiting there:
+ *
+ * 1. Anchored at the source's directory, the source moves to a fresh name,
+ *    and its identity is read.
+ * 2. Anchored at the destination's directory, that name moves to another
+ *    fresh name there, which must be the entry read in step 1.
+ * 3. Still anchored, it takes the destination's name.
+ *
+ * If a step fails, the source goes back under its own name, and the error is
+ * the step's own (EXDEV still sends moveFile to the cross-device copy). If it
+ * cannot go back (something took its name in the meantime, or its directory
+ * no longer resolves to the one validated, which is never entered), the error
+ * says where it was left.
  */
 export function renameIntoDirectory(
   sourcePath: string,
   destinationPath: string,
 ): void {
+  const sourceDirectory = path.dirname(sourcePath);
   const name = path.basename(sourcePath);
-  const expected = inDirectory(path.dirname(sourcePath), () => {
+  const destinationDirectory = path.dirname(destinationPath);
+  const held = stagingName();
+  const expected = inDirectory(sourceDirectory, () => {
     try {
-      return fs.lstatSync(name, { bigint: true });
+      fs.renameSync(name, held);
     } catch (error) {
       throw namingPath(error, name, sourcePath);
     }
+    return fs.lstatSync(held, { bigint: true });
   });
-  inDirectory(path.dirname(destinationPath), () => {
-    const staged = stagingName(destinationPath);
-    fs.renameSync(sourcePath, staged);
-    if (!isSameEntry(fs.lstatSync(staged, { bigint: true }), expected)) {
-      returnStaged(staged, sourcePath);
-      throw directoryChangedError(path.dirname(sourcePath));
+  const landing = stagingName();
+  let landed = false;
+  try {
+    inDirectory(destinationDirectory, () => {
+      try {
+        fs.renameSync(path.join(sourceDirectory, held), landing);
+      } catch (error) {
+        // The name was made in step 1, so a path that no longer reaches it
+        // leads somewhere else: the source's directory was swapped.
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+          throw directoryChangedError(sourceDirectory);
+        }
+        throw error;
+      }
+      if (!isSameEntry(fs.lstatSync(landing, { bigint: true }), expected)) {
+        // An entry another process put under the fresh name, after seeing
+        // it, at the end of a swapped path: send it back the way it came.
+        // The source is still where step 1 put it.
+        returnStaged(landing, path.join(sourceDirectory, held));
+        throw directoryChangedError(sourceDirectory);
+      }
+      landed = true;
+      fs.renameSync(landing, path.basename(destinationPath));
+    });
+  } catch (error) {
+    const from = landed ? path.join(destinationDirectory, landing) : held;
+    let restored = false;
+    try {
+      restored = inDirectory(sourceDirectory, () => returnStaged(from, name));
+    } catch {
+      // The source's directory cannot be entered as validated.
     }
-    fs.renameSync(staged, path.basename(destinationPath));
-  });
+    if (restored) {
+      throw error;
+    }
+    // Named by its directory as validated: if that directory was swapped,
+    // the entry is in the directory that was moved away, under this name.
+    const left = landed
+      ? `${landing} in ${destinationDirectory}`
+      : `${held} in ${sourceDirectory}`;
+    throw Object.assign(
+      new Error(
+        `${(error as Error).message}. The entry being moved could not be ` +
+          `put back at ${sourcePath} and was left as ${left}`,
+      ),
+      { code: (error as NodeJS.ErrnoException).code },
+    );
+  }
 }
 
 // The cross-device move below (#5188). rename() cannot cross a device

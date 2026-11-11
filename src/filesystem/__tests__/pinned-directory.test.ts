@@ -432,104 +432,240 @@ describe("renameIntoDirectory", () => {
     },
   );
 
-  // The source's directory swapped for a link to an outside one between the
-  // source's identity check and the rename: the rename resolves the swapped
-  // path and stages the outside entry, which must go back, never through.
-  const swapSourceOnRename = (after?: () => void) => {
+  const movingNames = (directory: string) =>
+    fs.readdirSync(directory).filter((n) => n.endsWith(".moving"));
+
+  // Stand in for renameSync, calling `around(call, from, to, real)` on each
+  // call; the first call is step 1 (inside the source's directory), the
+  // second step 2 (across), the third step 3 (to the destination's name).
+  const onRename = (
+    around: (
+      call: number,
+      from: fs.PathLike,
+      to: fs.PathLike,
+      real: typeof fs.renameSync,
+    ) => void,
+  ) => {
     const realRename = fs.renameSync;
-    let swapped = false;
-    vi.spyOn(fs, "renameSync").mockImplementation((from, to) => {
-      if (!swapped) {
-        swapped = true;
-        realRename(path.join(dir, "sub"), path.join(dir, "sub-real"));
-        fs.symlinkSync(outside, path.join(dir, "sub"));
-        realRename(from, to);
-        after?.();
-        return;
-      }
-      realRename(from, to);
-    });
+    let call = 0;
+    vi.spyOn(fs, "renameSync").mockImplementation((from, to) =>
+      around(++call, from, to, realRename),
+    );
   };
 
+  // The source's directory swapped for a link to an outside one between
+  // step 1 and step 2: step 2's path now leads outside, where nothing has
+  // the fresh name, so nothing comes in from there.
+  const swapSourceBeforeStep2 = (before?: (held: string) => void) =>
+    onRename((call, from, to, real) => {
+      if (call === 2) {
+        real(path.join(dir, "sub"), path.join(dir, "sub-real"));
+        fs.symlinkSync(outside, path.join(dir, "sub"));
+        before?.(path.basename(String(from)));
+      }
+      real(from, to);
+    });
+
   it.skipIf(!symlinks)(
-    "puts back an outside file a swapped source directory redirected the rename to",
+    "never brings in an outside entry when the source directory is swapped",
     () => {
       fs.mkdirSync(path.join(dir, "sub"));
       fs.writeFileSync(path.join(dir, "sub", "x.conf"), "inside");
       fs.writeFileSync(path.join(outside, "x.conf"), "secret");
-      swapSourceOnRename();
+      swapSourceBeforeStep2();
       expect(() =>
         renameIntoDirectory(
           path.join(dir, "sub", "x.conf"),
           path.join(dir, "moved.conf"),
         ),
       ).toThrow("Access denied");
-      expect(fs.readFileSync(path.join(outside, "x.conf"), "utf-8")).toBe(
-        "secret",
-      );
+      // Nothing came in, and nothing left the directory that was moved away:
+      // the source stays there under its fresh name, since the swapped path
+      // is never entered to put it back.
+      expect(fs.readdirSync(outside)).toEqual(["x.conf"]);
       expect(fs.readdirSync(dir).sort()).toEqual(["sub", "sub-real"]);
+      const [held] = movingNames(path.join(dir, "sub-real"));
+      expect(fs.readFileSync(path.join(dir, "sub-real", held), "utf-8")).toBe(
+        "inside",
+      );
       expect(process.cwd()).toBe(cwd);
     },
   );
 
+  it("puts back a directory source, which cannot be linked, by renaming it", () => {
+    fs.mkdirSync(path.join(dir, "d"));
+    fs.mkdirSync(path.join(dir, "sub"));
+    onRename((call, from, to, real) => {
+      if (call === 2) {
+        throw errno("EXDEV");
+      }
+      real(from, to);
+    });
+    expect(() =>
+      renameIntoDirectory(path.join(dir, "d"), path.join(dir, "sub", "e")),
+    ).toThrow(expect.objectContaining({ code: "EXDEV" }));
+    expect(fs.readdirSync(dir).sort()).toEqual(["d", "sub"]);
+  });
+
   it.skipIf(!symlinks)(
-    "puts back an outside directory, which cannot be linked, by renaming it",
+    "sends back an entry planted outside under the fresh name",
     () => {
       fs.mkdirSync(path.join(dir, "sub"));
-      fs.mkdirSync(path.join(dir, "sub", "d"));
-      fs.mkdirSync(path.join(outside, "d"));
-      fs.writeFileSync(path.join(outside, "d", "f"), "secret");
-      swapSourceOnRename();
+      fs.writeFileSync(path.join(dir, "sub", "x.conf"), "inside");
+      let planted = "";
+      swapSourceBeforeStep2((held) => {
+        planted = held;
+        fs.writeFileSync(path.join(outside, held), "secret");
+      });
       expect(() =>
-        renameIntoDirectory(path.join(dir, "sub", "d"), path.join(dir, "e")),
+        renameIntoDirectory(
+          path.join(dir, "sub", "x.conf"),
+          path.join(dir, "moved.conf"),
+        ),
       ).toThrow("Access denied");
-      expect(fs.readFileSync(path.join(outside, "d", "f"), "utf-8")).toBe(
+      expect(fs.readFileSync(path.join(outside, planted), "utf-8")).toBe(
         "secret",
       );
-      expect(fs.readdirSync(dir).sort()).toEqual(["sub", "sub-real"]);
+      expect(movingNames(dir)).toEqual([]);
+      expect(movingNames(path.join(dir, "sub-real"))).toHaveLength(1);
     },
   );
 
-  it.skipIf(!symlinks)(
-    "leaves an outside directory staged when the source name is taken again",
-    () => {
-      fs.mkdirSync(path.join(dir, "sub"));
-      fs.mkdirSync(path.join(dir, "sub", "d"));
-      fs.mkdirSync(path.join(outside, "d"));
-      swapSourceOnRename(() => fs.mkdirSync(path.join(outside, "d")));
-      expect(() =>
-        renameIntoDirectory(path.join(dir, "sub", "d"), path.join(dir, "e")),
-      ).toThrow("Access denied");
-      const names = fs.readdirSync(dir);
-      expect(names).not.toContain("e");
-      expect(names.filter((n) => n.endsWith(".moving"))).toHaveLength(1);
-    },
-  );
+  it("puts the source back, keeping the error's code, when step 2 fails", () => {
+    fs.mkdirSync(path.join(dir, "sub"));
+    fs.writeFileSync(path.join(dir, "a.txt"), "a");
+    onRename((call, from, to, real) => {
+      if (call === 2) {
+        throw errno("EXDEV");
+      }
+      real(from, to);
+    });
+    expect(() =>
+      renameIntoDirectory(
+        path.join(dir, "a.txt"),
+        path.join(dir, "sub", "b.txt"),
+      ),
+    ).toThrow(expect.objectContaining({ code: "EXDEV" }));
+    expect(fs.readFileSync(path.join(dir, "a.txt"), "utf-8")).toBe("a");
+    expect(movingNames(dir)).toEqual([]);
+  });
 
-  it.skipIf(!symlinks)(
-    "leaves the staged entry when the source name cannot be checked",
-    () => {
-      fs.mkdirSync(path.join(dir, "sub"));
-      fs.mkdirSync(path.join(dir, "sub", "d"));
-      fs.mkdirSync(path.join(outside, "d"));
-      const realLstat = fs.lstatSync;
-      swapSourceOnRename(() => {
+  it("puts the source back when the destination's name cannot be taken", () => {
+    fs.mkdirSync(path.join(dir, "sub"));
+    fs.writeFileSync(path.join(dir, "a.txt"), "a");
+    onRename((call, from, to, real) => {
+      if (call === 3) {
+        throw errno("EISDIR");
+      }
+      real(from, to);
+    });
+    expect(() =>
+      renameIntoDirectory(
+        path.join(dir, "a.txt"),
+        path.join(dir, "sub", "b.txt"),
+      ),
+    ).toThrow(expect.objectContaining({ code: "EISDIR" }));
+    expect(fs.readFileSync(path.join(dir, "a.txt"), "utf-8")).toBe("a");
+    expect(movingNames(dir)).toEqual([]);
+    expect(fs.readdirSync(path.join(dir, "sub"))).toEqual([]);
+  });
+
+  it("says where the source was left when its name was taken meanwhile", () => {
+    fs.mkdirSync(path.join(dir, "sub"));
+    fs.writeFileSync(path.join(dir, "a.txt"), "a");
+    onRename((call, from, to, real) => {
+      if (call === 3) {
+        fs.writeFileSync(path.join(dir, "a.txt"), "someone else's");
+        throw errno("EISDIR");
+      }
+      real(from, to);
+    });
+    let error: unknown;
+    try {
+      renameIntoDirectory(
+        path.join(dir, "a.txt"),
+        path.join(dir, "sub", "b.txt"),
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    const [left] = movingNames(path.join(dir, "sub"));
+    expect(error).toMatchObject({
+      code: "EISDIR",
+      message: expect.stringContaining(
+        `was left as ${left} in ${path.join(dir, "sub")}`,
+      ),
+    });
+    expect(fs.readFileSync(path.join(dir, "sub", left), "utf-8")).toBe("a");
+  });
+
+  it("says where a directory source was left when its name was taken", () => {
+    fs.mkdirSync(path.join(dir, "d"));
+    fs.mkdirSync(path.join(dir, "sub"));
+    onRename((call, from, to, real) => {
+      if (call === 2) {
+        fs.writeFileSync(path.join(dir, "d"), "someone else's");
+        throw errno("EIO");
+      }
+      real(from, to);
+    });
+    expect(() =>
+      renameIntoDirectory(path.join(dir, "d"), path.join(dir, "sub", "e")),
+    ).toThrow(/was left as \.mcp-[0-9a-f]{16}\.moving in /);
+    expect(movingNames(dir)).toHaveLength(1);
+  });
+
+  it("leaves the source staged when its directory cannot be checked", () => {
+    fs.mkdirSync(path.join(dir, "d"));
+    fs.mkdirSync(path.join(dir, "sub"));
+    const realLstat = fs.lstatSync;
+    onRename((call, from, to, real) => {
+      if (call === 2) {
         vi.spyOn(fs, "lstatSync").mockImplementation(((
           p: fs.PathLike,
           options?: fs.StatSyncOptions,
         ) => {
-          if (p === path.join(dir, "sub", "d")) {
+          if (p === "d") {
             throw errno("EACCES");
           }
           return realLstat(p, options);
         }) as never);
-      });
-      expect(() =>
-        renameIntoDirectory(path.join(dir, "sub", "d"), path.join(dir, "e")),
-      ).toThrow("Access denied");
-      expect(fs.readdirSync(dir)).not.toContain("e");
-    },
-  );
+        throw errno("EIO");
+      }
+      real(from, to);
+    });
+    expect(() =>
+      renameIntoDirectory(path.join(dir, "d"), path.join(dir, "sub", "e")),
+    ).toThrow("was left as");
+    expect(movingNames(dir)).toHaveLength(1);
+  });
+
+  it("reports the source left when its directory can no longer be entered", () => {
+    fs.mkdirSync(path.join(dir, "sub"));
+    fs.mkdirSync(path.join(dir, "src"));
+    fs.writeFileSync(path.join(dir, "src", "a.txt"), "a");
+    onRename((call, from, to, real) => {
+      if (call === 2) {
+        fs.renameSync(path.join(dir, "src"), path.join(dir, "src-gone"));
+        throw errno("EIO");
+      }
+      real(from, to);
+    });
+    expect(() =>
+      renameIntoDirectory(
+        path.join(dir, "src", "a.txt"),
+        path.join(dir, "sub", "b.txt"),
+      ),
+    ).toThrow("could not be put back");
+  });
+
+  it("moves to a name as long as the filesystem allows", () => {
+    fs.mkdirSync(path.join(dir, "sub"));
+    fs.writeFileSync(path.join(dir, "a.txt"), "a");
+    const long = `${"n".repeat(251)}.txt`;
+    renameIntoDirectory(path.join(dir, "a.txt"), path.join(dir, "sub", long));
+    expect(fs.readFileSync(path.join(dir, "sub", long), "utf-8")).toBe("a");
+  });
 
   it("names the source when it is missing", () => {
     expect(() =>
