@@ -30,6 +30,7 @@
 import { randomBytes } from "crypto";
 import fs from "fs";
 import path from "path";
+import { isWindowsUncRoot } from "./path-validation.js";
 
 // Descriptor I/O, looked up on fs at call time so tests can stand in for it.
 function ftruncate(fd: number): Promise<void> {
@@ -912,7 +913,8 @@ export async function readFileInDirectory(filePath: string): Promise<Buffer> {
  */
 export function statInDirectory(filePath: string): fs.Stats {
   const name = path.basename(filePath);
-  if (name === "") {
+  // A root (`/`, `C:\`, a UNC share) has no directory above it to anchor at.
+  if (name === "" || (onWindows() && isWindowsUncRoot(filePath))) {
     return fs.lstatSync(filePath);
   }
   return inDirectory(path.dirname(filePath), () => {

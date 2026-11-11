@@ -43,6 +43,18 @@ export function namesAlternateDataStream(normalizedPath: string): boolean {
 const WINDOWS_UNC_ROOT =
   /^(?:\\\\[?.]\\UNC\\|\\\\(?![?.]\\))[^\\/]+[\\/][^\\/]+/i;
 
+/**
+ * True when `windowsPath` is a UNC root itself (`\\server\share`,
+ * `\\?\UNC\server\share`, with or without a trailing separator): a root,
+ * like `C:\`, with no parent directory above it. Node's `path.win32` takes
+ * the share for a name inside the server, or, for the `\\?\UNC\` form,
+ * the server for a directory.
+ */
+export function isWindowsUncRoot(windowsPath: string): boolean {
+  const match = WINDOWS_UNC_ROOT.exec(windowsPath);
+  return match !== null && /^[\\/]?$/.test(windowsPath.slice(match[0].length));
+}
+
 const WINDOWS_DEVICE_NAME =
   /^(?:CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³]) *(?:\..*)?$/is;
 
