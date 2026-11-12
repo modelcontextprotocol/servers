@@ -1,0 +1,42 @@
+# Placeholder for the MCP interface diff's future file name (#5463, Step 1 of
+# a rename staged across a milestone merge).
+#
+# The interface diff lives in `everything-mcp-diff.yml`, a name left over from
+# when it diffed only the Everything server. GitHub dispatches a workflow only
+# when its file exists on the default branch (`main`), and both version
+# workflows (`version-packages.yml`, `prepare-python-release.yml`) dispatch
+# the diff by file name from `v2/main`. Renaming it in one step on `v2/main`
+# would break their dispatch until the next milestone merge. So the rename is
+# staged:
+#
+# 1. This file ships to `main` in a milestone merge. It is a placeholder, not
+#    a copy of the diff: a dispatch resolves the file name on `main` but runs
+#    the file as it is on the dispatched ref, so a placeholder makes the name
+#    dispatchable as well as a copy would, without a second copy to keep in
+#    step meanwhile. It has only a `workflow_dispatch` trigger, so it never
+#    runs beside the real diff on a push or a pull request.
+# 2. After that merge, #5527 (Step 2) moves `everything-mcp-diff.yml`'s
+#    contents here, switches the callers to this name, and deletes the old
+#    file.
+#
+# Until then, nothing dispatches this file, and a manual dispatch only says
+# where the diff is.
+name: MCP Interface Diff (rename placeholder)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  placeholder:
+    name: Point to the interface diff
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+      - name: Say where the interface diff runs
+        run: |
+          echo "This file is a placeholder for a staged rename (#5463, #5527)."
+          echo "The MCP interface diff runs from .github/workflows/everything-mcp-diff.yml:"
+          echo "  gh workflow run everything-mcp-diff.yml --ref <branch>"
