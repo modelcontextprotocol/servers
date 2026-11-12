@@ -365,6 +365,30 @@ ${row("short")}
       expect(rows.at(-2)).toBe(row(`… ${headerRows} more lines not shown`));
     });
 
+    // #5526: a line ending in a branchId would start a line of output the
+    // row cap never counted; the header shows it escaped instead.
+    it("escapes line endings in a branchId so the header stays on its rows", async () => {
+      const branchId = "x\r\ny\rz\n".repeat(500);
+      const escaped = "x\\r\\ny\\rz\\n".repeat(500);
+      const header = `🌿 Branch 1/3 (from thought 1, ID: ${escaped})`;
+      await conn!.think(
+        thought({ thought: "t", branchFromThought: 1, branchId }),
+      );
+      const out = logged()[0];
+      expect(out).not.toContain("\r");
+      const rows = out.split("\n");
+      const headerRows = Math.ceil(header.length / W);
+      // A leading blank, the borders and separator, the header rows and the
+      // thought's one row.
+      expect(rows).toHaveLength(headerRows + 5);
+      expect(
+        rows
+          .slice(2, 2 + headerRows)
+          .map((r) => r.slice(2, 2 + W).trimEnd())
+          .join(""),
+      ).toBe(header);
+    });
+
     // #5526: a header too long for every row is cut, so a huge branchId logs
     // no more than the cap; its last row says how much was left out.
     it("cuts a header longer than the row cap", async () => {

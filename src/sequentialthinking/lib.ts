@@ -133,9 +133,14 @@ export class SequentialThinkingServer {
     } else if (branchFromThought) {
       label = "🌿 Branch";
       colour = chalk.green;
+      // #5526: a line ending in the branchId is shown as its escape, \r or
+      // \n, so the header stays on rows the box draws and MAX_BOX_ROWS counts.
       context =
         branchId !== undefined
-          ? ` (from thought ${branchFromThought}, ID: ${branchId})`
+          ? ` (from thought ${branchFromThought}, ID: ${branchId.replace(
+              /[\r\n]/g,
+              (eol) => (eol === "\r" ? "\\r" : "\\n"),
+            )})`
           : ` (from thought ${branchFromThought})`;
     } else {
       label = "💭 Thought";
