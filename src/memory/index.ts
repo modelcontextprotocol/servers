@@ -277,13 +277,17 @@ async function breakStaleLock(
 }
 
 // The lock files this process holds right now, each mapped to the token it
-// wrote into it. withFileLock releases its lock in a `finally`, which never
+// writes into it and whether that write has finished. withFileLock releases its lock in a `finally`, which never
 // runs when a signal ends the process, so the exit hook releaseHeldLocks()
 // removes them instead (#5485). Without it, a lock left by a stopped server
 // stalls the next writer until it goes stale, which takes the full staleMs
 // when that writer is on another host (another container) and cannot see
 // that this process has gone.
-const heldLocks = new Map<string, string>();
+interface HeldLock {
+  token: string;
+  written: boolean;
+}
+const heldLocks = new Map<string, HeldLock>();
 
 // The lock paths this process holds right now, for tests.
 export function heldLockPaths(): string[] {
@@ -295,12 +299,17 @@ export function heldLockPaths(): string[] {
 // release, a lock is removed only while it still holds this process's token,
 // so a lock broken as stale and re-taken by another process stays in place.
 // A lock is tracked from the moment its exclusive create returns, before its
-// token is written, so a file holding only the start of the token (or none of
-// it) is ours too: the exit interrupted the write.
+// token is written. Until that write finishes, a file holding only the start
+// of the token (or none of it) is ours too: the exit interrupted the write.
+// Nothing else can have replaced it by then, since a lock that new, with a
+// live owner, is never judged stale. Once the token is written only an exact
+// match is ours, so another writer's replacement, empty while its own token
+// is being written, is left alone.
 export function releaseHeldLocks(): void {
-  for (const [lockPath, token] of heldLocks) {
+  for (const [lockPath, { token, written }] of heldLocks) {
     try {
-      if (token.startsWith(readFileSync(lockPath, "utf-8"))) {
+      const contents = readFileSync(lockPath, "utf-8");
+      if (written ? contents === token : token.startsWith(contents)) {
         unlinkSync(lockPath);
       }
     } catch {
@@ -365,9 +374,11 @@ export async function withFileLock<T>(
       // Track the lock before anything else is awaited: a signal is handled
       // only between tasks, never between the open's completion and this
       // line, so from here on the exit hook can remove it (#5485).
-      heldLocks.set(lockPath, token);
+      const held: HeldLock = { token, written: false };
+      heldLocks.set(lockPath, held);
       try {
         await handle.writeFile(token);
+        held.written = true;
         await handle.close();
       } catch (error) {
         // The lock was created but not written: remove it rather than leave
@@ -447,7 +458,7 @@ export async function withFileLock<T>(
     // it still removes the lock. A lock this same process broke as stale and
     // re-took in another withFileLock call carries that call's token, and
     // stays tracked for it.
-    if (heldLocks.get(lockPath) === token) {
+    if (heldLocks.get(lockPath)?.token === token) {
       heldLocks.delete(lockPath);
     }
   }

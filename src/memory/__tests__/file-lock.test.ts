@@ -489,6 +489,19 @@ describe("releasing held locks on exit (#5485)", () => {
     expect(await held).toBe("ran");
   });
 
+  it("leaves another writer's empty replacement of a written lock in place", async () => {
+    const lockPath = path.join(dir, "memory.jsonl.lock");
+    await withFileLock(lockPath, async () => {
+      // Our lock was broken as stale, and a new writer has created its own
+      // but not yet written its token.
+      await fs.writeFile(lockPath, "");
+
+      releaseHeldLocks();
+
+      expect(await exists(lockPath)).toBe(true);
+    });
+  });
+
   it("still tracks a lock while its release is in progress", async () => {
     const lockPath = path.join(dir, "memory.jsonl.lock");
     const realUnlink = fs.unlink;
