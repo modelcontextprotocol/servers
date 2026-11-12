@@ -384,6 +384,31 @@ Add to your Zed settings.json:
 ```
 </details>
 
+## Streamable HTTP
+
+The server talks over stdio by default. With `--transport streamable-http` it
+runs on its own as an HTTP service instead, serving one MCP endpoint, `/mcp`,
+to any number of clients of either protocol era:
+
+```sh
+uvx mcp-server-git --transport streamable-http --repository path/to/git/repo
+```
+
+It listens on `127.0.0.1:3001` unless `HOST` and `PORT` say otherwise (for
+example `PORT=8080`); `HOST=0.0.0.0` exposes it to every machine that can reach
+this one, so set it deliberately. Point a client at the URL, such as
+`http://127.0.0.1:3001/mcp`, instead of giving it a command:
+
+```json
+{
+  "mcpServers": {
+    "git": { "type": "http", "url": "http://127.0.0.1:3001/mcp" }
+  }
+}
+```
+
+Every other option works as it does over stdio; `--repository` matters more here, since any client that can reach the port can use the server. A browser page from any origin but localhost is refused with `403`, whatever `HOST` is, to guard against DNS rebinding; on loopback the SDK also checks each request's `Host` header.
+
 ## Debugging
 
 You can use the MCP inspector to debug the server. For uvx installations:
