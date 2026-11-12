@@ -147,9 +147,16 @@ async def test_not_a_repository(tmp_path: Path):
         ),
         ("https://example.com/r?e=a@b.com", "https://example.com/r?e=<redacted>"),
         ("ssh://git@example.com/r?t=x", "ssh://git@example.com/r?t=<redacted>"),
-        # No path: a '?' or '#' in the userinfo is still inside the userinfo.
-        ("https://user:p?ss@example.com", "https://<redacted>@example.com"),
-        ("https://user:p#ss@example.com", "https://<redacted>@example.com"),
+        # A '?' or '#' before the userinfo's '@' may be in a password or may
+        # start a query or fragment holding an '@': nothing after the scheme
+        # can be shown safely.
+        ("https://user:p?ss@example.com", "https://<redacted>"),
+        ("https://user:p#ss@example.com", "https://<redacted>"),
+        ("https://example.com?token=left@SECRET", "https://<redacted>"),
+        ("https://example.com#left@SECRET", "https://<redacted>"),
+        ("ssh://example.com?token=left@SECRET", "ssh://<redacted>"),
+        ("https://example.com?t=a@SECRET/x", "https://<redacted>"),
+        ("https://u:p?ss@example.com/r", "https://<redacted>"),
         ("https://example.com?t=SECRET", "https://example.com?t=<redacted>"),
         # A remote-helper address: the inner URL's query is redacted.
         (

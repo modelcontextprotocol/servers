@@ -966,8 +966,9 @@ def redact_url(url: str) -> str:
     with only a password after it redacted. Query values and the fragment are
     redacted too (`_redact_query_and_fragment`), except in a `file://` URL,
     where '?' and '#' are characters of a local file name. A path segment is
-    kept: a token there cannot be told apart from a repository name. A
-    remote-helper address (`<transport>::<url>`) has its inner URL redacted.
+    kept: a token there cannot be told apart from a repository name. A URL
+    whose userinfo would hold a '?' or '#' cannot be split safely and is
+    shown as `scheme://<redacted>`. A remote-helper address (`<transport>::<url>`) has its inner URL redacted.
     An scp-like address (`git@host:path`) or a local path is not a URL and is
     returned as is.
     """
@@ -983,6 +984,11 @@ def redact_url(url: str) -> str:
         head, rest = url[: authority.end()], url[authority.end() :]
     else:
         userinfo = match["userinfo"]
+        if "?" in userinfo or "#" in userinfo:
+            # Ambiguous: the '?' or '#' may be in a password or may start a
+            # query or fragment holding an '@' (`https://host?t=a@SECRET`), so
+            # no split of it is safe. Only the scheme is shown.
+            return f"{scheme}://{REDACTED}"
         if scheme.lower() in _SSH_SCHEMES:
             user, has_password, _ = userinfo.partition(":")
             kept = f"{user}:{REDACTED}" if has_password else user
