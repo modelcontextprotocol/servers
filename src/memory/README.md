@@ -164,6 +164,33 @@ The server serves both protocol eras on stdio from the same process. The client'
 
 Node.js 24 or later, when the server runs through `npx` or from source.
 
+# Streamable HTTP
+
+The server talks over stdio by default. With `--transport streamable-http` it
+runs on its own as an HTTP service instead, serving one MCP endpoint, `/mcp`,
+to any number of clients of either protocol era:
+
+```sh
+npx -y @modelcontextprotocol/server-memory --transport streamable-http
+```
+
+It listens on `127.0.0.1:3001` unless `HOST` and `PORT` say otherwise (for
+example `PORT=8080`); `HOST=0.0.0.0` exposes it to every machine that can reach
+this one, so set it deliberately. A request from a browser page on any
+origin but localhost is refused with `403`, and the endpoint sends no CORS
+headers, so it serves clients that are not browser pages. Point a client at the URL, such as
+`http://127.0.0.1:3001/mcp`, instead of giving it a command:
+
+```json
+{
+  "mcpServers": {
+    "memory": { "type": "http", "url": "http://127.0.0.1:3001/mcp" }
+  }
+}
+```
+
+Over HTTP each request is served by a fresh server, and a 2025-era client gets no session (GET and DELETE on `/mcp` answer `405`), so the server cannot send it requests or notifications between its own requests. The graph lives in its file, so nothing is lost between requests. A 2026-07-28 client that names `memory://knowledge-graph` in its `subscriptions/listen` filter is told of every change any client makes; `resources/subscribe` from a 2025-era client lasts only for its own request, so over HTTP it hears of none.
+
 # Usage with Claude Desktop
 
 ### Setup

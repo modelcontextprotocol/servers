@@ -689,8 +689,11 @@ look before retrying.
   2026-07-28 request lives under a handle the server mints. Ask a client for
   input (elicitation, sampling, roots) by returning `inputRequired(...)`,
   which the SDK's legacy shim also serves to 2025-era clients.
-- **Transports**: stdio is the default and every server supports it.
-  `everything` also serves Streamable HTTP and HTTP+SSE. **HTTP+SSE is
+- **Transports**: stdio is the default and every server supports it. Every
+  server also serves Streamable HTTP on `/mcp` at `HOST`:`PORT`
+  (loopback:3001 by default), which `everything` selects with its
+  `streamableHttp` argument and the others with `--transport
+  streamable-http`; `everything` alone also serves HTTP+SSE. **HTTP+SSE is
   deprecated**: keep what exists working, and never make it the default or the
   recommended option in new code or docs.
 - **Tool annotations**: every tool you add or change sets `readOnlyHint`,

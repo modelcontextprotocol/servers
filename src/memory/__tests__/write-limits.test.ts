@@ -3,14 +3,20 @@
 // tested directly for its parsing; the limits themselves are driven through an
 // SDK Client over an in-memory transport, asserting on the tool result and on
 // the graph file, which a refused call must leave byte for byte unchanged.
-// The last block runs main() to show the environment reaches the server.
+// The last blocks show the limits reach the Streamable HTTP endpoint, and
+// that main() reads them from the environment.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { promises as fs } from "fs";
 import path from "path";
-import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
+import {
+  Client,
+  InMemoryTransport,
+  StreamableHTTPClientTransport,
+} from "@modelcontextprotocol/client";
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import { GRAPH_LIMIT_ENV, graphLimitsFromEnv, main } from "../index.js";
 import type { GraphLimits } from "../index.js";
+import { startHttpServer } from "../http.js";
 import {
   call,
   connect,
@@ -291,6 +297,38 @@ describe("write limits", () => {
         code: "ENOENT",
       });
     });
+  });
+});
+
+describe("write limits over Streamable HTTP", () => {
+  it("holds the endpoint's write tools to the limits it was given", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { filePath, cleanup } = await makeTempGraph();
+    const running = await startHttpServer(
+      filePath,
+      { host: "127.0.0.1", port: 0 },
+      { maxEntities: 1 },
+    );
+    const client = new Client({ name: "http-test", version: "0.0.0" });
+    try {
+      await client.connect(
+        new StreamableHTTPClientTransport(new URL(running.url)),
+      );
+      const ok = await call(client, "create_entities", {
+        entities: [entity("A")],
+      });
+      expect(ok.isError).toBeUndefined();
+      const refused = await call(client, "create_entities", {
+        entities: [entity("B")],
+      });
+      expect(refused.isError).toBe(true);
+      expect(textOf(refused)).toContain("set by MEMORY_MAX_ENTITIES");
+    } finally {
+      await client.close();
+      await running.close();
+      await cleanup();
+      vi.restoreAllMocks();
+    }
   });
 });
 

@@ -320,6 +320,31 @@ To always use the pure-Python extractor, add the argument `--no-readability-js` 
 configuration. The server then never starts Node.js (or npm), whether or not it is installed, and never contacts the
 npm registry.
 
+## Streamable HTTP
+
+The server talks over stdio by default. With `--transport streamable-http` it
+runs on its own as an HTTP service instead, serving one MCP endpoint, `/mcp`,
+to any number of clients of either protocol era:
+
+```sh
+uvx mcp-server-fetch --transport streamable-http
+```
+
+It listens on `127.0.0.1:3001` unless `HOST` and `PORT` say otherwise (for
+example `PORT=8080`); `HOST=0.0.0.0` exposes it to every machine that can reach
+this one, so set it deliberately. Point a client at the URL, such as
+`http://127.0.0.1:3001/mcp`, instead of giving it a command:
+
+```json
+{
+  "mcpServers": {
+    "fetch": { "type": "http", "url": "http://127.0.0.1:3001/mcp" }
+  }
+}
+```
+
+Every other option works as it does over stdio. A browser page from any origin but localhost is refused with `403`, whatever `HOST` is, to guard against DNS rebinding; on loopback the SDK also checks each request's `Host` header.
+
 ## Windows Configuration
 
 If you're experiencing timeout issues on Windows, you may need to set the `PYTHONIOENCODING` environment variable to ensure proper character encoding:

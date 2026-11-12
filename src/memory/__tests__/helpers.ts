@@ -25,7 +25,7 @@ export async function connect(
   filePath: string,
   limits: GraphLimits = {},
 ): Promise<Connection> {
-  const server = createServer(filePath, "legacy", limits);
+  const server = createServer(filePath, "legacy", undefined, limits);
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "memory-test-client", version: "0.0.0" });

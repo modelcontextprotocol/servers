@@ -174,6 +174,7 @@ def test_flag_is_normalized_and_passed_to_serve(
         False,
         ["example.com", "*.docs.example.org", "10.0.0.1"],
         True,
+        "stdio",
     )
 
 

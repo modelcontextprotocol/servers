@@ -41,7 +41,7 @@ def test_main_passes_local_timezone_to_serve(
         patch.object(sys, "argv", ["mcp-server-time", *argv]),
     ):
         mcp_server_time.main()
-    serve.assert_awaited_once_with(expected_local_timezone)
+    serve.assert_awaited_once_with(expected_local_timezone, "stdio")
 
 
 def test_main_help_describes_the_server(capsys: pytest.CaptureFixture[str]) -> None:
@@ -93,7 +93,7 @@ def test_init_module_run_as_main_calls_main() -> None:
         patch.object(sys, "argv", ["mcp-server-time", "--local-timezone", "UTC"]),
     ):
         runpy.run_module("mcp_server_time.__init__", run_name="__main__")
-    serve.assert_awaited_once_with("UTC")
+    serve.assert_awaited_once_with("UTC", "stdio")
 
 
 @pytest.fixture

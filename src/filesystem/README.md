@@ -402,6 +402,33 @@ The mapping for filesystem tools is:
 
 Node.js 24 or later, when the server runs through `npx` or from source.
 
+## Streamable HTTP
+
+The server talks over stdio by default. With `--transport streamable-http` it
+runs on its own as an HTTP service instead, serving one MCP endpoint, `/mcp`,
+to any number of clients of either protocol era:
+
+```sh
+npx -y @modelcontextprotocol/server-filesystem --transport streamable-http /Users/username/Desktop
+```
+
+It listens on `127.0.0.1:3001` unless `HOST` and `PORT` say otherwise (for
+example `PORT=8080`); `HOST=0.0.0.0` exposes it to every machine that can reach
+this one, so set it deliberately. A request from a browser page on any
+origin but localhost is refused with `403`, and the endpoint sends no CORS
+headers, so it serves clients that are not browser pages. Point a client at the URL, such as
+`http://127.0.0.1:3001/mcp`, instead of giving it a command:
+
+```json
+{
+  "mcpServers": {
+    "filesystem": { "type": "http", "url": "http://127.0.0.1:3001/mcp" }
+  }
+}
+```
+
+Over HTTP each request is served by a fresh server, and a 2025-era client gets no session (GET and DELETE on `/mcp` answer `405`), so the server cannot send it requests or notifications between its own requests. That is why **over HTTP the allowed directories must be given on the command line**: the server cannot ask a client for its [Roots](#method-2-mcp-roots-deprecated-2025-era-clients-only), on either protocol era, and it refuses to start without a directory. `--read-only`, `--read-only-dir` and the other options work as they do over stdio; `--confine-roots` has nothing to confine.
+
 ## Usage with Claude Desktop
 
 Add this to your `claude_desktop_config.json`:

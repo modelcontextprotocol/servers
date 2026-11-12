@@ -55,6 +55,7 @@ from .timeout import (
     timeout_ms_from_env,
 )
 from .title import with_page_title
+from .transport import run
 
 # The version this server reports in serverInfo, read from the installed
 # distribution's metadata (pyproject.toml) so it cannot drift from the
@@ -1115,8 +1116,9 @@ async def serve(
     allow_private_ips: bool = False,
     allowed_hosts: Sequence[str] | None = None,
     use_readability_js: bool = True,
+    transport: str = "stdio",
 ) -> None:
-    """Run the fetch MCP server over stdio.
+    """Run the fetch MCP server over stdio, or over Streamable HTTP.
 
     Args:
         custom_user_agent: Optional custom User-Agent string to use for requests
@@ -1131,6 +1133,7 @@ async def serve(
         use_readability_js: Extract HTML with Readability.js under Node.js
             when Node.js is on PATH (falling back to the pure-Python extractor
             when it cannot run); False always uses the pure-Python extractor
+        transport: ``stdio``, or ``streamable-http`` to listen on $HOST:$PORT
     """
     server = create_server(
         custom_user_agent,
@@ -1140,9 +1143,4 @@ async def serve(
         allowed_hosts,
         use_readability_js,
     )
-    # Both eras (#4853): the SDK's dual-era loop lets the client's first
-    # request decide. `initialize` gets the 2025-11-25 handshake;
-    # `server/discover` or a request carrying a 2026-07-28 envelope gets the
-    # modern, sessionless era, with its required result fields (resultType,
-    # ttlMs, cacheScope) filled in by the SDK.
-    await server.run_stdio_async()
+    await run(server, transport)

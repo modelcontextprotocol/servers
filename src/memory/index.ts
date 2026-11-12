@@ -6,8 +6,10 @@
 // tests can run it in-process; main() serves it on stdio through the SDK's
 // serveStdio entry, which answers 2026-07-28 clients (server/discover, change
 // notifications on subscriptions/listen) and 2025-era clients (initialize,
-// resources/subscribe) from the same factory (#4852). main() runs only when
-// this file is the process entry point, so importing it starts nothing.
+// resources/subscribe) from the same factory (#4852). run() reads --transport
+// and starts stdio (the default) or Streamable HTTP (http.ts, #576). It runs
+// only when this file is the process entry point, so importing it starts
+// nothing.
 import {
   serveStdio,
   type StdioServerHandle,
@@ -1105,7 +1107,7 @@ const RelationSchema = z.object({
   relationType: z.string().describe("The type of the relation"),
 });
 
-const RESOURCE_URI = "memory://knowledge-graph";
+export const RESOURCE_URI = "memory://knowledge-graph";
 
 export const SEARCH_QUERY_MAX_LENGTH = 2048;
 
@@ -1162,11 +1164,16 @@ const ReadEntitySchema = EntitySchema.extend({
 // result on stdio; tests connect it to an in-memory transport, so each call
 // returns an independent server with its own subscriber set. `era` is the
 // protocol era the instance will serve, which decides how graph changes are
-// announced (see notifyGraphUpdated). `limits` caps how large the write tools
-// may grow the graph; main() reads it from the environment.
+// announced (see notifyGraphUpdated). `publishGraphUpdated`, when given,
+// announces every change instead of the instance itself, whatever era wrote
+// it: over HTTP each request gets a fresh server that holds no listen stream
+// and no subscriber, so http.ts hands in the handler's subscription bus, which
+// every open 2026-07-28 stream listens on. `limits` caps how large the write
+// tools may grow the graph; main() and run() read it from the environment.
 export function createServer(
   memoryFilePath: string,
   era: "legacy" | "modern" = "legacy",
+  publishGraphUpdated?: () => void,
   limits: GraphLimits = {},
 ): McpServer {
   const knowledgeGraphManager = new KnowledgeGraphManager(
@@ -1191,7 +1198,9 @@ export function createServer(
   // the notification only to a listen stream that named the URI, so it is
   // always handed over.
   function notifyGraphUpdated() {
-    if (era === "modern" || resourceSubscribers.has(RESOURCE_URI)) {
+    if (publishGraphUpdated) {
+      publishGraphUpdated();
+    } else if (era === "modern" || resourceSubscribers.has(RESOURCE_URI)) {
       // Fire-and-forget: the tool result must not wait on (or fail because of)
       // the notification, so a delivery failure is logged rather than thrown.
       server.server
@@ -1649,7 +1658,7 @@ export async function main(transport?: Transport): Promise<StdioServerHandle> {
   }
   installLockCleanup();
   const handle = serveStdio(
-    ({ era }) => createServer(memoryFilePath, era, limits),
+    ({ era }) => createServer(memoryFilePath, era, undefined, limits),
     {
       transport,
       // serveStdio reports a transport that fails, including one that cannot
@@ -1682,9 +1691,77 @@ export function isMainModule(
   }
 }
 
+/** The transports `--transport` can name. */
+export const TRANSPORTS = ["stdio", "streamable-http"] as const;
+export type TransportName = (typeof TRANSPORTS)[number];
+
+/**
+ * The transport the command line asks for: `--transport <name>` or
+ * `--transport=<name>`, else stdio. Throws on a missing or unknown name.
+ * Other arguments are ignored, as they always have been.
+ */
+export function parseTransport(args: string[]): TransportName {
+  let value: string | undefined;
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index];
+    if (arg === "--transport") {
+      value = args[++index];
+      if (value === undefined) {
+        throw new Error("--transport needs a value: stdio or streamable-http");
+      }
+    } else if (arg.startsWith("--transport=")) {
+      value = arg.slice("--transport=".length);
+    }
+  }
+  if (value === undefined) return "stdio";
+  if (!(TRANSPORTS as readonly string[]).includes(value)) {
+    throw new Error(
+      `Unknown transport ${JSON.stringify(value)}: expected stdio or streamable-http`,
+    );
+  }
+  return value as TransportName;
+}
+
+// Start the server on the transport args names, and hand back how to stop
+// it. Streamable HTTP listens on HOST:PORT (loopback:3001 by default) and also
+// stops, exiting the process, on SIGINT or SIGTERM.
+export async function run(
+  args: string[] = process.argv.slice(2),
+): Promise<{ close: () => Promise<void> }> {
+  if (parseTransport(args) === "stdio") {
+    return main();
+  }
+  const memoryFilePath = await ensureMemoryFilePath();
+  const limits = graphLimitsFromEnv();
+  const locationWarning = memoryFileLocationWarning(memoryFilePath);
+  if (locationWarning) {
+    console.error(locationWarning);
+  }
+  const { httpEndpoint, startHttpServer } = await import("./http.js");
+  const running = await startHttpServer(memoryFilePath, httpEndpoint(), limits);
+  console.error(
+    `Knowledge Graph MCP Server running on Streamable HTTP at ${running.url}`,
+  );
+  const stop = () => {
+    running.close().then(
+      () => process.exit(0),
+      (error: unknown) => {
+        console.error("Error shutting down:", error);
+        process.exit(1);
+      },
+    );
+  };
+  process.once("SIGINT", stop);
+  process.once("SIGTERM", stop);
+  return running;
+}
+
 if (isMainModule()) {
-  main().catch((error) => {
-    console.error("Fatal error in main():", error);
+  run().catch((error: unknown) => {
+    console.error(
+      "Fatal error running server:",
+      error instanceof Error ? error.message : error,
+    );
     process.exit(1);
   });
 }

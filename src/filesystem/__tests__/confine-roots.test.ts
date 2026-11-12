@@ -228,12 +228,14 @@ describe("the command line", () => {
       readOnly: false,
       confineRoots: true,
       readOnlyDirectories: [],
+      transport: "stdio",
     });
     expect(parseArgs(["--", "--confine-roots"])).toEqual({
       directories: ["--confine-roots"],
       readOnly: false,
       confineRoots: false,
       readOnlyDirectories: [],
+      transport: "stdio",
     });
   });
 

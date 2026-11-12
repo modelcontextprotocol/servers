@@ -34,6 +34,7 @@
     "validate": "npm run format:check && npm run lint && npm run typecheck && npm run build && npm run test"
   },
   "dependencies": {
+    "@modelcontextprotocol/node": "^2.1.1",
     "@modelcontextprotocol/server": "^2.3.1",
     "chalk": "^5.3.0",
     "zod": "^4.2.0"

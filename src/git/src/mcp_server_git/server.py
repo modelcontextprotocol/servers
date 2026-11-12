@@ -41,6 +41,8 @@ from mcp.shared.exceptions import MCPError
 from mcp.types import INVALID_PARAMS, ToolAnnotations
 from pydantic import Field
 
+from .transport import run
+
 # The version this server reports in serverInfo, read from the installed
 # distribution's metadata (pyproject.toml) so it cannot drift from the
 # published version (#360). Without it the SDK reports its own `mcp` version.
@@ -1537,7 +1539,7 @@ def create_server(repository: Path | None) -> MCPServer:
     return server
 
 
-async def serve(repository: Path | None) -> None:
+async def serve(repository: Path | None, transport: str = "stdio") -> None:
     logger = logging.getLogger(__name__)
 
     if repository is not None:
@@ -1558,9 +1560,4 @@ async def serve(repository: Path | None) -> None:
         repository = root
         logger.info(f"Using repository at {repository}")
 
-    # Both eras (#4853): the SDK's dual-era loop lets the client's first
-    # request decide. `initialize` gets the 2025-11-25 handshake;
-    # `server/discover` or a request carrying a 2026-07-28 envelope gets the
-    # modern, sessionless era, with its required result fields (resultType,
-    # ttlMs, cacheScope) filled in by the SDK.
-    await create_server(repository).run_stdio_async()
+    await run(create_server(repository), transport)

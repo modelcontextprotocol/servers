@@ -143,6 +143,7 @@ describe("parseArgs", () => {
       readOnly: false,
       confineRoots: false,
       readOnlyDirectories: [],
+      transport: "stdio",
     });
   });
 
@@ -157,6 +158,7 @@ describe("parseArgs", () => {
         readOnly: true,
         confineRoots: false,
         readOnlyDirectories: [],
+        transport: "stdio",
       });
     }
   });
@@ -167,6 +169,7 @@ describe("parseArgs", () => {
       readOnly: true,
       confineRoots: false,
       readOnlyDirectories: [],
+      transport: "stdio",
     });
   });
 });
@@ -218,7 +221,7 @@ describe("main() with --read-only", () => {
     );
     closers.push(() => handle.close());
     expect(stderr).toHaveBeenCalledWith(
-      "Usage: mcp-server-filesystem [--read-only] [--confine-roots] [--read-only-dir <dir>]... [allowed-directory] [additional-directories...]",
+      "Usage: mcp-server-filesystem [--transport stdio|streamable-http] [--read-only] [--confine-roots] [--read-only-dir <dir>]... [allowed-directory] [additional-directories...]",
     );
   });
 });
