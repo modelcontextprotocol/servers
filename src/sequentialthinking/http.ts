@@ -85,8 +85,9 @@ export async function startHttpServer({
   const allowOrigin = localhostOriginValidation();
 
   const httpServer = createNodeServer((req, res) => {
-    // A request a Node server hands its listener always carries a URL.
-    const path = new URL(req.url!, "http://localhost").pathname;
+    // The path, without parsing the target: a malformed one (`//[`) would
+    // make URL parsing throw here, outside any handler, and end the process.
+    const path = String(req.url).split("?")[0];
     if (path !== MCP_PATH) {
       res.writeHead(404, { "content-type": "text/plain" }).end("Not Found");
       return;

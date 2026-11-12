@@ -960,9 +960,10 @@ const ReadEntitySchema = EntitySchema.extend({
 // returns an independent server with its own subscriber set. `era` is the
 // protocol era the instance will serve, which decides how graph changes are
 // announced (see notifyGraphUpdated). `publishGraphUpdated`, when given,
-// announces a 2026-07-28 change instead of the instance itself: over HTTP each
-// request gets a fresh server that holds no listen stream, so http.ts hands in
-// the handler's subscription bus, which every open stream listens on.
+// announces every change instead of the instance itself, whatever era wrote
+// it: over HTTP each request gets a fresh server that holds no listen stream
+// and no subscriber, so http.ts hands in the handler's subscription bus, which
+// every open 2026-07-28 stream listens on.
 export function createServer(
   memoryFilePath: string,
   era: "legacy" | "modern" = "legacy",
@@ -986,7 +987,7 @@ export function createServer(
   // the notification only to a listen stream that named the URI, so it is
   // always handed over.
   function notifyGraphUpdated() {
-    if (era === "modern" && publishGraphUpdated) {
+    if (publishGraphUpdated) {
       publishGraphUpdated();
     } else if (era === "modern" || resourceSubscribers.has(RESOURCE_URI)) {
       // Fire-and-forget: the tool result must not wait on (or fail because of)

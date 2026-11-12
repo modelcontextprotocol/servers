@@ -5,6 +5,7 @@
 // history is asserted across calls and across clients.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { connect as connectTcp } from "node:net";
 import {
   Client,
   StreamableHTTPClientTransport,
@@ -89,6 +90,24 @@ describe("Streamable HTTP", () => {
       await first.close();
       await second.close();
     }
+  });
+
+  it("answers a malformed request target 404 and keeps serving", async () => {
+    running = await startHttpServer({ host: "127.0.0.1", port: 0 });
+    const url = new URL(running.url);
+    const reply = await new Promise<string>((resolve, reject) => {
+      const socket = connectTcp(Number(url.port), url.hostname, () =>
+        socket.write("GET //[ HTTP/1.1\r\nHost: localhost\r\n\r\n"),
+      );
+      socket.setEncoding("utf8");
+      socket.once("data", (chunk: string) => {
+        socket.destroy();
+        resolve(chunk);
+      });
+      socket.once("error", reject);
+    });
+    expect(reply).toMatch(/^HTTP\/1\.1 404/);
+    expect((await fetch(new URL("/other", url))).status).toBe(404);
   });
 
   it("answers 404 off the MCP path and 403 to a foreign Origin", async () => {

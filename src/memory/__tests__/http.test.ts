@@ -5,6 +5,7 @@
 // across requests, and a 2026-07-28 listen stream across clients.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { connect as connectTcp } from "node:net";
 import {
   Client,
   StreamableHTTPClientTransport,
@@ -83,27 +84,47 @@ describe("Streamable HTTP", () => {
     },
   );
 
-  it("sends a 2026-07-28 listener the updates another client's write makes", async () => {
-    const url = (await start()).url;
-    const listener = await connect(url, ERAS[0][1]);
-    const writer = await connect(url, ERAS[0][1]);
-    try {
-      const updated = new Promise<string>((resolve) => {
-        listener.setNotificationHandler(
-          "notifications/resources/updated",
-          (notification) => resolve(notification.params.uri),
-        );
+  it.each(ERAS)(
+    "sends a 2026-07-28 listener the updates a %s writer makes",
+    async (_, negotiation) => {
+      const url = (await start()).url;
+      const listener = await connect(url, ERAS[0][1]);
+      const writer = await connect(url, negotiation);
+      try {
+        const updated = new Promise<string>((resolve) => {
+          listener.setNotificationHandler(
+            "notifications/resources/updated",
+            (notification) => resolve(notification.params.uri),
+          );
+        });
+        const subscription = await listener.listen({
+          resourceSubscriptions: [RESOURCE_URI],
+        });
+        await call(writer, "create_entities", { entities: [alice] });
+        expect(await updated).toBe(RESOURCE_URI);
+        await subscription.close();
+      } finally {
+        await listener.close();
+        await writer.close();
+      }
+    },
+  );
+
+  it("answers a malformed request target 404 and keeps serving", async () => {
+    const url = new URL((await start()).url);
+    const reply = await new Promise<string>((resolve, reject) => {
+      const socket = connectTcp(Number(url.port), url.hostname, () =>
+        socket.write("GET //[ HTTP/1.1\r\nHost: localhost\r\n\r\n"),
+      );
+      socket.setEncoding("utf8");
+      socket.once("data", (chunk: string) => {
+        socket.destroy();
+        resolve(chunk);
       });
-      const subscription = await listener.listen({
-        resourceSubscriptions: [RESOURCE_URI],
-      });
-      await call(writer, "create_entities", { entities: [alice] });
-      expect(await updated).toBe(RESOURCE_URI);
-      await subscription.close();
-    } finally {
-      await listener.close();
-      await writer.close();
-    }
+      socket.once("error", reject);
+    });
+    expect(reply).toMatch(/^HTTP\/1\.1 404/);
+    expect((await fetch(new URL("/other", url))).status).toBe(404);
   });
 
   it("answers 404 off the MCP path and 403 to a foreign Origin", async () => {
