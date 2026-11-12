@@ -22,12 +22,15 @@ export interface ThoughtData {
 export const MAX_BOX_TEXT_WIDTH = 100;
 
 /**
- * The most rows of thought text a box draws (#5433). Each row is padded to
- * the box's width, so a thought of many short lines would still log about a
- * hundred times its own size; past this many rows the box ends with one row
- * saying how many lines it left out. Header rows (a long branchId) are not
- * counted. Only stderr is cut: the thought kept in thoughtHistory is whole,
- * and the tool result, which carries no thought text, is unchanged.
+ * The most rows of text a box draws, header and thought together (#5433,
+ * #5526). Each row is padded to the box's width, so a thought of many short
+ * lines would still log about a hundred times its own size; past this many
+ * rows the box ends with one row saying how many lines it left out. The
+ * header's rows count too, so a long branchId, which wraps onto rows of its
+ * own, cannot draw past the cap: a header too long for every row is cut, its
+ * last row saying how many characters it left out. Only stderr is cut: the
+ * thought kept in thoughtHistory is whole, and the tool result, which carries
+ * no thought text, is unchanged.
  */
 export const MAX_BOX_ROWS = 1000;
 
@@ -130,9 +133,14 @@ export class SequentialThinkingServer {
     } else if (branchFromThought) {
       label = "🌿 Branch";
       colour = chalk.green;
+      // #5526: a line ending in the branchId is shown as its escape, \r or
+      // \n, so the header stays on rows the box draws and MAX_BOX_ROWS counts.
       context =
         branchId !== undefined
-          ? ` (from thought ${branchFromThought}, ID: ${branchId})`
+          ? ` (from thought ${branchFromThought}, ID: ${branchId.replace(
+              /[\r\n]/g,
+              (eol) => (eol === "\r" ? "\\r" : "\\n"),
+            )})`
           : ` (from thought ${branchFromThought})`;
     } else {
       label = "💭 Thought";
@@ -158,15 +166,32 @@ export class SequentialThinkingServer {
     );
     // A header longer than the cap (a long branchId) wraps like a thought
     // line; only its first row, which starts with the label, is coloured.
-    const headerTexts = wrapRow(visibleHeader, wrapWidth);
-    // Rows are drawn up to MAX_BOX_ROWS; the lines left over are counted, not
-    // drawn, so a huge thought costs no more than the cap.
+    // #5526: its rows count toward MAX_BOX_ROWS. Only one character more than
+    // the cap's rows can hold is wrapped, so a huge branchId costs no more
+    // than the cap, and more than MAX_BOX_ROWS rows means the header does not
+    // fit. It then keeps MAX_BOX_ROWS - 1 rows and a last one saying how many
+    // characters it left out: always more than one row's worth. Such a header
+    // is longer than the box is wide, so wrapWidth is MAX_BOX_TEXT_WIDTH and
+    // that row fits it.
+    const headerTexts = wrapRow(
+      visibleHeader.slice(0, MAX_BOX_ROWS * wrapWidth + 1),
+      wrapWidth,
+    );
+    if (headerTexts.length > MAX_BOX_ROWS) {
+      headerTexts.length = MAX_BOX_ROWS - 1;
+      const shown = headerTexts.reduce((n, text) => n + text.length, 0);
+      headerTexts.push(
+        `… ${visibleHeader.length - shown} more characters not shown`,
+      );
+    }
+    // Thought rows fill what the header left of MAX_BOX_ROWS; the lines left
+    // over are counted, not drawn, so a huge thought costs no more than the cap.
     const texts: string[] = [];
     // Lines drawn in full; a line cut off by the cap counts as hidden.
     let whole = 0;
     for (const line of lines) {
       const wrapped = wrapRow(line, wrapWidth);
-      const room = MAX_BOX_ROWS - texts.length;
+      const room = MAX_BOX_ROWS - headerTexts.length - texts.length;
       texts.push(...wrapped.slice(0, room));
       if (wrapped.length > room) break;
       whole++;

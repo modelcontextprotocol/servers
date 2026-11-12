@@ -52,6 +52,9 @@
 # dispatches only a workflow whose file exists on the default branch (`main`),
 # and both version workflows dispatch this one by file name from `v2/main`, so
 # renaming it here would break their dispatch until the next milestone merge.
+# The rename is staged instead: `mcp-interface-diff.yml` lands on `main` first
+# as a dispatch-only placeholder (#5463), then #5527 moves this file's contents
+# there, switches the callers and deletes this file.
 #
 # See: https://github.com/modelcontextprotocol/inspector/issues/1034
 name: MCP Interface Diff

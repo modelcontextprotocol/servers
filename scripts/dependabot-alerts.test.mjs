@@ -282,9 +282,11 @@ test("npm lockfile reading is workspace-aware", () => {
     [],
   );
   assert.deepEqual(npmDeclarers(NPM_LOCK, "hono"), [
-    "src/everything/package.json",
+    { manifest: "src/everything/package.json", range: "^4.12.0" },
   ]);
-  assert.deepEqual(npmDeclarers(NPM_LOCK, "semver"), ["package.json"]);
+  assert.deepEqual(npmDeclarers(NPM_LOCK, "semver"), [
+    { manifest: "package.json", range: "^7" },
+  ]);
   assert.deepEqual(npmDeclarers(NPM_LOCK, "fast-uri"), []);
   assert.deepEqual(
     overrideAncestors("node_modules/@scope/a/node_modules/b/node_modules/c"),
@@ -480,7 +482,7 @@ test("a vulnerable interval above the target is called out, and every fix is ver
     affected: [
       { path: "node_modules/hono", version: "4.12.0", topLevel: true },
     ],
-    declarers: ["package.json"],
+    declarers: [decl("package.json")],
   });
   assert.match(body, /\*\*Then verify\*\*/);
 });
@@ -575,7 +577,7 @@ test("npm labels come from the vulnerable copies, not the root lockfile", () => 
   assert.deepEqual(
     issueLabels(npm, {
       affected: [{ path: "node_modules/hono", topLevel: true }],
-      declarers: ["src/everything/package.json"],
+      declarers: [decl("src/everything/package.json")],
     }),
     [...base, "server-everything"],
   );
@@ -583,7 +585,7 @@ test("npm labels come from the vulnerable copies, not the root lockfile", () => 
   assert.deepEqual(
     issueLabels(npm, {
       affected: [{ path: "src/filesystem/node_modules/diff", topLevel: true }],
-      declarers: ["package.json"],
+      declarers: [decl("package.json")],
     }),
     [...base, "server-filesystem"],
   );
@@ -591,7 +593,7 @@ test("npm labels come from the vulnerable copies, not the root lockfile", () => 
   assert.deepEqual(
     issueLabels(npm, {
       affected: [{ path: "node_modules/semver", topLevel: true }],
-      declarers: ["package.json"],
+      declarers: [decl("package.json")],
     }),
     base,
   );
@@ -603,6 +605,11 @@ test("npm labels come from the vulnerable copies, not the root lockfile", () => 
     base,
   );
 });
+
+/** A manifest declaring the package; `*` lets any copy satisfy it. */
+function decl(manifest, range = "*") {
+  return { manifest, range };
+}
 
 function npmGroup(pkg, fixedIn, range = "< 99") {
   const [group] = groupAlerts([
@@ -630,7 +637,7 @@ test("an npm body says which edit clears which copy", () => {
     affected: [
       { path: "node_modules/hono", version: "4.12.0", topLevel: true },
     ],
-    declarers: ["src/everything/package.json"],
+    declarers: [decl("src/everything/package.json")],
     securityPrsOff: true,
   });
   assert.match(
@@ -648,7 +655,7 @@ test("an npm body says which edit clears which copy", () => {
         topLevel: false,
       },
     ],
-    declarers: ["package.json"],
+    declarers: [decl("package.json")],
   });
   assert.match(both, /Both edits are needed/);
   assert.match(both, /1\. \*\*Raise/);
@@ -662,26 +669,78 @@ test("a workspace's own copy is direct only if that workspace declares it", () =
   const ws = { path: "src/filesystem/node_modules/diff", topLevel: true };
   const hoisted = { path: "node_modules/diff", topLevel: true };
   const nested = { path: "node_modules/a/node_modules/diff", topLevel: false };
-  assert.deepEqual(npmCopyDeclarers(ws, ["package.json"]), []);
+  assert.deepEqual(npmCopyDeclarers(ws, [decl("package.json")]), []);
   assert.deepEqual(
-    npmCopyDeclarers(ws, ["package.json", "src/filesystem/package.json"]),
+    npmCopyDeclarers(ws, [
+      decl("package.json"),
+      decl("src/filesystem/package.json"),
+    ]),
     ["src/filesystem/package.json"],
   );
-  assert.deepEqual(npmCopyDeclarers(hoisted, ["package.json"]), [
+  assert.deepEqual(npmCopyDeclarers(hoisted, [decl("package.json")]), [
     "package.json",
   ]);
-  assert.deepEqual(npmCopyDeclarers(nested, ["package.json"]), []);
+  assert.deepEqual(npmCopyDeclarers(nested, [decl("package.json")]), []);
 
   // The root declares `diff`; only the workspace's undeclared copy is
   // vulnerable. The fix is the override, scoped, not the root's range.
   const body = buildIssueBody(npmGroup("diff", "5.2.2"), {
     affected: [{ ...ws, version: "5.0.0" }],
-    declarers: ["package.json"],
+    declarers: [decl("package.json")],
   });
   assert.ok(!body.includes("Raise the declared range"));
   assert.match(body, /\*\*Add a parent-scoped/);
   assert.match(body, /npm explain diff/);
   assert.match(body, /EOVERRIDE/);
+});
+
+test("a hoisted copy no declared range resolves to is transitive (#5506)", () => {
+  // The #5481 shape: src/filesystem declares minimatch ^11.0.4 and has its
+  // own fixed nested copy; the hoisted root copy is 10.2.5, pulled in only by
+  // dev tooling. The root copy is not filesystem's, so the fix is a
+  // package-wide override and no server is in scope.
+  const lock = {
+    packages: {
+      "": { name: "@modelcontextprotocol/servers", devDependencies: {} },
+      "src/filesystem": {
+        name: "@modelcontextprotocol/server-filesystem",
+        dependencies: { minimatch: "^11.0.4" },
+      },
+      "src/filesystem/node_modules/minimatch": { version: "11.0.4" },
+      "node_modules/minimatch": { version: "10.2.5", dev: true },
+    },
+  };
+  const declarers = npmDeclarers(lock, "minimatch");
+  assert.deepEqual(declarers, [
+    { manifest: "src/filesystem/package.json", range: "^11.0.4" },
+  ]);
+  const hoisted = npmLockEntries(lock, "minimatch").find(
+    (e) => e.path === "node_modules/minimatch",
+  );
+  assert.ok(hoisted);
+  assert.deepEqual(npmCopyDeclarers(hoisted, declarers), []);
+  // The same copy is a declarer's when its range does admit it.
+  assert.deepEqual(
+    npmCopyDeclarers(hoisted, [decl("src/filesystem/package.json", "^10.0.0")]),
+    ["src/filesystem/package.json"],
+  );
+
+  const affected = [hoisted];
+  assert.deepEqual(
+    issueLabels(
+      { manifestPath: "package-lock.json", ecosystem: "npm" },
+      { affected, declarers },
+    ),
+    ["v2", "chore", "dependencies"],
+  );
+  const body = buildIssueBody(npmGroup("minimatch", "10.2.6"), {
+    affected,
+    declarers,
+  });
+  assert.ok(!body.includes("Raise the declared range"));
+  assert.match(body, /\*\*Add an \[`overrides`\]/);
+  // Only the root's own declaration makes a package-wide override fail.
+  assert.ok(!body.includes("EOVERRIDE"));
 });
 
 test("a pip body says whether to raise the bound or refresh the lock", () => {

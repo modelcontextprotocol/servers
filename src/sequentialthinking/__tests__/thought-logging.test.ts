@@ -2,7 +2,7 @@
 // "true" (any case), each accepted thought is drawn as a box on stderr, with
 // a header that differs for plain thoughts, revisions and branches, and one
 // row per line of the thought, wrapped at MAX_BOX_TEXT_WIDTH and cut off
-// after MAX_BOX_ROWS. Thoughts
+// once header and thought fill MAX_BOX_ROWS rows. Thoughts
 // are driven through the in-process client and stderr is captured by spying
 // on console.error, which also keeps the boxes off the test output. chalk's
 // colour level depends on the terminal the tests run in, so it is pinned to 0
@@ -232,15 +232,18 @@ ${rows.join("\n")}
     });
 
     // #5433: past MAX_BOX_ROWS the box stops drawing and says how many lines
-    // it left out; the call itself is unaffected.
+    // it left out; the call itself is unaffected. The header's one row counts
+    // toward the cap (#5526), so the thought gets the rest.
     it("draws a thought with very many lines", async () => {
       const lines = Array.from({ length: 200_000 }, (_, i) => `${i % 10}`);
       const result = await conn!.think(thought({ thought: lines.join("\n") }));
       expect(result.isError).toBeFalsy();
       const out = logged()[0].split("\n");
-      expect(out).toHaveLength(MAX_BOX_ROWS + 1 + 5);
+      // A leading blank, the borders and separator, MAX_BOX_ROWS rows of
+      // header and thought, and the summary row.
+      expect(out).toHaveLength(MAX_BOX_ROWS + 5);
       expect(out.at(-2)).toContain(
-        `… ${200_000 - MAX_BOX_ROWS} more lines not shown`,
+        `… ${200_000 - (MAX_BOX_ROWS - 1)} more lines not shown`,
       );
       // The summary is wider than every one-character line and the header,
       // so it sets the box's width; it must not stick out of it.
@@ -284,28 +287,33 @@ ${row("short")}
       const result = await conn!.think(thought({ thought: text }));
       expect(result.isError).toBeFalsy();
       const out = logged()[0];
-      // 200 wrapped rows for the long line, short lines up to the row cap,
-      // then the summary row; each row is W + 6 characters and a newline.
-      const shortShown = MAX_BOX_ROWS - n / W;
-      expect(out.split("\n")).toHaveLength(MAX_BOX_ROWS + 1 + 5);
+      // The header row, 200 wrapped rows for the long line, short lines up to
+      // the row cap, then the summary row; each row is W + 6 characters and a
+      // newline.
+      const shortShown = MAX_BOX_ROWS - 1 - n / W;
+      expect(out.split("\n")).toHaveLength(MAX_BOX_ROWS + 5);
       expect(out).toContain(`… ${n - 1 - shortShown} more lines not shown`);
       expect(out.length).toBeLessThan((MAX_BOX_ROWS + 10) * (W + 7));
     });
 
     it("counts a line the row cap cuts off as not shown", async () => {
-      const text = `${"s\n".repeat(MAX_BOX_ROWS - 1)}${"L".repeat(2 * W)}`;
+      // The header row and these short lines leave one row for the long one.
+      const text = `${"s\n".repeat(MAX_BOX_ROWS - 2)}${"L".repeat(2 * W)}`;
       await conn!.think(thought({ thought: text }));
       const rows = logged()[0].split("\n");
-      expect(rows).toHaveLength(MAX_BOX_ROWS + 1 + 5);
+      expect(rows).toHaveLength(MAX_BOX_ROWS + 5);
       expect(rows.at(-3)).toBe(row("L".repeat(W)));
       expect(rows.at(-2)).toBe(row("… 1 more line not shown"));
     });
 
     it("draws a thought that exactly fills the cap with no summary row", async () => {
-      const text = Array.from({ length: MAX_BOX_ROWS }, () => "s").join("\n");
+      // With the header's one row, these lines fill the cap exactly.
+      const text = Array.from({ length: MAX_BOX_ROWS - 1 }, () => "s").join(
+        "\n",
+      );
       await conn!.think(thought({ thought: text }));
       const rows = logged()[0].split("\n");
-      expect(rows).toHaveLength(MAX_BOX_ROWS + 5);
+      expect(rows).toHaveLength(MAX_BOX_ROWS + 4);
       expect(logged()[0]).not.toContain("not shown");
     });
 
@@ -336,6 +344,81 @@ ${row("short")}
       // Each row is W + 6 characters and a newline. Uncapped, the header would
       // have set every row's width to its own length of more than 2 × W.
       expect(out.length).toBeLessThan((lines + 10) * (W + 7));
+    });
+
+    // #5526: a long branchId's header rows count toward MAX_BOX_ROWS, so they
+    // cannot add rows past the cap the thought's rows are held to.
+    it("counts a wrapped header's rows toward the row cap", async () => {
+      const branchId = "b".repeat(2 * W);
+      const header = `🌿 Branch 1/3 (from thought 1, ID: ${branchId})`;
+      const headerRows = Math.ceil(header.length / W);
+      expect(headerRows).toBeGreaterThan(1);
+      await conn!.think(
+        thought({
+          thought: Array.from({ length: MAX_BOX_ROWS }, () => "s").join("\n"),
+          branchFromThought: 1,
+          branchId,
+        }),
+      );
+      const rows = logged()[0].split("\n");
+      expect(rows).toHaveLength(MAX_BOX_ROWS + 5);
+      expect(rows.at(-2)).toBe(row(`… ${headerRows} more lines not shown`));
+    });
+
+    // #5526: a line ending in a branchId would start a line of output the
+    // row cap never counted; the header shows it escaped instead.
+    it("escapes line endings in a branchId so the header stays on its rows", async () => {
+      const branchId = "x\r\ny\rz\n".repeat(500);
+      const escaped = "x\\r\\ny\\rz\\n".repeat(500);
+      const header = `🌿 Branch 1/3 (from thought 1, ID: ${escaped})`;
+      await conn!.think(
+        thought({ thought: "t", branchFromThought: 1, branchId }),
+      );
+      const out = logged()[0];
+      expect(out).not.toContain("\r");
+      const rows = out.split("\n");
+      const headerRows = Math.ceil(header.length / W);
+      // A leading blank, the borders and separator, the header rows and the
+      // thought's one row.
+      expect(rows).toHaveLength(headerRows + 5);
+      expect(
+        rows
+          .slice(2, 2 + headerRows)
+          .map((r) => r.slice(2, 2 + W).trimEnd())
+          .join(""),
+      ).toBe(header);
+    });
+
+    // #5526: a header too long for every row is cut, so a huge branchId logs
+    // no more than the cap; its last row says how much was left out.
+    it("cuts a header longer than the row cap", async () => {
+      const branchId = "b".repeat(MAX_BOX_ROWS * W);
+      const header = `🌿 Branch 1/3 (from thought 1, ID: ${branchId})`;
+      const result = await conn!.think(
+        thought({ thought: "t", branchFromThought: 1, branchId }),
+      );
+      expect(result.isError).toBeFalsy();
+      const out = logged()[0];
+      const rows = out.split("\n");
+      // A leading blank, the top border, MAX_BOX_ROWS header rows, the
+      // separator, the thought's summary row and the bottom border.
+      expect(rows).toHaveLength(MAX_BOX_ROWS + 5);
+      const shown = (MAX_BOX_ROWS - 1) * W;
+      expect(
+        rows
+          .slice(2, MAX_BOX_ROWS + 1)
+          .map((r) => r.slice(2, 2 + W))
+          .join(""),
+      ).toBe(header.slice(0, shown));
+      expect(rows[MAX_BOX_ROWS + 1]).toBe(
+        row(`… ${header.length - shown} more characters not shown`),
+      );
+      expect(rows[MAX_BOX_ROWS + 2]).toBe(`├${border}┤`);
+      expect(rows.at(-2)).toBe(row("… 1 more line not shown"));
+      expect(new Set(rows.slice(1).map((r) => r.length))).toEqual(
+        new Set([W + 6]),
+      );
+      expect(out.length).toBeLessThan((MAX_BOX_ROWS + 10) * (W + 7));
     });
 
     it("never splits an emoji across rows", async () => {

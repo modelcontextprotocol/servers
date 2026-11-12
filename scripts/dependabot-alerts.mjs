@@ -271,11 +271,12 @@ export function npmLockEntries(lock, pkg) {
 
 /**
  * The manifests that declare `pkg` (any dependency section): the root, and
- * each workspace, as the lockfile records them.
+ * each workspace, as the lockfile records them, with the range each declares.
  *
  * @param {object} lock parsed `package-lock.json`
  * @param {string} pkg
- * @returns {string[]} manifest paths, e.g. `package.json`, `src/everything/package.json`
+ * @returns {Array<{manifest: string, range: string}>} sorted by manifest path,
+ *   e.g. `package.json`, `src/everything/package.json`
  */
 export function npmDeclarers(lock, pkg) {
   const declarers = [];
@@ -287,12 +288,13 @@ export function npmDeclarers(lock, pkg) {
       entry?.optionalDependencies?.[pkg] ??
       entry?.peerDependencies?.[pkg];
     if (declared) {
-      declarers.push(
-        lockPath === "" ? "package.json" : `${lockPath}/package.json`,
-      );
+      declarers.push({
+        manifest: lockPath === "" ? "package.json" : `${lockPath}/package.json`,
+        range: declared,
+      });
     }
   }
-  return declarers.sort();
+  return declarers.sort((a, b) => a.manifest.localeCompare(b.manifest));
 }
 
 /**
@@ -310,8 +312,9 @@ export function overrideAncestors(lockPath) {
 
 /**
  * A parent-scoped `overrides` block for the nested vulnerable copies. npm
- * rejects a package-wide override that contradicts a direct dependency of the
- * same name (`EOVERRIDE`), so when a manifest declares the package the nested
+ * rejects a package-wide override that contradicts the ROOT package's own
+ * direct dependency of the same name (`EOVERRIDE`; a workspace's declaration
+ * does not trigger it), so when the root declares the package the nested
  * copies have to be reached through their parents.
  *
  * @param {Array<{path: string}>} affected
@@ -651,7 +654,7 @@ export function buildIssueTitle(group) {
  * the root declares, or one no manifest declares, names no server.
  *
  * @param {{manifestPath: string, ecosystem?: string}} group
- * @param {{affected?: Array<{path: string, topLevel: boolean}>, declarers?: string[]}} [probe]
+ * @param {{affected?: Array<{path: string, version?: string, topLevel: boolean}>, declarers?: Array<{manifest: string, range: string}>}} [probe]
  * @returns {string[]}
  */
 export function issueLabels(group, { affected = [], declarers = [] } = {}) {
@@ -671,40 +674,55 @@ export function issueLabels(group, { affected = [], declarers = [] } = {}) {
 }
 
 /**
- * What an npm fix edits, from WHICH copies are vulnerable: the declared copy
- * needs its range raised, a nested or undeclared copy needs an `overrides`
- * pin, and both at once need both.
- */
-/**
  * The manifests whose declared range resolves to this copy. A copy under
  * another package's `node_modules` is nobody's declaration. A copy at the top
  * of a workspace's own `node_modules` is that workspace's, and only if that
  * workspace declares the package: the root declaring it says nothing about a
- * copy the workspace could not share. The hoisted root copy serves every
- * manifest that declares the package.
+ * copy the workspace could not share. The hoisted root copy serves each
+ * manifest whose declared range its version satisfies; a manifest it does not
+ * satisfy gets a nested copy of its own, so for that manifest the root copy is
+ * only something other packages pulled in (#5506). A range semver cannot read
+ * (an alias, a URL) is assumed to resolve to the root copy, as before.
  *
- * @param {{path: string, topLevel: boolean}} entry
- * @param {string[]} declarers every manifest that declares the package
- * @returns {string[]}
+ * @param {{path: string, version?: string, topLevel: boolean}} entry
+ * @param {Array<{manifest: string, range: string}>} declarers every manifest
+ *   that declares the package, with its declared range
+ * @returns {string[]} manifest paths
  */
 export function npmCopyDeclarers(entry, declarers) {
   if (!entry.topLevel) return [];
   const { owner } = splitOwner(entry.path);
-  return owner === ""
-    ? declarers
-    : declarers.filter((m) => m === `${owner}/package.json`);
+  if (owner !== "") {
+    return declarers
+      .filter((d) => d.manifest === `${owner}/package.json`)
+      .map((d) => d.manifest);
+  }
+  return declarers
+    .filter(
+      (d) =>
+        semver.validRange(d.range) === null ||
+        semver.valid(entry.version ?? "") === null ||
+        semver.satisfies(entry.version, d.range),
+    )
+    .map((d) => d.manifest);
 }
 
+/**
+ * What an npm fix edits, from WHICH copies are vulnerable: the declared copy
+ * needs its range raised, a nested or undeclared copy needs an `overrides`
+ * pin, and both at once need both.
+ */
 function npmFix(group, { affected, declarers }) {
   const copyDeclarers = (entry) => npmCopyDeclarers(entry, declarers);
   const raise = [...new Set(affected.flatMap(copyDeclarers))].sort();
   const direct = raise.length > 0;
   const nested = affected.filter((entry) => copyDeclarers(entry).length === 0);
   const transitive = nested.length > 0;
-  // A package-wide override contradicting ANY declaration of the package is
-  // refused (`EOVERRIDE`), so the scoped form is needed whenever one exists,
-  // not only when the declared copy is itself vulnerable.
-  const scoped = declarers.length > 0;
+  // A package-wide override contradicting the ROOT package's own declaration
+  // is refused (`EOVERRIDE`), so the scoped form is needed whenever the root
+  // declares the package, not only when the root's copy is itself vulnerable.
+  // A workspace's declaration does not trigger it (verified against npm 11).
+  const scoped = declarers.some((d) => d.manifest === "package.json");
   const unscopable = nested.some((e) => overrideAncestors(e.path).length === 0);
   const steps = [];
   if (direct) {
@@ -715,7 +733,7 @@ function npmFix(group, { affected, declarers }) {
   if (transitive) {
     steps.push(
       scoped
-        ? `**Add a parent-scoped [\`overrides\`](${DEPENDENCIES_DOC}) entry** in the root \`package.json\` for the nested copies below:\n\n\`\`\`json\n${scopedOverrideExample(nested, group)}\n\`\`\`\n\n${unscopable ? `   A copy at the top of a workspace's own \`node_modules\` names no parent in its path; \`npm explain ${group.package}\` shows which dependency pulls it in, to scope the entry under.\n\n` : ""}   A package-wide \`"${group.package}": "${group.fixedIn}"\` would fail with \`EOVERRIDE\`, because a manifest also declares \`${group.package}\` directly. **Not** \`npm audit fix\`, which can resolve an advisory by silently downgrading.`
+        ? `**Add a parent-scoped [\`overrides\`](${DEPENDENCIES_DOC}) entry** in the root \`package.json\` for the nested copies below:\n\n\`\`\`json\n${scopedOverrideExample(nested, group)}\n\`\`\`\n\n${unscopable ? `   A copy at the top of a workspace's own \`node_modules\` names no parent in its path; \`npm explain ${group.package}\` shows which dependency pulls it in, to scope the entry under.\n\n` : ""}   A package-wide \`"${group.package}": "${group.fixedIn}"\` would fail with \`EOVERRIDE\`, because the root \`package.json\` also declares \`${group.package}\` directly. **Not** \`npm audit fix\`, which can resolve an advisory by silently downgrading.`
         : `**Add an [\`overrides\`](${DEPENDENCIES_DOC}) entry** in the root \`package.json\` pinning \`${group.package}\` to \`>=${group.fixedIn}\`, for the copies below, which no declared range reaches. **Not** \`npm audit fix\`, which can resolve an advisory by silently downgrading.`,
     );
   }
@@ -737,7 +755,7 @@ function pipFix(group, { declaredSpec }) {
 
 /**
  * @param {ReturnType<typeof groupAlerts>[number]} group narrowed to what applies
- * @param {{affected: Array<{path: string, version: string, topLevel: boolean}>, declarers?: string[], declaredSpec?: string, ghsas?: string[], securityPrsOff?: boolean}} probe
+ * @param {{affected: Array<{path: string, version: string, topLevel: boolean}>, declarers?: Array<{manifest: string, range: string}>, declaredSpec?: string, ghsas?: string[], securityPrsOff?: boolean}} probe
  * @returns {string}
  */
 export function buildIssueBody(
