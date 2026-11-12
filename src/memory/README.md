@@ -7,12 +7,15 @@ Published on npm as [`@modelcontextprotocol/server-memory`](https://www.npmjs.co
 ## Core Concepts
 
 ### Entities
+
 Entities are the primary nodes in the knowledge graph. Each entity has:
+
 - A unique name (identifier)
 - An entity type (e.g., "person", "organization", "event")
 - A list of observations
 
 Example:
+
 ```json
 {
   "name": "John_Smith",
@@ -22,9 +25,11 @@ Example:
 ```
 
 ### Relations
+
 Relations define directed connections between entities. They are always stored in active voice and describe how entities interact or relate to each other.
 
 Example:
+
 ```json
 {
   "from": "John_Smith",
@@ -32,7 +37,9 @@ Example:
   "relationType": "works_at"
 }
 ```
+
 ### Observations
+
 Observations are discrete pieces of information about an entity. They are:
 
 - Stored as strings
@@ -41,6 +48,7 @@ Observations are discrete pieces of information about an entity. They are:
 - Should be atomic (one fact per observation)
 
 Example:
+
 ```json
 {
   "entityName": "John_Smith",
@@ -55,6 +63,7 @@ Example:
 ## API
 
 ### Tools
+
 - **create_entities**
   - Create multiple new entities in the knowledge graph
   - Input: `entities` (array of objects)
@@ -195,22 +204,27 @@ Add this to your claude_desktop_config.json:
   "mcpServers": {
     "memory": {
       "command": "docker",
-      "args": ["run", "-i", "-v", "claude-memory:/app/dist", "--rm", "mcp/memory"]
+      "args": [
+        "run",
+        "-i",
+        "-v",
+        "claude-memory:/app/dist",
+        "--rm",
+        "mcp/memory"
+      ]
     }
   }
 }
 ```
 
 #### NPX
+
 ```json
 {
   "mcpServers": {
     "memory": {
       "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-memory"
-      ]
+      "args": ["-y", "@modelcontextprotocol/server-memory"]
     }
   }
 }
@@ -223,12 +237,7 @@ On Windows, use `cmd /c` to launch `npx`:
   "mcpServers": {
     "memory": {
       "command": "cmd",
-      "args": [
-        "/c",
-        "npx",
-        "-y",
-        "@modelcontextprotocol/server-memory"
-      ]
+      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-memory"]
     }
   }
 }
@@ -243,10 +252,7 @@ The server can be configured using the following environment variables:
   "mcpServers": {
     "memory": {
       "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-memory"
-      ],
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
       "env": {
         "MEMORY_FILE_PATH": "/path/to/custom/memory.jsonl"
       }
@@ -262,12 +268,7 @@ On Windows, use:
   "mcpServers": {
     "memory": {
       "command": "cmd",
-      "args": [
-        "/c",
-        "npx",
-        "-y",
-        "@modelcontextprotocol/server-memory"
-      ],
+      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-memory"],
       "env": {
         "MEMORY_FILE_PATH": "/path/to/custom/memory.jsonl"
       }
@@ -277,6 +278,11 @@ On Windows, use:
 ```
 
 - `MEMORY_FILE_PATH`: Path to the memory storage JSONL file (default: `memory.jsonl` in the server directory). A leading `~` expands to your home directory; a relative path resolves against the server directory. Set it to an absolute path you own; see [Choosing where the graph is stored](#choosing-where-the-graph-is-stored).
+- `MEMORY_MAX_ENTITIES`: The most entities the graph may hold. Unset by default (no limit).
+- `MEMORY_MAX_RELATIONS`: The most relations the graph may hold. Unset by default (no limit).
+- `MEMORY_MAX_FILE_BYTES`: The most bytes the memory file may hold. Unset by default (no limit).
+
+The three limits are opt-in, and each is described under [Limiting how large the graph grows](#limiting-how-large-the-graph-grows). A variable that is set must hold a positive whole number; any other value, an empty one included, stops the server at startup with an error naming the variable.
 
 When `MEMORY_FILE_PATH` is not set and the server directory still holds a legacy `memory.json` but no `memory.jsonl`, the server renames `memory.json` to `memory.jsonl` at startup. If that rename fails, the server exits with an error naming both paths and the cause, rather than starting on an empty graph; fix the cause (a permission problem, say) and restart, or set `MEMORY_FILE_PATH` to choose a file explicitly.
 
@@ -298,6 +304,17 @@ Each MCP client starts its own server process, so two clients using the same `ME
 - A lock left behind by a server that crashed mid-write is removed automatically: at once if its process is known to have exited on the same machine, otherwise once it has gone 30 seconds without being refreshed (a server holding the lock refreshes it every 15 seconds while it works). Only one waiting server breaks a stale lock at a time, guarded by a momentary `<memory file>.lock.break` file.
 - A write that cannot get the lock within 60 seconds fails with a tool error rather than overwriting the file.
 - The lock relies on exclusive file creation, which local filesystems provide; a network filesystem that does not honour it cannot be shared safely this way.
+
+#### Limiting how large the graph grows
+
+Every write tool reads the whole memory file, changes the graph and writes the whole file back, holding the lock throughout. Its cost, and how long other servers sharing the file wait for the lock, therefore grow linearly with the file, however small the change: adding one entity to a graph of 100,000 entities rewrites the whole file, about 24 MB at around 240 bytes per entity, in roughly 0.4 seconds on a laptop (#5525). The read tools load the whole file too. Size a shared file with that in mind.
+
+By default nothing caps the graph. Set `MEMORY_MAX_ENTITIES`, `MEMORY_MAX_RELATIONS` or `MEMORY_MAX_FILE_BYTES` to put a ceiling on it:
+
+- `create_entities`, `create_relations` and `add_observations` refuse a call that would leave the graph over a limit, with a tool error naming the variable. The whole call is refused and nothing is saved, not just the part past the limit.
+- A call that adds nothing new (every entity or relation already exists, say) is still answered, even when the graph is at or over a limit.
+- The delete tools are never refused, so a graph over a limit (one that grew before the limit was set, or lowered) can always be shrunk. While it is over, calls that would grow it further on that dimension are refused.
+- `MEMORY_MAX_FILE_BYTES` counts the bytes of the file as it would be saved, unreadable lines included, so it bounds the cost of each write directly. The counts are easier to reason about but do not bound how long each entity's observations grow.
 
 # VS Code Installation Instructions
 
@@ -324,10 +341,7 @@ Alternatively, you can add the configuration to a file called `.vscode/mcp.json`
   "servers": {
     "memory": {
       "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-memory"
-      ]
+      "args": ["-y", "@modelcontextprotocol/server-memory"]
     }
   }
 }
@@ -340,12 +354,7 @@ On Windows, use:
   "servers": {
     "memory": {
       "command": "cmd",
-      "args": [
-        "/c",
-        "npx",
-        "-y",
-        "@modelcontextprotocol/server-memory"
-      ]
+      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-memory"]
     }
   }
 }
@@ -375,7 +384,7 @@ On Windows, use:
 
 The prompt for utilizing memory depends on the use case. Changing the prompt will help the model determine the frequency and types of memories created.
 
-Here is an example prompt for chat personalization. You could use this prompt in the "Custom Instructions" field of a [Claude.ai Project](https://www.anthropic.com/news/projects). 
+Here is an example prompt for chat personalization. You could use this prompt in the "Custom Instructions" field of a [Claude.ai Project](https://www.anthropic.com/news/projects).
 
 ```
 Follow these steps for each interaction:
@@ -408,7 +417,7 @@ Follow these steps for each interaction:
 Docker:
 
 ```sh
-docker build -t mcp/memory -f src/memory/Dockerfile . 
+docker build -t mcp/memory -f src/memory/Dockerfile .
 ```
 
 ### Upgrading a Docker install
@@ -435,7 +444,16 @@ Mounting a volume on a directory of its own and pointing `MEMORY_FILE_PATH` at i
   "mcpServers": {
     "memory": {
       "command": "docker",
-      "args": ["run", "-i", "-v", "claude-memory-data:/data", "-e", "MEMORY_FILE_PATH=/data/memory.jsonl", "--rm", "mcp/memory"]
+      "args": [
+        "run",
+        "-i",
+        "-v",
+        "claude-memory-data:/data",
+        "-e",
+        "MEMORY_FILE_PATH=/data/memory.jsonl",
+        "--rm",
+        "mcp/memory"
+      ]
     }
   }
 }

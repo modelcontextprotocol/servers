@@ -28,6 +28,7 @@ import {
   toNodeHandler,
 } from "@modelcontextprotocol/node";
 import { createServer, RESOURCE_URI } from "./index.js";
+import type { GraphLimits } from "./index.js";
 
 /** The interface bound when `HOST` is unset: loopback only. */
 export const DEFAULT_HOST = "127.0.0.1";
@@ -70,19 +71,23 @@ export interface RunningHttpServer {
 
 /**
  * Bind the endpoint on `host`:`port` (port 0 picks a free one) and serve the
- * memory server over the graph at `memoryFilePath` on it. Rejects when the
- * port cannot be bound.
+ * memory server over the graph at `memoryFilePath` on it, holding its write
+ * tools to `limits`. Rejects when the port cannot be bound.
  */
 export async function startHttpServer(
   memoryFilePath: string,
   { host, port }: { host: string; port: number },
+  limits: GraphLimits = {},
 ): Promise<RunningHttpServer> {
   const onerror = (error: Error) =>
     console.error("Error serving MCP request:", error);
   const handler: McpHttpHandler = createMcpHandler(
     ({ era }) =>
-      createServer(memoryFilePath, era, () =>
-        handler.notify.resourceUpdated(RESOURCE_URI),
+      createServer(
+        memoryFilePath,
+        era,
+        () => handler.notify.resourceUpdated(RESOURCE_URI),
+        limits,
       ),
     { onerror },
   );

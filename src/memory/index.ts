@@ -173,6 +173,60 @@ export function skippedEntitiesNotice(skipped: string[]): string {
   );
 }
 
+// Opt-in ceilings on how large the write tools may grow the graph (#5525).
+// Every mutation reads the whole graph file and writes it back under the
+// cross-process lock, so its cost, and how long it holds the lock, grow
+// linearly with the file. These let an operator bound that growth. Each is
+// unset by default, which leaves the store unbounded, as it always was.
+export interface GraphLimits {
+  // Most entities the graph may hold.
+  maxEntities?: number;
+  // Most relations the graph may hold.
+  maxRelations?: number;
+  // Most bytes the saved graph file may hold.
+  maxFileBytes?: number;
+}
+
+// The environment variable that sets each limit.
+export const GRAPH_LIMIT_ENV: Readonly<Record<keyof GraphLimits, string>> = {
+  maxEntities: "MEMORY_MAX_ENTITIES",
+  maxRelations: "MEMORY_MAX_RELATIONS",
+  maxFileBytes: "MEMORY_MAX_FILE_BYTES",
+};
+
+// Read the limits from the environment. Only an unset variable leaves its
+// limit off; any other value that is not a positive whole number, an empty
+// one included, stops startup, since a limit silently ignored would leave the
+// store unbounded while the operator believes it capped.
+export function graphLimitsFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): GraphLimits {
+  const limits: GraphLimits = {};
+  for (const key of Object.keys(GRAPH_LIMIT_ENV) as (keyof GraphLimits)[]) {
+    const name = GRAPH_LIMIT_ENV[key];
+    if (env[name] === undefined) {
+      continue;
+    }
+    const raw = env[name].trim();
+    const value = Number(raw);
+    if (!/^\d+$/.test(raw) || !Number.isSafeInteger(value) || value < 1) {
+      throw new Error(
+        `${name} must be a positive whole number, got "${env[name]}". ` +
+          "Unset it to leave that limit off.",
+      );
+    }
+    limits[key] = value;
+  }
+  return limits;
+}
+
+// How large a graph is, on each dimension GraphLimits caps.
+interface GraphSize {
+  entities: number;
+  relations: number;
+  bytes: number;
+}
+
 // Timings for the cross-process lock around each mutation. Exposed so tests
 // can shorten them; the server always uses the defaults.
 export interface FileLockOptions {
@@ -471,6 +525,7 @@ export class KnowledgeGraphManager {
   constructor(
     private memoryFilePath: string,
     private lockOptions: FileLockOptions = {},
+    private limits: GraphLimits = {},
   ) {}
 
   // Serializes all read-modify-write graph mutations behind a single queue.
@@ -521,9 +576,12 @@ export class KnowledgeGraphManager {
   // them back to saveGraph so they are written out unchanged. Otherwise the
   // next unrelated write would silently delete them from disk, together with
   // every valid observation of an entity that has one bad field.
+  // size is the graph as loaded, for the write tools' limit check (see
+  // checkLimits).
   private async loadGraphWithUnreadable(): Promise<{
     graph: KnowledgeGraph;
     unreadable: string[];
+    size: GraphSize;
   }> {
     try {
       const data = await fs.readFile(this.memoryFilePath, "utf-8");
@@ -581,14 +639,23 @@ export class KnowledgeGraphManager {
         }
       }
 
-      return { graph, unreadable };
+      const size = {
+        entities: graph.entities.length,
+        relations: graph.relations.length,
+        bytes: Buffer.byteLength(data, "utf-8"),
+      };
+      return { graph, unreadable, size };
     } catch (error) {
       if (
         error instanceof Error &&
         "code" in error &&
         error.code === "ENOENT"
       ) {
-        return { graph: { entities: [], relations: [] }, unreadable: [] };
+        return {
+          graph: { entities: [], relations: [] },
+          unreadable: [],
+          size: { entities: 0, relations: 0, bytes: 0 },
+        };
       }
       throw error;
     }
@@ -611,9 +678,50 @@ export class KnowledgeGraphManager {
     }
   }
 
+  // Refuse a write that would leave the graph over a limit and larger than it
+  // was (`before`), on any one dimension. Comparing against `before` keeps a
+  // graph already over a lowered limit usable: a call that adds nothing still
+  // succeeds, and the delete tools, which never pass `before`, can always
+  // shrink it. The refusal is thrown before anything is written, so the call
+  // changes nothing.
+  private checkLimits(
+    graph: KnowledgeGraph,
+    content: string,
+    before: GraphSize,
+  ): void {
+    const after: GraphSize = {
+      entities: graph.entities.length,
+      relations: graph.relations.length,
+      bytes: Buffer.byteLength(content, "utf-8"),
+    };
+    const dimensions: [keyof GraphSize, keyof GraphLimits, string][] = [
+      ["entities", "maxEntities", "entities"],
+      ["relations", "maxRelations", "relations"],
+      ["bytes", "maxFileBytes", "bytes in the memory file"],
+    ];
+    for (const [dimension, key, unit] of dimensions) {
+      const limit = this.limits[key];
+      if (
+        limit !== undefined &&
+        after[dimension] > limit &&
+        after[dimension] > before[dimension]
+      ) {
+        throw new Error(
+          `Refused: this change would bring the knowledge graph to ${after[dimension]} ${unit}, ` +
+            `over the limit of ${limit} set by ${GRAPH_LIMIT_ENV[key]}. Nothing was saved. ` +
+            "Delete entities, relations or observations that are no longer needed to make room, " +
+            `or ask the operator to raise ${GRAPH_LIMIT_ENV[key]}.`,
+        );
+      }
+    }
+  }
+
+  // before is the graph's size as loaded; the write tools that add to the
+  // graph pass it, so the save is refused if it breaks a limit (checkLimits).
   private async saveGraph(
     graph: KnowledgeGraph,
     unreadable: string[],
+    before?: GraphSize,
   ): Promise<void> {
     // The modelled fields come first and always hold the current values; a
     // record's extras (see extraFields) follow unchanged. A record created by
@@ -639,6 +747,10 @@ export class KnowledgeGraphManager {
       ),
       ...unreadable,
     ];
+    const content = lines.join("\n") + "\n";
+    if (before) {
+      this.checkLimits(graph, content, before);
+    }
 
     // Write to a temporary file in the same directory, then rename it over
     // the target. fs.writeFile would truncate the memory file before writing,
@@ -683,7 +795,7 @@ export class KnowledgeGraphManager {
       // umask removed.
       await fs.writeFile(
         tempFilePath,
-        lines.join("\n") + "\n",
+        content,
         mode === undefined ? undefined : { mode },
       );
       if (mode !== undefined) {
@@ -699,7 +811,7 @@ export class KnowledgeGraphManager {
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
     return this.withLock(async () => {
-      const { graph, unreadable } = await this.loadGraphWithUnreadable();
+      const { graph, unreadable, size } = await this.loadGraphWithUnreadable();
       const newEntities = entities.filter(
         (e, index) =>
           !graph.entities.some(
@@ -709,14 +821,20 @@ export class KnowledgeGraphManager {
           !entities.slice(0, index).some((earlier) => earlier.name === e.name),
       );
       graph.entities.push(...newEntities);
-      await this.saveGraph(graph, unreadable);
+      // Only a call that adds something is held to the limits: re-saving can
+      // grow an existing file that was not written in this exact form.
+      await this.saveGraph(
+        graph,
+        unreadable,
+        newEntities.length > 0 ? size : undefined,
+      );
       return newEntities;
     });
   }
 
   async createRelations(relations: Relation[]): Promise<Relation[]> {
     return this.withLock(async () => {
-      const { graph, unreadable } = await this.loadGraphWithUnreadable();
+      const { graph, unreadable, size } = await this.loadGraphWithUnreadable();
       const entityNames = new Set(graph.entities.map((e) => e.name));
 
       relations.forEach((r) => {
@@ -741,7 +859,12 @@ export class KnowledgeGraphManager {
             .some((earlier) => isSameRelation(earlier, r)),
       );
       graph.relations.push(...newRelations);
-      await this.saveGraph(graph, unreadable);
+      // Held to the limits only when it adds something (see createEntities).
+      await this.saveGraph(
+        graph,
+        unreadable,
+        newRelations.length > 0 ? size : undefined,
+      );
       return newRelations;
     });
   }
@@ -750,7 +873,7 @@ export class KnowledgeGraphManager {
     observations: { entityName: string; contents: string[] }[],
   ): Promise<{ entityName: string; addedObservations: string[] }[]> {
     return this.withLock(async () => {
-      const { graph, unreadable } = await this.loadGraphWithUnreadable();
+      const { graph, unreadable, size } = await this.loadGraphWithUnreadable();
       const results = observations.map((o) => {
         const entity = graph.entities.find((e) => e.name === o.entityName);
         if (!entity) {
@@ -764,7 +887,9 @@ export class KnowledgeGraphManager {
         entity.observations.push(...newObservations);
         return { entityName: o.entityName, addedObservations: newObservations };
       });
-      await this.saveGraph(graph, unreadable);
+      // Held to the limits only when it adds something (see createEntities).
+      const added = results.some((r) => r.addedObservations.length > 0);
+      await this.saveGraph(graph, unreadable, added ? size : undefined);
       return results;
     });
   }
@@ -1043,13 +1168,19 @@ const ReadEntitySchema = EntitySchema.extend({
 // announces every change instead of the instance itself, whatever era wrote
 // it: over HTTP each request gets a fresh server that holds no listen stream
 // and no subscriber, so http.ts hands in the handler's subscription bus, which
-// every open 2026-07-28 stream listens on.
+// every open 2026-07-28 stream listens on. `limits` caps how large the write
+// tools may grow the graph; main() and run() read it from the environment.
 export function createServer(
   memoryFilePath: string,
   era: "legacy" | "modern" = "legacy",
   publishGraphUpdated?: () => void,
+  limits: GraphLimits = {},
 ): McpServer {
-  const knowledgeGraphManager = new KnowledgeGraphManager(memoryFilePath);
+  const knowledgeGraphManager = new KnowledgeGraphManager(
+    memoryFilePath,
+    {},
+    limits,
+  );
 
   const server = new McpServer({
     name: "memory-server",
@@ -1520,21 +1651,25 @@ export function registerKnowledgeGraphSubscriptions(
 // including one that stops the transport from starting, is reported on stderr.
 export async function main(transport?: Transport): Promise<StdioServerHandle> {
   const memoryFilePath = await ensureMemoryFilePath();
+  const limits = graphLimitsFromEnv();
   const locationWarning = memoryFileLocationWarning(memoryFilePath);
   if (locationWarning) {
     console.error(locationWarning);
   }
   installLockCleanup();
-  const handle = serveStdio(({ era }) => createServer(memoryFilePath, era), {
-    transport,
-    // serveStdio reports a transport that fails, including one that cannot
-    // start, here rather than by rejecting, so record the failure in the
-    // exit status for whatever supervises the process.
-    onerror: (error) => {
-      console.error("Transport error:", error);
-      process.exitCode = 1;
+  const handle = serveStdio(
+    ({ era }) => createServer(memoryFilePath, era, undefined, limits),
+    {
+      transport,
+      // serveStdio reports a transport that fails, including one that cannot
+      // start, here rather than by rejecting, so record the failure in the
+      // exit status for whatever supervises the process.
+      onerror: (error) => {
+        console.error("Transport error:", error);
+        process.exitCode = 1;
+      },
     },
-  });
+  );
   console.error("Knowledge Graph MCP Server running on stdio");
   return handle;
 }
@@ -1597,12 +1732,13 @@ export async function run(
     return main();
   }
   const memoryFilePath = await ensureMemoryFilePath();
+  const limits = graphLimitsFromEnv();
   const locationWarning = memoryFileLocationWarning(memoryFilePath);
   if (locationWarning) {
     console.error(locationWarning);
   }
   const { httpEndpoint, startHttpServer } = await import("./http.js");
-  const running = await startHttpServer(memoryFilePath, httpEndpoint());
+  const running = await startHttpServer(memoryFilePath, httpEndpoint(), limits);
   console.error(
     `Knowledge Graph MCP Server running on Streamable HTTP at ${running.url}`,
   );
