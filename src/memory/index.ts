@@ -294,10 +294,13 @@ export function heldLockPaths(): string[] {
 // exits: an `exit` listener cannot wait on a promise. As in withFileLock's own
 // release, a lock is removed only while it still holds this process's token,
 // so a lock broken as stale and re-taken by another process stays in place.
+// A lock is tracked from the moment its exclusive create returns, before its
+// token is written, so a file holding only the start of the token (or none of
+// it) is ours too: the exit interrupted the write.
 export function releaseHeldLocks(): void {
   for (const [lockPath, token] of heldLocks) {
     try {
-      if (readFileSync(lockPath, "utf-8") === token) {
+      if (token.startsWith(readFileSync(lockPath, "utf-8"))) {
         unlinkSync(lockPath);
       }
     } catch {
@@ -359,6 +362,10 @@ export async function withFileLock<T>(
       }
     }
     if (handle) {
+      // Track the lock before anything else is awaited: a signal is handled
+      // only between tasks, never between the open's completion and this
+      // line, so from here on the exit hook can remove it (#5485).
+      heldLocks.set(lockPath, token);
       try {
         await handle.writeFile(token);
         await handle.close();
@@ -367,6 +374,7 @@ export async function withFileLock<T>(
         // every other writer waiting for it to go stale.
         await handle.close().catch(ignoreError);
         await fs.unlink(lockPath).catch(ignoreError);
+        heldLocks.delete(lockPath);
         throw error;
       }
       break;
@@ -424,23 +432,23 @@ export async function withFileLock<T>(
       .catch(ignoreError);
   }, staleMs / 2);
   heartbeat.unref();
-  heldLocks.set(lockPath, token);
 
   try {
     return await operation();
   } finally {
     clearInterval(heartbeat);
-    // Stop tracking the lock before releasing it. A lock this same process
-    // broke as stale and re-took in another withFileLock call carries that
-    // call's token, and stays tracked for it.
-    if (heldLocks.get(lockPath) === token) {
-      heldLocks.delete(lockPath);
-    }
     // Release only our own lock: if it was broken as stale while we held it,
     // the file may now belong to another process.
     const current = await fs.readFile(lockPath, "utf-8").catch(() => null);
     if (current === token) {
       await fs.unlink(lockPath).catch(ignoreError);
+    }
+    // Stop tracking the lock only once the release is done, so an exit during
+    // it still removes the lock. A lock this same process broke as stale and
+    // re-took in another withFileLock call carries that call's token, and
+    // stays tracked for it.
+    if (heldLocks.get(lockPath) === token) {
+      heldLocks.delete(lockPath);
     }
   }
 }

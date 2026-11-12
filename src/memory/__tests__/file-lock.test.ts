@@ -460,6 +460,51 @@ describe("releasing held locks on exit (#5485)", () => {
     expect(await fs.readFile(taken, "utf-8")).toBe("someone else");
   });
 
+  it("removes a lock whose token was still being written at exit", async () => {
+    const lockPath = path.join(dir, "memory.jsonl.lock");
+    const realOpen = fs.open;
+    let finishWrite!: () => void;
+    let writing!: () => void;
+    const writeStarted = new Promise<void>((resolve) => (writing = resolve));
+    vi.spyOn(fs, "open").mockImplementationOnce(async (...args) => {
+      const handle = await realOpen(...args);
+      const realWrite = handle.writeFile.bind(handle);
+      // Hold the token write open, with nothing written yet.
+      handle.writeFile = async (data) => {
+        writing();
+        await new Promise<void>((resolve) => (finishWrite = resolve));
+        return realWrite(data);
+      };
+      return handle;
+    });
+
+    const held = withFileLock(lockPath, async () => "ran");
+    await writeStarted;
+    expect(await fs.readFile(lockPath, "utf-8")).toBe("");
+
+    releaseHeldLocks();
+
+    expect(await exists(lockPath)).toBe(false);
+    finishWrite();
+    expect(await held).toBe("ran");
+  });
+
+  it("still tracks a lock while its release is in progress", async () => {
+    const lockPath = path.join(dir, "memory.jsonl.lock");
+    const realUnlink = fs.unlink;
+    let trackedDuringRelease: string[] = [];
+    await withFileLock(lockPath, async () => {
+      // The release's removal of the lock is the next unlink.
+      vi.spyOn(fs, "unlink").mockImplementationOnce(async (file) => {
+        trackedDuringRelease = heldLockPaths();
+        return realUnlink(file);
+      });
+    });
+    expect(trackedDuringRelease).toEqual([lockPath]);
+    expect(heldLockPaths()).toEqual([]);
+    expect(await exists(lockPath)).toBe(false);
+  });
+
   it("keeps tracking a lock the same process re-took after breaking it", async () => {
     const lockPath = path.join(dir, "memory.jsonl.lock");
     let releaseFirst!: () => void;
