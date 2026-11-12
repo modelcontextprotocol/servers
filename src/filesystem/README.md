@@ -414,8 +414,9 @@ npx -y @modelcontextprotocol/server-filesystem --transport streamable-http /User
 
 It listens on `127.0.0.1:3001` unless `HOST` and `PORT` say otherwise (for
 example `PORT=8080`); `HOST=0.0.0.0` exposes it to every machine that can reach
-this one, so set it deliberately. A browser page can reach it only from a
-localhost origin. Point a client at the URL, such as
+this one, so set it deliberately. A request from a browser page on any
+origin but localhost is refused with `403`, and the endpoint sends no CORS
+headers, so it serves clients that are not browser pages. Point a client at the URL, such as
 `http://127.0.0.1:3001/mcp`, instead of giving it a command:
 
 ```json

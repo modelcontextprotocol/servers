@@ -255,7 +255,7 @@ this one, so set it deliberately. Point a client at the URL, such as
 }
 ```
 
-Every other option works as it does over stdio. On loopback the SDK also checks each request's `Host` and `Origin` headers against loopback names, to guard against DNS rebinding.
+Every other option works as it does over stdio. A browser page from any origin but localhost is refused with `403`, whatever `HOST` is, to guard against DNS rebinding; on loopback the SDK also checks each request's `Host` header.
 
 ## Example Interactions
 

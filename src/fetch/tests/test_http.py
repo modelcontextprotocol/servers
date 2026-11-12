@@ -8,6 +8,7 @@ import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from functools import partial
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import anyio
@@ -16,7 +17,13 @@ from mcp import Client
 
 import mcp_server_fetch
 from mcp_server_fetch.server import serve
-from mcp_server_fetch.transport import DEFAULT_HOST, DEFAULT_PORT, http_endpoint
+from mcp_server_fetch.transport import (
+    DEFAULT_HOST,
+    DEFAULT_PORT,
+    LocalhostOriginMiddleware,
+    http_endpoint,
+    origin_allowed,
+)
 
 ERAS = [
     pytest.param("2026-07-28", "2026-07-28", id="2026-07-28"),
@@ -114,3 +121,55 @@ def test_main_refuses_an_unknown_transport_or_a_bad_port(
     assert exit_info.value.code == 2
     serve_mock.assert_not_awaited()
     assert "error:" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "origin,allowed",
+    [
+        (None, True),
+        ("http://localhost:6274", True),
+        ("http://127.0.0.1", True),
+        ("http://[::1]:3000", True),
+        ("https://evil.example", False),
+        ("http://localhost.evil.example", False),
+        ("http://[::1", False),
+        ("null", False),
+    ],
+)
+def test_origin_allowed(origin: str | None, allowed: bool) -> None:
+    assert origin_allowed(origin) is allowed
+
+
+async def test_middleware_refuses_a_foreign_origin_whatever_the_host() -> None:
+    """The check does not depend on the bind address, so it holds under HOST=0.0.0.0."""
+    reached: list[str] = []
+
+    async def app(scope: Any, receive: Any, send: Any) -> None:
+        reached.append(scope["type"])
+
+    sent: list[Any] = []
+
+    async def send(message: Any) -> None:
+        sent.append(message)
+
+    async def receive() -> Any:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    middleware = LocalhostOriginMiddleware(app)
+    foreign = {
+        "type": "http",
+        "method": "POST",
+        "path": "/mcp",
+        "headers": [
+            (b"host", b"192.168.1.20:3001"),
+            (b"origin", b"https://evil.example"),
+        ],
+    }
+    await middleware(foreign, receive, send)
+    assert reached == []
+    assert sent[0]["status"] == 403
+
+    local = {**foreign, "headers": [(b"origin", b"http://localhost:6274")]}
+    await middleware(local, receive, send)
+    await middleware({"type": "lifespan"}, receive, send)
+    assert reached == ["http", "lifespan"]
