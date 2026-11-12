@@ -1,5 +1,17 @@
 # @modelcontextprotocol/server-memory
 
+## 2.2.0
+
+### Minor Changes
+
+- [#5536](https://github.com/modelcontextprotocol/servers/pull/5536) [`311c0fd`](https://github.com/modelcontextprotocol/servers/commit/311c0fdc953f38da08153fd2e8d134d03c8e168b) [@cliffhall](https://github.com/cliffhall) - Serve Streamable HTTP as well as stdio ([#576](https://github.com/modelcontextprotocol/servers/issues/576)). `--transport streamable-http` serves the server on one `/mcp` endpoint, for 2026-07-28 and 2025-era clients alike, at `HOST`:`PORT` (`127.0.0.1:3001` by default); stdio stays the default. Over HTTP the filesystem server requires its allowed directories on the command line, since it cannot ask a client for its Roots, and the sequential-thinking history belongs to the server process rather than to one connection.
+
+- [#5534](https://github.com/modelcontextprotocol/servers/pull/5534) [`1c00bfa`](https://github.com/modelcontextprotocol/servers/commit/1c00bfa0f3a38faee6be46631f95928726e37ab1) [@cliffhall](https://github.com/cliffhall) - Add opt-in write limits: `MEMORY_MAX_ENTITIES`, `MEMORY_MAX_RELATIONS` and `MEMORY_MAX_FILE_BYTES` cap how large the write tools may grow the graph, and the README now documents that every write rewrites the whole memory file.
+
+### Patch Changes
+
+- [#5530](https://github.com/modelcontextprotocol/servers/pull/5530) [`37bff57`](https://github.com/modelcontextprotocol/servers/commit/37bff572435208d09b5b7403edf638c88871cc14) [@cliffhall](https://github.com/cliffhall) - Remove the memory file lock the server holds when it is stopped by SIGINT or SIGTERM, or exits, so the next writer does not wait for it to go stale.
+
 ## 2.1.1
 
 ### Patch Changes
