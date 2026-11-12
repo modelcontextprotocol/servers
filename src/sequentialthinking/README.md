@@ -218,6 +218,32 @@ Run the following:
 codex mcp add sequential-thinking npx -y @modelcontextprotocol/server-sequential-thinking
 ```
 
+## Streamable HTTP
+
+The server talks over stdio by default. With `--transport streamable-http` it
+runs on its own as an HTTP service instead, serving one MCP endpoint, `/mcp`,
+to any number of clients of either protocol era:
+
+```sh
+npx -y @modelcontextprotocol/server-sequential-thinking --transport streamable-http
+```
+
+It listens on `127.0.0.1:3001` unless `HOST` and `PORT` say otherwise (for
+example `PORT=8080`); `HOST=0.0.0.0` exposes it to every machine that can reach
+this one, so set it deliberately. A browser page can reach it only from a
+localhost origin. Point a client at the URL, such as
+`http://127.0.0.1:3001/mcp`, instead of giving it a command:
+
+```json
+{
+  "mcpServers": {
+    "sequentialthinking": { "type": "http", "url": "http://127.0.0.1:3001/mcp" }
+  }
+}
+```
+
+Over HTTP each request is served by a fresh server, and a 2025-era client gets no session (GET and DELETE on `/mcp` answer `405`), so the server cannot send it requests or notifications between its own requests. So the thought history and branches, which over stdio belong to one connection, **belong to the server process over HTTP and are shared by every client it serves**: run one process per client when histories must stay apart.
+
 ## Building
 
 Docker:

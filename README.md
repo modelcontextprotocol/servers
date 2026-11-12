@@ -135,7 +135,7 @@ An MCP server talks to its client over a **transport**. The protocol defines two
 | **stdio** | The client launches the server as a subprocess and talks to it over the process's stdin and stdout. The server opens no port. | A `command` and `args` in the client's configuration, as in the examples above |
 | **Streamable HTTP** | The server runs on its own as an HTTP service, and can serve many clients | A URL, such as `http://localhost:3001/mcp` |
 
-**Every server in this repository serves stdio, and only [Everything](src/everything) also serves Streamable HTTP** (its README shows how to start it that way, and covers its deprecated HTTP+SSE transport too). So when you run `uvx mcp-server-git` or `npx -y @modelcontextprotocol/server-memory` in a terminal, it opens no port, prints at most a one-line startup notice, and then appears to hang. That is expected: it is waiting for a client to send it messages on stdin. You do not normally start a stdio server yourself; your MCP client starts it from its configuration and stops it when it is done.
+**Every server in this repository serves stdio by default, and every one can also serve Streamable HTTP** on `http://127.0.0.1:3001/mcp` (set `PORT` and `HOST` to move it): [Everything](src/everything) with its `streamableHttp` argument (its README also covers its deprecated HTTP+SSE transport), and the others with `--transport streamable-http`, as each server's README shows. Started without one, a server uses stdio, so when you run `uvx mcp-server-git` or `npx -y @modelcontextprotocol/server-memory` in a terminal, it opens no port, prints at most a one-line startup notice, and then appears to hang. That is expected: it is waiting for a client to send it messages on stdin. You do not normally start a stdio server yourself; your MCP client starts it from its configuration and stops it when it is done.
 
 To try a server without setting up a client, use the [MCP Inspector](https://github.com/modelcontextprotocol/inspector). Given a stdio server's command, it launches the server for you and lets you browse and call its tools; given a URL, it connects to a running Streamable HTTP server:
 
@@ -144,7 +144,7 @@ To try a server without setting up a client, use the [MCP Inspector](https://git
 npx @modelcontextprotocol/inspector uvx mcp-server-git
 
 # A Streamable HTTP server: start it first, then connect to its URL
-npx @modelcontextprotocol/server-everything streamableHttp
+npx @modelcontextprotocol/server-everything streamableHttp   # or: uvx mcp-server-time --transport streamable-http
 npx @modelcontextprotocol/inspector --transport http --server-url http://localhost:3001/mcp
 ```
 

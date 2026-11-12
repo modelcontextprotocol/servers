@@ -232,6 +232,31 @@ Example:
 
 The Docker image cannot see the host's timezone, so it reads the `LOCAL_TIMEZONE` environment variable when the container starts, and uses `UTC` when it is unset or empty. Pass it with `-e`: `"-e", "LOCAL_TIMEZONE"` forwards the client's own value, as in the Docker configuration above, and `"-e", "LOCAL_TIMEZONE=America/New_York"` sets one. A `--local-timezone` given after the image name takes precedence.
 
+## Streamable HTTP
+
+The server talks over stdio by default. With `--transport streamable-http` it
+runs on its own as an HTTP service instead, serving one MCP endpoint, `/mcp`,
+to any number of clients of either protocol era:
+
+```sh
+uvx mcp-server-time --transport streamable-http
+```
+
+It listens on `127.0.0.1:3001` unless `HOST` and `PORT` say otherwise (for
+example `PORT=8080`); `HOST=0.0.0.0` exposes it to every machine that can reach
+this one, so set it deliberately. Point a client at the URL, such as
+`http://127.0.0.1:3001/mcp`, instead of giving it a command:
+
+```json
+{
+  "mcpServers": {
+    "time": { "type": "http", "url": "http://127.0.0.1:3001/mcp" }
+  }
+}
+```
+
+Every other option works as it does over stdio. On loopback the SDK also checks each request's `Host` and `Origin` headers against loopback names, to guard against DNS rebinding.
+
 ## Example Interactions
 
 1. Get current time:

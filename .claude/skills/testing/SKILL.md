@@ -40,7 +40,7 @@ connection harness does (`__tests__/harness.ts` in `everything`,
 
 | Server | How its tests reach the code |
 | --- | --- |
-| `everything`, `filesystem`, `memory`, `sequentialthinking` | An SDK `Client` connected to the server's `createServer()` over `InMemoryTransport`, in the vitest process, through the server's own harness, plus unit tests of helper modules such as `lib.ts`. `everything` drives its stdio, SSE and Streamable HTTP transports in-process too; the other three have one thin spawn smoke of the built `dist/index.js` |
+| `everything`, `filesystem`, `memory`, `sequentialthinking` | An SDK `Client` connected to the server's `createServer()` over `InMemoryTransport`, in the vitest process, through the server's own harness, plus unit tests of helper modules such as `lib.ts`. `everything` drives its stdio, SSE and Streamable HTTP transports in-process too; the other three drive their `http.ts` in-process over a free loopback port, and have one thin spawn smoke of the built `dist/index.js` |
 | `fetch`, `git`, `time` | A `ClientSession` linked in-process to the real `serve()` over in-memory streams (below), plus direct calls on the pure functions in `server.py` |
 
 No TypeScript test uses an in-memory transport yet.

@@ -5,9 +5,10 @@
 // SDK Client over an in-memory transport (#4854); `main()` serves it through
 // the SDK's `serveStdio` entry, which answers both 2026-07-28 clients
 // (`server/discover`, no handshake) and 2025-era clients (`initialize`) from
-// the same factory (#4852); and stdio is only attached when this file is run
-// as the binary, so importing it from a test never touches the runner's
-// stdin/stdout.
+// the same factory (#4852); `run()` reads `--transport` and starts stdio (the
+// default) or Streamable HTTP (`http.ts`, #576); and a transport is only
+// attached when this file is run as the binary, so importing it from a test
+// never touches the runner's stdin/stdout.
 
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -37,18 +38,20 @@ const coercedBoolean = z
   });
 
 /**
- * Build the sequential-thinking server with its one tool registered. Each call
- * returns an independent server with its own thought history and branches.
- * `serveStdio` calls it once per connection, so the history lives exactly as
- * long as the client's connection, on either protocol era.
+ * Build the sequential-thinking server with its one tool registered, recording
+ * thoughts in `thinkingServer`. By default each call gets a history and
+ * branches of its own: `serveStdio` calls it once per connection, so the
+ * history lives exactly as long as the client's connection, on either
+ * protocol era. Over HTTP every request gets a fresh server, so `http.ts`
+ * passes one history shared by all of them.
  */
-export function createServer(): McpServer {
+export function createServer(
+  thinkingServer: SequentialThinkingServer = new SequentialThinkingServer(),
+): McpServer {
   const server = new McpServer({
     name: "sequential-thinking-server",
     version: SERVER_VERSION,
   });
-
-  const thinkingServer = new SequentialThinkingServer();
 
   server.registerTool(
     "sequentialthinking",
@@ -189,8 +192,75 @@ export function isEntryPoint(
   }
 }
 
+/** The transports `--transport` can name. */
+export const TRANSPORTS = ["stdio", "streamable-http"] as const;
+export type TransportName = (typeof TRANSPORTS)[number];
+
+/**
+ * The transport the command line asks for: `--transport <name>` or
+ * `--transport=<name>`, else stdio. Throws on a missing or unknown name.
+ * Other arguments are ignored, as they always have been.
+ */
+export function parseTransport(args: string[]): TransportName {
+  let value: string | undefined;
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index];
+    if (arg === "--transport") {
+      value = args[++index];
+      if (value === undefined) {
+        throw new Error("--transport needs a value: stdio or streamable-http");
+      }
+    } else if (arg.startsWith("--transport=")) {
+      value = arg.slice("--transport=".length);
+    }
+  }
+  if (value === undefined) return "stdio";
+  if (!(TRANSPORTS as readonly string[]).includes(value)) {
+    throw new Error(
+      `Unknown transport ${JSON.stringify(value)}: expected stdio or streamable-http`,
+    );
+  }
+  return value as TransportName;
+}
+
+/**
+ * Start the server on the transport `args` names, and hand back how to stop
+ * it. Streamable HTTP listens on `HOST`:`PORT` (loopback:3001 by default) and
+ * also stops, exiting the process, on SIGINT or SIGTERM.
+ */
+export async function run(
+  args: string[] = process.argv.slice(2),
+): Promise<{ close: () => Promise<void> }> {
+  if (parseTransport(args) === "stdio") {
+    return main();
+  }
+  const { httpEndpoint, startHttpServer } = await import("./http.js");
+  const running = await startHttpServer(httpEndpoint());
+  console.error(
+    `Sequential Thinking MCP Server running on Streamable HTTP at ${running.url}`,
+  );
+  const stop = () => {
+    running.close().then(
+      () => process.exit(0),
+      (error: unknown) => {
+        console.error("Error shutting down:", error);
+        process.exit(1);
+      },
+    );
+  };
+  process.once("SIGINT", stop);
+  process.once("SIGTERM", stop);
+  return running;
+}
+
 /* v8 ignore start -- runs only when this file is the process entry point (the spawned bin), which stdio-smoke.test.ts exercises; v8 cannot see into that child */
 if (isEntryPoint(import.meta.url, process.argv[1])) {
-  main();
+  run().catch((error: unknown) => {
+    console.error(
+      "Fatal error running server:",
+      error instanceof Error ? error.message : error,
+    );
+    process.exit(1);
+  });
 }
 /* v8 ignore stop */

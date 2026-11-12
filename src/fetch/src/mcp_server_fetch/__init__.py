@@ -8,6 +8,7 @@ from .timeout import (
     parse_timeout_ms,
     timeout_ms_from_env,
 )
+from .transport import TRANSPORTS, http_endpoint
 
 
 def main():
@@ -53,6 +54,13 @@ def main():
         help="Extract HTML with the pure-Python extractor only, never starting Node.js "
         "or npm (by default Readability.js is used when Node.js is on PATH)",
     )
+    parser.add_argument(
+        "--transport",
+        choices=TRANSPORTS,
+        default="stdio",
+        help="How clients reach the server (default: stdio). streamable-http "
+        "listens on $HOST:$PORT, 127.0.0.1:3001 by default",
+    )
 
     args = parser.parse_args()
     # The server reads its timeout from the environment (see timeout.py), and
@@ -63,6 +71,12 @@ def main():
         timeout_ms_from_env()
     except ValueError as e:
         parser.error(str(e))
+    if args.transport == "streamable-http":
+        # A bad HOST or PORT stops the server here, as a usage error.
+        try:
+            http_endpoint()
+        except ValueError as e:
+            parser.error(str(e))
     asyncio.run(
         serve(
             args.user_agent,
@@ -71,6 +85,7 @@ def main():
             args.allow_private_ips,
             args.allowed_hosts,
             not args.no_readability_js,
+            args.transport,
         )
     )
 

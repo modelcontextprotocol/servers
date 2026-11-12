@@ -105,7 +105,7 @@ Notes on the stages:
   offline.
 - **`smoke` launches what a user launches**: the built `dist/index.js` for a
   TypeScript server, the console script through `uv run --no-sync` for a Python
-  one. stdio for all seven; HTTP+SSE and Streamable HTTP as well for
+  one. stdio and Streamable HTTP for all seven; HTTP+SSE as well for
   `everything`. The servers are given nothing outside the machine to talk to
   and none of your files: `fetch` is pointed at a page the smoke serves on the
   loopback interface, and the HTTP transports listen on a free port rather
