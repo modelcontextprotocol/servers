@@ -192,20 +192,20 @@ export const GRAPH_LIMIT_ENV: Readonly<Record<keyof GraphLimits, string>> = {
   maxFileBytes: "MEMORY_MAX_FILE_BYTES",
 };
 
-// Read the limits from the environment. An unset or empty variable leaves its
-// limit off; anything other than a positive whole number stops startup, since
-// a misspelt limit silently ignored would leave the store unbounded while the
-// operator believes it capped.
+// Read the limits from the environment. Only an unset variable leaves its
+// limit off; any other value that is not a positive whole number, an empty
+// one included, stops startup, since a limit silently ignored would leave the
+// store unbounded while the operator believes it capped.
 export function graphLimitsFromEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): GraphLimits {
   const limits: GraphLimits = {};
   for (const key of Object.keys(GRAPH_LIMIT_ENV) as (keyof GraphLimits)[]) {
     const name = GRAPH_LIMIT_ENV[key];
-    const raw = env[name]?.trim();
-    if (raw === undefined || raw === "") {
+    if (env[name] === undefined) {
       continue;
     }
+    const raw = env[name].trim();
     const value = Number(raw);
     if (!/^\d+$/.test(raw) || !Number.isSafeInteger(value) || value < 1) {
       throw new Error(
@@ -739,7 +739,13 @@ export class KnowledgeGraphManager {
           !entities.slice(0, index).some((earlier) => earlier.name === e.name),
       );
       graph.entities.push(...newEntities);
-      await this.saveGraph(graph, unreadable, size);
+      // Only a call that adds something is held to the limits: re-saving can
+      // grow an existing file that was not written in this exact form.
+      await this.saveGraph(
+        graph,
+        unreadable,
+        newEntities.length > 0 ? size : undefined,
+      );
       return newEntities;
     });
   }
@@ -771,7 +777,12 @@ export class KnowledgeGraphManager {
             .some((earlier) => isSameRelation(earlier, r)),
       );
       graph.relations.push(...newRelations);
-      await this.saveGraph(graph, unreadable, size);
+      // Held to the limits only when it adds something (see createEntities).
+      await this.saveGraph(
+        graph,
+        unreadable,
+        newRelations.length > 0 ? size : undefined,
+      );
       return newRelations;
     });
   }
@@ -794,7 +805,9 @@ export class KnowledgeGraphManager {
         entity.observations.push(...newObservations);
         return { entityName: o.entityName, addedObservations: newObservations };
       });
-      await this.saveGraph(graph, unreadable, size);
+      // Held to the limits only when it adds something (see createEntities).
+      const added = results.some((r) => r.addedObservations.length > 0);
+      await this.saveGraph(graph, unreadable, added ? size : undefined);
       return results;
     });
   }

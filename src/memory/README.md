@@ -255,7 +255,7 @@ On Windows, use:
 - `MEMORY_MAX_RELATIONS`: The most relations the graph may hold. Unset by default (no limit).
 - `MEMORY_MAX_FILE_BYTES`: The most bytes the memory file may hold. Unset by default (no limit).
 
-The three limits are opt-in, and each is described under [Limiting how large the graph grows](#limiting-how-large-the-graph-grows). A limit that is set must be a positive whole number; any other value stops the server at startup with an error naming the variable.
+The three limits are opt-in, and each is described under [Limiting how large the graph grows](#limiting-how-large-the-graph-grows). A variable that is set must hold a positive whole number; any other value, an empty one included, stops the server at startup with an error naming the variable.
 
 When `MEMORY_FILE_PATH` is not set and the server directory still holds a legacy `memory.json` but no `memory.jsonl`, the server renames `memory.json` to `memory.jsonl` at startup. If that rename fails, the server exits with an error naming both paths and the cause, rather than starting on an empty graph; fix the cause (a permission problem, say) and restart, or set `MEMORY_FILE_PATH` to choose a file explicitly.
 

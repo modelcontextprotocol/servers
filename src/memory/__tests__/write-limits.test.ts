@@ -5,6 +5,7 @@
 // the graph file, which a refused call must leave byte for byte unchanged.
 // The last block runs main() to show the environment reaches the server.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { promises as fs } from "fs";
 import path from "path";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import type { CallToolResult } from "@modelcontextprotocol/server";
@@ -29,13 +30,13 @@ describe("graphLimitsFromEnv", () => {
     expect(graphLimitsFromEnv({})).toEqual({});
   });
 
-  it("treats an empty or blank variable as unset", () => {
-    expect(
-      graphLimitsFromEnv({
-        MEMORY_MAX_ENTITIES: "",
-        MEMORY_MAX_RELATIONS: "  ",
-      }),
-    ).toEqual({});
+  it("refuses an empty or blank variable rather than treating it as unset", () => {
+    expect(() => graphLimitsFromEnv({ MEMORY_MAX_ENTITIES: "" })).toThrow(
+      'MEMORY_MAX_ENTITIES must be a positive whole number, got ""',
+    );
+    expect(() => graphLimitsFromEnv({ MEMORY_MAX_RELATIONS: "  " })).toThrow(
+      'MEMORY_MAX_RELATIONS must be a positive whole number, got "  "',
+    );
   });
 
   it("reads each limit from its variable, trimming whitespace", () => {
@@ -257,6 +258,26 @@ describe("write limits", () => {
         "MEMORY_MAX_FILE_BYTES",
         await readFileText(filePath),
       );
+    });
+
+    it("answers a call that adds nothing even when re-saving grows the file", async () => {
+      // A record with an extra space and no final newline: the save rewrites
+      // it in canonical form, a few bytes larger, though nothing was added.
+      const record =
+        '{"type":"entity", "name":"A","entityType":"person","observations":["x"]}';
+      await fs.writeFile(filePath, record);
+      const client = await clientWith({
+        maxFileBytes: Buffer.byteLength(record, "utf-8"),
+      });
+
+      const entities = await call(client, "create_entities", {
+        entities: [entity("A")],
+      });
+      expect(entities.isError).toBeUndefined();
+      const observations = await call(client, "add_observations", {
+        observations: [{ entityName: "A", contents: ["x"] }],
+      });
+      expect(observations.isError).toBeUndefined();
     });
 
     it("refuses the first write to a new file that would already be too large", async () => {
