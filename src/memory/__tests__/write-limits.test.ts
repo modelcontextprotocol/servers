@@ -261,10 +261,10 @@ describe("write limits", () => {
     });
 
     it("answers a call that adds nothing even when re-saving grows the file", async () => {
-      // A record with an extra space and no final newline: the save rewrites
-      // it in canonical form, a few bytes larger, though nothing was added.
+      // A record with no final newline: the save writes it back with one, a
+      // byte larger than the limit, though nothing was added.
       const record =
-        '{"type":"entity", "name":"A","entityType":"person","observations":["x"]}';
+        '{"type":"entity","name":"A","entityType":"person","observations":["x"]}';
       await fs.writeFile(filePath, record);
       const client = await clientWith({
         maxFileBytes: Buffer.byteLength(record, "utf-8"),
