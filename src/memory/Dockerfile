@@ -72,4 +72,10 @@ WORKDIR /app
 # not root, and refuses to start the container under `runAsNonRoot`.
 USER 1000:1000
 
+# The server handles SIGTERM itself, removing any lock it holds before it
+# exits (#5485). Node running as PID 1 would otherwise ignore `docker stop`'s
+# SIGTERM, leaving it to wait out its timeout and SIGKILL the server. SIGINT
+# is handled the same way; it is the stop signal everything's image uses.
+STOPSIGNAL SIGINT
+
 ENTRYPOINT ["node", "dist/index.js"]

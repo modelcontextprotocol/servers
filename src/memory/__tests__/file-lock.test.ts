@@ -1,12 +1,20 @@
 // Unit tests for withFileLock, the lock file that orders mutations from
 // separate server processes sharing one graph file (#4797): mutual exclusion,
-// release, breaking an abandoned lock, and giving up on a held one.
+// release, breaking an abandoned lock, and giving up on a held one; and the
+// exit-time release of the locks this process still holds (#5485).
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
-import { spawnSync } from "child_process";
-import { KnowledgeGraphManager, withFileLock } from "../index.js";
+import { spawn, spawnSync } from "child_process";
+import { fileURLToPath, pathToFileURL } from "url";
+import {
+  KnowledgeGraphManager,
+  heldLockPaths,
+  installLockCleanup,
+  releaseHeldLocks,
+  withFileLock,
+} from "../index.js";
 import { makeTempGraph } from "./helpers.js";
 
 const fast = { staleMs: 60_000, timeoutMs: 100, retryMs: 5 };
@@ -400,4 +408,157 @@ describe("withFileLock", () => {
     expect(graph.entities.map((e) => e.name).sort()).toEqual([...names].sort());
     expect(await fs.readdir(dir)).toEqual(["memory.jsonl"]);
   });
+});
+
+describe("releasing held locks on exit (#5485)", () => {
+  let dir: string;
+  let cleanup: () => Promise<void>;
+
+  beforeEach(async () => {
+    ({ dir, cleanup } = await makeTempGraph());
+  });
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    await cleanup();
+  });
+
+  async function exists(file: string): Promise<boolean> {
+    return fs.access(file).then(
+      () => true,
+      () => false,
+    );
+  }
+
+  it("tracks a lock only while it is held", async () => {
+    const lockPath = path.join(dir, "memory.jsonl.lock");
+    await withFileLock(lockPath, async () => {
+      expect(heldLockPaths()).toEqual([lockPath]);
+    });
+    expect(heldLockPaths()).toEqual([]);
+  });
+
+  it("removes each lock still held, and only those still ours", async () => {
+    const ours = path.join(dir, "ours.lock");
+    const taken = path.join(dir, "taken.lock");
+    const gone = path.join(dir, "gone.lock");
+    await withFileLock(ours, () =>
+      withFileLock(taken, () =>
+        withFileLock(gone, async () => {
+          // Another process broke and re-took one lock, and another vanished.
+          await fs.writeFile(taken, "someone else");
+          await fs.unlink(gone);
+
+          releaseHeldLocks();
+
+          expect(heldLockPaths()).toEqual([]);
+          expect(await exists(ours)).toBe(false);
+          expect(await fs.readFile(taken, "utf-8")).toBe("someone else");
+        }),
+      ),
+    );
+    expect(await fs.readFile(taken, "utf-8")).toBe("someone else");
+  });
+
+  it("keeps tracking a lock the same process re-took after breaking it", async () => {
+    const lockPath = path.join(dir, "memory.jsonl.lock");
+    let releaseFirst!: () => void;
+    const firstHolds = new Promise<void>((resolve) => (releaseFirst = resolve));
+    let firstStarted!: () => void;
+    const started = new Promise<void>((resolve) => (firstStarted = resolve));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const first = withFileLock(
+      lockPath,
+      async () => {
+        firstStarted();
+        await firstHolds;
+      },
+      { staleMs: 60_000 },
+    );
+    await started;
+    // Age the first holder's lock past a short staleMs, so a second holder in
+    // this process breaks it and takes it over.
+    const old = new Date(Date.now() - 10_000);
+    await fs.utimes(lockPath, old, old);
+    await withFileLock(
+      lockPath,
+      async () => {
+        releaseFirst();
+        await first;
+        // The first holder's release left the second's lock, and its entry.
+        expect(heldLockPaths()).toEqual([lockPath]);
+        expect(await exists(lockPath)).toBe(true);
+      },
+      { staleMs: 1_000, timeoutMs: 1_000, retryMs: 5 },
+    );
+    expect(heldLockPaths()).toEqual([]);
+  });
+
+  it("installs an exit hook and SIGINT and SIGTERM handlers, once", () => {
+    const handlers = new Map<string | symbol, () => void>();
+    const on = vi.spyOn(process, "on").mockImplementation((event, listener) => {
+      handlers.set(event, listener as () => void);
+      return process;
+    });
+    const exit = vi
+      .spyOn(process, "exit")
+      .mockImplementation((() => undefined) as typeof process.exit);
+
+    installLockCleanup();
+    installLockCleanup();
+
+    expect(on).toHaveBeenCalledTimes(3);
+    expect(handlers.get("exit")).toBe(releaseHeldLocks);
+    handlers.get("SIGINT")?.();
+    expect(exit).toHaveBeenLastCalledWith(130);
+    handlers.get("SIGTERM")?.();
+    expect(exit).toHaveBeenLastCalledWith(143);
+  });
+
+  // A real signal, sent to a real process holding a lock mid-operation.
+  // Windows has no SIGTERM to deliver: process.kill() there ends the process
+  // outright, so no handler can run.
+  it.skipIf(process.platform === "win32")(
+    "removes the lock when SIGTERM stops a process mid-mutation",
+    async () => {
+      const lockPath = path.join(dir, "memory.jsonl.lock");
+      const distIndex = pathToFileURL(
+        path.join(
+          path.dirname(fileURLToPath(import.meta.url)),
+          "..",
+          "dist",
+          "index.js",
+        ),
+      ).href;
+      const script = `
+        const { installLockCleanup, withFileLock } = await import(${JSON.stringify(distIndex)});
+        installLockCleanup();
+        await withFileLock(${JSON.stringify(lockPath)}, () => {
+          console.log("held");
+          return new Promise(() => setInterval(() => {}, 1000));
+        });
+      `;
+      const child = spawn(
+        process.execPath,
+        ["--input-type=module", "-e", script],
+        { stdio: ["ignore", "pipe", "inherit"] },
+      );
+      const exited = new Promise<number | null>((resolve) =>
+        child.on("exit", (code) => resolve(code)),
+      );
+      await new Promise<void>((resolve, reject) => {
+        child.stdout.on("data", (data: Buffer) => {
+          if (data.toString().includes("held")) resolve();
+        });
+        child.on("exit", () => reject(new Error("exited before holding")));
+      });
+      expect(await exists(lockPath)).toBe(true);
+
+      child.kill("SIGTERM");
+
+      expect(await exited).toBe(143);
+      expect(await exists(lockPath)).toBe(false);
+    },
+  );
 });

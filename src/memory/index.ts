@@ -15,7 +15,7 @@ import {
 import { McpServer } from "@modelcontextprotocol/server";
 import type { Transport } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { promises as fs, realpathSync } from "fs";
+import { promises as fs, readFileSync, realpathSync, unlinkSync } from "fs";
 import type { FileHandle } from "fs/promises";
 import path from "path";
 import os from "os";
@@ -276,6 +276,60 @@ async function breakStaleLock(
   }
 }
 
+// The lock files this process holds right now, each mapped to the token it
+// wrote into it. withFileLock releases its lock in a `finally`, which never
+// runs when a signal ends the process, so the exit hook releaseHeldLocks()
+// removes them instead (#5485). Without it, a lock left by a stopped server
+// stalls the next writer until it goes stale, which takes the full staleMs
+// when that writer is on another host (another container) and cannot see
+// that this process has gone.
+const heldLocks = new Map<string, string>();
+
+// The lock paths this process holds right now, for tests.
+export function heldLockPaths(): string[] {
+  return [...heldLocks.keys()];
+}
+
+// Synchronously remove every lock this process still holds, as the process
+// exits: an `exit` listener cannot wait on a promise. As in withFileLock's own
+// release, a lock is removed only while it still holds this process's token,
+// so a lock broken as stale and re-taken by another process stays in place.
+export function releaseHeldLocks(): void {
+  for (const [lockPath, token] of heldLocks) {
+    try {
+      if (readFileSync(lockPath, "utf-8") === token) {
+        unlinkSync(lockPath);
+      }
+    } catch {
+      // Already gone, or unreadable: there is nothing of ours to remove.
+    }
+  }
+  heldLocks.clear();
+}
+
+// The exit codes a shell reports for a process its signal ended: 128 + the
+// signal's number.
+const SIGNAL_EXIT_CODES = { SIGINT: 130, SIGTERM: 143 } as const;
+
+let lockCleanupInstalled = false;
+
+// Release held locks however the server process ends (#5485): on a normal
+// exit or process.exit() through the `exit` event, and on SIGINT or SIGTERM,
+// whose default action would end the process without emitting `exit`. A
+// signal handler replaces that default, so it exits itself, with the status
+// the default would have given. Installed once, by main(): only the server
+// process should take over its signals, not a test that imports this module.
+export function installLockCleanup(): void {
+  if (lockCleanupInstalled) {
+    return;
+  }
+  lockCleanupInstalled = true;
+  process.on("exit", releaseHeldLocks);
+  for (const [signal, code] of Object.entries(SIGNAL_EXIT_CODES)) {
+    process.on(signal, () => process.exit(code));
+  }
+}
+
 // Run operation while holding an exclusive lock file at lockPath, so that
 // mutations from separate server processes sharing one graph file take turns
 // and each one loads the graph the previous one saved (#4797). The lock is a
@@ -370,11 +424,18 @@ export async function withFileLock<T>(
       .catch(ignoreError);
   }, staleMs / 2);
   heartbeat.unref();
+  heldLocks.set(lockPath, token);
 
   try {
     return await operation();
   } finally {
     clearInterval(heartbeat);
+    // Stop tracking the lock before releasing it. A lock this same process
+    // broke as stale and re-took in another withFileLock call carries that
+    // call's token, and stays tracked for it.
+    if (heldLocks.get(lockPath) === token) {
+      heldLocks.delete(lockPath);
+    }
     // Release only our own lock: if it was broken as stale while we held it,
     // the file may now belong to another process.
     const current = await fs.readFile(lockPath, "utf-8").catch(() => null);
@@ -1435,6 +1496,7 @@ export async function main(transport?: Transport): Promise<StdioServerHandle> {
   if (locationWarning) {
     console.error(locationWarning);
   }
+  installLockCleanup();
   const handle = serveStdio(({ era }) => createServer(memoryFilePath, era), {
     transport,
     // serveStdio reports a transport that fails, including one that cannot
