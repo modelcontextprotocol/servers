@@ -441,7 +441,7 @@
     },
     {
       "name": "git_remote",
-      "description": "Lists the repository's remotes with their fetch and push URLs, like `git remote -v`. Credentials embedded in a URL are shown as <redacted>",
+      "description": "Lists the repository's remotes with their fetch and push URLs, like `git remote -v`. Credentials embedded in a URL's userinfo, query values or fragment are shown as <redacted>; path segments are shown as configured",
       "inputSchema": {
         "properties": {
           "repo_path": {

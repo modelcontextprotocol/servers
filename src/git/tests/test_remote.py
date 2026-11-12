@@ -3,7 +3,7 @@
 The tool's output goes to the model, and a remote URL can carry a credential
 (`https://user:token@host/...`), so most of these pin `redact_url`'s rule: the
 whole userinfo is redacted except an SSH username, which names an account and
-authenticates nothing. The protocol tests drive the real server through
+authenticates nothing, and so are query values and the fragment (#5508). The protocol tests drive the real server through
 `conftest.connect`; the unit tests cover URL shapes git would not let a test
 configure as easily.
 """
@@ -117,6 +117,53 @@ async def test_not_a_repository(tmp_path: Path):
         ),
         ("ext::ssh://git:pw@example.com/r", "ext::ssh://git:<redacted>@example.com/r"),
         ("https::https://example.com/r.git", "https::https://example.com/r.git"),
+        # Query values and the fragment (#5508): every value, whatever its
+        # parameter's name, with the names kept; a bare parameter whole.
+        (
+            "https://git.example.com/g/r.git?private_token=SECRET",
+            "https://git.example.com/g/r.git?private_token=<redacted>",
+        ),
+        (
+            "https://example.com/r?a=1&token=SECRET&&flag",
+            "https://example.com/r?a=<redacted>&token=<redacted>&&<redacted>",
+        ),
+        ("https://example.com/r?SECRET", "https://example.com/r?<redacted>"),
+        ("https://example.com/r?", "https://example.com/r?"),
+        (
+            "https://git.example.com/g/r.git#SECRET",
+            "https://git.example.com/g/r.git#<redacted>",
+        ),
+        ("https://example.com/r#", "https://example.com/r#"),
+        # The fragment starts at the first '#', which also ends the query.
+        ("https://example.com/r#a?b=c", "https://example.com/r#<redacted>"),
+        (
+            "https://example.com/r?a=b#c",
+            "https://example.com/r?a=<redacted>#<redacted>",
+        ),
+        # Userinfo, query and fragment together; an '@' inside a query value.
+        (
+            "https://u:p@example.com/r?t=x#y",
+            "https://<redacted>@example.com/r?t=<redacted>#<redacted>",
+        ),
+        ("https://example.com/r?e=a@b.com", "https://example.com/r?e=<redacted>"),
+        ("ssh://git@example.com/r?t=x", "ssh://git@example.com/r?t=<redacted>"),
+        # No path: a '?' or '#' in the userinfo is still inside the userinfo.
+        ("https://user:p?ss@example.com", "https://<redacted>@example.com"),
+        ("https://user:p#ss@example.com", "https://<redacted>@example.com"),
+        ("https://example.com?t=SECRET", "https://example.com?t=<redacted>"),
+        # A remote-helper address: the inner URL's query is redacted.
+        (
+            "https::https://example.com/r?t=SECRET",
+            "https::https://example.com/r?t=<redacted>",
+        ),
+        # A path segment cannot be told apart from a repository name: kept.
+        (
+            "https://git.example.com/token/SECRET/r.git",
+            "https://git.example.com/token/SECRET/r.git",
+        ),
+        # A file:// URL names a local file, whose name may hold '?' or '#'.
+        ("file:///srv/r?x#y.git", "file:///srv/r?x#y.git"),
+        ("file://u:p@host/srv/r?x", "file://<redacted>@host/srv/r?x"),
         # A password holding a line separator other than '\n'.
         ("https://u:s3cret\u2028tok@example.com/r", "https://<redacted>@example.com/r"),
     ],
@@ -193,4 +240,17 @@ async def test_remote_helper_url_is_redacted(repo: git.Repo):
     assert await call_remote(None, repo) == text_result(
         "origin\thttps::https://<redacted>@example.com/r.git (fetch)\n"
         "origin\thttps::https://<redacted>@example.com/r.git (push)"
+    )
+
+
+async def test_query_and_fragment_credentials_are_redacted_over_the_wire(
+    repo: git.Repo,
+):
+    # The issue's examples (#5508): a token in a query value or the fragment.
+    repo.create_remote("origin", "https://git.example.com/g/r.git?private_token=S1")
+    repo.git.remote("set-url", "--push", "origin", "https://git.example.com/g/r.git#S2")
+    result = await call_remote(None, repo)
+    assert result == text_result(
+        "origin\thttps://git.example.com/g/r.git?private_token=<redacted> (fetch)\n"
+        "origin\thttps://git.example.com/g/r.git#<redacted> (push)"
     )
