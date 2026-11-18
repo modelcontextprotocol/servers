@@ -71,7 +71,8 @@
   },
   "overrides": {
     "qs": ">=6.16.1",
-    "hono": ">=4.13.7",
+    "hono": ">=4.13.16",
+    "@hono/node-server": ">=2.1.6",
     "proxy-addr": "^2.0.8",
     "ip-address": "^10.7.4",
     "brace-expansion": "^5.0.12",
