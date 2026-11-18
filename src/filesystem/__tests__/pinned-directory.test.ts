@@ -1409,6 +1409,11 @@ describe("readDirectoryInPlace", () => {
       .map((entry) => `${entry.name}:${entry.isDirectory()}`)
       .sort();
     expect(entries).toEqual(["f.txt:false", "sub:true"]);
+    // parentPath names the directory, as fs.readdir(dir) would, not ".".
+    expect(readDirectoryInPlace(dir).map((entry) => entry.parentPath)).toEqual([
+      dir,
+      dir,
+    ]);
     expect(process.cwd()).toBe(cwd);
   });
 

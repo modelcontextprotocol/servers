@@ -1037,11 +1037,18 @@ export function readDirectoryInPlace(directory: string): fs.Dirent[] {
   return inDirectory(
     directory,
     () => {
+      let entries: fs.Dirent[];
       try {
-        return fs.readdirSync(".", { withFileTypes: true });
+        entries = fs.readdirSync(".", { withFileTypes: true });
       } catch (error) {
         throw namingPath(error, ".", directory);
       }
+      // Read from ".", so each entry's parentPath is "."; name the directory,
+      // as a readdir of its path would.
+      for (const entry of entries) {
+        entry.parentPath = directory;
+      }
+      return entries;
     },
     cannotListError,
   );
