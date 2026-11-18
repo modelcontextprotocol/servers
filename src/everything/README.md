@@ -32,12 +32,12 @@ Roots, sampling and logging are deprecated as of 2026-07-28 and stay available, 
 
 The `gzip-file-as-resource` tool fetches the URL it is given, so these environment variables limit what it will fetch:
 
-| Variable | Default | Effect |
-| --- | --- | --- |
-| `GZIP_MAX_FETCH_SIZE` | 10 MiB | The largest response, in bytes, it reads |
-| `GZIP_MAX_FETCH_TIME_MILLIS` | 30000 | How long a fetch may take, redirects included |
-| `GZIP_ALLOWED_DOMAINS` | empty (any name) | Comma-separated host names; a host must be one of them or a subdomain of one. Checked on the caller's URL and on every redirect hop |
-| `GZIP_ALLOW_PRIVATE_IPS` | off | Set to `1` or `true` to allow loopback, private (RFC 1918), CGNAT, link-local (cloud metadata) and other non-public addresses |
+| Variable                     | Default          | Effect                                                                                                                              |
+| ---------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `GZIP_MAX_FETCH_SIZE`        | 10 MiB           | The largest response, in bytes, it reads                                                                                            |
+| `GZIP_MAX_FETCH_TIME_MILLIS` | 30000            | How long a fetch may take, redirects included                                                                                       |
+| `GZIP_ALLOWED_DOMAINS`       | empty (any name) | Comma-separated host names; a host must be one of them or a subdomain of one. Checked on the caller's URL and on every redirect hop |
+| `GZIP_ALLOW_PRIVATE_IPS`     | off              | Set to `1` or `true` to allow loopback, private (RFC 1918), CGNAT, link-local (cloud metadata) and other non-public addresses       |
 
 By default the tool refuses a URL whose host resolves to a non-public address, and follows at most five redirects, checking each hop the same way. An IPv6 address that wraps an IPv4 one (IPv4-mapped, IPv4-translated, or in the NAT64 prefix `64:ff9b::/96`) is judged by that IPv4, and any other IPv6 address outside global unicast (`2000::/3`) is refused. `GZIP_ALLOWED_DOMAINS` filters names, not addresses: a listed name that resolves to a private address is still refused unless `GZIP_ALLOW_PRIVATE_IPS` is set. The address is checked before the request and resolved again when it is made, so a DNS answer that changes in between (DNS rebinding) is not caught. `data:` URLs are not fetched, so neither check applies to them.
 
@@ -129,10 +129,13 @@ The endpoint is `http://localhost:3001/mcp` (`PORT` overrides the port). It serv
 
 Both HTTP transports (Streamable HTTP and HTTP+SSE) listen on the loopback interface, `127.0.0.1`, by default, so only clients on the same machine can reach them. Set `HOST` to bind another address: `HOST=0.0.0.0` listens on every interface, which exposes the server's tools to every host that can reach the machine, so set it only on a network you trust. The listening line the server prints names the address and port it bound, such as `127.0.0.1:3001`.
 
-| Variable | Default | Effect |
-| --- | --- | --- |
-| `PORT` | `3001` | The port the HTTP transport listens on |
-| `HOST` | `127.0.0.1` | The address it binds; `0.0.0.0` (or `::`) for every interface |
+| Variable                      | Default                | Effect                                                                                                       |
+| ----------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `PORT`                        | `3001`                 | The port the HTTP transport listens on                                                                       |
+| `HOST`                        | `127.0.0.1`            | The address it binds; `0.0.0.0` (or `::`) for every interface                                                |
+| `SESSION_IDLE_TIMEOUT_MILLIS` | `1800000` (30 minutes) | Streamable HTTP only: how long a 2025-era session may sit idle before the server ends it; `0` never ends one |
+
+A 2025-era Streamable HTTP session normally ends when its client sends a `DELETE`. One whose client goes away without doing so is ended by the server once it has been idle for `SESSION_IDLE_TIMEOUT_MILLIS`: its server instance is closed and its timers and subscriptions are released. Idle means no request in flight and no stream open, so a client that keeps its `GET` stream open, or is waiting on a long tool call, is never timed out; the clock starts when the session's last response closes, and idle sessions are looked for every tenth of the timeout (no less than a second and no more than a minute apart), so one is ended that much late at most. A request for a session the server has ended is answered `404 Not Found` (`Session not found`), which is the [specification's signal](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#session-management) for the client to start a new session with a fresh `initialize`. Set a short timeout to exercise that path in a client under test, or `0` to keep every session until its client ends it. A value that is not a non-negative number is ignored in favor of the default. 2026-07-28 clients have no sessions, and an HTTP+SSE session ends when its stream's connection closes, so neither is affected.
 
 Both HTTP transports (Streamable HTTP and HTTP+SSE) accept browser requests only from a localhost origin: an `Origin` header whose host is `localhost`, `127.0.0.1` or `[::1]`, on any port, such as the MCP Inspector's. A request carrying any other `Origin` is refused with `403 Forbidden`. Clients that send no `Origin` header, which is every non-browser client, are unaffected.
 

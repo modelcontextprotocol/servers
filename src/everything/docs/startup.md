@@ -34,6 +34,7 @@
   - **Streamable HTTP**: one `/mcp` endpoint for both eras.
     - **2026-07-28**: a session-less **POST** carrying the per-request `_meta` envelope is served by the SDK's `createMcpHandler`, which builds a fresh server per request with `createServer({ era: "modern", publish })`. There are no sessions. Change notifications are published on the handler's subscription bus (`publish`), which reaches every open `subscriptions/listen` stream.
     - **2025 era**: everything else, classified by the SDK's `isLegacyRequest`, keeps the sessionful wiring: a server per session, created on the `initialize` **POST**, with **GET** for the standalone SSE stream and **DELETE** to end the session. Transports are stored by `sessionId`, an event store makes streams resumable, and the session's `cleanup()` runs when it closes. Sessionful serving keeps the server-to-client channel the legacy shim needs for elicitation, sampling and roots.
+    - A 2025-era session with no request in flight and no stream open for `SESSION_IDLE_TIMEOUT_MILLIS` (default 30 minutes; `0` disables it) is closed by the server, as if its client had sent the DELETE; its next request is answered `404`.
     - A session-less POST's body is parsed once (up to 4 MiB) to classify it and serve it.
   - **SSE** and **Streamable HTTP** bind their port (`PORT`, default `3001`) through `listenOrExit()` in `transports/listen.ts`.
     - The listening line is printed only once the port is bound.
