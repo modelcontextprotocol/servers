@@ -118,7 +118,8 @@ def _git_text(repo: git.Repo, command: str, *args: str) -> str:
 # honoring it would let the repository run code as the server's user on a
 # read-only call such as git_status. The overrides go in through
 # GIT_CONFIG_COUNT (git 2.31+), which outranks every config file and is
-# inherited by the git processes git itself starts, submodules included.
+# inherited by the git processes git itself starts, submodules included from
+# git 2.33 (`_MIN_SUBMODULE_GIT`).
 #
 # - `core.fsmonitor` is run on every index refresh (status, diff, add).
 # - `core.hooksPath` pointing at the null device leaves no hook to find, so
@@ -191,6 +192,12 @@ def _config_env(entries: list[tuple[str, str]]) -> dict[str, str]:
     return env
 
 
+# Git 2.31 and 2.32 drop GIT_CONFIG_COUNT from the environment of the git
+# they run inside a submodule (fixed upstream in 2.33), so none of the
+# overrides would reach it.
+_MIN_SUBMODULE_GIT = (2, 33)
+
+
 def _submodule_drivers(repo: git.Repo) -> set[str]:
     """The filter and merge driver keys each checked-out submodule defines.
 
@@ -201,18 +208,33 @@ def _submodule_drivers(repo: git.Repo) -> set[str]:
     too once their names are known. A submodule is found at each gitlink in
     the index, then inside it at each of its own, the way git descends.
     Listing them runs only `git config` and `git ls-files`, which start no
-    program. A gitlink whose directory git cannot open as a repository is
-    skipped: the nested git cannot open it either, so it runs nothing there.
+    program. Each submodule is opened the way the nested git opens it, with
+    `GIT_DIR=.git` in its directory, so no upward search or ownership check
+    makes the two disagree. A submodule whose configuration or index git
+    cannot read is skipped: the nested git cannot read it either, and stops
+    before it runs anything there.
+
+    Raises `git.GitError` on git older than `_MIN_SUBMODULE_GIT`, whose
+    nested git would not inherit the overrides.
     """
+    if repo.git.version_info[:2] < _MIN_SUBMODULE_GIT:
+        raise git.GitError(
+            "Git 2.33 or later is required: older git does not pass the "
+            "configuration overrides to the git it runs inside a submodule"
+        )
     drivers: set[str] = set()
     if repo.working_tree_dir is None:
         return drivers
-    pending = [Path(repo.working_tree_dir)]
+    # The opened repository's own index, then each submodule's.
+    pending = [(Path(repo.working_tree_dir), repo.git)]
     seen: set[Path] = set()
     while pending:
-        top = pending.pop()
-        # -z prints `<mode> <object> <stage>\t<path>\0` for each entry.
-        listing = repo.git(C=str(top)).ls_files("-z", "--stage")
+        top, top_git = pending.pop()
+        try:
+            # -z prints `<mode> <object> <stage>\t<path>\0` for each entry.
+            listing = top_git.ls_files("-z", "--stage")
+        except git.GitCommandError:
+            continue  # an index git cannot read
         for entry in listing.split("\0"):
             info, _, path = entry.partition("\t")
             if not info.startswith("160000 "):
@@ -224,8 +246,11 @@ def _submodule_drivers(repo: git.Repo) -> set[str]:
             if resolved in seen:
                 continue
             seen.add(resolved)
+            # The nested git runs with GIT_DIR=.git in the submodule.
+            sub_git = git.Git(submodule)
+            sub_git.update_environment(**repo.git.environment(), GIT_DIR=".git")
             try:
-                listed = repo.git(C=str(submodule)).config(
+                listed = sub_git.config(
                     "--show-scope", "-z", "--get-regexp", _LISTED_KEYS
                 )
             except git.GitCommandError:
@@ -235,7 +260,7 @@ def _submodule_drivers(repo: git.Repo) -> set[str]:
                 key = field.partition("\n")[0]
                 if key != "core.hookspath" and scope not in _TRUSTED_SCOPES:
                     drivers.add(key)
-            pending.append(submodule)
+            pending.append((submodule, sub_git))
     return drivers
 
 
@@ -564,7 +589,10 @@ def git_checkout(repo: git.Repo, branch_name: str) -> str:
     repo.rev_parse(
         branch_name
     )  # Validates branch_name is a real git ref, throws BadName if not
-    repo.git.checkout(branch_name)
+    # --quiet: without it, git checks each checked-out submodule of the new
+    # branch for local changes, running git inside it under its own
+    # configuration; the reply below does not use git's output.
+    repo.git.checkout("--quiet", branch_name)
     # rev_parse accepts any revision, so branch_name may have been a sha, tag or
     # remote-tracking ref rather than a branch. Report what actually happened instead of
     # claiming a branch switch; a detached HEAD is easy to commit onto by mistake.

@@ -188,9 +188,9 @@ A repository's configuration and hooks travel with it (an unpacked archive, a sh
 - `commit.gpgSign` and `merge.verifySignatures` are `false`, and `git_merge` passes `--no-gpg-sign` and `--no-verify-signatures`. Each `branch.<name>.mergeOptions` the repository's own configuration sets is emptied, since Git reads it as command-line options. `submodule.recurse` and `merge.autoStash` are `false`, and `core.pager` is `cat`.
 - `git_status`, `git_diff_unstaged` and `git_diff` pass `--ignore-submodules=dirty`, because looking for changes inside a submodule runs Git under the submodule's own configuration. A submodule whose checked-out commit moved is still reported; changes inside one are not, so run the tool on the submodule's path to see them.
 - `diff.submodule` is `short`, so a diff reports a submodule whose commit moved as a `Subproject commit` line rather than running a nested `git diff` inside it, which would not carry the flags above.
-- `git_add` and `git_checkout` let Git check whether a checked-out submodule changed, which runs Git inside it under its own configuration. The filter and merge drivers each checked-out submodule (and each submodule inside one) defines are emptied too, the same way as the repository's own.
+- `git_add` lets Git check whether a checked-out submodule changed, which runs Git inside it under its own configuration, so the filter and merge drivers each checked-out submodule (and each submodule inside one) defines are emptied too, the same way as the repository's own. `git_checkout` passes `--quiet`, which skips that check.
 
-This needs Git 2.31 or later; with an older Git every tool call fails with an error saying so, rather than run unprotected.
+This needs Git 2.33 or later; with an older Git every tool call fails with an error saying so, rather than run unprotected.
 
 ### Commit identity
 

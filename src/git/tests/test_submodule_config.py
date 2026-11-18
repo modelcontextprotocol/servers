@@ -238,6 +238,33 @@ async def test_nested_submodule_filters_never_run(repo: git.Repo, canary: Canary
     assert canary.runs() == []
 
 
+@posix_only
+async def test_checkout_never_looks_inside_a_submodule_the_branch_adds(
+    repo: git.Repo, canary: Canary
+):
+    # The current branch has no gitlink at `vendor`, so hardening does not
+    # list its drivers; the target branch records one. git_checkout must not
+    # look inside it once the new index is written.
+    vendor = make_repo(root_of(repo) / "vendor")
+    commit_file(vendor, ".gitattributes", "*.txt filter=evil\n")
+    vendor.git.config("filter.evil.clean", canary.command("filter"))
+    sha = vendor.head.commit.hexsha
+    vendor.close()
+    repo.git.checkout("-q", "-b", "with-vendor")
+    record_gitlink(repo, "vendor", sha)
+    repo.git.commit("-m", "add vendor")
+    repo.git.checkout("-q", "main")
+    os.utime(root_of(repo) / "vendor" / "test.txt", (1_000_000_000, 1_000_000_000))
+    path = root_of(repo)
+
+    result = await call(
+        "git_checkout", {"repo_path": str(path), "branch_name": "with-vendor"}, path
+    )
+
+    assert result["isError"] is False, result
+    assert canary.runs() == []
+
+
 async def test_git_add_still_stages_a_moved_submodule(repo: git.Repo):
     sm = embed(repo, "sm")
     commit_file(sm, "test.txt", "changed\n")
@@ -314,3 +341,50 @@ def test_bare_repository_has_no_submodules(tmp_path: Path):
     bare = git.Repo.init(tmp_path / "bare.git", bare=True)
     assert _submodule_drivers(bare) == set()
     bare.close()
+
+
+def test_skips_a_submodule_whose_index_git_cannot_read(repo: git.Repo):
+    # One broken submodule does not stop every tool: the nested git cannot
+    # read that index either, so it runs nothing there.
+    sm = embed(repo, "sm")
+    sm.git.config("filter.evil.clean", "x")
+    sm.close()
+    (root_of(repo) / "sm" / ".git" / "index").write_bytes(b"not an index")
+
+    assert _submodule_drivers(repo) == {"filter.evil.clean"}
+
+
+async def test_tools_still_work_beside_a_broken_submodule(repo: git.Repo):
+    embed(repo, "sm").close()
+    (root_of(repo) / "sm" / ".git" / "index").write_bytes(b"not an index")
+
+    result = await call("git_status", {"repo_path": str(root_of(repo))})
+
+    assert result["isError"] is False, result
+
+
+def test_opens_a_submodule_as_the_nested_git_does(
+    tmp_path: Path, repo: git.Repo, monkeypatch: pytest.MonkeyPatch
+):
+    # The nested git opens a submodule with GIT_DIR=.git, which skips the
+    # ownership check; so does the listing. Simulated here: every repository
+    # is taken to belong to someone else, and only the opened one is trusted.
+    sm = embed(repo, "sm")
+    sm.git.config("filter.evil.clean", "x")
+    sm.close()
+    global_config = tmp_path / "global-config"
+    global_config.write_text(f"[safe]\n\tdirectory = {root_of(repo).as_posix()}\n")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(global_config))
+    monkeypatch.setenv("GIT_TEST_ASSUME_DIFFERENT_OWNER", "1")
+    with pytest.raises(git.GitCommandError, match="dubious ownership"):
+        git.Git(root_of(repo) / "sm").ls_files()
+
+    assert _submodule_drivers(repo) == {"filter.evil.clean"}
+
+
+def test_refuses_git_older_than_2_33(repo: git.Repo, monkeypatch: pytest.MonkeyPatch):
+    # Git 2.31 and 2.32 do not pass GIT_CONFIG_COUNT to the git they run
+    # inside a submodule, so the overrides would not reach it.
+    monkeypatch.setattr(git.Git, "version_info", property(lambda self: (2, 32, 0)))
+    with pytest.raises(git.GitError, match="Git 2.33 or later is required"):
+        harden_repo(repo)
