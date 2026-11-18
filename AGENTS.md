@@ -101,7 +101,11 @@ opening paragraph instead, as this one does. A format with no comment syntax
 
 Node **24** for the TypeScript servers: the development version and the oldest
 supported (`engines` is `>=24`), and CI validates each TypeScript server on 24
-and 26 in parallel legs. Python **>= 3.10** for the Python servers, at the version each server's `.python-version` pins. Python
+and 26 in parallel legs. Python **>= 3.10** for the Python servers, at the version each server's `.python-version` pins,
+except `fetch`, whose floor is **>= 3.11.5**: no `soupsieve` release patched
+against its open advisories supports an older Python (#5546). A server's
+floor is the `requires-python` in its `pyproject.toml`; raise one only when a
+dependency forces it, and record the exception here. Python
 dependencies are managed with **`uv`, never `pip`**.
 
 ```sh

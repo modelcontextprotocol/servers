@@ -56,6 +56,9 @@ The server speaks both eras of the Model Context Protocol over stdio, with nothi
 
 ## Installation
 
+Requires **Python 3.11.5 or newer**. `uvx` fetches a suitable interpreter on its own; with pip, install into an
+environment on 3.11.5 or later.
+
 Optionally: Install node.js, this will cause the fetch server to use a different HTML simplifier that is more robust.
 Its JavaScript dependencies are then installed with npm on first use, which contacts the npm registry.
 To keep the server from ever starting Node.js, see [Customization - HTML extraction](#customization---html-extraction).
