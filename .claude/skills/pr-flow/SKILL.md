@@ -465,16 +465,16 @@ code another PR was adding.
 git fetch origin v2/main
 git merge --no-edit origin/v2/main
 npm install                       # the merge may have moved package-lock.json
-npm run local:gate; echo "EXIT=$?"
-git push
+npm run local:gate && git push    # the push runs only on a green gate
 ```
 
 - **Merge, never rebase.** A rebase rewrites the commits that were reviewed,
   outdates every review thread and needs a force-push. The merge commit is
   exempt from the DCO check (step 3).
 - **The gate runs on the merged tree before the push**, as before any push
-  (step 4). A red stage here is the interaction this step exists to find: fix
-  it on the branch, signed off, and run the gate again.
+  (step 4), and a red gate pushes nothing. A red stage here is the interaction
+  this step exists to find: fix it on the branch, signed off, and run that
+  last line again.
 - **Then wait for CI on the new head**, with one backgrounded command, as
   `AGENTS.md` **Waiting on long-running work** says. The `sleep` gives the push
   runs time to register; `--watch` on a head with no checks yet exits at once.
