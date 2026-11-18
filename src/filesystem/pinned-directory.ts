@@ -26,6 +26,9 @@
 // against it, so reading it back proves nothing; there the leaf is lstat'd
 // relative to the anchor and must be the file the descriptor opened, which
 // narrows the race without closing it.
+// That gap is a decided limit of the implementation, not pending work:
+// closing it needs handle-relative opens, so native code (#5260, closed as
+// not planned). The README states it for users, under "Access Control".
 
 import { randomBytes } from "crypto";
 import fs from "fs";
