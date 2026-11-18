@@ -4,6 +4,12 @@
 // the files, so the description now says the tool matches names, never
 // contents. These tests pin that wording and each matching rule it states, so
 // the description cannot drift from the behavior again.
+//
+// They also pin what an empty result says (#5553): a bare "No matches found"
+// gave a model nothing to correct a pattern with, so it repeated
+// '*.ext' patterns that cannot reach a subdirectory. The empty result now
+// names the pattern and the directory, restates how the pattern is read, and
+// suggests the '**/' form when the pattern has no '**'.
 
 import fs from "fs/promises";
 import path from "path";
@@ -62,7 +68,32 @@ describe("search_files description (#896, #3419)", () => {
   });
 
   it("does not match a file's contents", async () => {
-    expect(await search("**/needle")).toEqual(["No matches found"]);
+    expect(await search("**/needle")).toEqual([
+      `No matches found for pattern '**/needle' under ${dir}. ` +
+        "The pattern is a glob matched case-sensitively against each entry's path " +
+        "relative to that directory: it matches names, never file contents.",
+    ]);
+  });
+
+  it("suggests the '**/' form when an empty search's pattern has no '**'", async () => {
+    const result = await call(client, "search_files", {
+      path: dir,
+      pattern: "app*.md",
+    });
+    expect(result.isError).toBeFalsy();
+    const text = textOf(result);
+    expect(text).toBe(
+      `No matches found for pattern 'app*.md' under ${dir}. ` +
+        "The pattern is a glob matched case-sensitively against each entry's path " +
+        "relative to that directory: it matches names, never file contents. " +
+        "It has no '**', so it only matches at one depth ('*.ext' only directly " +
+        "under the directory); try '**/app*.md' to match at any depth.",
+    );
+    expect(result.structuredContent).toEqual({ content: text });
+    // The suggested pattern is one that works.
+    expect(await search("**/app*.md")).toEqual([
+      path.join(dir, "src", "app.md"),
+    ]);
   });
 
   it("matches '*.ext' only directly under path", async () => {

@@ -140,7 +140,7 @@ async def test_tool_failure_is_an_is_error_result_in_each_era(
     assert bad_zone.is_error is True
     assert text_of(bad_zone) == (
         "Error executing tool get_current_time: "
-        "Invalid timezone: 'No time zone found with key Nope/Nowhere'"
+        "Invalid timezone: 'Nope/Nowhere' is not a known IANA timezone name"
     )
 
 
