@@ -241,7 +241,7 @@ class Certificates:
         ca: bool,
         names: Sequence[x509.GeneralName],
     ) -> x509.Certificate:
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = datetime.datetime.now(datetime.UTC)
         builder = (
             x509.CertificateBuilder()
             .subject_name(subject)
