@@ -130,6 +130,9 @@ def _git_text(repo: git.Repo, command: str, *args: str) -> str:
 # - `submodule.recurse` would carry checkout and merge into submodules, whose
 #   own configuration this override cannot neutralize (see `_LISTED_KEYS`).
 # - `merge.autoStash` keeps git_merge from stashing behind the tool's back.
+# - `diff.submodule` set to `diff` makes git diff run a nested git diff inside
+#   each changed submodule, without `_DIFF_FLAGS`, so the submodule's own
+#   `diff.external` and textconv drivers would run; `short` starts nothing.
 #
 # External diff programs and textconv filters are turned off per command
 # (`_DIFF_FLAGS`), and filter and merge drivers per repository (`_LISTED_KEYS`).
@@ -142,6 +145,7 @@ HARDENED_CONFIG: tuple[tuple[str, str], ...] = (
     ("submodule.recurse", "false"),
     ("status.submoduleSummary", "false"),
     ("merge.autoStash", "false"),
+    ("diff.submodule", "short"),
 )
 
 # A filter driver (`filter.<name>.clean`/`smudge`/`process`, applied by
@@ -187,6 +191,54 @@ def _config_env(entries: list[tuple[str, str]]) -> dict[str, str]:
     return env
 
 
+def _submodule_drivers(repo: git.Repo) -> set[str]:
+    """The filter and merge driver keys each checked-out submodule defines.
+
+    `git_add ["."]` and `git_checkout` make git run `git status` inside a
+    checked-out submodule, under the submodule's own configuration, where a
+    filter driver its `.gitattributes` selects would run. The overrides are
+    inherited by that nested git, so emptying the drivers by name works there
+    too once their names are known. A submodule is found at each gitlink in
+    the index, then inside it at each of its own, the way git descends.
+    Listing them runs only `git config` and `git ls-files`, which start no
+    program. A gitlink whose directory git cannot open as a repository is
+    skipped: the nested git cannot open it either, so it runs nothing there.
+    """
+    drivers: set[str] = set()
+    if repo.working_tree_dir is None:
+        return drivers
+    pending = [Path(repo.working_tree_dir)]
+    seen: set[Path] = set()
+    while pending:
+        top = pending.pop()
+        # -z prints `<mode> <object> <stage>\t<path>\0` for each entry.
+        listing = repo.git(C=str(top)).ls_files("-z", "--stage")
+        for entry in listing.split("\0"):
+            info, _, path = entry.partition("\t")
+            if not info.startswith("160000 "):
+                continue
+            submodule = top / path
+            if not (submodule / ".git").exists():
+                continue  # not checked out: git does not look inside
+            resolved = submodule.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            try:
+                listed = repo.git(C=str(submodule)).config(
+                    "--show-scope", "-z", "--get-regexp", _LISTED_KEYS
+                )
+            except git.GitCommandError:
+                continue  # not a repository git can open, or nothing listed
+            fields = listed.split("\0")
+            for scope, field in zip(fields[0::2], fields[1::2]):
+                key = field.partition("\n")[0]
+                if key != "core.hookspath" and scope not in _TRUSTED_SCOPES:
+                    drivers.add(key)
+            pending.append(submodule)
+    return drivers
+
+
 def harden_repo(repo: git.Repo) -> None:
     """Keep every git command run for `repo` from running a program it names.
 
@@ -223,6 +275,7 @@ def harden_repo(repo: git.Repo) -> None:
             "overrides that keep a repository's own configuration from running "
             "programs"
         )
+    drivers |= _submodule_drivers(repo)
     if drivers:
         entries += [(key, "") for key in sorted(drivers)]
         repo.git.update_environment(**_config_env(entries))
