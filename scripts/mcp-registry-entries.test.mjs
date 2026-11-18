@@ -282,6 +282,20 @@ test("repository: every published server has a sound entry at its manifest's ver
   }
 });
 
+test("repository: filesystem's entry asks for its allowed directories", () => {
+  // Without them a 2026-07-28 client starts the server with an empty
+  // allow-list, so an entry a client builds its launch command from must say
+  // they are needed, and that there can be several.
+  const [pkg] = registryEntries().entries.filesystem.packages;
+  assert.equal(pkg.version, expectedPackages().npm.filesystem.version);
+  assert.equal(pkg.packageArguments.length, 1);
+  const [argument] = pkg.packageArguments;
+  assert.equal(argument.type, "positional");
+  assert.equal(argument.format, "filepath");
+  assert.equal(argument.isRequired, true);
+  assert.equal(argument.isRepeated, true);
+});
+
 test("repository: no two servers share a registry name", () => {
   const names = Object.values(registryEntries().entries).map((e) => e.name);
   assert.equal(new Set(names).size, names.length);

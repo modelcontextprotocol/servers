@@ -14,7 +14,17 @@
       "identifier": "@modelcontextprotocol/server-filesystem",
       "transport": {
         "type": "stdio"
-      }
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "valueHint": "allowed_directory",
+          "description": "A directory the server may read and write. Repeat for each directory to allow.",
+          "format": "filepath",
+          "isRequired": true,
+          "isRepeated": true
+        }
+      ]
     }
   ]
 }
