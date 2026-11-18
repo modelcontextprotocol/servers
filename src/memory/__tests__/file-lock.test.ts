@@ -184,6 +184,85 @@ describe("withFileLock", () => {
     expect(await fs.readdir(dir)).toEqual(["memory.jsonl.lock"]);
   });
 
+  // Run hook once, just before the breaker moves the lock it judged stale
+  // aside: after its staleness re-check, before the removal (#5560).
+  function onceBeforeRemoval(hook: () => Promise<void>): void {
+    const realRename = fs.rename;
+    let fired = false;
+    vi.spyOn(fs, "rename").mockImplementation(async (from, to) => {
+      if (!fired && from === lockPath) {
+        fired = true;
+        await hook();
+      }
+      return realRename(from, to);
+    });
+  }
+
+  it("keeps a successor's lock placed between the staleness re-check and the removal (#5560)", async () => {
+    await writeStaleLock();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    let successor: { ino: bigint; mtimeMs: bigint } | undefined;
+    // The stale lock's holder comes back and releases it, and a successor
+    // takes a live lock at the same path, after the breaker's re-check under
+    // its guard and before the breaker removes what it judged.
+    onceBeforeRemoval(async () => {
+      await fs.unlink(lockPath);
+      await fs.writeFile(lockPath, "successor");
+      successor = await fs.stat(lockPath, { bigint: true });
+    });
+    const operation = vi.fn(async () => "ran");
+
+    await expect(withFileLock(lockPath, operation, fast)).rejects.toThrow(
+      "Timed out",
+    );
+
+    // The breaker did not acquire the lock, and broke nothing.
+    expect(operation).not.toHaveBeenCalled();
+    expect(console.error).not.toHaveBeenCalled();
+    // The successor's lock is the same file, untouched: not a copy, and not
+    // refreshed or aged by its trip aside.
+    expect(successor).toBeDefined();
+    expect(await fs.readFile(lockPath, "utf-8")).toBe("successor");
+    const kept = await fs.stat(lockPath, { bigint: true });
+    expect(kept.ino).toBe(successor?.ino);
+    expect(kept.mtimeMs).toBe(successor?.mtimeMs);
+    // Neither the breaking guard nor the aside file is left behind.
+    expect(await fs.readdir(dir)).toEqual(["memory.jsonl.lock"]);
+  });
+
+  it("acquires the lock at once when its holder releases it between the re-check and the removal", async () => {
+    await writeStaleLock();
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    onceBeforeRemoval(() => fs.unlink(lockPath));
+
+    expect(await withFileLock(lockPath, async () => "ran", fast)).toBe("ran");
+    // Nothing was broken: the lock was gone before the breaker could take it.
+    expect(error).not.toHaveBeenCalled();
+    expect(await fs.readdir(dir)).toEqual([]);
+  });
+
+  it("removes the stale lock itself, leaving no aside file", async () => {
+    await writeStaleLock();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const unlink = vi.spyOn(fs, "unlink");
+
+    await withFileLock(
+      lockPath,
+      async () => {
+        // The lock path was never unlinked while the stale lock stood there:
+        // the stale file was moved aside and deleted under its own name.
+        const removed = unlink.mock.calls.map(([file]) => String(file));
+        expect(removed).not.toContain(lockPath);
+        expect(
+          removed.filter((file) => /\.lock\.[0-9a-f]{16}\.stale$/.test(file)),
+        ).toHaveLength(1);
+        expect(await fs.readdir(dir)).toEqual(["memory.jsonl.lock"]);
+      },
+      fast,
+    );
+    expect(await fs.readdir(dir)).toEqual([]);
+  });
+
   it("leaves a stale lock to the waiter already breaking it", async () => {
     await writeStaleLock();
     await fs.writeFile(`${lockPath}.break`, "");
