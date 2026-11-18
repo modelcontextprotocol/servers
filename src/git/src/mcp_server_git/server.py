@@ -459,7 +459,9 @@ def _has_staged_changes(repo: git.Repo) -> bool:
     return bool(repo.index.diff(repo.head.commit))
 
 
-def git_commit(repo: git.Repo, message: str) -> str:
+def git_commit(
+    repo: git.Repo, message: str, *, allowed_repository: Path | None = None
+) -> str:
     # repo.index.commit() writes a tree unconditionally, so without this check
     # a caller that forgot to stage gets a hash back for an empty commit and no
     # way to tell it apart from a real one.
@@ -480,7 +482,7 @@ def git_commit(repo: git.Repo, message: str) -> str:
         commit = repo.index.commit(message, parent_commits=parents, skip_hooks=True)
         for name in ("MERGE_HEAD", "MERGE_MSG", "MERGE_MODE", "AUTO_MERGE"):
             (git_dir / name).unlink(missing_ok=True)
-        autostash_note = _apply_merge_autostash(repo)
+        autostash_note = _apply_merge_autostash(repo, allowed_repository)
     else:
         # skip_hooks: GitPython runs the repository's hooks itself, ignoring
         # the core.hooksPath override (`harden_repo`).
@@ -489,7 +491,9 @@ def git_commit(repo: git.Repo, message: str) -> str:
     return f"Changes committed successfully with hash {commit.hexsha}{autostash_note}"
 
 
-def _apply_merge_autostash(repo: git.Repo) -> str:
+def _apply_merge_autostash(
+    repo: git.Repo, allowed_repository: Path | None = None
+) -> str:
     """Reapply a `git merge --autostash` stash, as `git commit` does.
 
     Mirrors git's sequencer: apply the stash, store it in the stash list if
@@ -503,7 +507,9 @@ def _apply_merge_autostash(repo: git.Repo) -> str:
     try:
         # Through _rewrite_tree although nothing after it runs a driver today
         # (`git stash store` runs none): any later git command must be safe.
-        _rewrite_tree(repo, "stash", "apply", stash_oid)
+        _rewrite_tree(
+            repo, "stash", "apply", stash_oid, allowed_repository=allowed_repository
+        )
         note = "\nApplied autostash."
     except git.GitCommandError:
         repo.git.stash("store", "-m", "autostash", "-q", stash_oid)
@@ -652,8 +658,13 @@ def git_create_branch(
     return f"Created branch '{branch_name}' from {base_label}"
 
 
-def _rewrite_tree(repo: git.Repo, command: str, *args: str) -> str:
-    """Run `git <command> <args>`, which writes the working tree, then re-harden.
+def _rewrite_tree(
+    repo: git.Repo,
+    command: str,
+    *args: str,
+    allowed_repository: Path | None = None,
+) -> str:
+    """Run `git <command> <args>`, which writes the working tree, then re-check.
 
     `harden_repo` reads the repository's configuration when the call opens
     the repository, but that configuration can depend on the working tree: an
@@ -671,6 +682,16 @@ def _rewrite_tree(repo: git.Repo, command: str, *args: str) -> str:
     If that read fails, the overrides may be incomplete, so the call stops
     with a `GitError`, which a caller's `except GitCommandError` cleanup does
     not catch, and no further git command runs.
+
+    The same holds for where git operates (#5599). `open_repo` checked the
+    directories git uses against `allowed_repository` (`--repository`) before
+    the write, and the write can move them: a `.git/config` that is a link to
+    a tracked file gains a `core.worktree` naming a directory outside, and
+    the next git command that writes the tree (the `git merge --abort` after
+    a conflict) writes there instead. So `validate_opened_repo` runs again
+    too, after the drivers are read, as at open. A repository that no longer
+    passes stops the call the same way: no git command can be trusted to
+    stay inside, the cleanup included, so the tree stays as written.
     """
     try:
         return getattr(repo.git, command)(*args)
@@ -684,9 +705,22 @@ def _rewrite_tree(repo: git.Repo, command: str, *args: str) -> str:
                 f"tree was left as git {command} wrote it (a merge may still be in "
                 f"progress), and no further git command was run: {e}"
             ) from e
+        if allowed_repository is not None:
+            try:
+                validate_opened_repo(repo, Path(repo.working_dir), allowed_repository)
+            except (ValueError, OSError, git.GitError) as e:
+                raise git.GitError(
+                    f"Stopped: after git {command} changed the working tree, the "
+                    "repository no longer passes the --repository check. The "
+                    f"working tree was left as git {command} wrote it (a merge may "
+                    "still be in progress), and no further git command was run: "
+                    f"{e}"
+                ) from e
 
 
-def git_checkout(repo: git.Repo, branch_name: str) -> str:
+def git_checkout(
+    repo: git.Repo, branch_name: str, *, allowed_repository: Path | None = None
+) -> str:
     # Defense in depth: reject branch names starting with '-' to prevent flag injection,
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
     if branch_name.startswith("-"):
@@ -699,7 +733,9 @@ def git_checkout(repo: git.Repo, branch_name: str) -> str:
     # --quiet: without it, git checks each checked-out submodule of the new
     # branch for local changes, running git inside it under its own
     # configuration; the reply below does not use git's output.
-    _rewrite_tree(repo, "checkout", "--quiet", branch_name)
+    _rewrite_tree(
+        repo, "checkout", "--quiet", branch_name, allowed_repository=allowed_repository
+    )
     # rev_parse accepts any revision, so branch_name may have been a sha, tag or
     # remote-tracking ref rather than a branch. Report what actually happened instead of
     # claiming a branch switch; a detached HEAD is easy to commit onto by mistake.
@@ -717,7 +753,12 @@ def _git_stderr(error: git.GitCommandError) -> str:
     return message or str(error)
 
 
-def _merge_failure(repo: git.Repo, error: git.GitCommandError, what: str) -> str:
+def _merge_failure(
+    repo: git.Repo,
+    error: git.GitCommandError,
+    what: str,
+    allowed_repository: Path | None = None,
+) -> str:
     """Why `git merge` failed, after undoing whatever it left behind.
 
     A merge that stops on conflicts, or fails to write its merge commit,
@@ -737,7 +778,7 @@ def _merge_failure(repo: git.Repo, error: git.GitCommandError, what: str) -> str
     ).splitlines()
     # Through _rewrite_tree although it is the last git command here, so a git
     # command added after it reads drivers the restored tree defines.
-    _rewrite_tree(repo, "merge", "--abort")
+    _rewrite_tree(repo, "merge", "--abort", allowed_repository=allowed_repository)
     if conflicts:
         return (
             f"{what} stopped on conflicts in: {', '.join(conflicts)}. {unchanged} "
@@ -747,7 +788,11 @@ def _merge_failure(repo: git.Repo, error: git.GitCommandError, what: str) -> str
 
 
 def git_merge(
-    repo: git.Repo, source_branch: str, fast_forward_only: bool = True
+    repo: git.Repo,
+    source_branch: str,
+    fast_forward_only: bool = True,
+    *,
+    allowed_repository: Path | None = None,
 ) -> str:
     """Merge `source_branch` into the current branch, or change nothing.
 
@@ -757,6 +802,9 @@ def git_merge(
     The conflicts are reported for the caller to resolve by hand. By default
     only a fast-forward is allowed; `fast_forward_only=False` lets git create
     a merge commit when the branches have diverged.
+
+    `allowed_repository` is the `--repository` the call was opened under,
+    checked again after each write to the working tree (`_rewrite_tree`).
     """
     # Defense in depth: reject sources starting with '-' to prevent flag
     # injection, even if a malicious ref with that name exists.
@@ -825,10 +873,11 @@ def git_merge(
             "-m",
             f"Merge '{source_branch}' into '{target}'",
             source.hexsha,
+            allowed_repository=allowed_repository,
         )
     except git.GitCommandError as e:
         what = f"Merge of '{source_branch}' into '{target}'"
-        raise ValueError(_merge_failure(repo, e, what)) from e
+        raise ValueError(_merge_failure(repo, e, what, allowed_repository)) from e
     merged = repo.head.commit
     if fast_forward:
         return f"Fast-forwarded '{target}' to '{source_branch}' ({merged.hexsha[:7]})"
@@ -1049,10 +1098,17 @@ def _check_git_dir_contents(
       `directory` itself: a link at `objects`, `refs`, `index`, `HEAD` or
       anything else in a git directory is followed by git, for reading and
       for writing (a linked `index` takes git_add's writes elsewhere).
+    - A directory that resolves outside them, which is what a Windows
+      directory junction is: `is_symlink()` is false for one and `is_dir()`
+      true, and git follows it as it follows a link. Every directory is
+      judged by where it resolves rather than by detecting a junction
+      (`is_junction()` exists only from Python 3.12): an ordinary directory
+      resolves to itself, inside the directory being walked, and passes.
 
-    A link that is allowed and names a directory is walked too, since git
-    follows it into that directory and on into any link inside it; each
-    directory is walked once, so a cycle of links ends.
+    A link or directory that is allowed is walked where it resolves, since
+    git follows it there and on into any link inside it; each directory is
+    walked once, so a cycle of links ends, and one whose target is gone
+    (a dangling link or junction) is not walked.
 
     `hooks` is not walked: no hook runs (`HARDENED_CONFIG`), so a hooks
     directory linked to a shared one elsewhere is harmless.
@@ -1076,21 +1132,16 @@ def _check_git_dir_contents(
             for entry in entries:
                 if current == directory and entry.name == "hooks":
                     continue
-                if entry.is_symlink():
-                    target = Path(entry.path).resolve()
-                    if not (
-                        target.is_relative_to(allowed)
-                        or target.is_relative_to(directory)
-                    ):
-                        raise outside(target)
-                    if target.is_dir() and target not in visited:
-                        visited.add(target)
-                        pending.append(target)
-                elif entry.is_dir():
-                    real = Path(entry.path).resolve()
-                    if real not in visited:
-                        visited.add(real)
-                        pending.append(real)
+                if not (entry.is_symlink() or entry.is_dir()):
+                    continue
+                target = Path(entry.path).resolve()
+                if not (
+                    target.is_relative_to(allowed) or target.is_relative_to(directory)
+                ):
+                    raise outside(target)
+                if target.is_dir() and target not in visited:
+                    visited.add(target)
+                    pending.append(target)
 
 
 def git_branch(
@@ -1597,7 +1648,7 @@ def create_server(repository: Path | None) -> MCPServer:
     )
     @reports_failures
     def commit(repo_path: str, message: str) -> str:
-        return git_commit(open_repo(repo_path), message)
+        return git_commit(open_repo(repo_path), message, allowed_repository=repository)
 
     @server.tool(
         name=GitTools.ADD.value,
@@ -1621,7 +1672,16 @@ def create_server(repository: Path | None) -> MCPServer:
 
     @server.tool(
         name=GitTools.LOG.value,
-        description="Shows the commit logs",
+        # #5552: small models read the old one-line description as "a time
+        # window is required" and filtered to an empty one. Say the order and
+        # that the filters are optional, where the model picks its arguments.
+        description=(
+            "Shows the commit log, newest commit first. For the latest "
+            "commits, pass only repo_path (and optionally max_count). "
+            "start_timestamp and end_timestamp are optional filters for a "
+            "date range: omit them unless a specific period is asked for, "
+            "because a range that holds no commits returns none."
+        ),
         annotations=READ_ONLY,
         structured_output=False,
     )
@@ -1638,19 +1698,33 @@ def create_server(repository: Path | None) -> MCPServer:
         start_timestamp: Annotated[
             str | None,
             Field(
-                description=f"Start timestamp for filtering commits. {TIMESTAMP_FORMATS}"
+                description=(
+                    "Optional: only show commits at or after this time. "
+                    f"Omit for no lower bound. {TIMESTAMP_FORMATS}"
+                )
             ),
         ] = None,
         end_timestamp: Annotated[
             str | None,
             Field(
-                description=f"End timestamp for filtering commits. {TIMESTAMP_FORMATS}"
+                description=(
+                    "Optional: only show commits at or before this time. "
+                    f"Omit for no upper bound. {TIMESTAMP_FORMATS}"
+                )
             ),
         ] = None,
     ) -> str:
         entries = git_log(
             open_repo(repo_path), max_count, start_timestamp, end_timestamp
         )
+        if not entries and (start_timestamp or end_timestamp):
+            # #5552: an empty history under a filter reads as "the repository
+            # has no commits". Name the filter as the cause and the way out.
+            return (
+                "Commit history:\n"
+                "No commits match the given start_timestamp/end_timestamp. "
+                "Omit both to see the latest commits."
+            )
         return "Commit history:\n" + "\n".join(entries)
 
     @server.tool(
@@ -1684,7 +1758,9 @@ def create_server(repository: Path | None) -> MCPServer:
     )
     @reports_failures
     def checkout(repo_path: str, branch_name: str) -> str:
-        return git_checkout(open_repo(repo_path), branch_name)
+        return git_checkout(
+            open_repo(repo_path), branch_name, allowed_repository=repository
+        )
 
     @server.tool(
         name=GitTools.MERGE.value,
@@ -1715,7 +1791,12 @@ def create_server(repository: Path | None) -> MCPServer:
             ),
         ] = True,
     ) -> str:
-        return git_merge(open_repo(repo_path), source_branch, fast_forward_only)
+        return git_merge(
+            open_repo(repo_path),
+            source_branch,
+            fast_forward_only,
+            allowed_repository=repository,
+        )
 
     @server.tool(
         name=GitTools.SHOW.value,

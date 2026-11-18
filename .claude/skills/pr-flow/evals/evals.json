@@ -24,6 +24,10 @@
     "expect": "pr-flow"
   },
   {
+    "prompt": "My PR is green and GitHub says it has no conflicts, but another PR for the same server merged into v2/main ten minutes ago. What do I have to do before it can merge?",
+    "expect": "pr-flow"
+  },
+  {
     "prompt": "What does this regex match? /^[a-z]+$/",
     "expect": null
   },

@@ -13,7 +13,7 @@
  *   roots.test.ts), `requestState` carried across the multi-step tool's
  *   rounds on both eras, with retries after missing or bad input, and the
  *   SDK refusing an embedded request whose capability the request did not
- *   declare (-32021) or a tampered state (-32602).
+ *   declare (-32021) or a tampered or expired state (-32602).
  * - Per-request log levels (`trigger-log-messages`) against the 2025-era
  *   session level.
  * - Change notifications (`trigger-list-changed`, `trigger-resource-update`)
@@ -335,6 +335,35 @@ describe("multi-round-trip requests on 2026-07-28", () => {
       inputRequests: { name: { method: "elicitation/create" } },
       requestState: expect.any(String),
     });
+  });
+
+  it("refuses an untampered requestState with -32602 once its 600-second TTL has passed", async () => {
+    // Freeze the clock before the state is minted, so only the test moves it.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    raw = await connectRaw({ elicitation: {} });
+    const mintedAt = Date.now();
+    const first = await raw.call("trigger-multi-step-elicitation");
+    const answerTheName = {
+      name: "trigger-multi-step-elicitation",
+      arguments: {},
+      requestState: (first as { requestState: string }).requestState,
+      inputResponses: {
+        name: { action: "accept", content: { name: "Ada" } },
+      },
+    };
+
+    // Inside the TTL the state is accepted, so the refusal below is the
+    // expiry and nothing else about this continuation.
+    vi.setSystemTime(mintedAt + 599_000);
+    expect(await raw.result("tools/call", answerTheName)).toMatchObject({
+      resultType: "input_required",
+      inputRequests: { color: { method: "elicitation/create" } },
+    });
+
+    // Past it, the same state is refused: only the clock has moved.
+    vi.setSystemTime(mintedAt + 601_000);
+    const response = await raw.request("tools/call", answerTheName);
+    expect(response.error).toMatchObject({ code: -32602 });
   });
 });
 

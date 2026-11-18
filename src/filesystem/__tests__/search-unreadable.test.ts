@@ -100,7 +100,7 @@ describe("search_files with an unreadable subdirectory (#5189)", () => {
     });
     expect(result.isError).toBeFalsy();
     const [matches, note] = textOf(result).split("\n\n");
-    expect(matches).toBe("No matches found");
+    expect(matches).toMatch(/^No matches found for pattern /);
     const [heading, ...listed] = note.split("\n");
     expect(heading).toBe(
       "The search is incomplete: 2 directories could not be read, and any matches inside are missing:",
