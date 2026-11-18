@@ -155,9 +155,11 @@ HARDENED_CONFIG: tuple[tuple[str, str], ...] = (
 # `commit.gpgSign` says). Drivers and options from the user's global or
 # system configuration (git-lfs, say) are the user's own and keep working.
 # `harden_repo` lists these keys, and `core.hooksPath`, whose command-scope
-# value shows that git applied the overrides.
+# value shows that git applied the overrides. A driver's name may be empty
+# (`[filter ""]`, read back as `filter..clean`, selected by `filter=`), so
+# the name is matched with `.*`, not `.+`.
 _LISTED_KEYS = (
-    r"^(core\.hookspath|filter\..+\.(clean|smudge|process)|merge\..+\.driver"
+    r"^(core\.hookspath|filter\..*\.(clean|smudge|process)|merge\..*\.driver"
     r"|branch\..+\.mergeoptions)$"
 )
 
