@@ -100,7 +100,7 @@ class PinnedBackend(httpcore.AsyncNetworkBackend):
         except socket.gaierror as e:
             # What the inner backend reports for a name it cannot resolve.
             raise httpcore.ConnectError(str(e)) from e
-        except asyncio.TimeoutError as e:
+        except TimeoutError as e:
             raise httpcore.ConnectTimeout(f"Timed out resolving {host}") from e
         # getaddrinfo lists an address once per socket type.
         addresses = list(dict.fromkeys(resolved))
