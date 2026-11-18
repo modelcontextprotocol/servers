@@ -635,6 +635,14 @@ def add_commits(repo: git.Repo, n: int) -> list[git.Commit]:
     return commits
 
 
+# #5552: what git_log returns when a timestamp filter matches nothing.
+NO_COMMITS_IN_RANGE = (
+    "Commit history:\n"
+    "No commits match the given start_timestamp/end_timestamp. "
+    "Omit both to see the latest commits."
+)
+
+
 async def test_git_log_default(repo: git.Repo):
     commits = add_commits(repo, 2)
     initial = repo.head.commit.parents[0].parents[0]
@@ -691,11 +699,11 @@ async def test_git_log_timestamps_filter(repo: git.Repo):
     future = await call(
         None, "git_log", {"repo_path": root, "start_timestamp": "2099-01-01"}
     )
-    assert future == text_result("Commit history:\n")
+    assert future == text_result(NO_COMMITS_IN_RANGE)
     past = await call(
         None, "git_log", {"repo_path": root, "end_timestamp": "2000-01-01"}
     )
-    assert past == text_result("Commit history:\n")
+    assert past == text_result(NO_COMMITS_IN_RANGE)
     both = await call(
         None,
         "git_log",
@@ -706,6 +714,44 @@ async def test_git_log_timestamps_filter(repo: git.Repo):
         },
     )
     assert both == text_result("Commit history:\n" + log_entry(repo.head.commit))
+
+
+async def test_git_log_empty_window_names_the_filter(repo: git.Repo):
+    # #5552: a small model asked for the latest commit passed "now" for both
+    # timestamps, got a bare "Commit history:" and concluded the repository
+    # had no commits. The reply now says the filter matched nothing.
+    add_commits(repo, 2)
+    root = str(root_of(repo))
+    # Committed a moment ago, so the window that ends before them is empty.
+    result = await call(
+        None,
+        "git_log",
+        {
+            "repo_path": root,
+            "max_count": 1,
+            "start_timestamp": "2000-01-01",
+            "end_timestamp": "2000-01-02",
+        },
+    )
+    assert result == text_result(NO_COMMITS_IN_RANGE)
+    # The same call with no filter returns the newest commit, with no hint.
+    latest = await call(None, "git_log", {"repo_path": root, "max_count": 1})
+    assert latest == text_result("Commit history:\n" + log_entry(repo.head.commit))
+
+
+async def test_git_log_description_states_order_and_optional_filters():
+    # #5552: the description is where a model decides its arguments, so it
+    # says the order and that both timestamps can be left out.
+    async with connect(None) as session:
+        tools = wire(await session.list_tools())["tools"]
+    log = next(t for t in tools if t["name"] == "git_log")
+    assert "newest commit first" in log["description"]
+    assert "optional" in log["description"]
+    assert log["inputSchema"]["required"] == ["repo_path"]
+    for name in ("start_timestamp", "end_timestamp"):
+        assert log["inputSchema"]["properties"][name]["description"].startswith(
+            "Optional: "
+        )
 
 
 async def test_git_log_rejects_timestamp_flag_injection(repo: git.Repo):

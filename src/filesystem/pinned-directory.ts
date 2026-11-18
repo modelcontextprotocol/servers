@@ -38,8 +38,13 @@
 // On Windows the working directory is a string and relative paths resolve
 // against it, so reading it back proves nothing; there the leaf is lstat'd
 // relative to the anchor and must be the file the descriptor opened, which
-// narrows the race without closing it. A listing there has no such check, and
-// is no more anchored than a readdir by path.
+// narrows the race without closing it. A listing there has no leaf to check,
+// so the listed directory is checked on both sides of the read instead
+// (listedDirectoryIdentity, #5600): before and after, its path must resolve to
+// itself, so no link or junction is on it, and must name one and the same
+// directory by identity. A swap still in place at either check is refused; one
+// made and undone between the two is not seen, so that too narrows the race
+// without closing it.
 // That gap is a decided limit of the implementation, not pending work:
 // closing it needs handle-relative opens, so native code (#5260, closed as
 // not planned). The README states it for users, under "Access Control".
@@ -1092,16 +1097,30 @@ function cannotListError(directory: string, error: unknown): Error {
  * validation is refused rather than listed. Entries come back as
  * fs.readdir(directory, { withFileTypes: true }) returns them, and errors in
  * its wording. Synchronous; see the module header for what callers do first.
+ *
+ * On Windows entering proves nothing and "." is resolved from the path again
+ * (see the module header), so the directory is checked before the read and
+ * again after it (listedDirectoryIdentity), and the entries are returned only
+ * if both checks found the same directory.
  */
 export function readDirectoryInPlace(directory: string): fs.Dirent[] {
   return inDirectory(
     directory,
     () => {
+      const before = onWindows()
+        ? listedDirectoryIdentity(directory)
+        : undefined;
       let entries: fs.Dirent[];
       try {
         entries = fs.readdirSync(".", { withFileTypes: true });
       } catch (error) {
         throw namingPath(error, ".", directory);
+      }
+      if (before) {
+        const after = listedDirectoryIdentity(directory);
+        if (after.dev !== before.dev || after.ino !== before.ino) {
+          throw directoryChangedError(directory);
+        }
       }
       // Read from ".", so each entry's parentPath is "."; name the directory,
       // as a readdir of its path would.
@@ -1112,4 +1131,34 @@ export function readDirectoryInPlace(directory: string): fs.Dirent[] {
     },
     cannotListError,
   );
+}
+
+/**
+ * The identity (volume serial and file id) of the directory `directory` names
+ * right now, for the Windows listing check (#5600); it throws the
+ * directory-changed refusal unless `directory`, a path validatePath returned,
+ * still names a directory with no link on the way to it:
+ *
+ * - its last component is a directory, where lstat reports a junction or a
+ *   directory symlink as a link;
+ * - its real path is itself. validatePath returned it from the same native
+ *   realpath, so anything else means a component of it is now a link.
+ *
+ * The two calls resolve the path separately, and the listing resolves it a
+ * third time, so this detects a swap that is in place when it runs and
+ * nothing more. The identities of two calls are compared by the caller as
+ * they are (both are lstats of the path, so a `dev` an older libuv reports
+ * as 0 is 0 in both; see isSameEntry for the path-against-handle case).
+ */
+function listedDirectoryIdentity(
+  directory: string,
+): Pick<fs.BigIntStats, "dev" | "ino"> {
+  const found = fs.lstatSync(directory, { bigint: true });
+  if (
+    !found.isDirectory() ||
+    !isSameDirectory(fs.realpathSync.native(directory), directory)
+  ) {
+    throw directoryChangedError(directory);
+  }
+  return found;
 }

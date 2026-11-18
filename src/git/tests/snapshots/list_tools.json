@@ -197,7 +197,7 @@
     },
     {
       "name": "git_log",
-      "description": "Shows the commit logs",
+      "description": "Shows the commit log, newest commit first. For the latest commits, pass only repo_path (and optionally max_count). start_timestamp and end_timestamp are optional filters for a date range: omit them unless a specific period is asked for, because a range that holds no commits returns none.",
       "inputSchema": {
         "properties": {
           "repo_path": {
@@ -221,7 +221,7 @@
               }
             ],
             "default": null,
-            "description": "Start timestamp for filtering commits. Accepts: ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')",
+            "description": "Optional: only show commits at or after this time. Omit for no lower bound. Accepts: ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')",
             "title": "Start Timestamp"
           },
           "end_timestamp": {
@@ -234,7 +234,7 @@
               }
             ],
             "default": null,
-            "description": "End timestamp for filtering commits. Accepts: ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')",
+            "description": "Optional: only show commits at or before this time. Omit for no upper bound. Accepts: ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')",
             "title": "End Timestamp"
           }
         },
