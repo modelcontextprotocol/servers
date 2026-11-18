@@ -13,6 +13,12 @@
 # keep the semantics obvious: an exact host (a name or an IP literal), and
 # `*.example.com`, which matches any subdomain at any depth of example.com but
 # not example.com itself. Ports and schemes are not part of an entry.
+#
+# A wildcard is for domain names only (#5521). `*.` in front of an address, or
+# of anything whose last label is a number, is refused when the list is read:
+# `*.0.0.1` is not a domain, and matched as a suffix it would cover 10.0.0.1
+# and 127.0.0.1 alike. Matching holds the same line from the other side: an
+# IP-literal host is only ever compared with exact entries.
 
 import argparse
 import ipaddress
@@ -29,7 +35,7 @@ def normalize_allowed_host(entry: str) -> str:
     ASCII form requests are checked in (``bücher.example`` becomes
     ``xn--bcher-kva.example``). An IP literal is written in its compressed
     form, an IPv6 one with or without brackets. A wildcard is ``*.`` followed
-    by a name.
+    by a domain name, never by an address or a numeric suffix of one.
     """
     value = entry.strip().rstrip(".").lower()
     wildcard = value.startswith("*.")
@@ -48,7 +54,25 @@ def normalize_allowed_host(entry: str) -> str:
         ascii_name = httpx.URL(f"http://{name}/").raw_host.decode("ascii")
     except httpx.InvalidURL as e:
         raise ValueError(f"{entry!r} is not a valid host name: {e}") from None
+    if wildcard and _ends_in_a_number(ascii_name):
+        raise ValueError(
+            f"{entry!r} puts a wildcard on an IP address: *.<domain> takes a "
+            "domain name, and an address is listed exactly"
+        )
     return f"*.{ascii_name}" if wildcard else ascii_name
+
+
+def _ends_in_a_number(name: str) -> bool:
+    """Whether a host's last label is a number, so it reads as an IPv4 address.
+
+    The test URL parsers apply: a host whose last label is decimal digits or
+    ``0x`` hex is an address (``10.0.0.1``, ``0.0.1``, ``1``, ``0x7f.1``),
+    never a domain, since no top-level domain is numeric.
+    """
+    last = name.rsplit(".", 1)[-1]
+    if last.isascii() and last.isdigit():
+        return True
+    return last.startswith("0x") and all(c in "0123456789abcdef" for c in last[2:])
 
 
 def parse_allowed_host(entry: str) -> str:
@@ -67,13 +91,15 @@ def normalize_allowed_hosts(entries: Iterable[str] | None) -> tuple[str, ...]:
 def host_is_allowed(host: str, allowed_hosts: tuple[str, ...]) -> bool:
     """Whether ``host`` (a request's ``raw_host``) matches a normalized entry."""
     host = host.rstrip(".").lower()
+    is_address = _ends_in_a_number(host)
     try:
         host = ipaddress.ip_address(host).compressed
+        is_address = True
     except ValueError:
         pass
     for entry in allowed_hosts:
         if entry.startswith("*."):
-            if host.endswith(entry[1:]):
+            if not is_address and host.endswith(entry[1:]):
                 return True
         elif host == entry:
             return True
