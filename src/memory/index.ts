@@ -431,9 +431,17 @@ async function tryTakeGuard(
   return true;
 }
 
-// Give up a guard this process took.
-async function dropGuard(guardPath: string): Promise<void> {
-  await fs.unlink(guardPath).catch(ignoreError);
+// Give up a guard this process took. The removal and the end of its tracking
+// are one synchronous step: were the removal awaited, an exit arriving before
+// its continuation would still find the guard tracked, and the exit hook
+// would remove, as this process's own, a guard another process had taken at
+// the same path in between.
+function dropGuard(guardPath: string): void {
+  try {
+    unlinkSync(guardPath);
+  } catch {
+    // Already gone: cleared as stale, or removed by the exit hook.
+  }
   heldGuards.delete(guardPath);
 }
 
@@ -492,7 +500,7 @@ async function breakStaleLock(
       await judged.close();
     }
   } finally {
-    await dropGuard(guardPath);
+    dropGuard(guardPath);
   }
 }
 
@@ -634,7 +642,7 @@ async function releaseLock(
     await fs.unlink(lockPath).catch(ignoreError);
   }
   if (guarded) {
-    await dropGuard(guardPath);
+    dropGuard(guardPath);
   }
 }
 

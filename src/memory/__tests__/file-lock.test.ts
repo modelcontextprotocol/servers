@@ -814,6 +814,29 @@ describe("withFileLock", () => {
       },
     );
 
+    it("gives the guard up in one synchronous step, so an exit cannot find it tracked but gone", async () => {
+      // Were the guard removed by an awaited unlink, an exit between the
+      // removal and its continuation would treat a guard another process
+      // had taken since as this process's own, and remove it.
+      const unlink = vi.spyOn(fs, "unlink");
+      let guardSeen = false;
+      const realReadFile = fs.readFile;
+      await withFileLock(lockPath, async () => {
+        vi.spyOn(fs, "readFile").mockImplementationOnce((async (
+          ...args: Parameters<typeof fs.readFile>
+        ) => {
+          guardSeen = await exists(guardPath());
+          return realReadFile(...args);
+        }) as typeof fs.readFile);
+      });
+
+      expect(guardSeen).toBe(true);
+      expect(unlink.mock.calls.map(([file]) => String(file))).not.toContain(
+        guardPath(),
+      );
+      expect(await fs.readdir(dir)).toEqual([]);
+    });
+
     it("waits for the guard before releasing", async () => {
       const opens = watchOpens();
       let contended: Promise<void> | undefined;
