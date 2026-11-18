@@ -118,7 +118,8 @@ def _git_text(repo: git.Repo, command: str, *args: str) -> str:
 # honoring it would let the repository run code as the server's user on a
 # read-only call such as git_status. The overrides go in through
 # GIT_CONFIG_COUNT (git 2.31+), which outranks every config file and is
-# inherited by the git processes git itself starts, submodules included.
+# inherited by the git processes git itself starts, inside a submodule only
+# from git 2.33 (`_MIN_SUBMODULE_GIT`, required where one is checked out).
 #
 # - `core.fsmonitor` is run on every index refresh (status, diff, add).
 # - `core.hooksPath` pointing at the null device leaves no hook to find, so
@@ -130,6 +131,9 @@ def _git_text(repo: git.Repo, command: str, *args: str) -> str:
 # - `submodule.recurse` would carry checkout and merge into submodules, whose
 #   own configuration this override cannot neutralize (see `_LISTED_KEYS`).
 # - `merge.autoStash` keeps git_merge from stashing behind the tool's back.
+# - `diff.submodule` set to `diff` makes git diff run a nested git diff inside
+#   each changed submodule, without `_DIFF_FLAGS`, so the submodule's own
+#   `diff.external` and textconv drivers would run; `short` starts nothing.
 # - `maintenance.auto` keeps a merge (or any other command that ends in
 #   `git maintenance run --auto`) from starting git's automatic maintenance,
 #   whose cruft repacks (git 2.42+) run each command the repository's
@@ -151,6 +155,7 @@ HARDENED_CONFIG: tuple[tuple[str, str], ...] = (
     ("submodule.recurse", "false"),
     ("status.submoduleSummary", "false"),
     ("merge.autoStash", "false"),
+    ("diff.submodule", "short"),
     ("maintenance.auto", "false"),
     ("gc.auto", "0"),
 )
@@ -244,6 +249,81 @@ def _config_env(entries: list[tuple[str, str]]) -> dict[str, str]:
     return env
 
 
+# Git 2.31 and 2.32 drop GIT_CONFIG_COUNT from the environment of the git
+# they run inside a submodule (fixed upstream in 2.33), so none of the
+# overrides would reach it.
+_MIN_SUBMODULE_GIT = (2, 33)
+
+
+def _submodule_drivers(repo: git.Repo) -> set[str]:
+    """The filter and merge driver keys each checked-out submodule defines.
+
+    `git_add ["."]` and `git_checkout` make git run `git status` inside a
+    checked-out submodule, under the submodule's own configuration, where a
+    filter driver its `.gitattributes` selects would run. The overrides are
+    inherited by that nested git, so emptying the drivers by name works there
+    too once their names are known. A submodule is found at each gitlink in
+    the index, then inside it at each of its own, the way git descends.
+    Listing them runs only `git config` and `git ls-files`, which start no
+    program. Each submodule is opened the way the nested git opens it, with
+    `GIT_DIR=.git` in its directory, so no upward search or ownership check
+    makes the two disagree. A submodule whose configuration or index git
+    cannot read is skipped: the nested git cannot read it either, and stops
+    before it runs anything there.
+
+    Raises `git.GitError` when a checked-out submodule is found and git is
+    older than `_MIN_SUBMODULE_GIT`, whose nested git would not inherit the
+    overrides. Without one, git never runs inside a submodule, so older git
+    is fine.
+    """
+    drivers: set[str] = set()
+    if repo.working_tree_dir is None:
+        return drivers
+    # The opened repository's own index, then each submodule's.
+    pending = [(Path(repo.working_tree_dir), repo.git)]
+    seen: set[Path] = set()
+    while pending:
+        top, top_git = pending.pop()
+        try:
+            # -z prints `<mode> <object> <stage>\t<path>\0` for each entry.
+            listing = top_git.ls_files("-z", "--stage")
+        except git.GitCommandError:
+            continue  # an index git cannot read
+        for entry in listing.split("\0"):
+            info, _, path = entry.partition("\t")
+            if not info.startswith("160000 "):
+                continue
+            submodule = top / path
+            if not (submodule / ".git").exists():
+                continue  # not checked out: git does not look inside
+            if repo.git.version_info[:2] < _MIN_SUBMODULE_GIT:
+                raise git.GitError(
+                    "Git 2.33 or later is required for a repository with a "
+                    "checked-out submodule: older git does not pass the "
+                    "configuration overrides to the git it runs inside one"
+                )
+            resolved = submodule.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            # The nested git runs with GIT_DIR=.git in the submodule.
+            sub_git = git.Git(submodule)
+            sub_git.update_environment(**repo.git.environment(), GIT_DIR=".git")
+            try:
+                listed = sub_git.config(
+                    "--show-scope", "-z", "--get-regexp", _LISTED_KEYS
+                )
+            except git.GitCommandError:
+                continue  # not a repository git can open, or nothing listed
+            fields = listed.split("\0")
+            for scope, field in zip(fields[0::2], fields[1::2]):
+                key = field.partition("\n")[0]
+                if key != "core.hookspath" and scope not in _TRUSTED_SCOPES:
+                    drivers.add(key)
+            pending.append((submodule, sub_git))
+    return drivers
+
+
 def harden_repo(repo: git.Repo) -> None:
     """Keep every git command run for `repo` from running a program it names.
 
@@ -252,9 +332,11 @@ def harden_repo(repo: git.Repo) -> None:
     a worktree's `config.worktree`, and files they include) defines, and
     overrides each with an empty command. The same read checks that git
     applied the overrides: git older than 2.31 ignores GIT_CONFIG_COUNT, and
-    is refused rather than run unprotected. Lazy fetching is turned off
-    (GIT_NO_LAZY_FETCH), and a repository with a promisor remote is refused
-    on a git too old to honor that (`_PROMISOR_KEYS`).
+    is refused rather than run unprotected; so is git older than 2.33 for a
+    repository with a checked-out submodule (`_submodule_drivers`). Lazy
+    fetching is turned off (GIT_NO_LAZY_FETCH), and a repository with a
+    promisor remote is refused on a git too old to honor that
+    (`_PROMISOR_KEYS`).
     """
     entries = list(HARDENED_CONFIG)
     repo.git.update_environment(GIT_NO_LAZY_FETCH="1", **_config_env(entries))
@@ -282,6 +364,7 @@ def harden_repo(repo: git.Repo) -> None:
             "overrides that keep a repository's own configuration from running "
             "programs"
         )
+    drivers |= _submodule_drivers(repo)
     if drivers:
         entries += [(key, "") for key in sorted(drivers)]
         repo.git.update_environment(**_config_env(entries))
@@ -608,7 +691,10 @@ def git_checkout(repo: git.Repo, branch_name: str) -> str:
     repo.rev_parse(
         branch_name
     )  # Validates branch_name is a real git ref, throws BadName if not
-    _rewrite_tree(repo, "checkout", branch_name)
+    # --quiet: without it, git checks each checked-out submodule of the new
+    # branch for local changes, running git inside it under its own
+    # configuration; the reply below does not use git's output.
+    _rewrite_tree(repo, "checkout", "--quiet", branch_name)
     # rev_parse accepts any revision, so branch_name may have been a sha, tag or
     # remote-tracking ref rather than a branch. Report what actually happened instead of
     # claiming a branch switch; a detached HEAD is easy to commit onto by mistake.
