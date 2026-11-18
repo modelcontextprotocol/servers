@@ -5,7 +5,11 @@
 // across requests, and a 2026-07-28 listen stream across clients.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { connect as connectTcp } from "node:net";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   Client,
   StreamableHTTPClientTransport,
@@ -18,7 +22,12 @@ import {
   startHttpServer,
   type RunningHttpServer,
 } from "../http.js";
-import { parseTransport, RESOURCE_URI, run } from "../index.js";
+import {
+  parseTransport,
+  releaseHeldLocks,
+  RESOURCE_URI,
+  run,
+} from "../index.js";
 import { call, makeTempGraph } from "./helpers.js";
 
 const alice = { name: "Alice", entityType: "person", observations: [] };
@@ -276,6 +285,73 @@ describe("run", () => {
     await vi.waitFor(() => expect(process.exit).toHaveBeenCalledWith(0));
     await expect(fetch(url)).rejects.toThrow();
   });
+
+  it("exits at once on a second signal, with that signal's status (#5595)", async () => {
+    const running = await run(["--transport=streamable-http"]);
+    const close = running.close;
+    // A shutdown that never finishes, as when a request is still in flight.
+    running.close = vi.fn().mockReturnValue(new Promise<void>(() => {}));
+    added("SIGINT")[0]("SIGINT");
+    expect(process.exit).not.toHaveBeenCalled();
+    added("SIGTERM")[0]("SIGTERM");
+    expect(process.exit).toHaveBeenLastCalledWith(143);
+    added("SIGINT")[0]("SIGINT");
+    expect(process.exit).toHaveBeenLastCalledWith(130);
+    expect(running.close).toHaveBeenCalledTimes(1);
+    await close();
+  });
+
+  it("registers the lock cleanup for the process's exit (#5595)", async () => {
+    const running = await run(["--transport=streamable-http"]);
+    expect(process.listeners("exit")).toContain(releaseHeldLocks);
+    await running.close();
+  });
+
+  // A real signal, sent to a real server process that is serving Streamable
+  // HTTP and holds the lock mid-write. Windows has no SIGTERM to deliver:
+  // process.kill() there ends the process outright, so no handler can run.
+  it.skipIf(process.platform === "win32")(
+    "removes a lock held mid-write when SIGTERM stops the HTTP server (#5595)",
+    async () => {
+      const lockPath = `${graph.filePath}.lock`;
+      const distIndex = pathToFileURL(
+        path.join(
+          path.dirname(fileURLToPath(import.meta.url)),
+          "..",
+          "dist",
+          "index.js",
+        ),
+      ).href;
+      const script = `
+        const { run, withFileLock } = await import(${JSON.stringify(distIndex)});
+        await run(["--transport", "streamable-http"]);
+        await withFileLock(${JSON.stringify(lockPath)}, () => {
+          console.log("held");
+          return new Promise(() => {});
+        });
+      `;
+      const child = spawn(
+        process.execPath,
+        ["--input-type=module", "-e", script],
+        { stdio: ["ignore", "pipe", "ignore"], env: process.env },
+      );
+      const exited = new Promise<number | null>((resolve) =>
+        child.on("exit", (code) => resolve(code)),
+      );
+      await new Promise<void>((resolve, reject) => {
+        child.stdout.on("data", (data: Buffer) => {
+          if (data.toString().includes("held")) resolve();
+        });
+        child.on("exit", () => reject(new Error("exited before holding")));
+      });
+      expect(existsSync(lockPath)).toBe(true);
+
+      child.kill("SIGTERM");
+
+      expect(await exited).toBe(0);
+      expect(existsSync(lockPath)).toBe(false);
+    },
+  );
 
   it("reports a shutdown that fails and exits non-zero", async () => {
     const running = await run(["--transport=streamable-http"]);
