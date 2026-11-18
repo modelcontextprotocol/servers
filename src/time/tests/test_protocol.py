@@ -676,19 +676,25 @@ async def test_get_current_time_argument_validation(
         ({"timezone": ""}, "Missing required argument: timezone"),
         (
             {"timezone": "Invalid/Timezone"},
-            "Invalid timezone: 'No time zone found with key Invalid/Timezone'",
+            "Invalid timezone: 'Invalid/Timezone' is not a known IANA timezone name",
         ),
         (
             {"timezone": "europe/warsaw"},
-            "Invalid timezone: 'No time zone found with key europe/warsaw'",
+            "Invalid timezone: 'europe/warsaw' is not a known IANA timezone name",
         ),
         (
             {"timezone": "../etc/passwd"},
-            "Invalid timezone: ZoneInfo keys must refer to subdirectories of TZPATH, got: ../etc/passwd",
+            "Invalid timezone: '../etc/passwd' is not a known IANA timezone name",
         ),
         (
             {"timezone": "/etc/localtime"},
-            "Invalid timezone: ZoneInfo keys may not be absolute paths, got: /etc/localtime",
+            "Invalid timezone: '/etc/localtime' is not a known IANA timezone name",
+        ),
+        # A tzdata directory, not a zone: zoneinfo's OSError quotes the host's
+        # absolute path to it, which must not reach the client (#5559).
+        (
+            {"timezone": "America"},
+            "Invalid timezone: 'America' is not a known IANA timezone name",
         ),
     ],
 )
@@ -1146,11 +1152,21 @@ async def test_convert_time_argument_validation(
         # Raised by the tool as a ToolError.
         (
             {"source_timezone": "Bad/Zone", "time": "12:00", "target_timezone": "UTC"},
-            "Invalid timezone: 'No time zone found with key Bad/Zone'",
+            "Invalid timezone: 'Bad/Zone' is not a known IANA timezone name",
         ),
         (
             {"source_timezone": "UTC", "time": "12:00", "target_timezone": "Bad/Zone"},
-            "Invalid timezone: 'No time zone found with key Bad/Zone'",
+            "Invalid timezone: 'Bad/Zone' is not a known IANA timezone name",
+        ),
+        # A tzdata directory: the fixed message, not zoneinfo's OSError with
+        # the host's path (#5559).
+        (
+            {"source_timezone": "America", "time": "12:00", "target_timezone": "UTC"},
+            "Invalid timezone: 'America' is not a known IANA timezone name",
+        ),
+        (
+            {"source_timezone": "UTC", "time": "12:00", "target_timezone": "America"},
+            "Invalid timezone: 'America' is not a known IANA timezone name",
         ),
         # Like get_current_time, an empty timezone is reported as a missing
         # argument rather than as zoneinfo's own message.
@@ -1196,7 +1212,7 @@ async def test_convert_time_checks_timezones_before_the_time_string() -> None:
             {"source_timezone": "UTC", "time": "nope", "target_timezone": "Bad/Zone"},
         )
     assert result == tool_error(
-        "convert_time", "Invalid timezone: 'No time zone found with key Bad/Zone'"
+        "convert_time", "Invalid timezone: 'Bad/Zone' is not a known IANA timezone name"
     )
 
 
@@ -1334,7 +1350,12 @@ async def test_get_time_ago_argument_validation(
         ({"timezone": ""}, "Missing required argument: timezone"),
         (
             {"timezone": "europe/warsaw"},
-            "Invalid timezone: 'No time zone found with key europe/warsaw'",
+            "Invalid timezone: 'europe/warsaw' is not a known IANA timezone name",
+        ),
+        # A tzdata directory: no host path in the message (#5559).
+        (
+            {"timezone": "America"},
+            "Invalid timezone: 'America' is not a known IANA timezone name",
         ),
         # Past what timedelta can hold, and past year 1.
         (
@@ -1348,7 +1369,7 @@ async def test_get_time_ago_argument_validation(
         # The timezone is checked before the offset.
         (
             {"timezone": "Bad/Zone", "days_ago": 10**10},
-            "Invalid timezone: 'No time zone found with key Bad/Zone'",
+            "Invalid timezone: 'Bad/Zone' is not a known IANA timezone name",
         ),
     ],
 )

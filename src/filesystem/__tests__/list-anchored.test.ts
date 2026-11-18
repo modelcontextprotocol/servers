@@ -6,6 +6,10 @@
 // is swapped for a symlink to a directory outside the allowed one. Each
 // listing must then refuse rather than return the outside directory's entry
 // names. Before listings were anchored, each of these returned them.
+//
+// They run on Windows too (#5600), where the swap is a junction, which needs
+// no privilege, and the refusal comes from the check made around the read
+// rather than from an anchor (list-anchored-windows.test.ts).
 
 import fs from "fs/promises";
 import fsSync from "fs";
@@ -52,16 +56,19 @@ afterEach(async () => {
   await fs.rm(outside, { recursive: true, force: true });
 });
 
-/** Swap `flip` for a symlink to `outside`, once, right after it is realpath'd. */
+/**
+ * Swap `flip` for a link to `outside`, once, right after it is realpath'd.
+ * "junction" picks the link type on Windows and is ignored elsewhere.
+ */
 function swapAfterRealpath(): void {
   const realRealpath = fs.realpath.bind(fs);
   let swapped = false;
   vi.spyOn(fs, "realpath").mockImplementation(async (p, opts) => {
     const resolved = await realRealpath(p, opts);
-    if (!swapped && p === flip) {
+    if (!swapped && String(p).toLowerCase() === flip.toLowerCase()) {
       swapped = true;
       fsSync.renameSync(flip, flipReal);
-      fsSync.symlinkSync(outside, flip);
+      fsSync.symlinkSync(outside, flip, "junction");
     }
     return resolved;
   });
@@ -70,44 +77,41 @@ function swapAfterRealpath(): void {
 const DIRECTORY_CHANGED =
   /Access denied - a directory on the path changed during the operation/;
 
-describe.skipIf(process.platform === "win32")(
-  "a listed directory swapped for a symlink after validation",
-  () => {
-    it.each([
-      ["list_directory", {}],
-      ["list_directory_with_sizes", {}],
-      ["directory_tree", {}],
-      ["search_files", { pattern: "**" }],
-    ])("%s does not list through it", async (tool, extra) => {
-      swapAfterRealpath();
-      const result = await call(client, tool, { path: flip, ...extra });
-      expect(result.isError).toBe(true);
-      expect(textOf(result)).toMatch(DIRECTORY_CHANGED);
-      expect(JSON.stringify(result)).not.toContain(OUTSIDE_NAME);
-    });
+describe("a listed directory swapped for a link after validation", () => {
+  it.each([
+    ["list_directory", {}],
+    ["list_directory_with_sizes", {}],
+    ["directory_tree", {}],
+    ["search_files", { pattern: "**" }],
+  ])("%s does not list through it", async (tool, extra) => {
+    swapAfterRealpath();
+    const result = await call(client, tool, { path: flip, ...extra });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toMatch(DIRECTORY_CHANGED);
+    expect(JSON.stringify(result)).not.toContain(OUTSIDE_NAME);
+  });
 
-    it("directory_tree does not list a subdirectory through it", async () => {
-      swapAfterRealpath();
-      const result = await call(client, "directory_tree", { path: dir });
-      expect(result.isError).toBe(true);
-      expect(textOf(result)).toMatch(DIRECTORY_CHANGED);
-      expect(JSON.stringify(result)).not.toContain(OUTSIDE_NAME);
-    });
+  it("directory_tree does not list a subdirectory through it", async () => {
+    swapAfterRealpath();
+    const result = await call(client, "directory_tree", { path: dir });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toMatch(DIRECTORY_CHANGED);
+    expect(JSON.stringify(result)).not.toContain(OUTSIDE_NAME);
+  });
 
-    it("search_files does not search a subdirectory through it, and says so", async () => {
-      swapAfterRealpath();
-      const result = await call(client, "search_files", {
-        path: dir,
-        pattern: "**",
-      });
-      expect(result.isError).toBeFalsy();
-      expect(JSON.stringify(result)).not.toContain(OUTSIDE_NAME);
-      // The swapped directory is reported as unreadable, not as empty.
-      expect(textOf(result)).toContain(`${flip}`);
-      expect(textOf(result)).toMatch(/could not be read/i);
+  it("search_files does not search a subdirectory through it, and says so", async () => {
+    swapAfterRealpath();
+    const result = await call(client, "search_files", {
+      path: dir,
+      pattern: "**",
     });
-  },
-);
+    expect(result.isError).toBeFalsy();
+    expect(JSON.stringify(result)).not.toContain(OUTSIDE_NAME);
+    // The swapped directory is reported as unreadable, not as empty.
+    expect(textOf(result)).toContain(`${flip}`);
+    expect(textOf(result)).toMatch(/could not be read/i);
+  });
+});
 
 describe("listings that are not swapped", () => {
   it("list every tool's way, from the directory validation resolved", async () => {
