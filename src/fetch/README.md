@@ -11,7 +11,7 @@ Requires MCP Python SDK 2.x (`mcp>=2.3,<3`).
 > [!CAUTION]
 > This server can access local/internal IP addresses and may represent a security risk. Exercise caution when using this MCP server to ensure this does not expose any sensitive data.
 >
-> By default the server refuses to fetch private, loopback, link-local and other non-public addresses, including cloud metadata endpoints such as `169.254.169.254`, and checks every redirect hop the same way. The `--allow-private-ips` argument turns this guard off; see [Customization - Private addresses](#customization---private-addresses). The guard checks the addresses a hostname resolves to before each request, so it does not protect against DNS rebinding between that check and the connection, and a hostname the server cannot resolve itself (one only a proxy can resolve) is not checked.
+> By default the server refuses to fetch private, loopback, link-local and other non-public addresses, including cloud metadata endpoints such as `169.254.169.254`, and checks every redirect hop the same way. The `--allow-private-ips` argument turns this guard off; see [Customization - Private addresses](#customization---private-addresses). The server connects only to an address the guard checked, so a hostname cannot pass the check with one address and be fetched from another (DNS rebinding). A request sent through a proxy is the exception: the proxy resolves the hostname and makes the connection, so the address it reaches is not the server's to check, and a hostname the server cannot resolve itself (one only a proxy can resolve) is not checked at all.
 
 The fetch tool will truncate the response, but by using the `start_index` argument, you can specify where to start the content extraction. This lets models read a webpage in chunks, until they find the information they need.
 
@@ -201,6 +201,18 @@ IPv4-mapped (`::ffff:0:0/96`), IPv4-translated (`::ffff:0:0:0/96`) or well-known
 judged by the IPv4 address it carries; a deprecated IPv4-compatible address (`::/96`, such as `::127.0.0.1`) is
 refused whatever IPv4 it carries. A hostname is refused if any one of its addresses is in those ranges.
 The client receives an error naming the refused address.
+
+The address that is checked is the address the server connects to. When it opens a connection the server resolves the
+hostname itself, checks every address in that answer, and connects to one of those addresses directly, so the name is
+not looked up again in between: a hostname whose DNS answer changes from a public address to a private one between the
+check and the connection (DNS rebinding) is refused. This holds for every connection the server opens, redirect hops
+and robots.txt fetches included. The request still carries the hostname in its `Host` header, and an HTTPS connection
+still sends it as the TLS server name and verifies the certificate against it, not against the address.
+
+A request that goes through a proxy (`--proxy-url`, or the proxy environment variables) is different, because the
+server connects to the proxy and the proxy resolves the hostname and connects to it. The hostname is still checked
+against what it resolves to for the server, but the proxy's own lookup is not pinned to that answer, and a hostname
+only the proxy can resolve is not checked.
 
 To fetch from local or internal hosts (a development server, an intranet page), add the argument
 `--allow-private-ips` to the `args` list in the configuration.
