@@ -190,7 +190,7 @@ A repository's configuration and hooks travel with it (an unpacked archive, a sh
 - `diff.submodule` is `short`, so a diff reports a submodule whose commit moved as a `Subproject commit` line rather than running a nested `git diff` inside it, which would not carry the flags above.
 - `git_add` lets Git check whether a checked-out submodule changed, which runs Git inside it under its own configuration, so the filter and merge drivers each checked-out submodule (and each submodule inside one) defines are emptied too, the same way as the repository's own. `git_checkout` passes `--quiet`, which skips that check.
 
-This needs Git 2.33 or later; with an older Git every tool call fails with an error saying so, rather than run unprotected.
+This needs Git 2.31 or later, and 2.33 or later for a repository with a checked-out submodule (older Git does not pass the overrides to the Git it runs inside one); with an older Git every tool call on such a repository fails with an error saying so, rather than run unprotected.
 
 ### Commit identity
 

@@ -382,9 +382,23 @@ def test_opens_a_submodule_as_the_nested_git_does(
     assert _submodule_drivers(repo) == {"filter.evil.clean"}
 
 
-def test_refuses_git_older_than_2_33(repo: git.Repo, monkeypatch: pytest.MonkeyPatch):
+def test_refuses_git_older_than_2_33_with_a_checked_out_submodule(
+    repo: git.Repo, monkeypatch: pytest.MonkeyPatch
+):
     # Git 2.31 and 2.32 do not pass GIT_CONFIG_COUNT to the git they run
     # inside a submodule, so the overrides would not reach it.
+    embed(repo, "sm").close()
     monkeypatch.setattr(git.Git, "version_info", property(lambda self: (2, 32, 0)))
     with pytest.raises(git.GitError, match="Git 2.33 or later is required"):
         harden_repo(repo)
+
+
+def test_older_git_works_without_a_checked_out_submodule(
+    repo: git.Repo, monkeypatch: pytest.MonkeyPatch
+):
+    # Without a checked-out submodule git never runs inside one, so 2.31 and
+    # 2.32 are still served; a gitlink with nothing checked out is fine too.
+    record_gitlink(repo, "absent", repo.head.commit.hexsha)
+    monkeypatch.setattr(git.Git, "version_info", property(lambda self: (2, 32, 0)))
+    harden_repo(repo)
+    assert repo.git.config("--get", "core.hooksPath") == os.devnull

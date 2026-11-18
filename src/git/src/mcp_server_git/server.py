@@ -118,8 +118,8 @@ def _git_text(repo: git.Repo, command: str, *args: str) -> str:
 # honoring it would let the repository run code as the server's user on a
 # read-only call such as git_status. The overrides go in through
 # GIT_CONFIG_COUNT (git 2.31+), which outranks every config file and is
-# inherited by the git processes git itself starts, submodules included from
-# git 2.33 (`_MIN_SUBMODULE_GIT`).
+# inherited by the git processes git itself starts, inside a submodule only
+# from git 2.33 (`_MIN_SUBMODULE_GIT`, required where one is checked out).
 #
 # - `core.fsmonitor` is run on every index refresh (status, diff, add).
 # - `core.hooksPath` pointing at the null device leaves no hook to find, so
@@ -214,14 +214,11 @@ def _submodule_drivers(repo: git.Repo) -> set[str]:
     cannot read is skipped: the nested git cannot read it either, and stops
     before it runs anything there.
 
-    Raises `git.GitError` on git older than `_MIN_SUBMODULE_GIT`, whose
-    nested git would not inherit the overrides.
+    Raises `git.GitError` when a checked-out submodule is found and git is
+    older than `_MIN_SUBMODULE_GIT`, whose nested git would not inherit the
+    overrides. Without one, git never runs inside a submodule, so older git
+    is fine.
     """
-    if repo.git.version_info[:2] < _MIN_SUBMODULE_GIT:
-        raise git.GitError(
-            "Git 2.33 or later is required: older git does not pass the "
-            "configuration overrides to the git it runs inside a submodule"
-        )
     drivers: set[str] = set()
     if repo.working_tree_dir is None:
         return drivers
@@ -242,6 +239,12 @@ def _submodule_drivers(repo: git.Repo) -> set[str]:
             submodule = top / path
             if not (submodule / ".git").exists():
                 continue  # not checked out: git does not look inside
+            if repo.git.version_info[:2] < _MIN_SUBMODULE_GIT:
+                raise git.GitError(
+                    "Git 2.33 or later is required for a repository with a "
+                    "checked-out submodule: older git does not pass the "
+                    "configuration overrides to the git it runs inside one"
+                )
             resolved = submodule.resolve()
             if resolved in seen:
                 continue
@@ -272,7 +275,8 @@ def harden_repo(repo: git.Repo) -> None:
     a worktree's `config.worktree`, and files they include) defines, and
     overrides each with an empty command. The same read checks that git
     applied the overrides: git older than 2.31 ignores GIT_CONFIG_COUNT, and
-    is refused rather than run unprotected.
+    is refused rather than run unprotected; so is git older than 2.33 for a
+    repository with a checked-out submodule (`_submodule_drivers`).
     """
     entries = list(HARDENED_CONFIG)
     repo.git.update_environment(**_config_env(entries))
