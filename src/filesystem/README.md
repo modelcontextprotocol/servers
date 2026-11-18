@@ -256,6 +256,9 @@ Files inside the allowed directories are also [resources](https://modelcontextpr
     - `source` (string)
     - `destination` (string)
   - Fails if destination exists
+  - A directory cannot be moved into itself: a destination inside the source
+    directory fails with `Cannot move a directory into itself: <destination>
+    is inside <source>`, and nothing is moved
   - Across filesystems (the source and destination on different mounts or
     disks), a regular file is moved by copying it to a newly created
     destination, with its permissions and modification time, and then removing

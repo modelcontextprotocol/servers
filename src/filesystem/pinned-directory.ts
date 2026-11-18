@@ -418,6 +418,50 @@ function returnStaged(staged: string, name: string): boolean {
 }
 
 /**
+ * Whether `destinationDirectory` is the directory at `sourcePath` or lies
+ * inside it (#5555), so the move would put a directory into itself. Decided
+ * by identity, not by comparing path strings: each directory from
+ * `destinationDirectory` up to the root is stat'd and compared with the
+ * source, so another spelling of the same directory (a different case on a
+ * case-insensitive volume, another normalization) cannot slip past. The
+ * paths are as validatePath resolved them, so going up one name at a time
+ * does not have to see through a symlink. A source that is not a directory
+ * itself, a symlink to one included, has no subtree to be moved into.
+ *
+ * This is a refusal, not an anchor: it reads by path, and when it is wrong
+ * (a directory swapped in between) the anchored steps of the move still hold.
+ */
+function isInsideSource(
+  sourcePath: string,
+  destinationDirectory: string,
+): boolean {
+  let source: fs.BigIntStats;
+  try {
+    source = fs.lstatSync(sourcePath, { bigint: true });
+  } catch {
+    // A missing source is the rename's error to report.
+    return false;
+  }
+  if (!source.isDirectory()) {
+    return false;
+  }
+  for (let directory = destinationDirectory; ; ) {
+    try {
+      if (isSameEntry(fs.statSync(directory, { bigint: true }), source)) {
+        return true;
+      }
+    } catch {
+      // Missing or unreadable, so not the source; one above it still can be.
+    }
+    const parent = path.dirname(directory);
+    if (parent === directory) {
+      return false;
+    }
+    directory = parent;
+  }
+}
+
+/**
  * Rename `sourcePath` to `destinationPath`, keeping both inside their
  * validated directories. rename() takes two paths and Node has no
  * renameat(), so each rename can resolve only one side relative to an
@@ -436,6 +480,11 @@ function returnStaged(staged: string, name: string): boolean {
  * cannot go back (something took its name in the meantime, or its directory
  * no longer resolves to the one validated, which is never entered), the error
  * says where it was left.
+ *
+ * A directory cannot be moved into itself, and that is refused (EINVAL)
+ * before step 1 (#5555): step 1 moves the source away, and with it the
+ * destination's directory, so step 2 would report that directory, which
+ * exists, as missing.
  */
 export function renameIntoDirectory(
   sourcePath: string,
@@ -444,6 +493,14 @@ export function renameIntoDirectory(
   const sourceDirectory = path.dirname(sourcePath);
   const name = path.basename(sourcePath);
   const destinationDirectory = path.dirname(destinationPath);
+  if (isInsideSource(sourcePath, destinationDirectory)) {
+    throw Object.assign(
+      new Error(
+        `Cannot move a directory into itself: ${destinationPath} is inside ${sourcePath}`,
+      ),
+      { code: "EINVAL" },
+    );
+  }
   const held = stagingName();
   const expected = inDirectory(sourceDirectory, () => {
     try {
