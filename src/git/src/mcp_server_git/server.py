@@ -134,6 +134,15 @@ def _git_text(repo: git.Repo, command: str, *args: str) -> str:
 # - `diff.submodule` set to `diff` makes git diff run a nested git diff inside
 #   each changed submodule, without `_DIFF_FLAGS`, so the submodule's own
 #   `diff.external` and textconv drivers would run; `short` starts nothing.
+# - `maintenance.auto` keeps a merge (or any other command that ends in
+#   `git maintenance run --auto`) from starting git's automatic maintenance,
+#   whose cruft repacks (git 2.42+) run each command the repository's
+#   `gc.recentObjectsHook` names. Stopping the launch covers every task,
+#   including a geometric repack the repository enables, which its own
+#   `maintenance.<task>.auto` gates; `gc.auto` is a backstop for the gc task
+#   only, so it does not replace `maintenance.auto`.
+#   That hook cannot be emptied like a driver: it is multi-valued, and an
+#   empty override adds a value rather than replacing the repository's.
 #
 # External diff programs and textconv filters are turned off per command
 # (`_DIFF_FLAGS`), and filter and merge drivers per repository (`_LISTED_KEYS`).
@@ -147,6 +156,8 @@ HARDENED_CONFIG: tuple[tuple[str, str], ...] = (
     ("status.submoduleSummary", "false"),
     ("merge.autoStash", "false"),
     ("diff.submodule", "short"),
+    ("maintenance.auto", "false"),
+    ("gc.auto", "0"),
 )
 
 # A filter driver (`filter.<name>.clean`/`smudge`/`process`, applied by
@@ -160,9 +171,11 @@ HARDENED_CONFIG: tuple[tuple[str, str], ...] = (
 # `commit.gpgSign` says). Drivers and options from the user's global or
 # system configuration (git-lfs, say) are the user's own and keep working.
 # `harden_repo` lists these keys, and `core.hooksPath`, whose command-scope
-# value shows that git applied the overrides.
+# value shows that git applied the overrides. A driver's name may be empty
+# (`[filter ""]`, read back as `filter..clean`, selected by `filter=`), so
+# the name is matched with `.*`, not `.+`.
 _LISTED_KEYS = (
-    r"^(core\.hookspath|filter\..+\.(clean|smudge|process)|merge\..+\.driver"
+    r"^(core\.hookspath|filter\..*\.(clean|smudge|process)|merge\..*\.driver"
     r"|branch\..+\.mergeoptions)$"
 )
 
@@ -180,6 +193,50 @@ _DIFF_FLAGS = ("--no-ext-diff", "--no-textconv")
 # whose checked-out commit moved, without that look inside. The flag outranks
 # `submodule.<name>.ignore`, which the repository could set to `none`.
 _NO_SUBMODULE_STATUS = "--ignore-submodules=dirty"
+
+# A repository that declares a promisor remote has git fetch any object it is
+# missing from that remote, by itself, on a read-only command (git show, git
+# status with HEAD's tree gone). The fetch runs a transport program the
+# repository's configuration names (`remote.<name>.uploadpack`,
+# `core.sshCommand`, an `ext::` URL), and no override can pin it by name,
+# since the remote's name is the repository's choice; `protocol.allow=never`
+# is no help either, as a repository-level `protocol.<name>.allow` outranks
+# it. GIT_NO_LAZY_FETCH=1 turns the fetch off, so a missing object is an
+# error. Git honors it from 2.45.1 and the maintenance releases made with it
+# (2.39.4, 2.40.2, ..., 2.44.1), mapped here as minor -> first patch; an
+# older git ignores it, so `harden_repo` refuses a repository with a promisor
+# remote there. Any of these keys declares one; git also reads a
+# `remote.promisor` with no remote name, as a promisor remote named "".
+_NO_LAZY_FETCH_SINCE = {39: 4, 40: 2, 41: 1, 42: 2, 43: 4, 44: 1, 45: 1}
+_PROMISOR_KEYS = (
+    r"^(extensions\.partialclone|remote\.(.+\.)?(promisor|partialclonefilter))$"
+)
+
+
+def _honors_no_lazy_fetch(version: tuple[int, ...]) -> bool:
+    """Whether git at `version` honors GIT_NO_LAZY_FETCH."""
+    major, minor, patch = (tuple(version) + (0, 0, 0))[:3]
+    if (major, minor) > (2, 45):
+        return True
+    since = _NO_LAZY_FETCH_SINCE.get(minor) if major == 2 else None
+    return since is not None and patch >= since
+
+
+def _refuse_promisor_remote(repo: git.Repo) -> None:
+    """Refuse a repository with a promisor remote, for a git that would fetch."""
+    try:
+        repo.git.config("--get-regexp", _PROMISOR_KEYS)
+    except git.GitCommandError as e:
+        # Exit 1 is "nothing matched": no promisor remote, nothing to fetch.
+        if e.status == 1:
+            return
+        raise
+    raise git.GitError(
+        "Git 2.45.1 or later (or 2.39.4, 2.40.2, 2.41.1, 2.42.2, 2.43.4, "
+        "2.44.1) is required for a repository with a promisor remote (a "
+        "partial clone): an older git fetches missing objects from it, and "
+        "the fetch runs a program the repository's configuration names"
+    )
 
 
 def _config_env(entries: list[tuple[str, str]]) -> dict[str, str]:
@@ -276,10 +333,13 @@ def harden_repo(repo: git.Repo) -> None:
     overrides each with an empty command. The same read checks that git
     applied the overrides: git older than 2.31 ignores GIT_CONFIG_COUNT, and
     is refused rather than run unprotected; so is git older than 2.33 for a
-    repository with a checked-out submodule (`_submodule_drivers`).
+    repository with a checked-out submodule (`_submodule_drivers`). Lazy
+    fetching is turned off (GIT_NO_LAZY_FETCH), and a repository with a
+    promisor remote is refused on a git too old to honor that
+    (`_PROMISOR_KEYS`).
     """
     entries = list(HARDENED_CONFIG)
-    repo.git.update_environment(**_config_env(entries))
+    repo.git.update_environment(GIT_NO_LAZY_FETCH="1", **_config_env(entries))
     try:
         listed = repo.git.config("--show-scope", "-z", "--get-regexp", _LISTED_KEYS)
     except git.GitCommandError as e:
@@ -308,6 +368,8 @@ def harden_repo(repo: git.Repo) -> None:
     if drivers:
         entries += [(key, "") for key in sorted(drivers)]
         repo.git.update_environment(**_config_env(entries))
+    if not _honors_no_lazy_fetch(repo.git.version_info):
+        _refuse_promisor_remote(repo)
 
 
 def git_status(repo: git.Repo) -> str:
@@ -434,7 +496,9 @@ def _apply_merge_autostash(repo: git.Repo) -> str:
         return ""
     stash_oid = autostash.read_text().strip()
     try:
-        repo.git.stash("apply", stash_oid)
+        # Through _rewrite_tree although nothing after it runs a driver today
+        # (`git stash store` runs none): any later git command must be safe.
+        _rewrite_tree(repo, "stash", "apply", stash_oid)
         note = "\nApplied autostash."
     except git.GitCommandError:
         repo.git.stash("store", "-m", "autostash", "-q", stash_oid)
@@ -583,6 +647,40 @@ def git_create_branch(
     return f"Created branch '{branch_name}' from {base_label}"
 
 
+def _rewrite_tree(repo: git.Repo, command: str, *args: str) -> str:
+    """Run `git <command> <args>`, which writes the working tree, then re-harden.
+
+    `harden_repo` reads the repository's configuration when the call opens
+    the repository, but that configuration can depend on the working tree: an
+    `[include]` or `[includeIf]` path into it (git skips one whose file is
+    missing), a `.git/config` that is a link into it, or an `includeIf
+    "onbranch:..."` that a branch switch satisfies. A command that writes the
+    tree can so create or change configuration. Git reads configuration once
+    per process, at start, so the command itself runs under what was read,
+    but every git command after it in the same call reads afresh, and would
+    find filter or merge drivers that were never overridden. Every command
+    that writes the tree therefore goes through here, and the drivers are
+    read again before any other git command runs, whether or not it failed:
+    a failed merge has written files too, and its cleanup runs git next.
+
+    If that read fails, the overrides may be incomplete, so the call stops
+    with a `GitError`, which a caller's `except GitCommandError` cleanup does
+    not catch, and no further git command runs.
+    """
+    try:
+        return getattr(repo.git, command)(*args)
+    finally:
+        try:
+            harden_repo(repo)
+        except git.GitCommandError as e:
+            raise git.GitError(
+                "Stopped: the repository's configuration could not be read "
+                f"again after git {command} changed the working tree. The working "
+                f"tree was left as git {command} wrote it (a merge may still be in "
+                f"progress), and no further git command was run: {e}"
+            ) from e
+
+
 def git_checkout(repo: git.Repo, branch_name: str) -> str:
     # Defense in depth: reject branch names starting with '-' to prevent flag injection,
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
@@ -596,7 +694,7 @@ def git_checkout(repo: git.Repo, branch_name: str) -> str:
     # --quiet: without it, git checks each checked-out submodule of the new
     # branch for local changes, running git inside it under its own
     # configuration; the reply below does not use git's output.
-    repo.git.checkout("--quiet", branch_name)
+    _rewrite_tree(repo, "checkout", "--quiet", branch_name)
     # rev_parse accepts any revision, so branch_name may have been a sha, tag or
     # remote-tracking ref rather than a branch. Report what actually happened instead of
     # claiming a branch switch; a detached HEAD is easy to commit onto by mistake.
@@ -632,7 +730,9 @@ def _merge_failure(repo: git.Repo, error: git.GitCommandError, what: str) -> str
     conflicts = _git_text(
         repo, "diff", _NO_SUBMODULE_STATUS, "--name-only", "--diff-filter=U"
     ).splitlines()
-    repo.git.merge("--abort")
+    # Through _rewrite_tree although it is the last git command here, so a git
+    # command added after it reads drivers the restored tree defines.
+    _rewrite_tree(repo, "merge", "--abort")
     if conflicts:
         return (
             f"{what} stopped on conflicts in: {', '.join(conflicts)}. {unchanged} "
@@ -707,7 +807,9 @@ def git_merge(
     # names what the caller asked for.
     mode = "--ff-only" if fast_forward_only else "--ff"
     try:
-        repo.git.merge(
+        _rewrite_tree(
+            repo,
+            "merge",
             mode,
             "--commit",
             "--no-squash",
