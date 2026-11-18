@@ -30,6 +30,7 @@ import socket
 from collections.abc import Awaitable, Callable, Iterable, Sequence
 from typing import Any, cast
 
+import anyio
 import httpcore
 import httpx
 
@@ -48,6 +49,13 @@ _KEEPALIVE_EXPIRY = 5.0
 Resolver = Callable[[str], Awaitable[Sequence[str]]]
 # Raises to refuse a host given every address it resolved to.
 Vetter = Callable[[str, Sequence[str]], None]
+
+
+async def _close(streams: list[httpcore.AsyncNetworkStream]) -> None:
+    """Close and forget every stream in ``streams``, even while cancelled."""
+    with anyio.CancelScope(shield=True):
+        while streams:
+            await streams.pop().aclose()
 
 
 class PinnedBackend(httpcore.AsyncNetworkBackend):
@@ -101,54 +109,75 @@ class PinnedBackend(httpcore.AsyncNetworkBackend):
         waiting = list(addresses)
         attempts: set[asyncio.Task[httpcore.AsyncNetworkStream]] = set()
         failures: list[Exception] = []
+        # Every stream an attempt produced is owned here until one is
+        # returned: `winner` is the one to hand over, `spare` the rest.
+        winner: httpcore.AsyncNetworkStream | None = None
+        spare: list[httpcore.AsyncNetworkStream] = []
         try:
-            while waiting or attempts:
-                if waiting:
-                    # Each attempt gets what is left of the one connect
-                    # timeout, so trying several addresses does not extend it.
-                    left = (
-                        None if timeout is None else timeout - (loop.time() - started)
-                    )
-                    attempts.add(
-                        loop.create_task(
-                            self._inner.connect_tcp(
-                                waiting.pop(0),
-                                port,
-                                timeout=left,
-                                local_address=local_address,
-                                socket_options=socket_options,
+            try:
+                while winner is None and (waiting or attempts):
+                    if waiting:
+                        # Each attempt gets what is left of the one connect
+                        # timeout, so trying several addresses does not
+                        # extend it.
+                        left = (
+                            None
+                            if timeout is None
+                            else timeout - (loop.time() - started)
+                        )
+                        attempts.add(
+                            loop.create_task(
+                                self._inner.connect_tcp(
+                                    waiting.pop(0),
+                                    port,
+                                    timeout=left,
+                                    local_address=local_address,
+                                    socket_options=socket_options,
+                                )
                             )
                         )
+                    # Wake on the first attempt to finish, or to start the
+                    # next address once this one has had its head start.
+                    done, attempts = await asyncio.wait(
+                        attempts,
+                        timeout=CONNECTION_ATTEMPT_DELAY if waiting else None,
+                        return_when=asyncio.FIRST_COMPLETED,
                     )
-                # Wake on the first attempt to finish, or to start the next
-                # address once this one has had its head start.
-                done, attempts = await asyncio.wait(
-                    attempts,
-                    timeout=CONNECTION_ATTEMPT_DELAY if waiting else None,
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
-                winner: httpcore.AsyncNetworkStream | None = None
-                for attempt in done:
-                    error = attempt.exception()
-                    if isinstance(error, Exception):
-                        failures.append(error)
-                    elif winner is None:
-                        winner = attempt.result()
-                    else:
-                        await attempt.result().aclose()
-                if winner is not None:
-                    return winner
-            # Every address failed: report the first, as a single connect would.
-            if failures:
-                raise failures[0]
-            raise httpcore.ConnectError(f"{host} has no addresses")
-        finally:
-            # Attempts still running lost the race, or the caller gave up.
-            for attempt in attempts:
-                attempt.cancel()
-            for outcome in await asyncio.gather(*attempts, return_exceptions=True):
-                if isinstance(outcome, httpcore.AsyncNetworkStream):
-                    await outcome.aclose()
+                    for attempt in done:
+                        error = attempt.exception()
+                        if isinstance(error, Exception):
+                            failures.append(error)
+                        elif winner is None:
+                            winner = attempt.result()
+                        else:
+                            spare.append(attempt.result())
+            finally:
+                # Attempts still running lost the race, or the caller gave
+                # up. Shielded, so a caller's timeout (an anyio cancel scope,
+                # which cancels every await inside it) cannot cut the
+                # teardown short.
+                with anyio.CancelScope(shield=True):
+                    for attempt in attempts:
+                        attempt.cancel()
+                    for outcome in await asyncio.gather(
+                        *attempts, return_exceptions=True
+                    ):
+                        if isinstance(outcome, httpcore.AsyncNetworkStream):
+                            spare.append(outcome)
+                    await _close(spare)
+        except BaseException:
+            # The winner was never handed over (the caller was cancelled
+            # during the teardown, say), so it is closed here with the rest.
+            if winner is not None:
+                spare.append(winner)
+            await _close(spare)
+            raise
+        if winner is not None:
+            return winner
+        # Every address failed: report the first, as a single connect would.
+        if failures:
+            raise failures[0]
+        raise httpcore.ConnectError(f"{host} has no addresses")
 
     async def connect_unix_socket(
         self,

@@ -894,6 +894,50 @@ async def test_backend_closes_a_connection_that_completes_after_losing(
     assert inner.streams["192.0.2.1"].closed is True
 
 
+class SlowLoserInner(FakeInner):
+    """The first address takes a while to wind down once it is cancelled."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.winding_down = asyncio.Event()
+
+    async def connect_tcp(
+        self,
+        host: str,
+        port: int,
+        timeout: float | None = None,
+        local_address: str | None = None,
+        socket_options: Iterable[Any] | None = None,
+    ) -> httpcore.AsyncNetworkStream:
+        if host == "192.0.2.1":
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                self.winding_down.set()
+                await asyncio.sleep(30)
+        return await super().connect_tcp(host, port, timeout)
+
+
+async def test_backend_closes_the_winner_when_cancelled_while_cleaning_up(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A connection that was won but never handed over is not leaked."""
+    monkeypatch.setattr(pinning, "CONNECTION_ATTEMPT_DELAY", 0.01)
+    inner = SlowLoserInner()
+    backend, _ = backend_for(["192.0.2.1", "192.0.2.2"], inner)
+
+    connecting = asyncio.ensure_future(backend.connect_tcp("name.test", 80))
+    # The second address has won; the first is still being torn down.
+    await inner.winding_down.wait()
+    assert not inner.streams["192.0.2.2"].closed
+    connecting.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await connecting
+    assert inner.streams["192.0.2.2"].closed is True
+    assert "192.0.2.1" not in inner.streams
+
+
 async def test_backend_passes_unix_sockets_and_sleep_through() -> None:
     inner = FakeInner()
     backend, vetted = backend_for(["192.0.2.1"], inner)
