@@ -1,5 +1,11 @@
 # @modelcontextprotocol/server-everything
 
+## 2.3.1
+
+### Patch Changes
+
+- [#5583](https://github.com/modelcontextprotocol/servers/pull/5583) [`66f641e`](https://github.com/modelcontextprotocol/servers/commit/66f641e9ae2fc7726a9420b15fbf68e0613a254b) [@cliffhall](https://github.com/cliffhall) - Fix GHSA-38j4-j742-j7r3.
+
 ## 2.3.0
 
 ### Minor Changes
