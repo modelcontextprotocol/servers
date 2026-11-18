@@ -352,6 +352,8 @@ def _apply_merge_autostash(repo: git.Repo) -> str:
         return ""
     stash_oid = autostash.read_text().strip()
     try:
+        # Through _rewrite_tree although nothing after it runs a driver today
+        # (`git stash store` runs none): any later git command must be safe.
         _rewrite_tree(repo, "stash", "apply", stash_oid)
         note = "\nApplied autostash."
     except git.GitCommandError:
@@ -529,7 +531,9 @@ def _rewrite_tree(repo: git.Repo, command: str, *args: str) -> str:
         except git.GitCommandError as e:
             raise git.GitError(
                 "Stopped: the repository's configuration could not be read "
-                f"again after git {command} changed the working tree: {e}"
+                f"again after git {command} changed the working tree. The working "
+                f"tree was left as git {command} wrote it (a merge may still be in "
+                f"progress), and no further git command was run: {e}"
             ) from e
 
 
@@ -579,6 +583,8 @@ def _merge_failure(repo: git.Repo, error: git.GitCommandError, what: str) -> str
     conflicts = _git_text(
         repo, "diff", _NO_SUBMODULE_STATUS, "--name-only", "--diff-filter=U"
     ).splitlines()
+    # Through _rewrite_tree although it is the last git command here, so a git
+    # command added after it reads drivers the restored tree defines.
     _rewrite_tree(repo, "merge", "--abort")
     if conflicts:
         return (

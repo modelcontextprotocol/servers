@@ -27,7 +27,7 @@ from conftest import connect, make_repo, wire
 from test_repository_config import Payload, root_of
 
 from mcp_server_git import server
-from mcp_server_git.server import _rewrite_tree, git_checkout, harden_repo
+from mcp_server_git.server import _rewrite_tree, git_checkout, git_merge, harden_repo
 
 posix_only = pytest.mark.skipif(
     sys.platform == "win32", reason="the payloads are POSIX shell scripts"
@@ -180,3 +180,28 @@ def test_a_failed_re_read_stops_the_call(repo: git.Repo) -> None:
     # run more git commands under incomplete overrides.
     assert not isinstance(raised.value, git.GitCommandError)
     assert "could not be read again after git status" in str(raised.value)
+
+
+def test_a_failed_re_read_after_a_conflicting_merge_runs_no_cleanup(
+    tmp_path: Path,
+) -> None:
+    repo = make_repo(tmp_path / "repo")
+    diverged(repo, {})
+    failure = git.GitCommandError(["git", "config"], 128)
+    with (
+        mock.patch.object(server, "harden_repo", side_effect=failure),
+        pytest.raises(git.GitError) as raised,
+    ):
+        git_merge(repo, "feature", fast_forward_only=False)
+    # Not git_merge's cleanup (`_merge_failure`, a ValueError), which would
+    # run more git commands under incomplete overrides.
+    assert not isinstance(raised.value, (git.GitCommandError, ValueError))
+    # The failed re-read, raised while the merge's own failure propagated.
+    assert raised.value.__cause__ is failure
+    merge_failure = failure.__context__
+    assert isinstance(merge_failure, git.GitCommandError)
+    assert "merge" in merge_failure.command
+    assert "a merge may still be in progress" in str(raised.value)
+    # `git merge --abort` never ran.
+    assert (Path(repo.git_dir) / "MERGE_HEAD").exists()
+    repo.close()
