@@ -1,5 +1,15 @@
 # @modelcontextprotocol/server-sequential-thinking
 
+## 2.2.0
+
+### Minor Changes
+
+- [#5536](https://github.com/modelcontextprotocol/servers/pull/5536) [`311c0fd`](https://github.com/modelcontextprotocol/servers/commit/311c0fdc953f38da08153fd2e8d134d03c8e168b) [@cliffhall](https://github.com/cliffhall) - Serve Streamable HTTP as well as stdio ([#576](https://github.com/modelcontextprotocol/servers/issues/576)). `--transport streamable-http` serves the server on one `/mcp` endpoint, for 2026-07-28 and 2025-era clients alike, at `HOST`:`PORT` (`127.0.0.1:3001` by default); stdio stays the default. Over HTTP the filesystem server requires its allowed directories on the command line, since it cannot ask a client for its Roots, and the sequential-thinking history belongs to the server process rather than to one connection.
+
+### Patch Changes
+
+- [#5535](https://github.com/modelcontextprotocol/servers/pull/5535) [`a5c60fa`](https://github.com/modelcontextprotocol/servers/commit/a5c60fa8cb442de81b99ccc4bcac8cd79e8c044f) [@cliffhall](https://github.com/cliffhall) - Count the thought box's header rows toward its 1000-row cap, so a long `branchId` can no longer draw past it on stderr: line breaks in a `branchId` are shown as `\r` and `\n`, and a header too long for the cap is cut with a row saying how many characters it left out ([#5526](https://github.com/modelcontextprotocol/servers/issues/5526)).
+
 ## 2.1.1
 
 ### Patch Changes
