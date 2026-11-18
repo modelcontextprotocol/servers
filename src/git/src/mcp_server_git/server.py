@@ -411,7 +411,9 @@ def _apply_merge_autostash(repo: git.Repo) -> str:
         return ""
     stash_oid = autostash.read_text().strip()
     try:
-        repo.git.stash("apply", stash_oid)
+        # Through _rewrite_tree although nothing after it runs a driver today
+        # (`git stash store` runs none): any later git command must be safe.
+        _rewrite_tree(repo, "stash", "apply", stash_oid)
         note = "\nApplied autostash."
     except git.GitCommandError:
         repo.git.stash("store", "-m", "autostash", "-q", stash_oid)
@@ -560,6 +562,40 @@ def git_create_branch(
     return f"Created branch '{branch_name}' from {base_label}"
 
 
+def _rewrite_tree(repo: git.Repo, command: str, *args: str) -> str:
+    """Run `git <command> <args>`, which writes the working tree, then re-harden.
+
+    `harden_repo` reads the repository's configuration when the call opens
+    the repository, but that configuration can depend on the working tree: an
+    `[include]` or `[includeIf]` path into it (git skips one whose file is
+    missing), a `.git/config` that is a link into it, or an `includeIf
+    "onbranch:..."` that a branch switch satisfies. A command that writes the
+    tree can so create or change configuration. Git reads configuration once
+    per process, at start, so the command itself runs under what was read,
+    but every git command after it in the same call reads afresh, and would
+    find filter or merge drivers that were never overridden. Every command
+    that writes the tree therefore goes through here, and the drivers are
+    read again before any other git command runs, whether or not it failed:
+    a failed merge has written files too, and its cleanup runs git next.
+
+    If that read fails, the overrides may be incomplete, so the call stops
+    with a `GitError`, which a caller's `except GitCommandError` cleanup does
+    not catch, and no further git command runs.
+    """
+    try:
+        return getattr(repo.git, command)(*args)
+    finally:
+        try:
+            harden_repo(repo)
+        except git.GitCommandError as e:
+            raise git.GitError(
+                "Stopped: the repository's configuration could not be read "
+                f"again after git {command} changed the working tree. The working "
+                f"tree was left as git {command} wrote it (a merge may still be in "
+                f"progress), and no further git command was run: {e}"
+            ) from e
+
+
 def git_checkout(repo: git.Repo, branch_name: str) -> str:
     # Defense in depth: reject branch names starting with '-' to prevent flag injection,
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
@@ -570,7 +606,7 @@ def git_checkout(repo: git.Repo, branch_name: str) -> str:
     repo.rev_parse(
         branch_name
     )  # Validates branch_name is a real git ref, throws BadName if not
-    repo.git.checkout(branch_name)
+    _rewrite_tree(repo, "checkout", branch_name)
     # rev_parse accepts any revision, so branch_name may have been a sha, tag or
     # remote-tracking ref rather than a branch. Report what actually happened instead of
     # claiming a branch switch; a detached HEAD is easy to commit onto by mistake.
@@ -606,7 +642,9 @@ def _merge_failure(repo: git.Repo, error: git.GitCommandError, what: str) -> str
     conflicts = _git_text(
         repo, "diff", _NO_SUBMODULE_STATUS, "--name-only", "--diff-filter=U"
     ).splitlines()
-    repo.git.merge("--abort")
+    # Through _rewrite_tree although it is the last git command here, so a git
+    # command added after it reads drivers the restored tree defines.
+    _rewrite_tree(repo, "merge", "--abort")
     if conflicts:
         return (
             f"{what} stopped on conflicts in: {', '.join(conflicts)}. {unchanged} "
@@ -681,7 +719,9 @@ def git_merge(
     # names what the caller asked for.
     mode = "--ff-only" if fast_forward_only else "--ff"
     try:
-        repo.git.merge(
+        _rewrite_tree(
+            repo,
+            "merge",
             mode,
             "--commit",
             "--no-squash",
