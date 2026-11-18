@@ -15,6 +15,7 @@ import {
   copyFileInDirectory,
   openFileForReading,
   overwriteFileInDirectory,
+  readDirectoryInPlace,
   readFileInDirectory,
   renameIntoDirectory,
   statInDirectory,
@@ -130,6 +131,29 @@ export function readdirWithTimeout(target: string): Promise<Dirent[]> {
     "readdir",
     target,
   );
+}
+
+/**
+ * The entries of the directory at `validPath`, a path validatePath returned,
+ * listed from inside that directory (readDirectoryInPlace in
+ * pinned-directory.ts), so a directory swapped onto the path after validation
+ * is refused rather than listed.
+ *
+ * The anchored listing is synchronous and cannot time out, so the directory is
+ * first read asynchronously by path, and that result is discarded: a stalled
+ * provider (#4162) then times out here (`bounded`, as the recursive walks
+ * are) or holds only this request (as a single listing always has), rather
+ * than blocking the process, and a directory that read completes on is
+ * materialized for the anchored read. Each directory is so read twice.
+ */
+export async function listValidatedDirectory(
+  validPath: string,
+  bounded: boolean,
+): Promise<Dirent[]> {
+  await (bounded
+    ? readdirWithTimeout(validPath)
+    : fs.readdir(validPath, { withFileTypes: true }));
+  return readDirectoryInPlace(validPath);
 }
 
 /**
@@ -1301,10 +1325,13 @@ export async function searchFilesWithValidation(
   const results: string[] = [];
   const visit = createEntryBudget("search_files", rootPath);
 
-  async function search(currentPath: string) {
+  // `currentPath` is the path reported, built from the requested root;
+  // `validPath` is what validatePath resolved it to, which the listing is
+  // anchored to.
+  async function search(currentPath: string, validPath: string) {
     let entries: Dirent[];
     try {
-      entries = await readdirWithTimeout(currentPath);
+      entries = await listValidatedDirectory(validPath, true);
     } catch (error) {
       // The starting path failing is the request failing, and a timeout ends
       // the whole search (see FsTimeoutError). A subdirectory that cannot be
@@ -1333,8 +1360,13 @@ export async function searchFilesWithValidation(
       // the allowed directories, a dangling link) is skipped silently. A
       // timeout still ends the whole search rather than returning partial
       // results as if they were complete.
+      let validEntryPath: string;
       try {
-        await validatePath(fullPath, allowedDirectories, "read");
+        validEntryPath = await validatePath(
+          fullPath,
+          allowedDirectories,
+          "read",
+        );
       } catch (error) {
         if (error instanceof FsTimeoutError) {
           throw error;
@@ -1348,11 +1380,11 @@ export async function searchFilesWithValidation(
       }
 
       if (entry.isDirectory()) {
-        await search(fullPath);
+        await search(fullPath, validEntryPath);
       }
     }
   }
 
-  await search(rootPath);
+  await search(rootPath, rootPath);
   return results;
 }

@@ -6,7 +6,6 @@
 // a module global lets two instances coexist in one process.
 import { McpServer } from "@modelcontextprotocol/server";
 import type { Root } from "@modelcontextprotocol/server";
-import fs from "fs/promises";
 import path from "path";
 import { pathToFileURL } from "url";
 import { z } from "zod";
@@ -30,7 +29,7 @@ import {
   applyFileEdits,
   tailFile,
   headFile,
-  readdirWithTimeout,
+  listValidatedDirectory,
   createEntryBudget,
 } from "./lib.js";
 import { registerFileResources } from "./file-resources.js";
@@ -720,7 +719,7 @@ export function createServer(
         allowedDirectories,
         "read",
       );
-      const entries = await fs.readdir(validPath, { withFileTypes: true });
+      const entries = await listValidatedDirectory(validPath, false);
       const formatted = entries
         .map(
           (entry) =>
@@ -759,7 +758,7 @@ export function createServer(
         allowedDirectories,
         "read",
       );
-      const entries = await fs.readdir(validPath, { withFileTypes: true });
+      const entries = await listValidatedDirectory(validPath, false);
 
       // Get detailed information for each entry; size is undefined when the
       // entry could not be stat'd
@@ -894,7 +893,7 @@ export function createServer(
           allowedDirectories,
           "read",
         );
-        const entries = await readdirWithTimeout(validPath);
+        const entries = await listValidatedDirectory(validPath, true);
         const result: TreeEntry[] = [];
 
         for (const entry of entries) {
