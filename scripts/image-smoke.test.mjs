@@ -299,6 +299,12 @@ function fakeDocker(answers = {}, files = ["memory.jsonl"]) {
   const calls = [];
   const docker = (args, cwd) => {
     calls.push({ args, cwd });
+    // A build that succeeds writes the ID of what it built.
+    if (args[0] === "build" && (answers.build?.status ?? 0) === 0)
+      writeFileSync(
+        args[args.indexOf("--iidfile") + 1],
+        answers.imageId ?? "sha256:built-here\n",
+      );
     if (args[0] === "cp" && answers.cp === undefined)
       for (const file of files) writeFileSync(path.join(args[2], file), "");
     return { status: 0, stdout: "", stderr: "", ...answers[args[0]] };
@@ -342,6 +348,37 @@ test("checkImage builds, boots, stops and reads back memory's directory", async 
   assert.deepEqual(calls[4].args, ["rm", "-f", container]);
   assert.deepEqual(state.called, ["create_entities"]);
   assert.equal(state.closed, 1);
+});
+
+test("checkImage boots the image it built, by ID, not whatever the tag points at", async () => {
+  // Another checkout's run can retag `mcp-image-smoke/<server>:local` between
+  // this run's build and its boot.
+  const { docker, calls } = fakeDocker();
+  let booted;
+  const connect = async (args) => {
+    booted = args;
+    return fakeSessionFor(["get_current_time"]);
+  };
+  await checkImage(byName("time"), { docker, connect, ...quiet });
+  assert.deepEqual(calls[0].args.slice(0, 3), [
+    "build",
+    "-t",
+    "mcp-image-smoke/time:local",
+  ]);
+  assert.equal(calls[0].args.at(-3), "--iidfile");
+  assert.equal(calls[0].args.at(-1), ".");
+  assert.equal(booted.at(-1), "sha256:built-here");
+  assert.ok(!booted.includes("mcp-image-smoke/time:local"));
+});
+
+test("checkImage fails a build that reports no image ID", async () => {
+  const { docker, ran } = fakeDocker({ imageId: "" });
+  const { connect } = fakeSession({ tools: [] });
+  await assert.rejects(
+    checkImage(byName("time"), { docker, connect, ...quiet }),
+    /wrote no image ID/,
+  );
+  assert.deepEqual(ran(), ["build"]);
 });
 
 test("checkImage does not stop-check an image the table does not say stops", async () => {

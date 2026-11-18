@@ -58,7 +58,14 @@
 //   npm run image-smoke -- --list            # print the selected images as JSON; build nothing
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -270,7 +277,13 @@ export function chooseImages(opts, changes) {
   return selectImages(changes());
 }
 
-/** The tag an image is built under. One per server, reused by every run. */
+/**
+ * The tag an image is built under. One per server, reused by every run, so
+ * the images do not pile up and one can be run by hand afterwards. A run never
+ * boots by this tag: another checkout's run can move it between this run's
+ * build and its boot, and the boot would then pass on that checkout's image.
+ * The boot uses the image ID the build wrote (`--iidfile`).
+ */
 export function imageTag(name) {
   return `mcp-image-smoke/${name}:local`;
 }
@@ -303,16 +316,17 @@ export function buildCommand(image, root = repoRoot) {
  *
  * @param {(typeof IMAGES)[number]} image
  * @param {string} container
+ * @param {string} [ref] the image to run: the ID this run built
  * @returns {string[]}
  */
-export function runArgs(image, container) {
+export function runArgs(image, container, ref = imageTag(image.name)) {
   return [
     "run",
     "-i",
     "--name",
     container,
     ...Object.entries(image.env ?? {}).flatMap(([k, v]) => ["-e", `${k}=${v}`]),
-    imageTag(image.name),
+    ref,
     ...(image.args ?? []),
   ];
 }
@@ -445,16 +459,35 @@ export async function checkImage(image, deps = {}) {
   const proc = deps.proc ?? process;
 
   const build = buildCommand(image, deps.root);
-  const built = run(build.args, build.cwd);
-  if (built.status !== 0)
-    throw new Error(
-      `\`docker ${build.args.join(" ")}\` failed (${built.status ?? "could not run"}):\n${tail(built.stderr) || tail(built.stdout)}`,
+  const scratch = mkdtempSync(path.join(tmpdir(), "mcp-image-smoke-"));
+  const iidFile = path.join(scratch, "image-id");
+  let imageId;
+  try {
+    // The context (`.`) stays last; the ID file is how the boot below runs
+    // exactly what this build produced, whatever the shared tag points at.
+    const built = run(
+      [...build.args.slice(0, -1), "--iidfile", iidFile, "."],
+      build.cwd,
     );
-  log(`image-smoke —   built ${imageTag(image.name)}`);
+    if (built.status !== 0)
+      throw new Error(
+        `\`docker ${build.args.join(" ")}\` failed (${built.status ?? "could not run"}):\n${tail(built.stderr) || tail(built.stdout)}`,
+      );
+    imageId = existsSync(iidFile) ? readFileSync(iidFile, "utf8").trim() : "";
+    if (!imageId)
+      throw new Error(
+        `\`docker ${build.args.join(" ")}\` succeeded but wrote no image ID, so there is nothing to boot.`,
+      );
+  } catch (err) {
+    rmSync(scratch, { recursive: true, force: true });
+    throw err;
+  }
+  log(
+    `image-smoke —   built ${imageTag(image.name)} (${imageId.replace(/^sha256:/, "").slice(0, 12)})`,
+  );
 
   const container = `mcp-image-smoke-${image.name}-${process.pid}-${Date.now()}`;
   let session;
-  let scratch;
   // An interrupt (Ctrl-C, a cancelled gate) ends the process without running
   // the `finally` below, and the container has no `--rm`, so it would be left
   // behind, still running where the image ignores the signal `docker run`
@@ -470,7 +503,7 @@ export async function checkImage(image, deps = {}) {
   );
   for (const [signal, handler] of interrupts) proc.once(signal, handler);
   try {
-    session = await open(runArgs(image, container));
+    session = await open(runArgs(image, container, imageId));
     try {
       const tools = await session.listTools();
       if (!tools.includes(image.tool))
@@ -516,15 +549,16 @@ export async function checkImage(image, deps = {}) {
     }
 
     if (image.leaves) {
-      scratch = mkdtempSync(path.join(tmpdir(), "mcp-image-smoke-"));
+      const left = path.join(scratch, "left");
+      mkdirSync(left);
       // `docker cp` reads a stopped container's filesystem; `/.` copies the
       // directory's contents rather than the directory.
-      const copied = run(["cp", `${container}:${image.leaves.dir}/.`, scratch]);
+      const copied = run(["cp", `${container}:${image.leaves.dir}/.`, left]);
       if (copied.status !== 0)
         throw new Error(
           `could not read ${image.leaves.dir} from the stopped container:\n${tail(copied.stderr)}`,
         );
-      const verdict = judgeLeftovers(readdirSync(scratch), image.leaves);
+      const verdict = judgeLeftovers(readdirSync(left), image.leaves);
       if (verdict) throw new Error(verdict);
       log(
         `image-smoke —   ${image.leaves.dir} holds only ${image.leaves.files.join(", ")}`,
@@ -534,7 +568,7 @@ export async function checkImage(image, deps = {}) {
     await session?.close();
     run(["rm", "-f", container]);
     for (const [signal, handler] of interrupts) proc.off(signal, handler);
-    if (scratch) rmSync(scratch, { recursive: true, force: true });
+    rmSync(scratch, { recursive: true, force: true });
   }
 }
 
