@@ -130,6 +130,12 @@ def _git_text(repo: git.Repo, command: str, *args: str) -> str:
 # - `submodule.recurse` would carry checkout and merge into submodules, whose
 #   own configuration this override cannot neutralize (see `_LISTED_KEYS`).
 # - `merge.autoStash` keeps git_merge from stashing behind the tool's back.
+# - `maintenance.auto` and `gc.auto` keep a merge (or any other command that
+#   ends in `git maintenance run --auto`) from starting git's automatic
+#   maintenance, whose garbage collection (a cruft repack, git 2.42+) runs
+#   each command the repository's `gc.recentObjectsHook` names.
+#   That hook cannot be emptied like a driver: it is multi-valued, and an
+#   empty override adds a value rather than replacing the repository's.
 #
 # External diff programs and textconv filters are turned off per command
 # (`_DIFF_FLAGS`), and filter and merge drivers per repository (`_LISTED_KEYS`).
@@ -142,6 +148,8 @@ HARDENED_CONFIG: tuple[tuple[str, str], ...] = (
     ("submodule.recurse", "false"),
     ("status.submoduleSummary", "false"),
     ("merge.autoStash", "false"),
+    ("maintenance.auto", "false"),
+    ("gc.auto", "0"),
 )
 
 # A filter driver (`filter.<name>.clean`/`smudge`/`process`, applied by
