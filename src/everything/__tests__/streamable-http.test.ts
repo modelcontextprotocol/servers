@@ -18,6 +18,13 @@
  * A browser request is served only from a localhost origin: the tests pin
  * that a foreign `Origin` is refused with a 403 and no CORS grant at every
  * route, preflights included, and that a localhost one is served.
+ *
+ * A 2025-era session left idle is evicted (#5558): the "idle sessions" block
+ * serves an app with a five-second idle timeout and moves a fake clock past
+ * it (only `setInterval` and `Date` are faked, so the HTTP round trips stay
+ * real), pinning that the abandoned session is closed, cleaned up and then
+ * answered 404 while one with an open stream is left alone. The timing rules
+ * themselves are in `idle-sessions.test.ts`.
  */
 import type { Server } from "node:http";
 import { once } from "node:events";
@@ -601,6 +608,156 @@ describe("shutdown", () => {
     expect(log).toHaveBeenCalledWith("Server shutdown complete");
     expect(exit).toHaveBeenCalledWith(0);
     await client.close();
+  });
+});
+
+describe("idle sessions (#5558)", () => {
+  const IDLE = 5000;
+  const ping = { jsonrpc: "2.0", id: 7, method: "ping" };
+
+  /** Replace the default app with one whose sessions idle out after `timeout`. */
+  async function serveWithIdleTimeout(timeout: number) {
+    await new Promise((resolve) => http.close(resolve));
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
+    app = createApp({ sessionIdleTimeoutMillis: timeout });
+    http = app.app.listen(0, "127.0.0.1");
+    await once(http, "listening");
+    const address = http.address();
+    if (address === null || typeof address === "string")
+      throw new Error("no port");
+    mcp = `http://127.0.0.1:${address.port}/mcp`;
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("evicts an abandoned session and releases what it held, leaving one with an open stream alone", async () => {
+    await serveWithIdleTimeout(IDLE);
+    const timers = vi.getTimerCount();
+
+    // The abandoned session starts a timer of its own, then goes quiet.
+    const abandoned = await rawInitialize();
+    const toggled = await post(
+      {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: { name: "toggle-simulated-logging", arguments: {} },
+      },
+      abandoned.sessionId,
+    );
+    await toggled.text();
+    expect(vi.getTimerCount()).toBe(timers + 1);
+
+    // The active session keeps its standalone stream open and sends nothing.
+    const active = await rawInitialize();
+    const controller = new AbortController();
+    const stream = await fetch(mcp, {
+      headers: {
+        accept: "text/event-stream",
+        "mcp-session-id": active.sessionId,
+        "mcp-protocol-version": "2025-11-25",
+      },
+      signal: controller.signal,
+    });
+    expect(stream.status).toBe(200);
+    const timersBeforeEviction = vi.getTimerCount();
+
+    vi.advanceTimersByTime(IDLE);
+    await vi.waitFor(() =>
+      expect(log).toHaveBeenCalledWith(
+        `Transport closed for session ${abandoned.sessionId}, removing from transports map`,
+      ),
+    );
+    expect(log).toHaveBeenCalledWith(
+      `Session ${abandoned.sessionId} idle for ${IDLE} ms, closing it`,
+    );
+    // Its cleanup ran: the simulated-logging timer is gone.
+    expect(vi.getTimerCount()).toBe(timersBeforeEviction - 1);
+    const evicted = await post(ping, abandoned.sessionId);
+    expect(evicted.status).toBe(404);
+    expect(await evicted.json()).toEqual({ ...SESSION_NOT_FOUND, id: 7 });
+
+    // The session with the open stream was idle just as long, and is served.
+    const kept = await post(ping, active.sessionId);
+    expect(kept.status).toBe(200);
+    await kept.text();
+    expect(log).not.toHaveBeenCalledWith(
+      `Session ${active.sessionId} idle for ${IDLE} ms, closing it`,
+    );
+
+    // Once its stream closes it is idle too, and is evicted in its turn.
+    controller.abort();
+    await vi.waitFor(() => {
+      vi.advanceTimersByTime(IDLE);
+      expect(log).toHaveBeenCalledWith(
+        `Transport closed for session ${active.sessionId}, removing from transports map`,
+      );
+    });
+    expect((await post(ping, active.sessionId)).status).toBe(404);
+  });
+
+  it("keeps a session that is still being used", async () => {
+    await serveWithIdleTimeout(IDLE);
+    const { sessionId } = await rawInitialize();
+    for (let i = 0; i < 3; i++) {
+      vi.advanceTimersByTime(IDLE - 1000);
+      const response = await post(ping, sessionId);
+      expect(response.status).toBe(200);
+      await response.text();
+    }
+    expect(log).not.toHaveBeenCalledWith(
+      `Session ${sessionId} idle for ${IDLE} ms, closing it`,
+    );
+  });
+
+  it("evicts nothing when the timeout is 0", async () => {
+    await serveWithIdleTimeout(0);
+    expect(vi.getTimerCount()).toBe(0);
+    const { sessionId } = await rawInitialize();
+    vi.advanceTimersByTime(24 * 60 * 60 * 1000);
+    const response = await post(ping, sessionId);
+    expect(response.status).toBe(200);
+    await response.text();
+  });
+
+  it("logs an idle session that fails to close, and evicts it at a later look", async () => {
+    await serveWithIdleTimeout(IDLE);
+    const { sessionId } = await rawInitialize();
+    const failure = new Error("close failed");
+    vi.spyOn(
+      NodeStreamableHTTPServerTransport.prototype,
+      "close",
+    ).mockRejectedValueOnce(failure);
+    vi.advanceTimersByTime(IDLE);
+    await vi.waitFor(() =>
+      expect(log).toHaveBeenCalledWith(
+        `Error closing idle session ${sessionId}:`,
+        failure,
+      ),
+    );
+    // The failed close left the session in place, and still served.
+    const held = await post(ping, sessionId);
+    expect(held.status).toBe(200);
+    await held.text();
+
+    // It is watched again, so the next timeout closes it for real.
+    await vi.waitFor(() => {
+      vi.advanceTimersByTime(IDLE);
+      expect(log).toHaveBeenCalledWith(
+        `Transport closed for session ${sessionId}, removing from transports map`,
+      );
+    });
+    expect((await post(ping, sessionId)).status).toBe(404);
+  });
+
+  it("stops looking for idle sessions on shutdown", async () => {
+    vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    await serveWithIdleTimeout(IDLE);
+    expect(vi.getTimerCount()).toBe(1);
+    await app.shutdown();
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
 
