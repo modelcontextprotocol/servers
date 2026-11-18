@@ -300,7 +300,12 @@ describe("write limits", () => {
   });
 });
 
-describe("write limits over Streamable HTTP", () => {
+// A real endpoint over real sockets, and this file's first client connect. On
+// Windows CI it takes a median of 72 ms and never took 1 s in 1,040 runs of
+// the suite, but it timed out once at Vitest's 5 s default, on a runner that
+// slowed the whole suite fivefold (#5570; `http.test.ts` has the detail). The
+// limit is here to catch a hang, so it sits well clear of a slow runner.
+describe("write limits over Streamable HTTP", { timeout: 30_000 }, () => {
   it("holds the endpoint's write tools to the limits it was given", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const { filePath, cleanup } = await makeTempGraph();

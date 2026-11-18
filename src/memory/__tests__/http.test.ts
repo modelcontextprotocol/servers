@@ -49,7 +49,17 @@ async function connect(
   return client;
 }
 
-describe("Streamable HTTP", () => {
+// These cases drive a real endpoint over real sockets, and the first one also
+// pays the client's first connect. Measured on Windows CI (#5570): a median of
+// 140 ms for the first case and never 1 s in 1,040 runs of the suite, yet one
+// leg in 56 timed out at Vitest's 5 s default, on a runner so slow that the
+// whole suite took five times its median. Nothing in the endpoint or the file
+// lock waited; every test was slow at once, and the ones with the most round
+// trips crossed the limit. The limit is here to catch a hang, so it sits well
+// clear of a slow runner.
+const REAL_ENDPOINT_TIMEOUT_MS = 30_000;
+
+describe("Streamable HTTP", { timeout: REAL_ENDPOINT_TIMEOUT_MS }, () => {
   let running: RunningHttpServer | undefined;
   let graph: Awaited<ReturnType<typeof makeTempGraph>>;
 
