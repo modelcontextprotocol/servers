@@ -375,6 +375,9 @@ def test_opens_a_submodule_as_the_nested_git_does(
     global_config = tmp_path / "global-config"
     global_config.write_text(f"[safe]\n\tdirectory = {root_of(repo).as_posix()}\n")
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(global_config))
+    # The system configuration can trust every directory (GitHub's runner
+    # images set `safe.directory = *` there), which would hide the check.
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
     monkeypatch.setenv("GIT_TEST_ASSUME_DIFFERENT_OWNER", "1")
     with pytest.raises(git.GitCommandError, match="dubious ownership"):
         git.Git(root_of(repo) / "sm").ls_files()
