@@ -79,6 +79,19 @@ streams: HTTP+SSE writes everything to stderr, while Streamable HTTP writes its
 request and session messages to stdout and its listening line (which names
 the bound `host:port`) and errors to stderr.
 
+The other six servers serve Streamable HTTP too (#576), selected with a flag
+rather than an argument, on the same `PORT`, `HOST` and `/mcp` path:
+
+```sh
+node src/memory/dist/index.js --transport streamable-http
+node src/filesystem/dist/index.js --transport streamable-http /tmp/scratch   # directories required over HTTP
+(cd src/time && uv run mcp-server-time --transport streamable-http)
+```
+
+Each one's endpoint is stateless for 2025-era clients (a fresh server per
+request; GET and DELETE answer 405), so nothing the server asks of the client
+mid-session (filesystem's Roots) reaches it over HTTP.
+
 ## Run the local package the way a user would
 
 A user starts these servers with `npx` or `uvx`. Both accept a path in place of

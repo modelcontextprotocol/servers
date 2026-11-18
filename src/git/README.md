@@ -113,7 +113,7 @@ Please note that mcp-server-git is currently in early development. The functiona
    - Inputs:
      - `repo_path` (string): Path to the Git repository.
    - Returns: One line per remote and direction, `<name>\t<url> (fetch)` or `(push)` (a partial clone's fetch line ends with its filter, such as ` [blob:none]`), or `No remotes configured`
-   - A credential embedded in a URL is never returned: the whole userinfo of a URL such as `https://user:token@host/...` or `https://token@host/...` is shown as `<redacted>`. An SSH username (`ssh://git@host/...`) is kept, since it names an account rather than authenticating one; a password after it is redacted. A remote-helper address (`https::https://user:token@host/...`) has its inner URL redacted the same way. scp-style addresses (`git@host:path`) and local paths are shown as configured. A line that cannot be parsed is shown as `<redacted>`, and if a configured remote URL (or `insteadOf` rewrite) contains a newline, which git itself refuses, the tool returns an error instead of a listing.
+   - A credential embedded in a URL is never returned: the whole userinfo of a URL such as `https://user:token@host/...` or `https://token@host/...` is shown as `<redacted>`, and so is every query value (`?private_token=<redacted>`, keeping the parameter names) and a non-empty fragment (`#<redacted>`). An SSH username (`ssh://git@host/...`) is kept, since it names an account rather than authenticating one; a password after it is redacted. A remote-helper address (`https::https://user:token@host/...`) has its inner URL redacted the same way. A URL where a `?` or `#` comes before the userinfo's `@` (`https://host?t=a@b`) cannot be split safely, so it is shown as `https://<redacted>`. A token carried as a path segment (`https://host/token/SECRET/r.git`) is not redacted, since it cannot be told apart from a repository name. scp-style addresses (`git@host:path`) and local paths are shown as configured, and a `file://` URL keeps its `?` and `#` parts, which belong to a local file name. A line that cannot be parsed is shown as `<redacted>`, and if a configured remote URL (or `insteadOf` rewrite) contains a newline, which git itself refuses, the tool returns an error instead of a listing.
 
 ### Protocol versions
 
@@ -178,17 +178,24 @@ A tool call's `repo_path` must be inside that repository, and so must the direct
 - names alternate object stores (`objects/info/alternates` or `objects/info/http-alternates` with any entry), wherever they are. A clone made with `--reference` or `--shared` therefore cannot be used under `--repository`; `git repack -a -d` and then deleting `objects/info/alternates` makes it self-contained.
 - holds a symbolic link (at `objects`, `refs`, `index`, `HEAD` or anywhere else in it) that resolves outside both the allowed repository and that Git directory. A link that stays inside is followed, and what it leads to is checked the same way. A `hooks` directory linked elsewhere is allowed, since no hook runs.
 
+It also refuses a repository whose index (`.git/index`) names a path Git would read outside the working tree: an entry that is absolute, or has an empty, `.`, `..` or `.git` component (on Windows also one with a `:`, or with `\` as a separator), which is what `git add` refuses to write. Git reads an index as it finds it, so a hand-written one could otherwise make `git_diff_unstaged`, `git_diff` and `git_status` show files outside the repository. For the same reason, every Git command the server runs, with or without `--repository`, sets `core.untrackedCache` to `false`: the untracked cache is kept in the index and names the directories `git status` lists, so Git scans the working tree instead.
+
 ### A repository's own programs
 
 A repository's configuration and hooks travel with it (an unpacked archive, a shared folder, a vendored tree), so the server never runs a program they name, with or without `--repository`. Every Git command it runs overrides, through `GIT_CONFIG_COUNT`, the settings that would start one:
 
 - `core.fsmonitor` is `false`, and `core.hooksPath` points at the null device, so no hook runs; `git_commit` also skips the hooks GitPython would run itself (`pre-commit`, `commit-msg`, `post-commit`).
 - Diffs pass `--no-ext-diff` and `--no-textconv`, so `diff.external`, `diff.<driver>.command` and `diff.<driver>.textconv` are ignored.
-- Each filter driver (`filter.<name>.clean`, `smudge`, `process`) and merge driver (`merge.<name>.driver`) that the repository's own configuration defines is emptied: files are staged and checked out unfiltered, and a file a merge driver would have merged is a conflict, which `git_merge` aborts. Drivers from your global or system configuration, such as Git LFS's, keep working.
+- Each filter driver (`filter.<name>.clean`, `smudge`, `process`) and merge driver (`merge.<name>.driver`) that the repository's own configuration defines is emptied, including one with an empty name (`[filter ""]`, selected by `filter=`): files are staged and checked out unfiltered, and a file a merge driver would have merged is a conflict, which `git_merge` aborts. Drivers from your global or system configuration, such as Git LFS's, keep working.
+- The repository's configuration can depend on its working tree (an `[include]` or `[includeIf]` path into it, or a `.git/config` linked to a tracked file), so a tool that writes the working tree (`git_checkout`, `git_merge`, and the `git merge --abort` after a conflict) reads the drivers again before it runs any other Git command, and a driver that the files it wrote define is emptied as well.
 - `commit.gpgSign` and `merge.verifySignatures` are `false`, and `git_merge` passes `--no-gpg-sign` and `--no-verify-signatures`. Each `branch.<name>.mergeOptions` the repository's own configuration sets is emptied, since Git reads it as command-line options. `submodule.recurse` and `merge.autoStash` are `false`, and `core.pager` is `cat`.
+- Git never fetches a missing object from a promisor remote by itself (`GIT_NO_LAZY_FETCH=1`), since that fetch runs the transport program the repository's configuration names (`remote.<name>.uploadpack`, `core.sshCommand`). In a partial clone, or any repository that declares a promisor remote, a tool that needs an object that is not on disk reports it missing. A Git too old to honor the variable (before 2.45.1, other than the maintenance releases 2.39.4, 2.40.2, 2.41.1, 2.42.2, 2.43.4 and 2.44.1 made with it) refuses a repository that declares a promisor remote (`remote.<name>.promisor`, `remote.<name>.partialCloneFilter` or `extensions.partialClone`, with or without a remote name).
+- `maintenance.auto` is `false` and `gc.auto` is `0`, so no tool starts Git's automatic maintenance (which `git merge` runs when it finishes), whose garbage collection would run the commands a repository's `gc.recentObjectsHook` names. Repositories the server works in are not garbage-collected automatically; your own Git commands still do it.
 - `git_status`, `git_diff_unstaged` and `git_diff` pass `--ignore-submodules=dirty`, because looking for changes inside a submodule runs Git under the submodule's own configuration. A submodule whose checked-out commit moved is still reported; changes inside one are not, so run the tool on the submodule's path to see them.
+- `diff.submodule` is `short`, so a diff reports a submodule whose commit moved as a `Subproject commit` line rather than running a nested `git diff` inside it, which would not carry the flags above.
+- `git_add` lets Git check whether a checked-out submodule changed, which runs Git inside it under its own configuration, so the filter and merge drivers each checked-out submodule (and each submodule inside one) defines are emptied too, the same way as the repository's own. `git_checkout` passes `--quiet`, which skips that check.
 
-This needs Git 2.31 or later; with an older Git every tool call fails with an error saying so, rather than run unprotected.
+This needs Git 2.31 or later, and 2.33 or later for a repository with a checked-out submodule (older Git does not pass the overrides to the Git it runs inside one); with an older Git every tool call on such a repository fails with an error saying so, rather than run unprotected.
 
 ### Commit identity
 
@@ -383,6 +390,31 @@ Add to your Zed settings.json:
 }
 ```
 </details>
+
+## Streamable HTTP
+
+The server talks over stdio by default. With `--transport streamable-http` it
+runs on its own as an HTTP service instead, serving one MCP endpoint, `/mcp`,
+to any number of clients of either protocol era:
+
+```sh
+uvx mcp-server-git --transport streamable-http --repository path/to/git/repo
+```
+
+It listens on `127.0.0.1:3001` unless `HOST` and `PORT` say otherwise (for
+example `PORT=8080`); `HOST=0.0.0.0` exposes it to every machine that can reach
+this one, so set it deliberately. Point a client at the URL, such as
+`http://127.0.0.1:3001/mcp`, instead of giving it a command:
+
+```json
+{
+  "mcpServers": {
+    "git": { "type": "http", "url": "http://127.0.0.1:3001/mcp" }
+  }
+}
+```
+
+Every other option works as it does over stdio; `--repository` matters more here, since any client that can reach the port can use the server. A browser page from any origin but localhost is refused with `403`, whatever `HOST` is, to guard against DNS rebinding; on loopback the SDK also checks each request's `Host` header.
 
 ## Debugging
 

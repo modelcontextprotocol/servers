@@ -1,12 +1,20 @@
 // Unit tests for withFileLock, the lock file that orders mutations from
 // separate server processes sharing one graph file (#4797): mutual exclusion,
-// release, breaking an abandoned lock, and giving up on a held one.
+// release, breaking an abandoned lock, and giving up on a held one; and the
+// exit-time release of the locks this process still holds (#5485).
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
-import { spawnSync } from "child_process";
-import { KnowledgeGraphManager, withFileLock } from "../index.js";
+import { spawn, spawnSync } from "child_process";
+import { fileURLToPath, pathToFileURL } from "url";
+import {
+  KnowledgeGraphManager,
+  heldLockPaths,
+  installLockCleanup,
+  releaseHeldLocks,
+  withFileLock,
+} from "../index.js";
 import { makeTempGraph } from "./helpers.js";
 
 const fast = { staleMs: 60_000, timeoutMs: 100, retryMs: 5 };
@@ -174,6 +182,85 @@ describe("withFileLock", () => {
     ).rejects.toThrow("Timed out");
     expect(await fs.readFile(lockPath, "utf-8")).toBe("fresh");
     expect(await fs.readdir(dir)).toEqual(["memory.jsonl.lock"]);
+  });
+
+  // Run hook once, just before the breaker moves the lock it judged stale
+  // aside: after its staleness re-check, before the removal (#5560).
+  function onceBeforeRemoval(hook: () => Promise<void>): void {
+    const realRename = fs.rename;
+    let fired = false;
+    vi.spyOn(fs, "rename").mockImplementation(async (from, to) => {
+      if (!fired && from === lockPath) {
+        fired = true;
+        await hook();
+      }
+      return realRename(from, to);
+    });
+  }
+
+  it("keeps a successor's lock placed between the staleness re-check and the removal (#5560)", async () => {
+    await writeStaleLock();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    let successor: { ino: bigint; mtimeMs: bigint } | undefined;
+    // The stale lock's holder comes back and releases it, and a successor
+    // takes a live lock at the same path, after the breaker's re-check under
+    // its guard and before the breaker removes what it judged.
+    onceBeforeRemoval(async () => {
+      await fs.unlink(lockPath);
+      await fs.writeFile(lockPath, "successor");
+      successor = await fs.stat(lockPath, { bigint: true });
+    });
+    const operation = vi.fn(async () => "ran");
+
+    await expect(withFileLock(lockPath, operation, fast)).rejects.toThrow(
+      "Timed out",
+    );
+
+    // The breaker did not acquire the lock, and broke nothing.
+    expect(operation).not.toHaveBeenCalled();
+    expect(console.error).not.toHaveBeenCalled();
+    // The successor's lock is the same file, untouched: not a copy, and not
+    // refreshed or aged by its trip aside.
+    expect(successor).toBeDefined();
+    expect(await fs.readFile(lockPath, "utf-8")).toBe("successor");
+    const kept = await fs.stat(lockPath, { bigint: true });
+    expect(kept.ino).toBe(successor?.ino);
+    expect(kept.mtimeMs).toBe(successor?.mtimeMs);
+    // Neither the breaking guard nor the aside file is left behind.
+    expect(await fs.readdir(dir)).toEqual(["memory.jsonl.lock"]);
+  });
+
+  it("acquires the lock at once when its holder releases it between the re-check and the removal", async () => {
+    await writeStaleLock();
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    onceBeforeRemoval(() => fs.unlink(lockPath));
+
+    expect(await withFileLock(lockPath, async () => "ran", fast)).toBe("ran");
+    // Nothing was broken: the lock was gone before the breaker could take it.
+    expect(error).not.toHaveBeenCalled();
+    expect(await fs.readdir(dir)).toEqual([]);
+  });
+
+  it("removes the stale lock itself, leaving no aside file", async () => {
+    await writeStaleLock();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const unlink = vi.spyOn(fs, "unlink");
+
+    await withFileLock(
+      lockPath,
+      async () => {
+        // The lock path was never unlinked while the stale lock stood there:
+        // the stale file was moved aside and deleted under its own name.
+        const removed = unlink.mock.calls.map(([file]) => String(file));
+        expect(removed).not.toContain(lockPath);
+        expect(
+          removed.filter((file) => /\.lock\.[0-9a-f]{16}\.stale$/.test(file)),
+        ).toHaveLength(1);
+        expect(await fs.readdir(dir)).toEqual(["memory.jsonl.lock"]);
+      },
+      fast,
+    );
+    expect(await fs.readdir(dir)).toEqual([]);
   });
 
   it("leaves a stale lock to the waiter already breaking it", async () => {
@@ -400,4 +487,215 @@ describe("withFileLock", () => {
     expect(graph.entities.map((e) => e.name).sort()).toEqual([...names].sort());
     expect(await fs.readdir(dir)).toEqual(["memory.jsonl"]);
   });
+});
+
+describe("releasing held locks on exit (#5485)", () => {
+  let dir: string;
+  let cleanup: () => Promise<void>;
+
+  beforeEach(async () => {
+    ({ dir, cleanup } = await makeTempGraph());
+  });
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    await cleanup();
+  });
+
+  async function exists(file: string): Promise<boolean> {
+    return fs.access(file).then(
+      () => true,
+      () => false,
+    );
+  }
+
+  it("tracks a lock only while it is held", async () => {
+    const lockPath = path.join(dir, "memory.jsonl.lock");
+    await withFileLock(lockPath, async () => {
+      expect(heldLockPaths()).toEqual([lockPath]);
+    });
+    expect(heldLockPaths()).toEqual([]);
+  });
+
+  it("removes each lock still held, and only those still ours", async () => {
+    const ours = path.join(dir, "ours.lock");
+    const taken = path.join(dir, "taken.lock");
+    const gone = path.join(dir, "gone.lock");
+    await withFileLock(ours, () =>
+      withFileLock(taken, () =>
+        withFileLock(gone, async () => {
+          // Another process broke and re-took one lock, and another vanished.
+          await fs.writeFile(taken, "someone else");
+          await fs.unlink(gone);
+
+          releaseHeldLocks();
+
+          expect(heldLockPaths()).toEqual([]);
+          expect(await exists(ours)).toBe(false);
+          expect(await fs.readFile(taken, "utf-8")).toBe("someone else");
+        }),
+      ),
+    );
+    expect(await fs.readFile(taken, "utf-8")).toBe("someone else");
+  });
+
+  it("removes a lock whose token was still being written at exit", async () => {
+    const lockPath = path.join(dir, "memory.jsonl.lock");
+    const realOpen = fs.open;
+    let finishWrite!: () => void;
+    let writing!: () => void;
+    const writeStarted = new Promise<void>((resolve) => (writing = resolve));
+    vi.spyOn(fs, "open").mockImplementationOnce(async (...args) => {
+      const handle = await realOpen(...args);
+      const realWrite = handle.writeFile.bind(handle);
+      // Hold the token write open, with nothing written yet.
+      handle.writeFile = async (data) => {
+        writing();
+        await new Promise<void>((resolve) => (finishWrite = resolve));
+        return realWrite(data);
+      };
+      return handle;
+    });
+
+    const held = withFileLock(lockPath, async () => "ran");
+    await writeStarted;
+    expect(await fs.readFile(lockPath, "utf-8")).toBe("");
+
+    releaseHeldLocks();
+
+    expect(await exists(lockPath)).toBe(false);
+    finishWrite();
+    expect(await held).toBe("ran");
+  });
+
+  it("leaves another writer's empty replacement of a written lock in place", async () => {
+    const lockPath = path.join(dir, "memory.jsonl.lock");
+    await withFileLock(lockPath, async () => {
+      // Our lock was broken as stale, and a new writer has created its own
+      // but not yet written its token.
+      await fs.writeFile(lockPath, "");
+
+      releaseHeldLocks();
+
+      expect(await exists(lockPath)).toBe(true);
+    });
+  });
+
+  it("still tracks a lock while its release is in progress", async () => {
+    const lockPath = path.join(dir, "memory.jsonl.lock");
+    const realUnlink = fs.unlink;
+    let trackedDuringRelease: string[] = [];
+    await withFileLock(lockPath, async () => {
+      // The release's removal of the lock is the next unlink.
+      vi.spyOn(fs, "unlink").mockImplementationOnce(async (file) => {
+        trackedDuringRelease = heldLockPaths();
+        return realUnlink(file);
+      });
+    });
+    expect(trackedDuringRelease).toEqual([lockPath]);
+    expect(heldLockPaths()).toEqual([]);
+    expect(await exists(lockPath)).toBe(false);
+  });
+
+  it("keeps tracking a lock the same process re-took after breaking it", async () => {
+    const lockPath = path.join(dir, "memory.jsonl.lock");
+    let releaseFirst!: () => void;
+    const firstHolds = new Promise<void>((resolve) => (releaseFirst = resolve));
+    let firstStarted!: () => void;
+    const started = new Promise<void>((resolve) => (firstStarted = resolve));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const first = withFileLock(
+      lockPath,
+      async () => {
+        firstStarted();
+        await firstHolds;
+      },
+      { staleMs: 60_000 },
+    );
+    await started;
+    // Age the first holder's lock past a short staleMs, so a second holder in
+    // this process breaks it and takes it over.
+    const old = new Date(Date.now() - 10_000);
+    await fs.utimes(lockPath, old, old);
+    await withFileLock(
+      lockPath,
+      async () => {
+        releaseFirst();
+        await first;
+        // The first holder's release left the second's lock, and its entry.
+        expect(heldLockPaths()).toEqual([lockPath]);
+        expect(await exists(lockPath)).toBe(true);
+      },
+      { staleMs: 1_000, timeoutMs: 1_000, retryMs: 5 },
+    );
+    expect(heldLockPaths()).toEqual([]);
+  });
+
+  it("installs an exit hook and SIGINT and SIGTERM handlers, once", () => {
+    const handlers = new Map<string | symbol, () => void>();
+    const on = vi.spyOn(process, "on").mockImplementation((event, listener) => {
+      handlers.set(event, listener as () => void);
+      return process;
+    });
+    const exit = vi
+      .spyOn(process, "exit")
+      .mockImplementation((() => undefined) as typeof process.exit);
+
+    installLockCleanup();
+    installLockCleanup();
+
+    expect(on).toHaveBeenCalledTimes(3);
+    expect(handlers.get("exit")).toBe(releaseHeldLocks);
+    handlers.get("SIGINT")?.();
+    expect(exit).toHaveBeenLastCalledWith(130);
+    handlers.get("SIGTERM")?.();
+    expect(exit).toHaveBeenLastCalledWith(143);
+  });
+
+  // A real signal, sent to a real process holding a lock mid-operation.
+  // Windows has no SIGTERM to deliver: process.kill() there ends the process
+  // outright, so no handler can run.
+  it.skipIf(process.platform === "win32")(
+    "removes the lock when SIGTERM stops a process mid-mutation",
+    async () => {
+      const lockPath = path.join(dir, "memory.jsonl.lock");
+      const distIndex = pathToFileURL(
+        path.join(
+          path.dirname(fileURLToPath(import.meta.url)),
+          "..",
+          "dist",
+          "index.js",
+        ),
+      ).href;
+      const script = `
+        const { installLockCleanup, withFileLock } = await import(${JSON.stringify(distIndex)});
+        installLockCleanup();
+        await withFileLock(${JSON.stringify(lockPath)}, () => {
+          console.log("held");
+          return new Promise(() => setInterval(() => {}, 1000));
+        });
+      `;
+      const child = spawn(
+        process.execPath,
+        ["--input-type=module", "-e", script],
+        { stdio: ["ignore", "pipe", "inherit"] },
+      );
+      const exited = new Promise<number | null>((resolve) =>
+        child.on("exit", (code) => resolve(code)),
+      );
+      await new Promise<void>((resolve, reject) => {
+        child.stdout.on("data", (data: Buffer) => {
+          if (data.toString().includes("held")) resolve();
+        });
+        child.on("exit", () => reject(new Error("exited before holding")));
+      });
+      expect(await exists(lockPath)).toBe(true);
+
+      child.kill("SIGTERM");
+
+      expect(await exited).toBe(143);
+      expect(await exists(lockPath)).toBe(false);
+    },
+  );
 });

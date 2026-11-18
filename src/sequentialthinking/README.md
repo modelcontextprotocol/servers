@@ -134,7 +134,7 @@ On Windows, use `cmd /c` to launch `npx`:
 
 To disable logging of thought information set env var: `DISABLE_THOUGHT_LOGGING` to `true`.
 
-Each thought is logged to stderr as a box, one row per line of the thought. The box is at most 100 characters wide, with longer lines (and a long branch ID in the header) wrapped, and draws at most 1000 rows of thought text; past that it ends with a row saying how many lines it left out. Only the log is shortened: the server keeps the whole thought in its history, and the tool result is unchanged.
+Each thought is logged to stderr as a box, one row per line of the thought. The box is at most 100 characters wide, with longer lines (and a long branch ID in the header) wrapped, and draws at most 1000 rows of text, header and thought together; past that it ends with a row saying how many lines it left out. A line break in a branch ID is shown in the header as `\r` or `\n`, and a header too long for those rows (a very long branch ID) is cut, with a row saying how many characters it left out. Only the log is shortened: the server keeps the whole thought in its history, and the tool result is unchanged.
 
 To bound memory use, the server retains at most `MAX_THOUGHT_HISTORY` thoughts per connection (a positive integer; default `1000`). Past the cap the oldest thought is dropped, from its branch too, so `thoughtHistoryLength` in the result stops at the cap and a branch whose thoughts have all been dropped is no longer listed in `branches`.
 
@@ -217,6 +217,33 @@ Run the following:
 ```bash
 codex mcp add sequential-thinking npx -y @modelcontextprotocol/server-sequential-thinking
 ```
+
+## Streamable HTTP
+
+The server talks over stdio by default. With `--transport streamable-http` it
+runs on its own as an HTTP service instead, serving one MCP endpoint, `/mcp`,
+to any number of clients of either protocol era:
+
+```sh
+npx -y @modelcontextprotocol/server-sequential-thinking --transport streamable-http
+```
+
+It listens on `127.0.0.1:3001` unless `HOST` and `PORT` say otherwise (for
+example `PORT=8080`); `HOST=0.0.0.0` exposes it to every machine that can reach
+this one, so set it deliberately. A request from a browser page on any
+origin but localhost is refused with `403`, and the endpoint sends no CORS
+headers, so it serves clients that are not browser pages. Point a client at the URL, such as
+`http://127.0.0.1:3001/mcp`, instead of giving it a command:
+
+```json
+{
+  "mcpServers": {
+    "sequentialthinking": { "type": "http", "url": "http://127.0.0.1:3001/mcp" }
+  }
+}
+```
+
+Over HTTP each request is served by a fresh server, and a 2025-era client gets no session (GET and DELETE on `/mcp` answer `405`), so the server cannot send it requests or notifications between its own requests. So the thought history and branches, which over stdio belong to one connection, **belong to the server process over HTTP and are shared by every client it serves**: run one process per client when histories must stay apart.
 
 ## Building
 

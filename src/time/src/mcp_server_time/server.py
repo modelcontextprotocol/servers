@@ -30,6 +30,8 @@ from mcp.types import INVALID_PARAMS, ToolAnnotations
 from pydantic import BaseModel, Field
 from tzlocal import get_localzone_name  # ← returns "Europe/Paris", etc.
 
+from .transport import run
+
 # The version this server reports in serverInfo, read from the installed
 # distribution's metadata (pyproject.toml) so it cannot drift from the
 # published version (#360). Without it the SDK reports its own `mcp` version.
@@ -385,7 +387,7 @@ def create_server(local_tz: str) -> MCPServer:
     return server
 
 
-async def serve(local_timezone: str | None = None) -> None:
+async def serve(local_timezone: str | None = None, transport: str = "stdio") -> None:
     if local_timezone:
         # Fail before the transport opens, with one line naming the bad value
         # rather than a traceback. zoneinfo raises a different type per kind of
@@ -399,9 +401,4 @@ async def serve(local_timezone: str | None = None) -> None:
                 "not a known IANA timezone name"
             )
     server = create_server(str(get_local_tz(local_timezone)))
-    # Both eras (#4853): the SDK's dual-era loop lets the client's first
-    # request decide. `initialize` gets the 2025-11-25 handshake;
-    # `server/discover` or a request carrying a 2026-07-28 envelope gets the
-    # modern, sessionless era, with its required result fields (resultType,
-    # ttlMs, cacheScope) filled in by the SDK.
-    await server.run_stdio_async()
+    await run(server, transport)

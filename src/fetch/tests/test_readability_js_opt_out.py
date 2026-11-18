@@ -79,7 +79,7 @@ def test_flag_is_passed_to_serve(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(mcp_server_fetch, "serve", serve)
     monkeypatch.setattr(sys, "argv", ["mcp-server-fetch", "--no-readability-js"])
     mcp_server_fetch.main()
-    serve.assert_awaited_once_with(None, False, None, False, None, False)
+    serve.assert_awaited_once_with(None, False, None, False, None, False, "stdio")
 
 
 def test_flag_is_in_help(

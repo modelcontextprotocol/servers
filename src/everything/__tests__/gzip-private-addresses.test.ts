@@ -33,6 +33,9 @@ vi.mock("node:dns/promises", async (importOriginal) => {
     "public.example": { address: "93.184.215.14", family: 4 },
     "anycast.example": { address: "192.0.0.9", family: 4 }, // inside 192.0.0.0/24
     "anycast6.example": { address: "2001:3::1", family: 6 }, // inside 2001::/23
+    // DNS64 synthesizes these: NAT64 of 169.254.169.254, and of 93.184.215.14
+    "nat64-metadata.example": { address: "64:ff9b::a9fe:a9fe", family: 6 },
+    "nat64-public.example": { address: "64:ff9b::5db8:d70e", family: 6 },
   };
   return {
     ...actual,
@@ -148,6 +151,31 @@ describe("gzip-file-as-resource private addresses (#5130)", () => {
   ])("refuses an IPv6 %s address", async (_kind, address) => {
     const url = `http://[${address}]/latest/meta-data/`;
     expect(textOf(await gzip(url))).toBe(refusal(url, address, address));
+  });
+
+  it.each([
+    ["NAT64 of a link-local IPv4", "64:ff9b::a9fe:a9fe"],
+    ["NAT64 of a loopback IPv4", "64:ff9b::7f00:1"],
+    ["NAT64 of an RFC 1918 IPv4", "64:ff9b::a00:1"],
+    ["IPv4-compatible loopback", "::7f00:1"],
+    ["site-local", "fec0::1"],
+    ["reserved (outside 2000::/3)", "4000::1"],
+  ])("refuses an IPv6 %s address", async (_kind, address) => {
+    const url = `http://[${address}]/latest/meta-data/`;
+    expect(textOf(await gzip(url))).toBe(refusal(url, address, address));
+  });
+
+  it("refuses a name whose DNS64 answer wraps a link-local IPv4", async () => {
+    const url = "http://nat64-metadata.example/latest/meta-data/";
+    expect(textOf(await gzip(url))).toBe(
+      refusal(url, "nat64-metadata.example", "64:ff9b::a9fe:a9fe"),
+    );
+  });
+
+  it("fetches from a NAT64 address that wraps a public IPv4", async () => {
+    expect(await gzip("http://nat64-public.example/file")).toMatchObject({
+      type: "resource_link",
+    });
   });
 
   it("fetches from a public address", async () => {

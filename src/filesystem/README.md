@@ -125,8 +125,13 @@ The server's directory access control follows this flow:
        /Users/username/project
      ```
    - Server requires at least ONE allowed directory to operate
+   - A path is checked and then used, so on macOS and Linux each write, each read of a file's content or metadata, and each directory listing (`list_directory`, `list_directory_with_sizes`, `directory_tree`, `search_files`) acts from inside the directory that was checked. If a directory on the path is replaced in between, the call is refused with "Access denied - a directory on the path changed during the operation" rather than following the replacement. A listing therefore needs to enter the directory it lists: a directory the server can read but not enter (read permission without execute) is refused with `EACCES`, as an unreadable one is
    - On Windows, a path naming an NTFS alternate data stream (`file.txt:stream`, `file.txt::$DATA`) is refused with "Access denied - NTFS alternate data stream paths are not supported", even inside an allowed directory: a colon is accepted only as a drive letter's (`C:\`, `\\?\C:\`). A stream holds data that no directory listing or diff of the file shows. On macOS and Linux a colon is an ordinary file-name character and is not refused
    - On Windows, a path any of whose components is a reserved device name (`CON`, `PRN`, `AUX`, `NUL`, `COM1`-`COM9`, `LPT1`-`LPT9`, in any case and with or without an extension, such as `NUL.txt`) is refused with "Access denied - Windows reserved device names ... are not supported", and one any of whose components ends in a dot or a space (`file.txt.`, `dir \file.txt`) with "Access denied - Windows path components ending in a dot or a space are not supported". Windows opens the device rather than a file in the directory, and strips trailing dots and spaces so the name refers to a different file. `.` and `..` are not affected. On macOS and Linux these are ordinary file names and are not refused
+   - **Limit on Windows: a parent directory swapped during an operation.** A path is checked and then used, and a directory on it could be replaced in between. On Linux and macOS the server anchors every write, and every read of a file's content or metadata, to the directory it validated, so a directory replaced with a symlink after the check cannot redirect the operation. **On Windows it cannot do that, and the operation is not protected**: a second local process that can already write inside an allowed directory can replace a parent directory with a junction (or a directory symlink) between the server's check and its open, and so redirect a read or a write outside the allowed directories. The server still checks the final component there (a write refuses a symlink or junction at the file's own name, and the file opened must be the one the directory holds at that name afterwards), which narrows the window without closing it
+     - **What it takes**: a concurrent local process with write access inside an allowed directory, winning a race against the server. No tool of this server creates a junction or a symlink, so it cannot be set up through the server alone
+     - **Guidance**: on Windows, do not allow a directory that untrusted local processes or users can write to
+     - **Why it is not fixed**: closing the window needs opens relative to a directory handle, which Node does not expose, so it would take native code, and that is out of scope for a reference server ([#5260](https://github.com/modelcontextprotocol/servers/issues/5260)). It may be revisited when Node ships a stable built-in FFI under this package's `engines` floor
 
 **Note**: The server will only allow operations within directories specified either via `args` or, for a 2025-era client, via Roots.
 
@@ -401,6 +406,33 @@ The mapping for filesystem tools is:
 ## Requirements
 
 Node.js 24 or later, when the server runs through `npx` or from source.
+
+## Streamable HTTP
+
+The server talks over stdio by default. With `--transport streamable-http` it
+runs on its own as an HTTP service instead, serving one MCP endpoint, `/mcp`,
+to any number of clients of either protocol era:
+
+```sh
+npx -y @modelcontextprotocol/server-filesystem --transport streamable-http /Users/username/Desktop
+```
+
+It listens on `127.0.0.1:3001` unless `HOST` and `PORT` say otherwise (for
+example `PORT=8080`); `HOST=0.0.0.0` exposes it to every machine that can reach
+this one, so set it deliberately. A request from a browser page on any
+origin but localhost is refused with `403`, and the endpoint sends no CORS
+headers, so it serves clients that are not browser pages. Point a client at the URL, such as
+`http://127.0.0.1:3001/mcp`, instead of giving it a command:
+
+```json
+{
+  "mcpServers": {
+    "filesystem": { "type": "http", "url": "http://127.0.0.1:3001/mcp" }
+  }
+}
+```
+
+Over HTTP each request is served by a fresh server, and a 2025-era client gets no session (GET and DELETE on `/mcp` answer `405`), so the server cannot send it requests or notifications between its own requests. That is why **over HTTP the allowed directories must be given on the command line**: the server cannot ask a client for its [Roots](#method-2-mcp-roots-deprecated-2025-era-clients-only), on either protocol era, and it refuses to start without a directory. `--read-only`, `--read-only-dir` and the other options work as they do over stdio; `--confine-roots` has nothing to confine.
 
 ## Usage with Claude Desktop
 

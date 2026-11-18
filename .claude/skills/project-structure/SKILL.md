@@ -29,9 +29,9 @@ includes the tests) and `vitest.config.ts`.
 | Server | Layout | Where its features are registered |
 | --- | --- | --- |
 | `everything` | `index.ts` picks a transport from `argv`; `server/` holds the factory; `tools/`, `resources/`, `prompts/` hold one file per feature plus an `index.ts`; `transports/` holds one file per transport; `version.ts` reads the package version; `docs/` is shipped | Each feature file exports a `register…` function, wired into its area's `index.ts` (`registerTools`, `registerResources`, `registerPrompts`), which `server/index.ts` calls from `createServer()` |
-| `filesystem` | `index.ts` is the stdio entry point (argv → allowed directories, `main()`); `server.ts` exports `createServer(allowedDirectories)`; `lib.ts` holds the file operations and path validation, with the allow-list passed in rather than held globally; `path-utils.ts`, `path-validation.ts` and `roots-utils.ts` are focused helpers, and `pinned-directory.ts` runs the write operations inside their verified directory; `version.ts` reads the package version | Inline in `createServer()` in `server.ts`, with `server.registerTool(...)` |
-| `memory` | `index.ts` holds the `KnowledgeGraphManager`, `createServer(memoryFilePath)` and the stdio `main()`; `version.ts` reads the package version | Inline in `createServer()`; the resource and its subscription handlers are exported `register…` functions in the same file |
-| `sequentialthinking` | `index.ts` holds `createServer()` and the stdio `main()`; `lib.ts` holds `SequentialThinkingServer`, the logic; `version.ts` reads the package version | Inline in `createServer()` |
+| `filesystem` | `index.ts` is the entry point (argv → transport and allowed directories, `main()`); `http.ts` serves the factory over Streamable HTTP; `server.ts` exports `createServer(allowedDirectories)`; `lib.ts` holds the file operations and path validation, with the allow-list passed in rather than held globally; `path-utils.ts`, `path-validation.ts` and `roots-utils.ts` are focused helpers, and `pinned-directory.ts` runs the write operations inside their verified directory; `version.ts` reads the package version | Inline in `createServer()` in `server.ts`, with `server.registerTool(...)` |
+| `memory` | `index.ts` holds the `KnowledgeGraphManager`, `createServer(memoryFilePath)`, the stdio `main()` and `run()`, which picks the transport; `http.ts` serves the factory over Streamable HTTP; `version.ts` reads the package version | Inline in `createServer()`; the resource and its subscription handlers are exported `register…` functions in the same file |
+| `sequentialthinking` | `index.ts` holds `createServer()`, the stdio `main()` and `run()`, which picks the transport; `http.ts` serves the factory over Streamable HTTP; `lib.ts` holds `SequentialThinkingServer`, the logic; `version.ts` reads the package version | Inline in `createServer()` |
 
 Three things about `everything` that the table cannot hold:
 
@@ -69,6 +69,7 @@ src/<server>/
 ├── src/mcp_server_<name>/
 │   ├── __init__.py           main(): the command-line flags, then asyncio.run(serve(...))
 │   ├── __main__.py           python -m mcp_server_<name>
+│   ├── transport.py          --transport: stdio, or Streamable HTTP on $HOST:$PORT
 │   └── server.py             everything else
 └── tests/                    pytest suite, driving serve() in-process
 ```

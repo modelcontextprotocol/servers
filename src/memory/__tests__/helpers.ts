@@ -10,6 +10,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/server";
 import type { McpServer, CallToolResult } from "@modelcontextprotocol/server";
 import { Client } from "@modelcontextprotocol/client";
 import { createServer } from "../index.js";
+import type { GraphLimits } from "../index.js";
 
 export interface Connection {
   client: Client;
@@ -18,9 +19,13 @@ export interface Connection {
   close: () => Promise<void>;
 }
 
-// Connect a fresh client to a fresh server over the graph file at filePath.
-export async function connect(filePath: string): Promise<Connection> {
-  const server = createServer(filePath);
+// Connect a fresh client to a fresh server over the graph file at filePath,
+// with the write limits given (none by default).
+export async function connect(
+  filePath: string,
+  limits: GraphLimits = {},
+): Promise<Connection> {
+  const server = createServer(filePath, "legacy", undefined, limits);
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "memory-test-client", version: "0.0.0" });

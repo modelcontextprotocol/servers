@@ -122,7 +122,7 @@ def test_main_sets_log_level_and_serves_repository(
 ):
     served: list[Path | None] = []
 
-    async def fake_serve(repository: Path | None) -> None:
+    async def fake_serve(repository: Path | None, transport: str = "stdio") -> None:
         served.append(repository)
 
     with (
@@ -139,7 +139,7 @@ def test_main_sets_log_level_and_serves_repository(
 def test_main_short_repository_flag(tmp_path: Path):
     served: list[Path | None] = []
 
-    async def fake_serve(repository: Path | None) -> None:
+    async def fake_serve(repository: Path | None, transport: str = "stdio") -> None:
         served.append(repository)
 
     with (
@@ -154,7 +154,7 @@ def test_main_short_repository_flag(tmp_path: Path):
 def test_main_without_repository_serves_none():
     served: list[Path | None] = []
 
-    async def fake_serve(repository: Path | None) -> None:
+    async def fake_serve(repository: Path | None, transport: str = "stdio") -> None:
         served.append(repository)
 
     with (

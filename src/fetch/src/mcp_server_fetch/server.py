@@ -3,7 +3,9 @@
 # beside the handlers because every request path (tool, prompt and robots.txt
 # check) must go through it: the private-address guard on each request and
 # redirect hop, robots.txt for autonomous fetches, the cap on how much of a
-# response body is read (#5370), and proxy normalization.
+# response body is read (#5370), and proxy normalization. The guard's check at
+# connect time, which closes the gap between checking a name and connecting to
+# it, is in `pinning.py` (#5557).
 #
 # Built on the MCP Python SDK's high-level `MCPServer` (#5174), as the example
 # to follow: the tool and the prompt are plain decorated functions, whose type
@@ -47,6 +49,7 @@ from protego import Protego
 from pydantic import AnyUrl, Field, TypeAdapter, ValidationError
 
 from .allowlist import normalize_allowed_hosts, refuse_unlisted_destination
+from .pinning import pin_direct_connections
 from .readability_js import extract_article
 from .timeout import (
     DEFAULT_TIMEOUT_MS,
@@ -55,6 +58,7 @@ from .timeout import (
     timeout_ms_from_env,
 )
 from .title import with_page_title
+from .transport import run
 
 # The version this server reports in serverInfo, read from the installed
 # distribution's metadata (pyproject.toml) so it cannot drift from the
@@ -201,6 +205,24 @@ async def _refuse_private_destination(request: httpx.Request) -> None:
         if not _is_public_address(address):
             raise ToolError(
                 f"Refused to fetch {request.url}: {host} resolves to {address}, "
+                "which is not a public address. Start the server with "
+                "--allow-private-ips to allow private, loopback and link-local addresses."
+            )
+
+
+def _refuse_private_addresses(host: str, addresses: Sequence[str]) -> None:
+    """The same refusal at connect time, for the addresses about to be used.
+
+    `pin_direct_connections` calls this with what ``host`` resolved to when
+    the connection is opened, and connects only to those addresses, so the
+    address that was checked is the address that is reached (#5557). The hook
+    above still runs first: it names the URL, and it is the only check a
+    proxied request gets.
+    """
+    for address in addresses:
+        if not _is_public_address(address):
+            raise ToolError(
+                f"Refused to connect to {host}: it resolves to {address}, "
                 "which is not a public address. Start the server with "
                 "--allow-private-ips to allow private, loopback and link-local addresses."
             )
@@ -405,21 +427,32 @@ def normalize_proxy_env() -> None:
             os.environ[name] = normalize_proxy_url(value)
 
 
-def make_client(proxy_url: str | None) -> httpx.AsyncClient:
+def make_client(
+    proxy_url: str | None, allow_private_ips: bool = False
+) -> httpx.AsyncClient:
     """Build the httpx client, turning a bad proxy setting into a ``ToolError``.
 
     httpx validates the proxy (``--proxy-url`` or the proxy environment
     variables) when the client is constructed, before any request, so this
     failure is not an ``HTTPError``.
+
+    Unless ``allow_private_ips``, the client's direct connections are pinned
+    to addresses the private-address guard checked (see `pinning.py`).
     """
     try:
-        return httpx.AsyncClient(proxy=proxy_url)
+        client = httpx.AsyncClient(proxy=proxy_url)
     except (ValueError, ImportError) as e:
         raise ToolError(
             f"Failed to set up the HTTP client, check the proxy "
             f"configuration (--proxy-url or the HTTP_PROXY, HTTPS_PROXY and "
             f"ALL_PROXY environment variables): {e}"
         )
+    if not allow_private_ips:
+        # The lambda looks `_resolve_host` up on each call, as the hook does.
+        pin_direct_connections(
+            client, lambda host: _resolve_host(host), _refuse_private_addresses
+        )
+    return client
 
 
 # The most body bytes the server reads from one response (#5370). A body is
@@ -740,7 +773,7 @@ async def check_may_autonomously_fetch_url(
 
     robot_txt_url = get_robots_txt_url(url)
 
-    async with make_client(proxy_url) as client:
+    async with make_client(proxy_url, allow_private_ips) as client:
         hooks: list[Callable[[httpx.Request], Awaitable[None]]] = []
         if allowed_hosts:
             hooks.append(refuse_unlisted_destination(allowed_hosts))
@@ -842,7 +875,7 @@ async def fetch_url(
             str(request.url), user_agent, proxy_url, allow_private_ips, allowed_hosts
         )
 
-    async with make_client(proxy_url) as client:
+    async with make_client(proxy_url, allow_private_ips) as client:
         hooks: list[Callable[[httpx.Request], Awaitable[None]]] = []
         if allowed_hosts:
             hooks.append(refuse_unlisted_destination(allowed_hosts))
@@ -1115,8 +1148,9 @@ async def serve(
     allow_private_ips: bool = False,
     allowed_hosts: Sequence[str] | None = None,
     use_readability_js: bool = True,
+    transport: str = "stdio",
 ) -> None:
-    """Run the fetch MCP server over stdio.
+    """Run the fetch MCP server over stdio, or over Streamable HTTP.
 
     Args:
         custom_user_agent: Optional custom User-Agent string to use for requests
@@ -1131,6 +1165,7 @@ async def serve(
         use_readability_js: Extract HTML with Readability.js under Node.js
             when Node.js is on PATH (falling back to the pure-Python extractor
             when it cannot run); False always uses the pure-Python extractor
+        transport: ``stdio``, or ``streamable-http`` to listen on $HOST:$PORT
     """
     server = create_server(
         custom_user_agent,
@@ -1140,9 +1175,4 @@ async def serve(
         allowed_hosts,
         use_readability_js,
     )
-    # Both eras (#4853): the SDK's dual-era loop lets the client's first
-    # request decide. `initialize` gets the 2025-11-25 handshake;
-    # `server/discover` or a request carrying a 2026-07-28 envelope gets the
-    # modern, sessionless era, with its required result fields (resultType,
-    # ttlMs, cacheScope) filled in by the SDK.
-    await server.run_stdio_async()
+    await run(server, transport)

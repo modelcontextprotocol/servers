@@ -1,10 +1,12 @@
 #!/usr/bin/env node
-// The stdio entry point of the filesystem server (the package's bin). It
+// The entry point of the filesystem server (the package's bin). It
 // parses the command line (its options, such as --read-only or --read-only-dir,
 // and the allowed directories), resolves the allowed directories and serves
 // createServer() on stdio through the SDK's serveStdio entry, which answers
 // 2026-07-28 clients (server/discover, no handshake) and 2025-era clients
-// (initialize, then Roots) from the same factory (#4852). Everything runs inside
+// (initialize, then Roots) from the same factory (#4852), or, with
+// --transport streamable-http, over Streamable HTTP (http.ts, #576), where
+// Roots cannot reach the server and the directories must be given here. Everything runs inside
 // main(), and main() runs only when this file is the process entry point, so
 // importing the module (as the tests do) starts nothing (#4854). main() takes
 // the argv and the stdio streams as parameters so the tests can drive the real
@@ -26,6 +28,11 @@ import {
   realpathWithRetry,
 } from "./path-utils.js";
 import { createServer } from "./server.js";
+import {
+  httpEndpoint,
+  startHttpServer,
+  type RunningHttpServer,
+} from "./http.js";
 import { describeAllowedDirectories } from "./allowed-directories.js";
 import {
   describeReadOnlyDirectories,
@@ -114,6 +121,22 @@ export interface ParsedArgs {
    * listed twice.
    */
   readOnlyDirectories: string[];
+  /** `--transport <name>`: how the server is reached (#576). */
+  transport: TransportName;
+}
+
+/** The transports `--transport` can name. */
+export const TRANSPORTS = ["stdio", "streamable-http"] as const;
+export type TransportName = (typeof TRANSPORTS)[number];
+
+/** `value` as a transport name; throws on any other value. */
+function transportName(value: string): TransportName {
+  if (!(TRANSPORTS as readonly string[]).includes(value)) {
+    throw new Error(
+      `Unknown transport ${JSON.stringify(value)}: expected stdio or streamable-http`,
+    );
+  }
+  return value as TransportName;
 }
 
 /**
@@ -122,7 +145,8 @@ export interface ParsedArgs {
  * option's can still be given after it. Any other argument is a directory, as
  * every argument was before options existed. `--read-only-dir` takes the next
  * argument as its directory, whatever it looks like, and throws when there is
- * none.
+ * none. `--transport` takes the next argument (or `--transport=<name>`) and
+ * throws when it is missing or names no transport.
  */
 export function parseArgs(args: string[]): ParsedArgs {
   const parsed: ParsedArgs = {
@@ -130,6 +154,7 @@ export function parseArgs(args: string[]): ParsedArgs {
     readOnly: false,
     confineRoots: false,
     readOnlyDirectories: [],
+    transport: "stdio",
   };
   let options = true;
   for (let index = 0; index < args.length; index++) {
@@ -146,6 +171,14 @@ export function parseArgs(args: string[]): ParsedArgs {
         throw new Error("--read-only-dir needs a directory after it");
       }
       parsed.readOnlyDirectories.push(args[index]);
+    } else if (options && arg === "--transport") {
+      index++;
+      if (index >= args.length) {
+        throw new Error("--transport needs a value: stdio or streamable-http");
+      }
+      parsed.transport = transportName(args[index]);
+    } else if (options && arg.startsWith("--transport=")) {
+      parsed.transport = transportName(arg.slice("--transport=".length));
     } else {
       parsed.directories.push(arg);
     }
@@ -153,22 +186,64 @@ export function parseArgs(args: string[]): ParsedArgs {
   return parsed;
 }
 
+/** Why Streamable HTTP will not start without command-line directories. */
+export const HTTP_NEEDS_DIRECTORIES_ERROR =
+  "Streamable HTTP needs the allowed directories on the command line: over HTTP the server cannot ask a client for its Roots";
+
 /**
- * Serve the server over stdio with the allowed directories in `args`. The
- * first message the client sends picks the connection's protocol era, and the
- * factory builds the server for it. A transport error, including one that
- * stops the transport from starting, is reported on stderr.
+ * Serve the server with the allowed directories in `args`: over stdio by
+ * default, where the first message the client sends picks the connection's
+ * protocol era and the factory builds the server for it, or over Streamable
+ * HTTP on `HOST`:`PORT` with `--transport streamable-http`, which needs at
+ * least one usable directory. A transport error, including one that stops the
+ * transport from starting, is reported on stderr.
  */
 export async function main(
   args: string[] = process.argv.slice(2),
   stdin: Readable = process.stdin,
   stdout: Writable = process.stdout,
-): Promise<StdioServerHandle> {
-  const { directories, readOnly, confineRoots, readOnlyDirectories } =
-    parseArgs(args);
+): Promise<StdioServerHandle | RunningHttpServer> {
+  const {
+    directories,
+    readOnly,
+    confineRoots,
+    readOnlyDirectories,
+    transport,
+  } = parseArgs(args);
+  if (transport === "streamable-http") {
+    // Rejects, so the server does not start, on a read-only directory that
+    // cannot be resolved, as on stdio.
+    const allowedDirectories = await resolveAllowedDirectories([
+      ...directories,
+      ...readOnlyDirectories,
+    ]);
+    if (allowedDirectories.length === 0) {
+      throw new Error(HTTP_NEEDS_DIRECTORIES_ERROR);
+    }
+    const resolvedReadOnlyDirectories =
+      await resolveReadOnlyDirectories(readOnlyDirectories);
+    const running = await startHttpServer(
+      ({ era }) =>
+        createServer(allowedDirectories, {
+          era,
+          readOnly,
+          confineRoots,
+          readOnlyDirectories: resolvedReadOnlyDirectories,
+        }),
+      httpEndpoint(),
+    );
+    console.error(
+      `Secure MCP Filesystem Server running on Streamable HTTP at ${running.url}`,
+    );
+    announceOptions(readOnly, resolvedReadOnlyDirectories);
+    console.error(
+      describeAllowedDirectories(allowedDirectories, { from: "command-line" }),
+    );
+    return running;
+  }
   if (directories.length === 0 && readOnlyDirectories.length === 0) {
     console.error(
-      "Usage: mcp-server-filesystem [--read-only] [--confine-roots] [--read-only-dir <dir>]... [allowed-directory] [additional-directories...]",
+      "Usage: mcp-server-filesystem [--transport stdio|streamable-http] [--read-only] [--confine-roots] [--read-only-dir <dir>]... [allowed-directory] [additional-directories...]",
     );
     console.error("Note: Allowed directories can be provided via:");
     console.error("  1. Command-line arguments (shown above)");
@@ -213,14 +288,7 @@ export async function main(
     },
   );
   console.error("Secure MCP Filesystem Server running on stdio");
-  if (readOnly) {
-    console.error(
-      "Read-only mode: only tools that cannot change the filesystem are served",
-    );
-  }
-  if (resolvedReadOnlyDirectories.length > 0) {
-    console.error(describeReadOnlyDirectories(resolvedReadOnlyDirectories));
-  }
+  announceOptions(readOnly, resolvedReadOnlyDirectories);
   if (confineRoots && allowedDirectories.length === 0) {
     console.error(
       "Warning: --confine-roots has no effect without command-line directories; a client's Roots will set the allowed directories",
@@ -238,6 +306,21 @@ export async function main(
     );
   }
   return handle;
+}
+
+/** Announce the options that narrow what the server may do, on stderr. */
+function announceOptions(
+  readOnly: boolean,
+  readOnlyDirectories: readonly string[],
+): void {
+  if (readOnly) {
+    console.error(
+      "Read-only mode: only tools that cannot change the filesystem are served",
+    );
+  }
+  if (readOnlyDirectories.length > 0) {
+    console.error(describeReadOnlyDirectories(readOnlyDirectories));
+  }
 }
 
 /**
@@ -258,9 +341,23 @@ export function isEntryPoint(
 
 /* v8 ignore start -- runs only when node executes this file as the bin, never under vitest; the spawn smoke in __tests__/bin-smoke.test.ts covers it */
 if (isEntryPoint(process.argv[1], import.meta.url)) {
-  main().catch((error) => {
-    console.error("Fatal error running server:", error);
-    process.exit(1);
-  });
+  main().then(
+    (running) => {
+      // Streamable HTTP keeps the process up on its port; stop it cleanly.
+      if (!("handler" in running)) return;
+      const stop = () => {
+        running.close().then(
+          () => process.exit(0),
+          () => process.exit(1),
+        );
+      };
+      process.once("SIGINT", stop);
+      process.once("SIGTERM", stop);
+    },
+    (error) => {
+      console.error("Fatal error running server:", error);
+      process.exit(1);
+    },
+  );
 }
 /* v8 ignore stop */

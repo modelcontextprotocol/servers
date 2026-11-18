@@ -11,7 +11,7 @@ Requires MCP Python SDK 2.x (`mcp>=2.3,<3`).
 > [!CAUTION]
 > This server can access local/internal IP addresses and may represent a security risk. Exercise caution when using this MCP server to ensure this does not expose any sensitive data.
 >
-> By default the server refuses to fetch private, loopback, link-local and other non-public addresses, including cloud metadata endpoints such as `169.254.169.254`, and checks every redirect hop the same way. The `--allow-private-ips` argument turns this guard off; see [Customization - Private addresses](#customization---private-addresses). The guard checks the addresses a hostname resolves to before each request, so it does not protect against DNS rebinding between that check and the connection, and a hostname the server cannot resolve itself (one only a proxy can resolve) is not checked.
+> By default the server refuses to fetch private, loopback, link-local and other non-public addresses, including cloud metadata endpoints such as `169.254.169.254`, and checks every redirect hop the same way. The `--allow-private-ips` argument turns this guard off; see [Customization - Private addresses](#customization---private-addresses). The server connects only to an address the guard checked, so a hostname cannot pass the check with one address and be fetched from another (DNS rebinding). A request sent through a proxy is the exception: the proxy resolves the hostname and makes the connection, so the address it reaches is not the server's to check, and a hostname the server cannot resolve itself (one only a proxy can resolve) is not checked at all.
 
 The fetch tool will truncate the response, but by using the `start_index` argument, you can specify where to start the content extraction. This lets models read a webpage in chunks, until they find the information they need.
 
@@ -55,6 +55,9 @@ The tool and the prompt ask for markdown first, with the request header `Accept:
 The server speaks both eras of the Model Context Protocol over stdio, with nothing to configure: a **2026-07-28** client (discovered with `server/discover`, no session) and a **2025-11-25** client (the `initialize` handshake). The client's first request decides which. Tools and prompts behave the same in both. Methods the 2026-07-28 specification removes, such as `ping`, are answered only on a 2025-11-25 connection.
 
 ## Installation
+
+Requires **Python 3.11.5 or newer**. `uvx` fetches a suitable interpreter on its own; with pip, install into an
+environment on 3.11.5 or later.
 
 Optionally: Install node.js, this will cause the fetch server to use a different HTML simplifier that is more robust.
 Its JavaScript dependencies are then installed with npm on first use, which contacts the npm registry.
@@ -202,6 +205,18 @@ judged by the IPv4 address it carries; a deprecated IPv4-compatible address (`::
 refused whatever IPv4 it carries. A hostname is refused if any one of its addresses is in those ranges.
 The client receives an error naming the refused address.
 
+The address that is checked is the address the server connects to. When it opens a connection the server resolves the
+hostname itself, checks every address in that answer, and connects to one of those addresses directly, so the name is
+not looked up again in between: a hostname whose DNS answer changes from a public address to a private one between the
+check and the connection (DNS rebinding) is refused. This holds for every connection the server opens, redirect hops
+and robots.txt fetches included. The request still carries the hostname in its `Host` header, and an HTTPS connection
+still sends it as the TLS server name and verifies the certificate against it, not against the address.
+
+A request that goes through a proxy (`--proxy-url`, or the proxy environment variables) is different, because the
+server connects to the proxy and the proxy resolves the hostname and connects to it. The hostname is still checked
+against what it resolves to for the server, but the proxy's own lookup is not pinned to that answer, and a hostname
+only the proxy can resolve is not checked.
+
 To fetch from local or internal hosts (a development server, an intranet page), add the argument
 `--allow-private-ips` to the `args` list in the configuration.
 
@@ -215,6 +230,10 @@ repeated). Each entry is one of:
 - `*.` followed by a domain, such as `*.github.com`, which matches every subdomain of it at any depth
   (`api.github.com`, `a.b.github.com`) but not `github.com` itself: list both to allow both;
 - an IP address, such as `203.0.113.7` or `2001:db8::7`, which matches a URL that uses that address literally.
+
+A wildcard applies to domain names only. An entry that puts `*.` in front of an IP address or of a numeric suffix of
+one, such as `*.10.0.0.1` or `*.0.0.1`, is refused at startup, and a URL that uses an IP address is only ever matched
+by an entry naming that exact address.
 
 Matching ignores case and a trailing dot, and an internationalized name may be given in either its Unicode or its
 `xn--` form. An entry names a host only, so it carries no scheme, port or path. The list is checked before every request
@@ -319,6 +338,31 @@ text. Other pages are extracted once, exactly as before.
 To always use the pure-Python extractor, add the argument `--no-readability-js` to the `args` list in the
 configuration. The server then never starts Node.js (or npm), whether or not it is installed, and never contacts the
 npm registry.
+
+## Streamable HTTP
+
+The server talks over stdio by default. With `--transport streamable-http` it
+runs on its own as an HTTP service instead, serving one MCP endpoint, `/mcp`,
+to any number of clients of either protocol era:
+
+```sh
+uvx mcp-server-fetch --transport streamable-http
+```
+
+It listens on `127.0.0.1:3001` unless `HOST` and `PORT` say otherwise (for
+example `PORT=8080`); `HOST=0.0.0.0` exposes it to every machine that can reach
+this one, so set it deliberately. Point a client at the URL, such as
+`http://127.0.0.1:3001/mcp`, instead of giving it a command:
+
+```json
+{
+  "mcpServers": {
+    "fetch": { "type": "http", "url": "http://127.0.0.1:3001/mcp" }
+  }
+}
+```
+
+Every other option works as it does over stdio. A browser page from any origin but localhost is refused with `403`, whatever `HOST` is, to guard against DNS rebinding; on loopback the SDK also checks each request's `Host` header.
 
 ## Windows Configuration
 

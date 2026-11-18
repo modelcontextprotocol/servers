@@ -17,7 +17,7 @@ The resource collections (`demo://resource/collection/summer-specials`, and the 
 
 The server info and every tool, prompt, resource and resource template carry a pair of [icons](docs/features.md#icons), one for a light theme and one for a dark theme, so a client can show the variant that suits its own background.
 
-The `get-env` tool returns the server's environment variables, but masks the value of any credential-like name (a `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `CREDENTIAL`, `AUTH` or `COOKIE` segment, such as `OPENAI_API_KEY`) as `"<redacted>"`. To see every value unmasked while debugging, start the server with `GET_ENV_INCLUDE_SECRETS=1` (or `true`). Leave it unset otherwise: with it set, every credential in the server's environment reaches the model's context.
+The `get-env` tool returns the server's environment variables, but masks the value of any credential-like name (one with a `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `CREDENTIAL`, `AUTH` or `COOKIE` segment between underscores, in any case: whole segments, not substrings, so `OPENAI_API_KEY` is masked and `APIKEY` is not) as `"<redacted>"`. To see every value unmasked while debugging, start the server with `GET_ENV_INCLUDE_SECRETS=1` (or `true`). Leave it unset otherwise: with it set, every credential in the server's environment reaches the model's context.
 
 ## Protocol versions
 
@@ -39,7 +39,7 @@ The `gzip-file-as-resource` tool fetches the URL it is given, so these environme
 | `GZIP_ALLOWED_DOMAINS` | empty (any name) | Comma-separated host names; a host must be one of them or a subdomain of one. Checked on the caller's URL and on every redirect hop |
 | `GZIP_ALLOW_PRIVATE_IPS` | off | Set to `1` or `true` to allow loopback, private (RFC 1918), CGNAT, link-local (cloud metadata) and other non-public addresses |
 
-By default the tool refuses a URL whose host resolves to a non-public address, and follows at most five redirects, checking each hop the same way. `GZIP_ALLOWED_DOMAINS` filters names, not addresses: a listed name that resolves to a private address is still refused unless `GZIP_ALLOW_PRIVATE_IPS` is set. The address is checked before the request and resolved again when it is made, so a DNS answer that changes in between (DNS rebinding) is not caught. `data:` URLs are not fetched, so neither check applies to them.
+By default the tool refuses a URL whose host resolves to a non-public address, and follows at most five redirects, checking each hop the same way. An IPv6 address that wraps an IPv4 one (IPv4-mapped, IPv4-translated, or in the NAT64 prefix `64:ff9b::/96`) is judged by that IPv4, and any other IPv6 address outside global unicast (`2000::/3`) is refused. `GZIP_ALLOWED_DOMAINS` filters names, not addresses: a listed name that resolves to a private address is still refused unless `GZIP_ALLOW_PRIVATE_IPS` is set. The address is checked before the request and resolved again when it is made, so a DNS answer that changes in between (DNS rebinding) is not caught. `data:` URLs are not fetched, so neither check applies to them.
 
 ## Requirements
 

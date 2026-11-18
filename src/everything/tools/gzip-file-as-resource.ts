@@ -67,9 +67,9 @@ const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 // Addresses that are not public destinations: the IANA special-purpose ranges
 // the fetch server refuses (src/fetch's _NON_PUBLIC_NETWORKS), plus
-// multicast. BlockList judges an IPv4-mapped IPv6 address (::ffff:a.b.c.d) by
-// the IPv4 rules, so those need no ranges of their own. The well-known NAT64
-// prefix (64:ff9b::/96) is not unwrapped and so passes as public.
+// multicast. An IPv6 address that carries an IPv4 destination is unwrapped
+// and judged by that IPv4 first (see IPV4_CARRIERS), so these ranges need no
+// IPv6 copies of the IPv4 ones.
 const NON_PUBLIC_ADDRESSES = new BlockList();
 for (const [network, prefix] of [
   ["0.0.0.0", 8], // "this network", including the unspecified address
@@ -91,15 +91,20 @@ for (const [network, prefix] of [
   NON_PUBLIC_ADDRESSES.addSubnet(network, prefix, "ipv4");
 }
 for (const [network, prefix] of [
-  ["::", 128], // unspecified
-  ["::1", 128], // loopback
+  // IPv4-compatible IPv6 (RFC 4291 2.5.5.1), deprecated and never routed;
+  // it also holds the unspecified (::) and loopback (::1) addresses.
+  ["::", 96],
   ["64:ff9b:1::", 48], // local-use NAT64
   ["100::", 64], // discard-only
   ["2001::", 23], // IETF protocol assignments (Teredo among them)
   ["2001:db8::", 32], // documentation
   ["2002::", 16], // 6to4
+  ["3fff::", 20], // documentation (RFC 9637)
   ["fc00::", 7], // unique local (AWS's fd00:ec2::254)
   ["fe80::", 10], // link-local
+  // Deprecated site-local (RFC 3879). Outside 2000::/3 as well, but listed so
+  // it is refused by name.
+  ["fec0::", 10],
   ["ff00::", 8], // multicast
 ] as const) {
   NON_PUBLIC_ADDRESSES.addSubnet(network, prefix, "ipv6");
@@ -121,12 +126,61 @@ for (const [network, prefix] of [
   PUBLIC_EXCEPTIONS.addSubnet(network, prefix, "ipv6");
 }
 
+// IPv6 ranges whose low 32 bits are the IPv4 destination: IPv4-mapped
+// (::ffff:0:0/96), IPv4-translated (RFC 6145, ::ffff:0:0:0/96), which a
+// stateless translator forwards to that IPv4, and the well-known NAT64 prefix
+// (RFC 6052, 64:ff9b::/96), which a NAT64 gateway forwards to it. An address
+// in one is judged by the IPv4 it wraps, as the fetch server judges it, so a
+// public IPv4 stays reachable through NAT64 and a private one is refused.
+const IPV4_CARRIERS = new BlockList();
+for (const network of ["::ffff:0:0", "::ffff:0:0:0", "64:ff9b::"]) {
+  IPV4_CARRIERS.addSubnet(network, 96, "ipv6");
+}
+
+// IPv6 global unicast (RFC 4291 2.4). The rest of the IPv6 space is reserved,
+// unique or site-local, link-local or multicast, none of it a public
+// destination, so an IPv6 address outside it is refused: a range missing from
+// NON_PUBLIC_ADDRESSES cannot pass as public.
+const IPV6_GLOBAL_UNICAST = new BlockList();
+IPV6_GLOBAL_UNICAST.addSubnet("2000::", 3, "ipv6");
+
+/**
+ * The IPv4 address held in the low 32 bits of a valid IPv6 address, as
+ * dotted quad.
+ */
+function lowIPv4(address: string): string {
+  // A resolver may spell those bits as a trailing dotted quad (::ffff:1.2.3.4)
+  const tail = address.slice(address.lastIndexOf(":") + 1);
+  if (tail.includes(".")) return tail;
+  const [head, rest] = address.split("::");
+  const groups =
+    rest === undefined
+      ? head.split(":")
+      : [
+          ...(head ? head.split(":") : []),
+          ...Array<string>(8).fill("0"),
+          ...(rest ? rest.split(":") : []),
+        ].slice(-8);
+  const high = parseInt(groups[6], 16);
+  const low = parseInt(groups[7], 16);
+  return [high >> 8, high & 255, low >> 8, low & 255].join(".");
+}
+
 /** True when `address` is not a public destination. */
-function isNonPublic(address: string, family: number): boolean {
-  const type = family === 6 ? "ipv6" : "ipv4";
+export function isNonPublic(address: string, family: number): boolean {
+  if (family !== 6) {
+    return (
+      !PUBLIC_EXCEPTIONS.check(address, "ipv4") &&
+      NON_PUBLIC_ADDRESSES.check(address, "ipv4")
+    );
+  }
+  if (IPV4_CARRIERS.check(address, "ipv6")) {
+    return isNonPublic(lowIPv4(address), 4);
+  }
+  if (PUBLIC_EXCEPTIONS.check(address, "ipv6")) return false;
   return (
-    !PUBLIC_EXCEPTIONS.check(address, type) &&
-    NON_PUBLIC_ADDRESSES.check(address, type)
+    NON_PUBLIC_ADDRESSES.check(address, "ipv6") ||
+    !IPV6_GLOBAL_UNICAST.check(address, "ipv6")
   );
 }
 

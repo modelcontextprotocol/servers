@@ -45,12 +45,15 @@ test("findUnlistedServers names a server the table lacks, either language", (t) 
   assert.deepEqual(findUnlistedServers(src), ["newpy", "newts"]);
 });
 
-test("stdio for all seven; SSE and Streamable HTTP for everything only", () => {
+test("stdio and Streamable HTTP for all seven; SSE for everything only", () => {
   assert.equal(SERVERS.length, 7);
   for (const server of SERVERS) {
-    assert.ok(server.transports.includes("stdio"), server.name);
     if (server.name !== "everything")
-      assert.deepEqual(server.transports, ["stdio"], server.name);
+      assert.deepEqual(
+        server.transports,
+        ["stdio", "streamableHttp"],
+        server.name,
+      );
   }
   assert.deepEqual(byName("everything").transports, [
     "stdio",
@@ -60,7 +63,7 @@ test("stdio for all seven; SSE and Streamable HTTP for everything only", () => {
 });
 
 test("selectTargets: no names means every server and transport", () => {
-  assert.equal(selectTargets([]).length, 9);
+  assert.equal(selectTargets([]).length, 15);
 });
 
 test("selectTargets: named servers only, in the table's order", () => {
@@ -73,6 +76,7 @@ test("selectTargets: named servers only, in the table's order", () => {
       "everything/sse",
       "everything/streamableHttp",
       "time/stdio",
+      "time/streamableHttp",
     ],
   );
 });
@@ -102,6 +106,12 @@ test("launchSpec: a TypeScript server runs its built bin, with the transport whe
   );
   assert.equal(filesystem.command, bin("filesystem"));
   assert.deepEqual(filesystem.args, ["/tmp/x"]);
+  // The other servers take the HTTP transport as a flag (#576).
+  assert.deepEqual(
+    launchSpec(byName("filesystem"), "streamableHttp", ctx, "/repo", "linux")
+      .args,
+    ["--transport", "streamable-http", "/tmp/x"],
+  );
   // Windows has no shebang: the file is handed to node.
   const win = launchSpec(byName("everything"), "sse", ctx, "/repo", "win32");
   assert.equal(win.command, process.execPath);

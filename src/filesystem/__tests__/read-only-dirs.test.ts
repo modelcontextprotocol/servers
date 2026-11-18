@@ -472,6 +472,7 @@ describe("parseArgs with --read-only-dir", () => {
       readOnly: false,
       confineRoots: false,
       readOnlyDirectories: ["/b", "/c"],
+      transport: "stdio",
     });
   });
 
@@ -487,6 +488,7 @@ describe("parseArgs with --read-only-dir", () => {
       readOnly: false,
       confineRoots: false,
       readOnlyDirectories: [],
+      transport: "stdio",
     });
   });
 

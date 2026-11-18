@@ -41,6 +41,8 @@ from mcp.shared.exceptions import MCPError
 from mcp.types import INVALID_PARAMS, ToolAnnotations
 from pydantic import Field
 
+from .transport import run
+
 # The version this server reports in serverInfo, read from the installed
 # distribution's metadata (pyproject.toml) so it cannot drift from the
 # published version (#360). Without it the SDK reports its own `mcp` version.
@@ -116,7 +118,8 @@ def _git_text(repo: git.Repo, command: str, *args: str) -> str:
 # honoring it would let the repository run code as the server's user on a
 # read-only call such as git_status. The overrides go in through
 # GIT_CONFIG_COUNT (git 2.31+), which outranks every config file and is
-# inherited by the git processes git itself starts, submodules included.
+# inherited by the git processes git itself starts, inside a submodule only
+# from git 2.33 (`_MIN_SUBMODULE_GIT`, required where one is checked out).
 #
 # - `core.fsmonitor` is run on every index refresh (status, diff, add).
 # - `core.hooksPath` pointing at the null device leaves no hook to find, so
@@ -128,6 +131,22 @@ def _git_text(repo: git.Repo, command: str, *args: str) -> str:
 # - `submodule.recurse` would carry checkout and merge into submodules, whose
 #   own configuration this override cannot neutralize (see `_LISTED_KEYS`).
 # - `merge.autoStash` keeps git_merge from stashing behind the tool's back.
+# - `core.untrackedCache` names no program, but the cache it turns on lives
+#   in the repository's own index and lists directories by name for git
+#   status to read: a forged one names `..` and lists what is outside the
+#   working tree. Off, git ignores the cache and scans the working tree.
+# - `diff.submodule` set to `diff` makes git diff run a nested git diff inside
+#   each changed submodule, without `_DIFF_FLAGS`, so the submodule's own
+#   `diff.external` and textconv drivers would run; `short` starts nothing.
+# - `maintenance.auto` keeps a merge (or any other command that ends in
+#   `git maintenance run --auto`) from starting git's automatic maintenance,
+#   whose cruft repacks (git 2.42+) run each command the repository's
+#   `gc.recentObjectsHook` names. Stopping the launch covers every task,
+#   including a geometric repack the repository enables, which its own
+#   `maintenance.<task>.auto` gates; `gc.auto` is a backstop for the gc task
+#   only, so it does not replace `maintenance.auto`.
+#   That hook cannot be emptied like a driver: it is multi-valued, and an
+#   empty override adds a value rather than replacing the repository's.
 #
 # External diff programs and textconv filters are turned off per command
 # (`_DIFF_FLAGS`), and filter and merge drivers per repository (`_LISTED_KEYS`).
@@ -140,6 +159,10 @@ HARDENED_CONFIG: tuple[tuple[str, str], ...] = (
     ("submodule.recurse", "false"),
     ("status.submoduleSummary", "false"),
     ("merge.autoStash", "false"),
+    ("core.untrackedCache", "false"),
+    ("diff.submodule", "short"),
+    ("maintenance.auto", "false"),
+    ("gc.auto", "0"),
 )
 
 # A filter driver (`filter.<name>.clean`/`smudge`/`process`, applied by
@@ -153,9 +176,11 @@ HARDENED_CONFIG: tuple[tuple[str, str], ...] = (
 # `commit.gpgSign` says). Drivers and options from the user's global or
 # system configuration (git-lfs, say) are the user's own and keep working.
 # `harden_repo` lists these keys, and `core.hooksPath`, whose command-scope
-# value shows that git applied the overrides.
+# value shows that git applied the overrides. A driver's name may be empty
+# (`[filter ""]`, read back as `filter..clean`, selected by `filter=`), so
+# the name is matched with `.*`, not `.+`.
 _LISTED_KEYS = (
-    r"^(core\.hookspath|filter\..+\.(clean|smudge|process)|merge\..+\.driver"
+    r"^(core\.hookspath|filter\..*\.(clean|smudge|process)|merge\..*\.driver"
     r"|branch\..+\.mergeoptions)$"
 )
 
@@ -174,6 +199,50 @@ _DIFF_FLAGS = ("--no-ext-diff", "--no-textconv")
 # `submodule.<name>.ignore`, which the repository could set to `none`.
 _NO_SUBMODULE_STATUS = "--ignore-submodules=dirty"
 
+# A repository that declares a promisor remote has git fetch any object it is
+# missing from that remote, by itself, on a read-only command (git show, git
+# status with HEAD's tree gone). The fetch runs a transport program the
+# repository's configuration names (`remote.<name>.uploadpack`,
+# `core.sshCommand`, an `ext::` URL), and no override can pin it by name,
+# since the remote's name is the repository's choice; `protocol.allow=never`
+# is no help either, as a repository-level `protocol.<name>.allow` outranks
+# it. GIT_NO_LAZY_FETCH=1 turns the fetch off, so a missing object is an
+# error. Git honors it from 2.45.1 and the maintenance releases made with it
+# (2.39.4, 2.40.2, ..., 2.44.1), mapped here as minor -> first patch; an
+# older git ignores it, so `harden_repo` refuses a repository with a promisor
+# remote there. Any of these keys declares one; git also reads a
+# `remote.promisor` with no remote name, as a promisor remote named "".
+_NO_LAZY_FETCH_SINCE = {39: 4, 40: 2, 41: 1, 42: 2, 43: 4, 44: 1, 45: 1}
+_PROMISOR_KEYS = (
+    r"^(extensions\.partialclone|remote\.(.+\.)?(promisor|partialclonefilter))$"
+)
+
+
+def _honors_no_lazy_fetch(version: tuple[int, ...]) -> bool:
+    """Whether git at `version` honors GIT_NO_LAZY_FETCH."""
+    major, minor, patch = (tuple(version) + (0, 0, 0))[:3]
+    if (major, minor) > (2, 45):
+        return True
+    since = _NO_LAZY_FETCH_SINCE.get(minor) if major == 2 else None
+    return since is not None and patch >= since
+
+
+def _refuse_promisor_remote(repo: git.Repo) -> None:
+    """Refuse a repository with a promisor remote, for a git that would fetch."""
+    try:
+        repo.git.config("--get-regexp", _PROMISOR_KEYS)
+    except git.GitCommandError as e:
+        # Exit 1 is "nothing matched": no promisor remote, nothing to fetch.
+        if e.status == 1:
+            return
+        raise
+    raise git.GitError(
+        "Git 2.45.1 or later (or 2.39.4, 2.40.2, 2.41.1, 2.42.2, 2.43.4, "
+        "2.44.1) is required for a repository with a promisor remote (a "
+        "partial clone): an older git fetches missing objects from it, and "
+        "the fetch runs a program the repository's configuration names"
+    )
+
 
 def _config_env(entries: list[tuple[str, str]]) -> dict[str, str]:
     """GIT_CONFIG_COUNT variables for `entries`, after any the user set."""
@@ -185,6 +254,81 @@ def _config_env(entries: list[tuple[str, str]]) -> dict[str, str]:
     return env
 
 
+# Git 2.31 and 2.32 drop GIT_CONFIG_COUNT from the environment of the git
+# they run inside a submodule (fixed upstream in 2.33), so none of the
+# overrides would reach it.
+_MIN_SUBMODULE_GIT = (2, 33)
+
+
+def _submodule_drivers(repo: git.Repo) -> set[str]:
+    """The filter and merge driver keys each checked-out submodule defines.
+
+    `git_add ["."]` and `git_checkout` make git run `git status` inside a
+    checked-out submodule, under the submodule's own configuration, where a
+    filter driver its `.gitattributes` selects would run. The overrides are
+    inherited by that nested git, so emptying the drivers by name works there
+    too once their names are known. A submodule is found at each gitlink in
+    the index, then inside it at each of its own, the way git descends.
+    Listing them runs only `git config` and `git ls-files`, which start no
+    program. Each submodule is opened the way the nested git opens it, with
+    `GIT_DIR=.git` in its directory, so no upward search or ownership check
+    makes the two disagree. A submodule whose configuration or index git
+    cannot read is skipped: the nested git cannot read it either, and stops
+    before it runs anything there.
+
+    Raises `git.GitError` when a checked-out submodule is found and git is
+    older than `_MIN_SUBMODULE_GIT`, whose nested git would not inherit the
+    overrides. Without one, git never runs inside a submodule, so older git
+    is fine.
+    """
+    drivers: set[str] = set()
+    if repo.working_tree_dir is None:
+        return drivers
+    # The opened repository's own index, then each submodule's.
+    pending = [(Path(repo.working_tree_dir), repo.git)]
+    seen: set[Path] = set()
+    while pending:
+        top, top_git = pending.pop()
+        try:
+            # -z prints `<mode> <object> <stage>\t<path>\0` for each entry.
+            listing = top_git.ls_files("-z", "--stage")
+        except git.GitCommandError:
+            continue  # an index git cannot read
+        for entry in listing.split("\0"):
+            info, _, path = entry.partition("\t")
+            if not info.startswith("160000 "):
+                continue
+            submodule = top / path
+            if not (submodule / ".git").exists():
+                continue  # not checked out: git does not look inside
+            if repo.git.version_info[:2] < _MIN_SUBMODULE_GIT:
+                raise git.GitError(
+                    "Git 2.33 or later is required for a repository with a "
+                    "checked-out submodule: older git does not pass the "
+                    "configuration overrides to the git it runs inside one"
+                )
+            resolved = submodule.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            # The nested git runs with GIT_DIR=.git in the submodule.
+            sub_git = git.Git(submodule)
+            sub_git.update_environment(**repo.git.environment(), GIT_DIR=".git")
+            try:
+                listed = sub_git.config(
+                    "--show-scope", "-z", "--get-regexp", _LISTED_KEYS
+                )
+            except git.GitCommandError:
+                continue  # not a repository git can open, or nothing listed
+            fields = listed.split("\0")
+            for scope, field in zip(fields[0::2], fields[1::2]):
+                key = field.partition("\n")[0]
+                if key != "core.hookspath" and scope not in _TRUSTED_SCOPES:
+                    drivers.add(key)
+            pending.append((submodule, sub_git))
+    return drivers
+
+
 def harden_repo(repo: git.Repo) -> None:
     """Keep every git command run for `repo` from running a program it names.
 
@@ -193,10 +337,14 @@ def harden_repo(repo: git.Repo) -> None:
     a worktree's `config.worktree`, and files they include) defines, and
     overrides each with an empty command. The same read checks that git
     applied the overrides: git older than 2.31 ignores GIT_CONFIG_COUNT, and
-    is refused rather than run unprotected.
+    is refused rather than run unprotected; so is git older than 2.33 for a
+    repository with a checked-out submodule (`_submodule_drivers`). Lazy
+    fetching is turned off (GIT_NO_LAZY_FETCH), and a repository with a
+    promisor remote is refused on a git too old to honor that
+    (`_PROMISOR_KEYS`).
     """
     entries = list(HARDENED_CONFIG)
-    repo.git.update_environment(**_config_env(entries))
+    repo.git.update_environment(GIT_NO_LAZY_FETCH="1", **_config_env(entries))
     try:
         listed = repo.git.config("--show-scope", "-z", "--get-regexp", _LISTED_KEYS)
     except git.GitCommandError as e:
@@ -221,9 +369,12 @@ def harden_repo(repo: git.Repo) -> None:
             "overrides that keep a repository's own configuration from running "
             "programs"
         )
+    drivers |= _submodule_drivers(repo)
     if drivers:
         entries += [(key, "") for key in sorted(drivers)]
         repo.git.update_environment(**_config_env(entries))
+    if not _honors_no_lazy_fetch(repo.git.version_info):
+        _refuse_promisor_remote(repo)
 
 
 def git_status(repo: git.Repo) -> str:
@@ -350,7 +501,9 @@ def _apply_merge_autostash(repo: git.Repo) -> str:
         return ""
     stash_oid = autostash.read_text().strip()
     try:
-        repo.git.stash("apply", stash_oid)
+        # Through _rewrite_tree although nothing after it runs a driver today
+        # (`git stash store` runs none): any later git command must be safe.
+        _rewrite_tree(repo, "stash", "apply", stash_oid)
         note = "\nApplied autostash."
     except git.GitCommandError:
         repo.git.stash("store", "-m", "autostash", "-q", stash_oid)
@@ -499,6 +652,40 @@ def git_create_branch(
     return f"Created branch '{branch_name}' from {base_label}"
 
 
+def _rewrite_tree(repo: git.Repo, command: str, *args: str) -> str:
+    """Run `git <command> <args>`, which writes the working tree, then re-harden.
+
+    `harden_repo` reads the repository's configuration when the call opens
+    the repository, but that configuration can depend on the working tree: an
+    `[include]` or `[includeIf]` path into it (git skips one whose file is
+    missing), a `.git/config` that is a link into it, or an `includeIf
+    "onbranch:..."` that a branch switch satisfies. A command that writes the
+    tree can so create or change configuration. Git reads configuration once
+    per process, at start, so the command itself runs under what was read,
+    but every git command after it in the same call reads afresh, and would
+    find filter or merge drivers that were never overridden. Every command
+    that writes the tree therefore goes through here, and the drivers are
+    read again before any other git command runs, whether or not it failed:
+    a failed merge has written files too, and its cleanup runs git next.
+
+    If that read fails, the overrides may be incomplete, so the call stops
+    with a `GitError`, which a caller's `except GitCommandError` cleanup does
+    not catch, and no further git command runs.
+    """
+    try:
+        return getattr(repo.git, command)(*args)
+    finally:
+        try:
+            harden_repo(repo)
+        except git.GitCommandError as e:
+            raise git.GitError(
+                "Stopped: the repository's configuration could not be read "
+                f"again after git {command} changed the working tree. The working "
+                f"tree was left as git {command} wrote it (a merge may still be in "
+                f"progress), and no further git command was run: {e}"
+            ) from e
+
+
 def git_checkout(repo: git.Repo, branch_name: str) -> str:
     # Defense in depth: reject branch names starting with '-' to prevent flag injection,
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
@@ -509,7 +696,10 @@ def git_checkout(repo: git.Repo, branch_name: str) -> str:
     repo.rev_parse(
         branch_name
     )  # Validates branch_name is a real git ref, throws BadName if not
-    repo.git.checkout(branch_name)
+    # --quiet: without it, git checks each checked-out submodule of the new
+    # branch for local changes, running git inside it under its own
+    # configuration; the reply below does not use git's output.
+    _rewrite_tree(repo, "checkout", "--quiet", branch_name)
     # rev_parse accepts any revision, so branch_name may have been a sha, tag or
     # remote-tracking ref rather than a branch. Report what actually happened instead of
     # claiming a branch switch; a detached HEAD is easy to commit onto by mistake.
@@ -545,7 +735,9 @@ def _merge_failure(repo: git.Repo, error: git.GitCommandError, what: str) -> str
     conflicts = _git_text(
         repo, "diff", _NO_SUBMODULE_STATUS, "--name-only", "--diff-filter=U"
     ).splitlines()
-    repo.git.merge("--abort")
+    # Through _rewrite_tree although it is the last git command here, so a git
+    # command added after it reads drivers the restored tree defines.
+    _rewrite_tree(repo, "merge", "--abort")
     if conflicts:
         return (
             f"{what} stopped on conflicts in: {', '.join(conflicts)}. {unchanged} "
@@ -620,7 +812,9 @@ def git_merge(
     # names what the caller asked for.
     mode = "--ff-only" if fast_forward_only else "--ff"
     try:
-        repo.git.merge(
+        _rewrite_tree(
+            repo,
+            "merge",
             mode,
             "--commit",
             "--no-squash",
@@ -741,7 +935,8 @@ def validate_opened_repo(
     not apply `core.worktree`, so the two can differ.
 
     Git also reaches past those directories from inside them, so
-    `_check_git_dir_contents` holds what they contain to the same boundary.
+    `_check_git_dir_contents` holds what they contain to the same boundary,
+    and `_check_index_entries` the paths the index names in the working tree.
     """
     if allowed_repository is None:
         return
@@ -787,6 +982,51 @@ def validate_opened_repo(
 
     for directory in {p.resolve() for p in git_dirs + common_dirs}:
         _check_git_dir_contents(repo_path, directory, allowed, outside)
+
+    if bare != "true":
+        _check_index_entries(repo, repo_path)
+
+
+def _unsafe_index_entry(entry: bytes, windows: bool = os.name == "nt") -> bool:
+    """Whether git would read index entry `entry` from outside the working tree.
+
+    Git reads each entry's file at the working tree joined with the entry, and
+    checks the entry only when it writes one (`git add`), never when it reads
+    the index. An entry is refused the way `git add` refuses it: absolute, or
+    with an empty, `.`, `..` or `.git` component. On Windows `\\` separates
+    components too, a `:` makes a drive or stream path, and a component's
+    trailing dots and spaces are dropped by the file system, so `...` or
+    `.git.` count as well.
+    """
+    for component in re.split(rb"[/\\]" if windows else rb"/", entry):
+        if windows:
+            if b":" in component:
+                return True
+            component = component.rstrip(b". ")
+        if component in (b"", b".", b"..") or component.lower() == b".git":
+            return True
+    return False
+
+
+def _check_index_entries(repo: git.Repo, repo_path: Path) -> None:
+    """Refuse an index naming a path outside the working tree.
+
+    The index is read through `git ls-files`, so a split index's shared part
+    and a sparse index's collapsed directories are listed as git uses them.
+    `:(top)` lists the whole index wherever GitPython runs git from.
+    """
+    listed = repo.git.ls_files(
+        "-z", "--full-name", "--", ":(top)", stdout_as_string=False
+    )
+    for entry in listed.split(b"\0"):
+        if entry and _unsafe_index_entry(entry):
+            # repr: the name is the repository's own, and escaped it carries
+            # no line breaks or terminal control sequences into the result.
+            name = entry.decode("utf-8", errors="replace")
+            raise ValueError(
+                f"Repository path '{repo_path}' has an index entry {name!r} "
+                "that git would read outside the working tree"
+            )
 
 
 # Files in a git directory that name more object stores for git to read: an
@@ -897,6 +1137,10 @@ def git_branch(
     return branch_info
 
 
+# A URL with an authority part, `scheme://...`; anything else (an scp-like
+# address, a local path) is not a URL and carries no userinfo or query.
+_URL_SCHEME = re.compile(r"^(?P<scheme>[A-Za-z][A-Za-z0-9+.-]*)://")
+
 # A URL with an authority part: `scheme://[userinfo@]host...`. The userinfo is
 # everything up to the last '@' before the first '/', which is where git itself
 # stops reading it.
@@ -925,32 +1169,75 @@ _SSH_SCHEMES = frozenset({"ssh", "git+ssh", "ssh+git"})
 REDACTED = "<redacted>"
 
 
+def _redact_query_and_fragment(rest: str) -> str:
+    """`rest` (a URL after its userinfo) with query values and fragment redacted.
+
+    A credential can ride in a query parameter (`?private_token=...`) or the
+    fragment as easily as in the userinfo (#5508). Every query value is
+    redacted, not only those with credential-like names, since no list of names
+    is complete; the names stay, so the URL still reads as what it is. A
+    parameter with no `=` (`?<token>`) is redacted whole, and so is a non-empty
+    fragment. The fragment starts at the first '#', which also ends the query.
+    """
+    rest, hash_mark, fragment = rest.partition("#")
+    rest, question_mark, query = rest.partition("?")
+    if question_mark:
+        params = []
+        for param in query.split("&"):
+            name, equals, _ = param.partition("=")
+            if equals:
+                params.append(f"{name}={REDACTED}")
+            else:
+                params.append(REDACTED if param else param)
+        rest += "?" + "&".join(params)
+    if hash_mark:
+        rest += "#" + (REDACTED if fragment else "")
+    return rest
+
+
 def redact_url(url: str) -> str:
-    """`url` with any credential in its userinfo replaced by `<redacted>` (#1611).
+    """`url` with any credential in it replaced by `<redacted>` (#1611, #5508).
 
     A remote URL can carry a credential (`https://user:token@host/...`), and
     the tool's output goes to the model, so it must not echo one. Over HTTP(S)
     and every other scheme a token is as often the username as the password
     (`https://<token>@github.com/...`), so the whole userinfo is redacted. An
     SSH username names the account and authenticates nothing, so it stays,
-    with only a password after it redacted. A remote-helper address
-    (`<transport>::<url>`) has its inner URL redacted. An scp-like address
-    (`git@host:path`) or a local path has no userinfo to carry a password and
-    is returned as is.
+    with only a password after it redacted. Query values and the fragment are
+    redacted too (`_redact_query_and_fragment`), except in a `file://` URL,
+    where '?' and '#' are characters of a local file name. A path segment is
+    kept: a token there cannot be told apart from a repository name. A URL
+    whose userinfo would hold a '?' or '#' cannot be split safely and is
+    shown as `scheme://<redacted>`. A remote-helper address (`<transport>::<url>`) has its inner URL redacted.
+    An scp-like address (`git@host:path`) or a local path is not a URL and is
+    returned as is.
     """
     helper = _REMOTE_HELPER.match(url)
     if helper is not None:
         return url[: helper.end()] + redact_url(url[helper.end() :])
+    authority = _URL_SCHEME.match(url)
+    if authority is None:
+        return url
+    scheme = authority["scheme"]
     match = _URL_USERINFO.match(url)
     if match is None:
-        return url
-    scheme, userinfo = match["scheme"], match["userinfo"]
-    if scheme.lower() in _SSH_SCHEMES:
-        user, has_password, _ = userinfo.partition(":")
-        kept = f"{user}:{REDACTED}" if has_password else user
+        head, rest = url[: authority.end()], url[authority.end() :]
     else:
-        kept = REDACTED
-    return f"{scheme}://{kept}@{url[match.end() :]}"
+        userinfo = match["userinfo"]
+        if "?" in userinfo or "#" in userinfo:
+            # Ambiguous: the '?' or '#' may be in a password or may start a
+            # query or fragment holding an '@' (`https://host?t=a@SECRET`), so
+            # no split of it is safe. Only the scheme is shown.
+            return f"{scheme}://{REDACTED}"
+        if scheme.lower() in _SSH_SCHEMES:
+            user, has_password, _ = userinfo.partition(":")
+            kept = f"{user}:{REDACTED}" if has_password else user
+        else:
+            kept = REDACTED
+        head, rest = f"{scheme}://{kept}@", url[match.end() :]
+    if scheme.lower() == "file":
+        return head + rest
+    return head + _redact_query_and_fragment(rest)
 
 
 # The config values `git remote -v` builds its URLs from: each remote's
@@ -1474,8 +1761,9 @@ def create_server(repository: Path | None) -> MCPServer:
         name=GitTools.REMOTE.value,
         description=(
             "Lists the repository's remotes with their fetch and push URLs, "
-            "like `git remote -v`. Credentials embedded in a URL are shown as "
-            "<redacted>"
+            "like `git remote -v`. Credentials embedded in a URL's userinfo, "
+            "query values or fragment are shown as <redacted>; path segments "
+            "are shown as configured"
         ),
         annotations=READ_ONLY,
         structured_output=False,
@@ -1489,7 +1777,7 @@ def create_server(repository: Path | None) -> MCPServer:
     return server
 
 
-async def serve(repository: Path | None) -> None:
+async def serve(repository: Path | None, transport: str = "stdio") -> None:
     logger = logging.getLogger(__name__)
 
     if repository is not None:
@@ -1510,9 +1798,4 @@ async def serve(repository: Path | None) -> None:
         repository = root
         logger.info(f"Using repository at {repository}")
 
-    # Both eras (#4853): the SDK's dual-era loop lets the client's first
-    # request decide. `initialize` gets the 2025-11-25 handshake;
-    # `server/discover` or a request carrying a 2026-07-28 envelope gets the
-    # modern, sessionless era, with its required result fields (resultType,
-    # ttlMs, cacheScope) filled in by the SDK.
-    await create_server(repository).run_stdio_async()
+    await run(create_server(repository), transport)

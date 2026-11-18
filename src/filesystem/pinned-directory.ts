@@ -1,6 +1,6 @@
 // Filesystem operations anchored to their directory, so a directory swapped
-// out from under them cannot redirect them: every write, and every read that
-// returns a file's content or metadata.
+// out from under them cannot redirect them: every write, every read that
+// returns a file's content or metadata, and every directory listing.
 //
 // validatePath() checks a path and returns its canonical form, but the write
 // or read that follows resolves that path again. A directory on it swapped
@@ -22,14 +22,32 @@
 // name inside the anchored source directory, renames only that name across,
 // checks it arrived by identity, and puts the source back if anything fails.
 //
+// A listing enters the listed directory itself and reads ".". Two
+// consequences follow. Entering needs search (x) permission on the directory,
+// so one the server can read but not enter (r without x) is refused with
+// EACCES where a plain readdir listed its names. Falling back to that readdir
+// by path would reopen the swap for any directory whose owner clears its x
+// bit, and Node has no portable way to list through a descriptor (Linux's
+// /proc/self/fd has no macOS equivalent), so it is refused. And the listing
+// is synchronous (the cwd invariant at inDirectory), so a directory on a
+// provider that stalls (#4162) would block the whole process; callers
+// therefore read it once asynchronously first (listValidatedDirectory in
+// lib.ts), which a stall times out or holds only that request, and use only
+// the anchored listing.
+//
 // On Windows the working directory is a string and relative paths resolve
 // against it, so reading it back proves nothing; there the leaf is lstat'd
 // relative to the anchor and must be the file the descriptor opened, which
-// narrows the race without closing it.
+// narrows the race without closing it. A listing there has no such check, and
+// is no more anchored than a readdir by path.
+// That gap is a decided limit of the implementation, not pending work:
+// closing it needs handle-relative opens, so native code (#5260, closed as
+// not planned). The README states it for users, under "Access Control".
 
 import { randomBytes } from "crypto";
 import fs from "fs";
 import path from "path";
+import { getSystemErrorMessage } from "util";
 import { isWindowsUncRoot } from "./path-validation.js";
 
 // Descriptor I/O, looked up on fs at call time so tests can stand in for it.
@@ -190,11 +208,14 @@ function cannotEnterError(directory: string, error: unknown): Error {
   return Object.assign(new Error(message), { code });
 }
 
-function enterDirectory(directory: string): void {
+function enterDirectory(
+  directory: string,
+  cannotEnter: (directory: string, error: unknown) => Error = cannotEnterError,
+): void {
   try {
     process.chdir(directory);
   } catch (error) {
-    throw cannotEnterError(directory, error);
+    throw cannotEnter(directory, error);
   }
   verifyWorkingDirectory(directory);
 }
@@ -211,7 +232,11 @@ function enterDirectory(directory: string): void {
  * it. Only what is done to an anchor-relative path inside `action` uses it;
  * every other path the server hands to fs is absolute.
  */
-function inDirectory<T>(directory: string, action: () => T): T {
+function inDirectory<T>(
+  directory: string,
+  action: () => T,
+  cannotEnter?: (directory: string, error: unknown) => Error,
+): T {
   let previous: string | undefined;
   try {
     previous = process.cwd();
@@ -219,7 +244,7 @@ function inDirectory<T>(directory: string, action: () => T): T {
     // The working directory was removed; there is nothing to return to.
   }
   try {
-    enterDirectory(directory);
+    enterDirectory(directory, cannotEnter);
     return action();
   } finally {
     try {
@@ -983,4 +1008,51 @@ export function createDirectoryInPlace(directory: string): void {
       }
     }
   });
+}
+
+/**
+ * The error for a directory a listing could not enter, worded as readdir's own
+ * (`ENOENT: no such file or directory, scandir '<directory>'`), since that is
+ * the call it stands in for. Like cannotEnterError, it names neither the
+ * working directory left nor chdir, and keeps the code.
+ */
+function cannotListError(directory: string, error: unknown): Error {
+  const { code, errno } = error as NodeJS.ErrnoException;
+  const description =
+    errno === undefined
+      ? "cannot enter directory"
+      : getSystemErrorMessage(errno);
+  return Object.assign(
+    new Error(`${code ?? "Error"}: ${description}, scandir '${directory}'`),
+    { code },
+  );
+}
+
+/**
+ * The entries of the directory at `directory`, a path validatePath returned,
+ * read from inside it: the process enters it, checks it entered the validated
+ * directory, and lists ".", so a directory swapped onto the path after
+ * validation is refused rather than listed. Entries come back as
+ * fs.readdir(directory, { withFileTypes: true }) returns them, and errors in
+ * its wording. Synchronous; see the module header for what callers do first.
+ */
+export function readDirectoryInPlace(directory: string): fs.Dirent[] {
+  return inDirectory(
+    directory,
+    () => {
+      let entries: fs.Dirent[];
+      try {
+        entries = fs.readdirSync(".", { withFileTypes: true });
+      } catch (error) {
+        throw namingPath(error, ".", directory);
+      }
+      // Read from ".", so each entry's parentPath is "."; name the directory,
+      // as a readdir of its path would.
+      for (const entry of entries) {
+        entry.parentPath = directory;
+      }
+      return entries;
+    },
+    cannotListError,
+  );
 }

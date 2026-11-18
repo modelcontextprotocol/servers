@@ -257,3 +257,18 @@ test("RELEASING.md names the statuses a version PR is merged on", () => {
     assert.ok(releasing.includes(`\`${context}\``), context);
   assert.doesNotMatch(releasing, /Close and reopen the PR to run CI/);
 });
+
+// #5463 (Step 1 of a staged rename): `mcp-interface-diff.yml` exists so the
+// name is on `main` before #5527 (Step 2) points the version workflows at it.
+// Until then it must not run beside the real diff on a push or a pull
+// request, and nothing may dispatch it yet: the version workflows keep
+// dispatching `everything-mcp-diff.yml` (pinned in VERSION_WORKFLOWS above).
+test("mcp-interface-diff.yml is a dispatch-only placeholder until Step 2", () => {
+  const wf = workflow("mcp-interface-diff.yml");
+  assert.deepEqual(Object.keys(wf.on), ["workflow_dispatch"]);
+  for (const { file } of VERSION_WORKFLOWS)
+    assert.ok(
+      !read(`.github/workflows/${file}`).includes("mcp-interface-diff.yml"),
+      `${file} does not dispatch the placeholder yet`,
+    );
+});

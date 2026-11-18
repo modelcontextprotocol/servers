@@ -781,6 +781,11 @@ describe("Lib Functions", () => {
         ];
 
         mockReaddir.mockResolvedValueOnce(mockEntries as Dirent[]);
+        // The anchored listing the search uses (the readdir above is only
+        // its bounded first read; see listValidatedDirectory).
+        mockPinned.readDirectoryInPlace.mockReturnValueOnce(
+          mockEntries as Dirent[],
+        );
 
         const testDir =
           process.platform === "win32" ? "C:\\allowed\\dir" : "/allowed/dir";
@@ -815,6 +820,11 @@ describe("Lib Functions", () => {
         ];
 
         mockReaddir.mockResolvedValueOnce(mockEntries as Dirent[]);
+        // The anchored listing the search uses (the readdir above is only
+        // its bounded first read; see listValidatedDirectory).
+        mockPinned.readDirectoryInPlace.mockReturnValueOnce(
+          mockEntries as Dirent[],
+        );
 
         // Mock validatePath to throw error for invalid_file.txt
         mockFs.realpath.mockImplementation(async (path: PathLike) => {
@@ -852,6 +862,11 @@ describe("Lib Functions", () => {
         ];
 
         mockReaddir.mockResolvedValueOnce(mockEntries as Dirent[]);
+        // The anchored listing the search uses (the readdir above is only
+        // its bounded first read; see listValidatedDirectory).
+        mockPinned.readDirectoryInPlace.mockReturnValueOnce(
+          mockEntries as Dirent[],
+        );
 
         const testDir =
           process.platform === "win32" ? "C:\\allowed\\dir" : "/allowed/dir";

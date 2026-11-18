@@ -64,6 +64,7 @@ servers/
 ├── .github/workflows/        typescript.yml, python.yml (per-package CI), release.yml (publishes on a GitHub Release),
 │                             version-packages.yml (the changesets PR), prepare-python-release.yml (the CalVer PR),
 │                             everything-mcp-diff.yml (each changed server's interface diff on PRs),
+│                             mcp-interface-diff.yml (a dispatch-only placeholder for that file's new name, #5463),
 │                             main-source.yml (a PR into main must bring nothing that is not on v2/main),
 │                             and the scheduled sweeps that file issues: dependency-refresh.yml, dependabot-alerts.yml, sdk-watch.yml
 ├── .github/ISSUE_TEMPLATE/   Bug and feature issue forms; config.yml routes security and new servers away
@@ -100,7 +101,11 @@ opening paragraph instead, as this one does. A format with no comment syntax
 
 Node **24** for the TypeScript servers: the development version and the oldest
 supported (`engines` is `>=24`), and CI validates each TypeScript server on 24
-and 26 in parallel legs. Python **>= 3.10** for the Python servers, at the version each server's `.python-version` pins. Python
+and 26 in parallel legs. Python **>= 3.10** for the Python servers, at the version each server's `.python-version` pins,
+except `fetch`, whose floor is **>= 3.11.5**: no `soupsieve` release patched
+against its open advisories supports an older Python (#5546). A server's
+floor is the `requires-python` in its `pyproject.toml`; raise one only when a
+dependency forces it, and record the exception here. Python
 dependencies are managed with **`uv`, never `pip`**.
 
 ```sh
@@ -688,8 +693,11 @@ look before retrying.
   2026-07-28 request lives under a handle the server mints. Ask a client for
   input (elicitation, sampling, roots) by returning `inputRequired(...)`,
   which the SDK's legacy shim also serves to 2025-era clients.
-- **Transports**: stdio is the default and every server supports it.
-  `everything` also serves Streamable HTTP and HTTP+SSE. **HTTP+SSE is
+- **Transports**: stdio is the default and every server supports it. Every
+  server also serves Streamable HTTP on `/mcp` at `HOST`:`PORT`
+  (loopback:3001 by default), which `everything` selects with its
+  `streamableHttp` argument and the others with `--transport
+  streamable-http`; `everything` alone also serves HTTP+SSE. **HTTP+SSE is
   deprecated**: keep what exists working, and never make it the default or the
   recommended option in new code or docs.
 - **Tool annotations**: every tool you add or change sets `readOnlyHint`,

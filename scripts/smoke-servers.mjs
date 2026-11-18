@@ -8,8 +8,8 @@
  *   npm run smoke                             # the root entry point (all)
  *
  * For each server and transport it connects an MCP client, lists the tools,
- * and calls one of them: stdio for all seven servers, plus HTTP+SSE and
- * Streamable HTTP for `everything`, the only server that serves them.
+ * and calls one of them: stdio and Streamable HTTP for all seven servers
+ * (#576), plus HTTP+SSE for `everything`, the only server that serves it.
  *
  * Why it exists when every server has a test suite: the suites import the
  * source. Nothing in them runs the artifact a user actually launches, which is
@@ -40,8 +40,9 @@
  * 3001, so the smoke does not collide with a server the developer has running.
  * That port is not reserved between the probe and the server's own `listen`,
  * so a launch whose server reports the port taken is relaunched on a fresh
- * one. Both HTTP transports report it (`listenOrExit` in `everything`'s
- * `transports/listen.ts`).
+ * one. Every HTTP launch reports it: `listenOrExit` in `everything`'s
+ * `transports/listen.ts`, the other TypeScript servers' `http.ts` (through
+ * their fatal-error line), and uvicorn under the Python servers.
  *
  * One server failing does not stop the rest: the run reports every target's
  * verdict and exits non-zero if any failed, so one run shows the whole picture.
@@ -122,7 +123,7 @@ export const SERVERS = [
   {
     name: "filesystem",
     language: "ts",
-    transports: ["stdio"],
+    transports: ["stdio", "streamableHttp"],
     args: (ctx) => [ctx.dir],
     call: () => ({ name: "list_allowed_directories", arguments: {} }),
     expect: (ctx) => path.basename(ctx.dir),
@@ -130,14 +131,14 @@ export const SERVERS = [
   {
     name: "memory",
     language: "ts",
-    transports: ["stdio"],
+    transports: ["stdio", "streamableHttp"],
     env: (ctx) => ({ MEMORY_FILE_PATH: path.join(ctx.dir, "memory.jsonl") }),
     call: () => ({ name: "read_graph", arguments: {} }),
   },
   {
     name: "sequentialthinking",
     language: "ts",
-    transports: ["stdio"],
+    transports: ["stdio", "streamableHttp"],
     call: () => ({
       name: "sequentialthinking",
       arguments: {
@@ -151,7 +152,7 @@ export const SERVERS = [
   {
     name: "fetch",
     language: "py",
-    transports: ["stdio"],
+    transports: ["stdio", "streamableHttp"],
     // fetch refuses loopback addresses by default (#4838); the smoke page is
     // on loopback, so the guard is turned off for it.
     args: () => ["--allow-private-ips"],
@@ -167,7 +168,7 @@ export const SERVERS = [
   {
     name: "git",
     language: "py",
-    transports: ["stdio"],
+    transports: ["stdio", "streamableHttp"],
     args: (ctx) => ["--repository", ctx.dir],
     prepare: (ctx) => run("git", ["init", "--quiet", ctx.dir]),
     call: (ctx) => ({ name: "git_status", arguments: { repo_path: ctx.dir } }),
@@ -175,14 +176,14 @@ export const SERVERS = [
   {
     name: "time",
     language: "py",
-    transports: ["stdio"],
+    transports: ["stdio", "streamableHttp"],
     args: () => ["--local-timezone", "UTC"],
     call: () => ({ name: "get_current_time", arguments: { timezone: "UTC" } }),
     expect: "UTC",
   },
 ];
 
-/** The argument that selects a transport; only `everything` takes one. */
+/** The path each HTTP transport is served on. */
 const TRANSPORT_ENDPOINT = { sse: "/sse", streamableHttp: "/mcp" };
 
 /** Run a setup command to completion; throw with its output if it fails. */
@@ -289,9 +290,14 @@ export function launchSpec(
  * @returns {string[]}
  */
 export function serverArguments(server, transport, ctx) {
-  // `everything` picks its transport from its first argument; the others are
-  // stdio-only and take none.
-  const transportArg = server.transports.length > 1 ? [transport] : [];
+  // `everything` picks its transport from its first argument; the others
+  // default to stdio and take `--transport streamable-http` for HTTP (#576).
+  const transportArg =
+    server.name === "everything"
+      ? [transport]
+      : transport === "streamableHttp"
+        ? ["--transport", "streamable-http"]
+        : [];
   return [...transportArg, ...(server.args?.(ctx) ?? [])];
 }
 
