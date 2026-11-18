@@ -436,7 +436,21 @@ export function releaseHeldLocks(): void {
 // signal's number.
 const SIGNAL_EXIT_CODES = { SIGINT: 130, SIGTERM: 143 } as const;
 
+let exitLockCleanupInstalled = false;
 let lockCleanupInstalled = false;
+
+// Release held locks when the process exits normally or through
+// process.exit(), by the `exit` event. Installed once, however the server is
+// started. It covers a signal only when something turns that signal into a
+// process.exit(): installLockCleanup() does for stdio, and run() does for
+// Streamable HTTP, whose signals first close the listener (#5595).
+export function installExitLockCleanup(): void {
+  if (exitLockCleanupInstalled) {
+    return;
+  }
+  exitLockCleanupInstalled = true;
+  process.on("exit", releaseHeldLocks);
+}
 
 // Release held locks however the server process ends (#5485): on a normal
 // exit or process.exit() through the `exit` event, and on SIGINT or SIGTERM,
@@ -449,7 +463,7 @@ export function installLockCleanup(): void {
     return;
   }
   lockCleanupInstalled = true;
-  process.on("exit", releaseHeldLocks);
+  installExitLockCleanup();
   for (const [signal, code] of Object.entries(SIGNAL_EXIT_CODES)) {
     process.on(signal, () => process.exit(code));
   }
@@ -1781,7 +1795,10 @@ export function parseTransport(args: string[]): TransportName {
 
 // Start the server on the transport args names, and hand back how to stop
 // it. Streamable HTTP listens on HOST:PORT (loopback:3001 by default) and also
-// stops, exiting the process, on SIGINT or SIGTERM.
+// stops, exiting the process, on SIGINT or SIGTERM. Closing the listener does
+// not wait for a tool call that is mid-write, so the exit that follows still
+// goes through the lock cleanup (#5595); a second signal does not wait for
+// the close either, and exits with the status the signal's default would give.
 export async function run(
   args: string[] = process.argv.slice(2),
 ): Promise<{ close: () => Promise<void> }> {
@@ -1799,17 +1816,24 @@ export async function run(
   console.error(
     `Knowledge Graph MCP Server running on Streamable HTTP at ${running.url}`,
   );
-  const stop = () => {
-    running.close().then(
-      () => process.exit(0),
-      (error: unknown) => {
-        console.error("Error shutting down:", error);
-        process.exit(1);
-      },
-    );
+  installExitLockCleanup();
+  let stopping = false;
+  const stop = (signal: keyof typeof SIGNAL_EXIT_CODES) => {
+    if (stopping) {
+      process.exit(SIGNAL_EXIT_CODES[signal]);
+    } else {
+      stopping = true;
+      running.close().then(
+        () => process.exit(0),
+        (error: unknown) => {
+          console.error("Error shutting down:", error);
+          process.exit(1);
+        },
+      );
+    }
   };
-  process.once("SIGINT", stop);
-  process.once("SIGTERM", stop);
+  process.on("SIGINT", () => stop("SIGINT"));
+  process.on("SIGTERM", () => stop("SIGTERM"));
   return running;
 }
 
