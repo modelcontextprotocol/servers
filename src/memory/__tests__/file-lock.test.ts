@@ -877,6 +877,53 @@ describe("withFileLock", () => {
       expect(await fs.readdir(dir)).toEqual([]);
     });
 
+    it("keeps a lock it has just created fresh while it waits out a guard", async () => {
+      // A guard left by a crash a moment ago: the new lock waits for it to
+      // go stale, and must not look abandoned itself by the time it does.
+      await fs.writeFile(guardPath(), "");
+      const opens = watchOpens();
+      const firstCheck = opens.opened(guardPath(), "r");
+      const held = withFileLock(lockPath, async () => "ran", fast);
+      await firstCheck;
+      const old = new Date(Date.now() - 600_000);
+      await fs.utimes(lockPath, old, old);
+
+      // Each turn of the wait checks the guard, then refreshes the lock, so
+      // two more checks put one whole refresh after the ageing above.
+      await opens.opened(guardPath(), "r");
+      await opens.opened(guardPath(), "r");
+      const { mtimeMs } = await fs.stat(lockPath);
+      expect(mtimeMs).toBeGreaterThan(Date.now() - 60_000);
+      await fs.unlink(guardPath());
+
+      expect(await held).toBe("ran");
+      expect(await fs.readdir(dir)).toEqual([]);
+    });
+
+    it("leaves a lock that displaced its own in place when its check fails", async () => {
+      const realOpen = fs.open;
+      vi.spyOn(fs, "open").mockImplementation((async (
+        ...args: Parameters<typeof fs.open>
+      ) => {
+        if (args[0] === guardPath() && args[1] === "r") {
+          // A breaker has put another holder's lock back over the new one,
+          // and then the check for a break in progress fails.
+          await fs.writeFile(lockPath, "another holder");
+          throw Object.assign(new Error("EACCES: simulated"), {
+            code: "EACCES",
+          });
+        }
+        return realOpen(...args);
+      }) as typeof fs.open);
+
+      await expect(
+        withFileLock(lockPath, async () => "ran", fast),
+      ).rejects.toThrow("EACCES: simulated");
+      expect(heldLockPaths()).toEqual([]);
+      expect(await fs.readFile(lockPath, "utf-8")).toBe("another holder");
+      expect(await fs.readdir(dir)).toEqual(["memory.jsonl.lock"]);
+    });
+
     it("clears a guard left by a crash rather than waiting on it", async () => {
       await fs.writeFile(guardPath(), "");
       const longAgo = new Date(Date.now() - 120_000);

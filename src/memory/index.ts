@@ -352,6 +352,9 @@ async function isLockStale(
 //   holder that stops refreshing it for staleMs is presumed dead. A lock
 //   file can go no further without a lock the kernel releases itself, which
 //   Node offers only through a native dependency.
+// - A guard left by a crash is cleared by path. Two processes clearing the
+//   same one at once can remove a guard a third took in between, which
+//   leaves that third process unguarded for its few calls (#5624).
 // - A server older than this change takes the guard only to break a lock. It
 //   releases without the guard and runs as soon as it has created the lock.
 //   Sharing a memory file with one is safe in every way it was before (same
@@ -635,6 +638,19 @@ async function releaseLock(
   }
 }
 
+// Refresh the lock at lockPath, if it still holds token, so it does not go
+// stale while its holder is alive. Returns false once the lock holds another
+// token: it changed hands, and keeping it fresh would stop a crashed new
+// owner's lock from ever going stale.
+async function refreshLock(lockPath: string, token: string): Promise<boolean> {
+  if ((await fs.readFile(lockPath, "utf-8")) !== token) {
+    return false;
+  }
+  const now = new Date();
+  await fs.utimes(lockPath, now, now);
+  return true;
+}
+
 // Whether the lock this writer has just created at lockPath is still its own
 // once no break is in progress. A breaker that took a live lock aside by
 // mistake puts it back over whatever stands at lockPath, and it holds the
@@ -643,7 +659,10 @@ async function releaseLock(
 // since a breaker that starts later judges this fresh lock live and leaves
 // it. The wait is not bounded by the caller's timeout, because a lock held
 // meanwhile cannot be given up safely by path; it ends within a few
-// file-system calls, or once a guard left by a crash is staleMs old.
+// file-system calls, or once a guard left by a crash is staleMs old. The lock
+// is refreshed on every turn of that wait: its heartbeat has not started, and
+// a lock that aged alongside a crash-left guard would otherwise look
+// abandoned the moment the guard is cleared.
 async function confirmLock(
   lockPath: string,
   token: string,
@@ -651,6 +670,8 @@ async function confirmLock(
   retryMs: number,
 ): Promise<boolean> {
   while (await isGuardHeld(guardPathOf(lockPath), staleMs)) {
+    // A failure here (the lock is aside, or gone) is left to the check below.
+    await refreshLock(lockPath, token).catch(ignoreError);
     await pause(retryMs);
   }
   try {
@@ -710,9 +731,16 @@ export async function withFileLock<T>(
       } catch (error) {
         // The lock was created but not written, or could not be confirmed:
         // remove it rather than leave every other writer waiting for it to
-        // go stale.
+        // go stale. Before its token is written the file can only be ours.
+        // After, a breaker may have put another holder's lock back over it,
+        // so it is released like any held lock: only if it still holds our
+        // token.
         await handle.close().catch(ignoreError);
-        await fs.unlink(lockPath).catch(ignoreError);
+        if (held.written) {
+          await releaseLock(lockPath, token, staleMs, retryMs);
+        } else {
+          await fs.unlink(lockPath).catch(ignoreError);
+        }
         untrackLock(lockPath, held);
         throw error;
       }
@@ -759,18 +787,14 @@ export async function withFileLock<T>(
   // as stale and re-taken, the file belongs to another process, and keeping
   // it fresh would stop a crashed new owner's lock from ever going stale.
   const heartbeat = setInterval(() => {
-    const now = new Date();
     // Not awaited: an interval callback has no caller to await it, and every
     // failure (the lock already gone) is caught and ignored here.
-    void fs
-      .readFile(lockPath, "utf-8")
-      .then((current) => {
-        if (current !== token) {
+    void refreshLock(lockPath, token)
+      .then((ours) => {
+        if (!ours) {
           // The lock changed hands: stop refreshing it, for good.
           clearInterval(heartbeat);
-          return;
         }
-        return fs.utimes(lockPath, now, now);
       })
       .catch(ignoreError);
   }, staleMs / 2);
