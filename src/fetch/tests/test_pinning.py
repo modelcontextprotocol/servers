@@ -747,6 +747,30 @@ async def test_backend_reports_an_unresolvable_host_as_a_connect_error() -> None
         await backend.connect_tcp("name.test", 80)
 
 
+async def test_backend_bounds_the_lookup_by_the_connect_timeout() -> None:
+    async def resolve(host: str) -> Sequence[str]:
+        await asyncio.Event().wait()
+        return []
+
+    backend = PinnedBackend(resolve, lambda host, found: None, FakeInner())
+    with pytest.raises(httpcore.ConnectTimeout, match="Timed out resolving name.test"):
+        await backend.connect_tcp("name.test", 80, timeout=0.05)
+
+
+async def test_backend_takes_the_lookup_out_of_the_time_left_to_connect() -> None:
+    inner = FakeInner()
+
+    async def resolve(host: str) -> Sequence[str]:
+        await asyncio.sleep(0.1)
+        return ["192.0.2.1"]
+
+    backend = PinnedBackend(resolve, lambda host, found: None, inner)
+    await backend.connect_tcp("name.test", 80, timeout=30)
+
+    ((_, _, left),) = inner.calls
+    assert left is not None and 0 < left < 30
+
+
 async def test_backend_reports_a_host_with_no_addresses_as_a_connect_error() -> None:
     backend, _ = backend_for([], FakeInner())
     with pytest.raises(httpcore.ConnectError, match="name.test has no addresses"):
@@ -775,7 +799,9 @@ async def test_backend_raises_the_first_failure_when_every_address_fails() -> No
 async def test_backend_tries_the_next_address_beside_one_that_does_not_answer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(pinning, "CONNECTION_ATTEMPT_DELAY", 0.01)
+    # Several ticks of Windows' ~16 ms clock, so the second attempt is
+    # measurably later than the first.
+    monkeypatch.setattr(pinning, "CONNECTION_ATTEMPT_DELAY", 0.1)
     inner = FakeInner(hang=["192.0.2.1"])
     backend, _ = backend_for(["192.0.2.1", "192.0.2.2"], inner)
 

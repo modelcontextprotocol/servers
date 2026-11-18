@@ -83,17 +83,21 @@ class PinnedBackend(httpcore.AsyncNetworkBackend):
         local_address: str | None = None,
         socket_options: Iterable[Any] | None = None,
     ) -> httpcore.AsyncNetworkStream:
+        # The connect timeout covers the lookup too, as it does for a
+        # name-based connect: the attempts below get what the lookup left.
+        loop = asyncio.get_running_loop()
+        started = loop.time()
         try:
-            resolved = await self._resolve(host)
+            resolved = await asyncio.wait_for(self._resolve(host), timeout)
         except socket.gaierror as e:
             # What the inner backend reports for a name it cannot resolve.
             raise httpcore.ConnectError(str(e)) from e
+        except asyncio.TimeoutError as e:
+            raise httpcore.ConnectTimeout(f"Timed out resolving {host}") from e
         # getaddrinfo lists an address once per socket type.
         addresses = list(dict.fromkeys(resolved))
         self._vet(host, addresses)
 
-        loop = asyncio.get_running_loop()
-        started = loop.time()
         waiting = list(addresses)
         attempts: set[asyncio.Task[httpcore.AsyncNetworkStream]] = set()
         failures: list[Exception] = []
