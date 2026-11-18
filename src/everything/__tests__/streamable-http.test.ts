@@ -722,7 +722,7 @@ describe("idle sessions (#5558)", () => {
     await response.text();
   });
 
-  it("logs an idle session that fails to close", async () => {
+  it("logs an idle session that fails to close, and evicts it at a later look", async () => {
     await serveWithIdleTimeout(IDLE);
     const { sessionId } = await rawInitialize();
     const failure = new Error("close failed");
@@ -737,6 +737,19 @@ describe("idle sessions (#5558)", () => {
         failure,
       ),
     );
+    // The failed close left the session in place, and still served.
+    const held = await post(ping, sessionId);
+    expect(held.status).toBe(200);
+    await held.text();
+
+    // It is watched again, so the next timeout closes it for real.
+    await vi.waitFor(() => {
+      vi.advanceTimersByTime(IDLE);
+      expect(log).toHaveBeenCalledWith(
+        `Transport closed for session ${sessionId}, removing from transports map`,
+      );
+    });
+    expect((await post(ping, sessionId)).status).toBe(404);
   });
 
   it("stops looking for idle sessions on shutdown", async () => {

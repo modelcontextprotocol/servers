@@ -223,9 +223,13 @@ export function createApp(
     transports
       .get(sessionId)
       ?.close()
-      .catch((error: unknown) =>
-        console.log(`Error closing idle session ${sessionId}:`, error),
-      );
+      .catch((error: unknown) => {
+        console.log(`Error closing idle session ${sessionId}:`, error);
+        // The session is still held, so watch it again: it is tried again
+        // after another timeout rather than kept for good. (If it did end,
+        // that later look finds no transport and just forgets it.)
+        idle.add(sessionId);
+      });
   });
 
   // A session-less POST's body is parsed once, to classify it and serve it.
