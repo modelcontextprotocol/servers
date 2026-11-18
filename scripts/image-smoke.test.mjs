@@ -10,6 +10,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import {
   mkdirSync,
   mkdtempSync,
@@ -22,6 +23,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   IMAGES,
+  INTERRUPT_EXIT_CODES,
   KILLED_EXIT_CODE,
   TOOLING_PATHS,
   buildCommand,
@@ -29,6 +31,7 @@ import {
   chooseImages,
   findUnlistedImages,
   imageTag,
+  inheritedEnv,
   judgeLeftovers,
   judgeStop,
   main,
@@ -521,6 +524,65 @@ test("main checks every selected image, and one failure does not stop the rest",
   assert.equal(passed.result, 0);
   assert.match(passed.output, /OK \(1 image built and booted\)/);
 });
+
+test("the container is started with this process's whole environment", () => {
+  // DOCKER_HOST and DOCKER_CONTEXT choose the daemon; the transport's default
+  // environment drops them, so the boot would miss the daemon the build used.
+  assert.deepEqual(
+    inheritedEnv({ DOCKER_HOST: "tcp://x:1", PATH: "/bin", GONE: undefined }),
+    { DOCKER_HOST: "tcp://x:1", PATH: "/bin" },
+  );
+});
+
+test("an interrupt removes the container and exits as the signal would", async () => {
+  for (const [signal, code] of Object.entries(INTERRUPT_EXIT_CODES)) {
+    const { docker, calls } = fakeDocker();
+    const proc = Object.assign(new EventEmitter(), {
+      exited: [],
+      exit(n) {
+        this.exited.push(n);
+      },
+    });
+    let interrupted;
+    const connect = async (args) => {
+      // The container is up; the interrupt arrives mid-boot.
+      interrupted = args[args.indexOf("--name") + 1];
+      proc.emit(signal);
+      return fakeSessionFor(["get_current_time"]);
+    };
+    await checkImage(byName("time"), { docker, connect, proc, ...quiet });
+    assert.deepEqual(proc.exited, [code], signal);
+    assert.deepEqual(calls[1].args, ["rm", "-f", interrupted], signal);
+    // Normal completion unregisters both handlers.
+    for (const name of Object.keys(INTERRUPT_EXIT_CODES))
+      assert.equal(proc.listenerCount(name), 0, name);
+  }
+});
+
+test("a failed check unregisters its interrupt handlers too", async () => {
+  const proc = Object.assign(new EventEmitter(), { exit() {} });
+  const { connect } = fakeSession({ tools: ["other"] });
+  await assert.rejects(
+    checkImage(byName("time"), {
+      docker: fakeDocker().docker,
+      connect,
+      proc,
+      ...quiet,
+    }),
+  );
+  assert.equal(proc.listenerCount("SIGINT"), 0);
+  assert.equal(proc.listenerCount("SIGTERM"), 0);
+});
+
+/** A bare session that lists `tools`. */
+function fakeSessionFor(tools) {
+  return {
+    listTools: async () => tools,
+    callTool: async () => ({ isError: false, text: "" }),
+    stderr: () => "",
+    close: async () => {},
+  };
+}
 
 test("imageTag is one fixed tag per server", () => {
   assert.equal(imageTag("time"), "mcp-image-smoke/time:local");

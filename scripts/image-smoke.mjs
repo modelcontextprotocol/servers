@@ -365,6 +365,16 @@ function docker(args, cwd = repoRoot) {
   };
 }
 
+/** This process's environment, as the string map the transport takes. */
+export function inheritedEnv(base = process.env) {
+  return Object.fromEntries(
+    Object.entries(base).filter(([, value]) => typeof value === "string"),
+  );
+}
+
+/** The signals that interrupt a run, and what a process they end exits with. */
+export const INTERRUPT_EXIT_CODES = { SIGINT: 130, SIGTERM: 143 };
+
 /**
  * Connect an MCP client to a container started with `dockerArgs`.
  *
@@ -382,6 +392,10 @@ async function connect(dockerArgs) {
   const transport = new StdioClientTransport({
     command: "docker",
     args: dockerArgs,
+    // The transport's default environment is a short allowlist that leaves
+    // out DOCKER_HOST, DOCKER_CONTEXT and the TLS settings, so `docker run`
+    // would reach a different daemon from the one `docker()` built on.
+    env: inheritedEnv(),
     stderr: "pipe",
   });
   let stderr = "";
@@ -420,12 +434,15 @@ async function connect(dockerArgs) {
  *
  * @param {(typeof IMAGES)[number]} image
  * @param {{ docker?: typeof docker, connect?: typeof connect,
- *   log?: (line: string) => void, root?: string }} [deps] replaced in tests
+ *   log?: (line: string) => void, root?: string,
+ *   proc?: Pick<NodeJS.Process, "once" | "off" | "exit"> }} [deps] replaced
+ *   in tests
  */
 export async function checkImage(image, deps = {}) {
   const run = deps.docker ?? docker;
   const open = deps.connect ?? connect;
   const log = deps.log ?? console.log;
+  const proc = deps.proc ?? process;
 
   const build = buildCommand(image, deps.root);
   const built = run(build.args, build.cwd);
@@ -438,6 +455,20 @@ export async function checkImage(image, deps = {}) {
   const container = `mcp-image-smoke-${image.name}-${process.pid}-${Date.now()}`;
   let session;
   let scratch;
+  // An interrupt (Ctrl-C, a cancelled gate) ends the process without running
+  // the `finally` below, and the container has no `--rm`, so it would be left
+  // behind, still running where the image ignores the signal `docker run`
+  // forwards. Remove it first, then exit as the signal would have.
+  const interrupts = Object.entries(INTERRUPT_EXIT_CODES).map(
+    ([signal, code]) => [
+      signal,
+      () => {
+        run(["rm", "-f", container]);
+        proc.exit(code);
+      },
+    ],
+  );
+  for (const [signal, handler] of interrupts) proc.once(signal, handler);
   try {
     session = await open(runArgs(image, container));
     try {
@@ -502,6 +533,7 @@ export async function checkImage(image, deps = {}) {
   } finally {
     await session?.close();
     run(["rm", "-f", container]);
+    for (const [signal, handler] of interrupts) proc.off(signal, handler);
     if (scratch) rmSync(scratch, { recursive: true, force: true });
   }
 }
