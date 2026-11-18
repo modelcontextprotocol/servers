@@ -1063,7 +1063,24 @@ export function createServer(
           },
         },
       );
-      let text = results.length > 0 ? results.join("\n") : "No matches found";
+      // An empty result says what was searched and how the pattern is read,
+      // and how to widen a pattern that cannot reach subdirectories: a bare
+      // "No matches found" left a model repeating the same '*.ext' pattern
+      // (#5553). It stays one paragraph, opening with those three words.
+      let text: string;
+      if (results.length > 0) {
+        text = results.join("\n");
+      } else {
+        text =
+          `No matches found for pattern '${args.pattern}' under ${args.path}. ` +
+          "The pattern is a glob matched case-sensitively against each entry's path " +
+          "relative to that directory: it matches names, never file contents.";
+        if (!args.pattern.includes("**")) {
+          text +=
+            " It has no '**', so it only matches at one depth ('*.ext' only directly " +
+            `under the directory); try '**/${args.pattern}' to match at any depth.`;
+        }
+      }
       if (unreadable.length > 0) {
         text +=
           `\n\nThe search is incomplete: ${unreadable.length} ` +

@@ -1670,7 +1670,16 @@ def create_server(repository: Path | None) -> MCPServer:
 
     @server.tool(
         name=GitTools.LOG.value,
-        description="Shows the commit logs",
+        # #5552: small models read the old one-line description as "a time
+        # window is required" and filtered to an empty one. Say the order and
+        # that the filters are optional, where the model picks its arguments.
+        description=(
+            "Shows the commit log, newest commit first. For the latest "
+            "commits, pass only repo_path (and optionally max_count). "
+            "start_timestamp and end_timestamp are optional filters for a "
+            "date range: omit them unless a specific period is asked for, "
+            "because a range that holds no commits returns none."
+        ),
         annotations=READ_ONLY,
         structured_output=False,
     )
@@ -1687,19 +1696,33 @@ def create_server(repository: Path | None) -> MCPServer:
         start_timestamp: Annotated[
             str | None,
             Field(
-                description=f"Start timestamp for filtering commits. {TIMESTAMP_FORMATS}"
+                description=(
+                    "Optional: only show commits at or after this time. "
+                    f"Omit for no lower bound. {TIMESTAMP_FORMATS}"
+                )
             ),
         ] = None,
         end_timestamp: Annotated[
             str | None,
             Field(
-                description=f"End timestamp for filtering commits. {TIMESTAMP_FORMATS}"
+                description=(
+                    "Optional: only show commits at or before this time. "
+                    f"Omit for no upper bound. {TIMESTAMP_FORMATS}"
+                )
             ),
         ] = None,
     ) -> str:
         entries = git_log(
             open_repo(repo_path), max_count, start_timestamp, end_timestamp
         )
+        if not entries and (start_timestamp or end_timestamp):
+            # #5552: an empty history under a filter reads as "the repository
+            # has no commits". Name the filter as the cause and the way out.
+            return (
+                "Commit history:\n"
+                "No commits match the given start_timestamp/end_timestamp. "
+                "Omit both to see the latest commits."
+            )
         return "Commit history:\n" + "\n".join(entries)
 
     @server.tool(
