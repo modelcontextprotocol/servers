@@ -297,6 +297,10 @@ Files inside the allowed directories are also [resources](https://modelcontextpr
       entirely.
   - Glob-style pattern matching
   - Returns full paths to matches
+  - When nothing matches, the result begins `No matches found` and goes on to
+    name the pattern and the directory searched and to say how the pattern is
+    read. For a pattern with no `**`, which only matches at one depth, it also
+    suggests the `**/` form that matches at any depth
   - Bounded: see [Slow and very large trees](#slow-and-very-large-trees)
   - A subdirectory that cannot be read (no permission, say) is skipped, and the
     result says so: after the matches, a note that the search is incomplete
