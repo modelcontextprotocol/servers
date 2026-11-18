@@ -187,10 +187,11 @@ _NO_SUBMODULE_STATUS = "--ignore-submodules=dirty"
 # error. Git honors it from 2.45.1 and the maintenance releases made with it
 # (2.39.4, 2.40.2, ..., 2.44.1), mapped here as minor -> first patch; an
 # older git ignores it, so `harden_repo` refuses a repository with a promisor
-# remote there. Any of these keys declares one.
+# remote there. Any of these keys declares one; git also reads a
+# `remote.promisor` with no remote name, as a promisor remote named "".
 _NO_LAZY_FETCH_SINCE = {39: 4, 40: 2, 41: 1, 42: 2, 43: 4, 44: 1, 45: 1}
 _PROMISOR_KEYS = (
-    r"^(extensions\.partialclone|remote\..+\.(promisor|partialclonefilter))$"
+    r"^(extensions\.partialclone|remote\.(.+\.)?(promisor|partialclonefilter))$"
 )
 
 

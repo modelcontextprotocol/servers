@@ -34,6 +34,15 @@ posix_only = pytest.mark.skipif(
     sys.platform == "win32", reason="the payloads are POSIX shell commands"
 )
 
+# The protocol tests check what GIT_NO_LAZY_FETCH stops. A git that ignores
+# it (by its version; a distribution backport reads as old) refuses these
+# repositories instead, which the tests of `harden_repo` below cover, so
+# there the protocol tests would pass without testing the variable.
+lazy_fetch_off = pytest.mark.skipif(
+    not _honors_no_lazy_fetch(git.Git().version_info),
+    reason="this git does not honor GIT_NO_LAZY_FETCH",
+)
+
 
 def root_of(repo: git.Repo) -> Path:
     assert repo.working_dir is not None
@@ -112,6 +121,7 @@ async def call(
 
 
 @posix_only
+@lazy_fetch_off
 @pytest.mark.parametrize("transport", ["uploadpack", "ssh"])
 async def test_show_of_a_missing_blob_runs_nothing(
     tmp_path: Path, canary: Canary, transport: str
@@ -130,6 +140,7 @@ async def test_show_of_a_missing_blob_runs_nothing(
 
 
 @posix_only
+@lazy_fetch_off
 @pytest.mark.parametrize("transport", ["uploadpack", "ssh"])
 @pytest.mark.parametrize(
     ("tool", "arguments"),
@@ -156,6 +167,7 @@ async def test_an_absent_object_id_runs_nothing(
 
 
 @posix_only
+@lazy_fetch_off
 @pytest.mark.parametrize("transport", ["uploadpack", "ssh"])
 @pytest.mark.parametrize("tool", ["git_status", "git_diff_staged", "git_diff_unstaged"])
 async def test_a_missing_head_tree_runs_nothing(
@@ -184,6 +196,7 @@ async def test_a_missing_head_tree_runs_nothing(
 
 
 @posix_only
+@lazy_fetch_off
 async def test_partial_clone_runs_nothing(tmp_path: Path, canary: Canary):
     upstream = two_commits(tmp_path / "upstream")
     upstream.git.config("uploadpack.allowFilter", "true")
@@ -204,6 +217,7 @@ async def test_partial_clone_runs_nothing(tmp_path: Path, canary: Canary):
 
 
 @posix_only
+@lazy_fetch_off
 async def test_nested_repository_runs_nothing_under_repository(
     tmp_path: Path, canary: Canary
 ):
@@ -225,6 +239,7 @@ async def test_nested_repository_runs_nothing_under_repository(
 
 
 @posix_only
+@lazy_fetch_off
 async def test_partial_clone_extension_runs_nothing_under_repository(
     tmp_path: Path, canary: Canary
 ):
@@ -245,6 +260,7 @@ async def test_partial_clone_extension_runs_nothing_under_repository(
 
 
 @posix_only
+@lazy_fetch_off
 async def test_a_complete_repository_with_a_promisor_still_works(
     tmp_path: Path, canary: Canary
 ):
@@ -303,6 +319,8 @@ def old_git() -> Any:
     ("key", "value"),
     [
         ("remote.origin.promisor", "true"),
+        ("remote.promisor", "true"),
+        ("remote.partialCloneFilter", "blob:none"),
         ("remote.origin.partialCloneFilter", "blob:none"),
         ("extensions.partialClone", "origin"),
     ],
