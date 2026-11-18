@@ -283,7 +283,9 @@ Files inside the allowed directories are also [resources](https://modelcontextpr
     - `path` (string): Starting directory
     - `pattern` (string): Glob matched, case-sensitively, against each entry's
       path relative to `path`: `*.ext` matches entries directly under `path`,
-      `**/*.ext` or `**/name` matches at any depth
+      `**/*.ext` or `**/name` matches at any depth. For example, `**/*.json`
+      finds every JSON file and `**/*report*` every entry with `report` in its
+      name
     - `excludePatterns` (string[]): Entries to leave out, read the same way as
       `directory_tree`'s. A bare name such as `node_modules` excludes an entry
       of that name at any depth and everything below it; it matches whole
@@ -297,6 +299,10 @@ Files inside the allowed directories are also [resources](https://modelcontextpr
       entirely.
   - Glob-style pattern matching
   - Returns full paths to matches
+  - When nothing matches, the result begins `No matches found` and goes on to
+    name the pattern and the directory searched and to say how the pattern is
+    read. For a pattern with no `**`, which only matches at one depth, it also
+    suggests the `**/` form that matches at any depth
   - Bounded: see [Slow and very large trees](#slow-and-very-large-trees)
   - A subdirectory that cannot be read (no permission, say) is skipped, and the
     result says so: after the matches, a note that the search is incomplete

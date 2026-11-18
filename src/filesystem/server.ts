@@ -190,7 +190,8 @@ const SearchFilesArgsSchema = z.object({
     .string()
     .describe(
       "Glob matched against each entry's path relative to path, never its content: " +
-        "'*.ts' matches directly under path, '**/*.ts' at any depth.",
+        "'*.ts' matches directly under path, '**/*.ts' at any depth, " +
+        "'**/*report*' any name containing 'report'.",
     ),
   excludePatterns: z
     .array(z.string())
@@ -1030,7 +1031,8 @@ export function createServer(
       description:
         "Find files and directories by NAME, not by content: this tool never reads or searches inside files. " +
         "It walks the tree under 'path' and matches a glob pattern against each entry's path relative to 'path' (case-sensitive). " +
-        "Use '*.ext' to match entries directly under 'path', and '**/*.ext' or '**/name' to match at any depth. " +
+        "Use '*.ext' to match entries directly under 'path', and '**/*.ext' or '**/name' to match at any depth: " +
+        "for example, '**/*.json' finds every JSON file and '**/*report*' every entry with 'report' in its name. " +
         "Returns full paths to all matching items. Great for finding files when you don't know their exact location. " +
         "Only searches within allowed directories.",
       inputSchema: jsonSchema2020(SearchFilesArgsSchema.shape),
@@ -1063,7 +1065,24 @@ export function createServer(
           },
         },
       );
-      let text = results.length > 0 ? results.join("\n") : "No matches found";
+      // An empty result says what was searched and how the pattern is read,
+      // and how to widen a pattern that cannot reach subdirectories: a bare
+      // "No matches found" left a model repeating the same '*.ext' pattern
+      // (#5553). It stays one paragraph, opening with those three words.
+      let text: string;
+      if (results.length > 0) {
+        text = results.join("\n");
+      } else {
+        text =
+          `No matches found for pattern '${args.pattern}' under ${args.path}. ` +
+          "The pattern is a glob matched case-sensitively against each entry's path " +
+          "relative to that directory: it matches names, never file contents.";
+        if (!args.pattern.includes("**")) {
+          text +=
+            " It has no '**', so it only matches at one depth ('*.ext' only directly " +
+            `under the directory); try '**/${args.pattern}' to match at any depth.`;
+        }
+      }
       if (unreadable.length > 0) {
         text +=
           `\n\nThe search is incomplete: ${unreadable.length} ` +
