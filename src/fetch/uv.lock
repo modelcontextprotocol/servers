@@ -4,7 +4,7 @@ requires-python = ">=3.11.5"
 resolution-markers = [
     "python_full_version >= '3.14'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'emscripten'",
-    "(python_full_version < '3.14' and sys_platform != 'emscripten') or (python_full_version < '3.12' and sys_platform == 'emscripten')",
+    "python_full_version < '3.12' or (python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform != 'emscripten')",
 ]
 
 [[package]]
@@ -829,7 +829,7 @@ wheels = [
 
 [[package]]
 name = "mcp-server-fetch"
-version = "2026.11.11"
+version = "2026.11.18"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
