@@ -24,7 +24,7 @@
 //     `scripts/lib/workflow-gate.test.mjs` derives that from the npm scripts a
 //     workflow invokes. A check behind an action is invisible to it; a check
 //     behind `npm run interface-diff` is enforced by it. CI
-//     (`everything-mcp-diff.yml`) and the gate run this same file.
+//     (`mcp-interface-diff.yml`) and the gate run this same file.
 //   - The tool comes in as an exact-pinned root devDependency, so it is held
 //     by `package-lock.json`'s integrity hash, the way every other npm
 //     dependency here is, and no third-party action runs in CI at all.

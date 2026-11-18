@@ -4,7 +4,7 @@
 // The Version Packages and Prepare Python Release workflows push their PR
 // branches with the workflow token, which starts no workflow (GitHub holds a
 // `pull_request` run as `action_required`), so they dispatch `typescript.yml`,
-// `python.yml`, `dco.yml` and `everything-mcp-diff.yml` on the branch instead. A dispatched run's checks are left out of the
+// `python.yml`, `dco.yml` and `mcp-interface-diff.yml` on the branch instead. A dispatched run's checks are left out of the
 // status rollup a pull request reads, so each dispatched workflow also mirrors
 // its run onto the commit as a status. Both version workflows run only from `v2/main`, so nothing
 // exercises this path before a release needs it; if any link here breaks,
@@ -17,6 +17,7 @@ import { spawnSync } from "node:child_process";
 import {
   chmodSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -48,7 +49,7 @@ const CI = [
     trigger: "pull_request",
   },
   {
-    file: "everything-mcp-diff.yml",
+    file: "mcp-interface-diff.yml",
     context: "Interface diff (dispatched)",
     trigger: "pull_request",
   },
@@ -63,7 +64,7 @@ const VERSION_WORKFLOWS = [
       "typescript.yml",
       "python.yml",
       "dco.yml",
-      "everything-mcp-diff.yml",
+      "mcp-interface-diff.yml",
     ],
   },
   {
@@ -73,7 +74,7 @@ const VERSION_WORKFLOWS = [
       "typescript.yml",
       "python.yml",
       "dco.yml",
-      "everything-mcp-diff.yml",
+      "mcp-interface-diff.yml",
     ],
   },
 ];
@@ -258,17 +259,34 @@ test("RELEASING.md names the statuses a version PR is merged on", () => {
   assert.doesNotMatch(releasing, /Close and reopen the PR to run CI/);
 });
 
-// #5463 (Step 1 of a staged rename): `mcp-interface-diff.yml` exists so the
-// name is on `main` before #5527 (Step 2) points the version workflows at it.
-// Until then it must not run beside the real diff on a push or a pull
-// request, and nothing may dispatch it yet: the version workflows keep
-// dispatching `everything-mcp-diff.yml` (pinned in VERSION_WORKFLOWS above).
-test("mcp-interface-diff.yml is a dispatch-only placeholder until Step 2", () => {
-  const wf = workflow("mcp-interface-diff.yml");
-  assert.deepEqual(Object.keys(wf.on), ["workflow_dispatch"]);
-  for (const { file } of VERSION_WORKFLOWS)
+// #5527 (Step 2 of the rename staged in #5463): the interface diff lives in
+// `mcp-interface-diff.yml`, and the old `everything-mcp-diff.yml` is gone. A
+// leftover copy would run a second diff on every push and pull request, and a
+// leftover reference would dispatch, or list the runs of, a workflow that no
+// longer exists on `v2/main`: `gh workflow run` fails the version workflow's
+// step, and a `gh run list` on a missing workflow reads as "no newer run".
+test("the interface diff is mcp-interface-diff.yml, and the old name is gone", () => {
+  const dir = path.join(repoRoot, ".github/workflows");
+  const files = readdirSync(dir);
+  assert.ok(!files.includes("everything-mcp-diff.yml"), "the old file");
+  // Comment lines may name the old file (this workflow's header records the
+  // rename); nothing a runner executes may.
+  for (const file of files) {
+    const live = readFileSync(path.join(dir, file), "utf8")
+      .split("\n")
+      .filter((line) => !line.trimStart().startsWith("#"))
+      .join("\n");
     assert.ok(
-      !read(`.github/workflows/${file}`).includes("mcp-interface-diff.yml"),
-      `${file} does not dispatch the placeholder yet`,
+      !live.includes("everything-mcp-diff.yml"),
+      `${file} names the old file`,
     );
+  }
+  // The real diff, not the Step 1 placeholder: it runs on every event the
+  // old file did.
+  assert.deepEqual(Object.keys(workflow("mcp-interface-diff.yml").on).sort(), [
+    "pull_request",
+    "push",
+    "release",
+    "workflow_dispatch",
+  ]);
 });
