@@ -20,6 +20,10 @@
 // classified by the SDK's own `isLegacyRequest`, from a body parsed once and
 // handed to whichever side serves it.
 //
+// A 2025-era session whose client never ends it is evicted once it has been
+// idle for `SESSION_IDLE_TIMEOUT_MILLIS` (#5558); `idle-sessions.ts` holds the
+// reasoning and decides when, and this file closes the transport.
+//
 // `createApp()` builds the Express app without binding a port or installing a
 // signal handler (#4854), so a test can serve it on a free port, drive it with
 // a real client, and call its shutdown handler directly; each app has its own
@@ -44,6 +48,10 @@ import { randomUUID } from "node:crypto";
 import cors from "cors";
 import { bindHost, hostAndPort, listenOrExit } from "./listen.js";
 import { InMemoryEventStore } from "./in-memory-event-store.js";
+import {
+  sessionIdleTimeoutMillis,
+  watchIdleSessions,
+} from "./idle-sessions.js";
 
 /** The most bytes of a refused POST's body read to find its request id. */
 const MAX_ID_BODY_BYTES = 64 * 1024;
@@ -126,6 +134,16 @@ function bodyError(
   }
 }
 
+/** What `createApp()` can be told; the launcher passes nothing. */
+export type StreamableHttpAppOptions = {
+  /**
+   * How long a 2025-era session may sit idle before it is evicted, in
+   * milliseconds; `0` disables eviction. Defaults to what
+   * `SESSION_IDLE_TIMEOUT_MILLIS` asks for.
+   */
+  sessionIdleTimeoutMillis?: number;
+};
+
 /** The Streamable HTTP app, and the handler the launcher installs for SIGINT. */
 export type StreamableHttpApp = {
   app: Express;
@@ -135,10 +153,12 @@ export type StreamableHttpApp = {
 /**
  * Build the Streamable HTTP transport's Express app: Origin validation, CORS,
  * the `/mcp` POST, GET and DELETE routes, the map from session id to
- * transport that they share, the 2026-07-28 handler, and the shutdown handler
- * that closes them.
+ * transport that they share, the eviction of idle sessions from it, the
+ * 2026-07-28 handler, and the shutdown handler that closes them.
  */
-export function createApp(): StreamableHttpApp {
+export function createApp(
+  options: StreamableHttpAppOptions = {},
+): StreamableHttpApp {
   const app = express();
   // A browser page may reach this server only from a localhost origin. The
   // SDK's guard answers any other Origin with a 403 before a route or the
@@ -191,6 +211,27 @@ export function createApp(): StreamableHttpApp {
     NodeStreamableHTTPServerTransport
   >();
 
+  // A session nobody has used for the idle timeout is closed, which runs its
+  // onclose below, so it is removed and cleaned up as a DELETE would have.
+  // Its next request is answered 404, the client's signal to initialize again.
+  const idleTimeoutMillis =
+    options.sessionIdleTimeoutMillis ?? sessionIdleTimeoutMillis();
+  const idle = watchIdleSessions(idleTimeoutMillis, (sessionId) => {
+    console.log(
+      `Session ${sessionId} idle for ${idleTimeoutMillis} ms, closing it`,
+    );
+    transports
+      .get(sessionId)
+      ?.close()
+      .catch((error: unknown) => {
+        console.log(`Error closing idle session ${sessionId}:`, error);
+        // The session is still held, so watch it again: it is tried again
+        // after another timeout rather than kept for good. (If it did end,
+        // that later look finds no transport and just forgets it.)
+        idle.add(sessionId);
+      });
+  });
+
   // A session-less POST's body is parsed once, to classify it and serve it.
   // A POST with a session id is a 2025-era session's, and its transport reads
   // the body itself.
@@ -236,6 +277,7 @@ export function createApp(): StreamableHttpApp {
             // This avoids race conditions where requests might come in before the session is stored
             console.log(`Session initialized with ID: ${sessionId}`);
             transports.set(sessionId, transport);
+            idle.add(sessionId);
           },
         });
 
@@ -247,6 +289,7 @@ export function createApp(): StreamableHttpApp {
               `Transport closed for session ${sid}, removing from transports map`,
             );
             transports.delete(sid);
+            idle.remove(sid);
             cleanup();
           }
         };
@@ -264,6 +307,8 @@ export function createApp(): StreamableHttpApp {
 
       // Handle the request with existing transport - no need to reconnect
       // The existing transport is already connected to the server
+      // (a request in flight keeps its session from being evicted as idle)
+      idle.hold(sessionId, res);
       await transport.handleRequest(req, res);
     } catch (error) {
       console.log("Error handling MCP request:", error);
@@ -309,6 +354,8 @@ export function createApp(): StreamableHttpApp {
       console.log(`Establishing new SSE stream for session ${sessionId}`);
     }
 
+    // The session is in use for as long as this stream stays open
+    idle.hold(sessionId, res);
     const transport = transports.get(sessionId);
     await transport!.handleRequest(req, res);
   });
@@ -358,6 +405,9 @@ export function createApp(): StreamableHttpApp {
   // Handle server shutdown
   const shutdown = async () => {
     console.log("Shutting down server...");
+
+    // Stop looking for idle sessions: every session is closed below
+    idle.stop();
 
     // End the 2026-07-28 requests and subscription streams in flight
     await modern.close();

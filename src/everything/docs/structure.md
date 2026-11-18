@@ -68,6 +68,7 @@ src/everything
      │   ├── trigger-sampling-request.ts
      │   └── trigger-url-elicitation.ts
      └── transports
+         ├── idle-sessions.ts
          ├── in-memory-event-store.ts
          ├── listen.ts
          ├── sse.ts
@@ -228,6 +229,9 @@ src/everything
 
 ### `transports/`
 
+- `idle-sessions.ts`
+  - `watchIdleSessions(timeoutMillis, evict)`: decides when a 2025-era Streamable HTTP session has been idle too long. A request counts as activity until its response closes, so an open stream or a running call keeps its session; `evict` is called once for a session with no open response for the timeout.
+  - `sessionIdleTimeoutMillis()`: reads `SESSION_IDLE_TIMEOUT_MILLIS` (default 30 minutes; `0` disables eviction).
 - `in-memory-event-store.ts`
   - `InMemoryEventStore`: the Streamable HTTP transport's event store for resumability. Replays only the events of the stream a `Last-Event-ID` belongs to, and reports an unknown event ID as having no stream, so the SDK refuses the resume.
 - `listen.ts`
@@ -250,4 +254,5 @@ src/everything
   - 2025 era: POST (JSON‑RPC), GET (SSE stream), and DELETE (session termination) using `NodeStreamableHTTPServerTransport` from `@modelcontextprotocol/node`.
   - Uses an `InMemoryEventStore` for resumable sessions and tracks transports by `sessionId`.
   - Answers a request for an unknown or ended `Mcp-Session-Id` with `404 Not Found`, and closes every open session on `SIGINT`.
+  - Closes a session that has been idle for `SESSION_IDLE_TIMEOUT_MILLIS` (`idle-sessions.ts`), which removes it and runs its `cleanup()` as a DELETE does.
   - Connects a fresh server instance on initialization POST and reuses the transport for subsequent requests.

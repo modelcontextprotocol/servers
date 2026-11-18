@@ -91,7 +91,7 @@ def test_get_current_time_with_invalid_timezone():
     time_server = TimeServer()
     with pytest.raises(
         ToolError,
-        match=r"Invalid timezone: 'No time zone found with key Invalid/Timezone'",
+        match=r"Invalid timezone: 'Invalid/Timezone' is not a known IANA timezone name",
     ):
         time_server.get_current_time("Invalid/Timezone")
 
@@ -103,13 +103,13 @@ def test_get_current_time_with_invalid_timezone():
             "invalid_tz",
             "12:00",
             "Europe/London",
-            "Invalid timezone: 'No time zone found with key invalid_tz'",
+            "Invalid timezone: 'invalid_tz' is not a known IANA timezone name",
         ),
         (
             "Europe/Warsaw",
             "12:00",
             "invalid_tz",
-            "Invalid timezone: 'No time zone found with key invalid_tz'",
+            "Invalid timezone: 'invalid_tz' is not a known IANA timezone name",
         ),
         (
             "Europe/Warsaw",
@@ -542,7 +542,7 @@ def test_get_zoneinfo_rejects_a_key_the_tz_database_does_not_list():
         patch("mcp_server_time.server.known_timezones", return_value=without_warsaw),
         pytest.raises(
             ToolError,
-            match="Invalid timezone: 'No time zone found with key Europe/Warsaw'",
+            match="Invalid timezone: 'Europe/Warsaw' is not a known IANA timezone name",
         ),
     ):
         get_zoneinfo("Europe/Warsaw")

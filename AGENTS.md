@@ -63,8 +63,7 @@ servers/
 │                             overview of how the rules, skills, gates and sweeps fit together
 ├── .github/workflows/        typescript.yml, python.yml (per-package CI), release.yml (publishes on a GitHub Release, then lists each server in the MCP Registry),
 │                             version-packages.yml (the changesets PR), prepare-python-release.yml (the CalVer PR),
-│                             everything-mcp-diff.yml (each changed server's interface diff on PRs),
-│                             mcp-interface-diff.yml (a dispatch-only placeholder for that file's new name, #5463),
+│                             mcp-interface-diff.yml (each changed server's interface diff on PRs),
 │                             main-source.yml (a PR into main must bring nothing that is not on v2/main),
 │                             and the scheduled sweeps that file issues: dependency-refresh.yml, dependabot-alerts.yml, sdk-watch.yml
 ├── .github/ISSUE_TEMPLATE/   Bug and feature issue forms; config.yml routes security and new servers away
@@ -609,6 +608,19 @@ here.
     declined finding that is worth doing gets its own issue, linked in the
     reply. The rule is under
     [Responding to code reviews](#responding-to-code-reviews).
+- **Before a PR merges, it is caught up and re-tested if `v2/main` moved in a
+  way that can interact with it.** GitHub reporting no conflicts is not that
+  test: it compares text, and the gate and CI ran on the PR's head, which
+  holds nothing that landed on `v2/main` after the branch last took it in. Two
+  fetch PRs that were each green left `v2/main` red that way (#5569). What
+  landed **can interact** when it touches a server directory
+  (`src/<server>/`) the PR also touches, or when either side touches
+  repository-wide configuration: a root manifest, lockfile or configuration
+  file, `scripts/`, or `.github/workflows/`. When in doubt, re-test. Catching
+  up is a merge of `origin/v2/main` into the branch, never a rebase, then the
+  gate, a push, and green CI on the new head. `v2/main`'s ruleset requires no
+  status checks, so this is on whoever merges. The recipe is the `pr-flow`
+  skill (step 10).
 - **If new tasks are discovered during development, create issues** for them
   and put them on the board, rather than widening the current PR.
 

@@ -17,7 +17,14 @@ import {
 import { McpServer } from "@modelcontextprotocol/server";
 import type { Transport } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { promises as fs, readFileSync, realpathSync, unlinkSync } from "fs";
+import {
+  promises as fs,
+  closeSync,
+  openSync,
+  readFileSync,
+  realpathSync,
+  unlinkSync,
+} from "fs";
 import type { FileHandle } from "fs/promises";
 import path from "path";
 import os from "os";
@@ -318,15 +325,135 @@ async function isLockStale(
   }
 }
 
-// Remove an abandoned lock, returning whether it did. Breaking is itself
-// guarded by a second O_EXCL file, so only one waiter breaks at a time and
-// re-checks the lock under that guard: two waiters can never both judge the
-// same abandoned lock stale and one then remove the lock the other has just
-// taken in its place.
+// The lock protocol, for writers in separate processes sharing lockPath.
 //
-// The guard orders breakers only. The lock's own holder can still release it,
-// and a breaker that stalls past staleMs loses its guard to another, so the
-// file at lockPath can be replaced by a successor's live lock after the
+// The lock is a file created with O_EXCL: exactly one creator wins. Next to
+// it stands a second O_EXCL file, the guard (`<lock>.break`), held for a few
+// file-system calls at a time. The guard orders every change of the lock
+// path's occupant other than the create itself (#5565):
+//
+// - Breaking a stale lock happens under the guard (breakStaleLock).
+// - Releasing a lock happens under the guard (releaseLock, and
+//   releaseHeldLocks at exit): the holder compares the token and removes the
+//   file with no breaker able to act in between, and never while a breaker
+//   has that lock renamed aside.
+// - A writer that has just created the lock does not run until no guard
+//   stands, and then checks that the file at lockPath still holds its token
+//   (withFileLock). A lock created while a breaker had a live lock aside is
+//   overwritten when the breaker puts that lock back; its creator finds the
+//   other token and goes back to waiting.
+//
+// What this rests on, and where it stops:
+//
+// - No process stalls for longer than staleMs inside a guarded section. A
+//   guard older than staleMs is taken to be left by a crash and is cleared,
+//   so writers never deadlock on one; a holder that really did stall that
+//   long there loses the guard's protection. The same holds for the lock: a
+//   holder that stops refreshing it for staleMs is presumed dead. A lock
+//   file can go no further without a lock the kernel releases itself, which
+//   Node offers only through a native dependency.
+// - A guard left by a crash is cleared by path. Two processes clearing the
+//   same one at once can remove a guard a third took in between, which
+//   leaves that third process unguarded for its few calls (#5624).
+// - A server older than this change takes the guard only to break a lock. It
+//   releases without the guard and runs as soon as it has created the lock.
+//   Sharing a memory file with one is safe in every way it was before (same
+//   lock file, same contents, same guard, same stale rules), and each
+//   hand-off window above is closed for the newer process's own acquire and
+//   release, whichever version the breaker runs. The older process's own
+//   release and acquire keep the windows they had.
+
+// The guard file that orders changes to the lock at lockPath.
+function guardPathOf(lockPath: string): string {
+  return `${lockPath}.break`;
+}
+
+// The guards this process holds right now, so the exit hook can remove them:
+// a guard left behind stalls the next writer until it goes stale.
+const heldGuards = new Set<string>();
+
+// Wait before another attempt: retryMs, plus up to the same again of jitter.
+function pause(retryMs: number): Promise<void> {
+  return new Promise((resolve) =>
+    setTimeout(resolve, retryMs + Math.random() * retryMs),
+  );
+}
+
+// Whether a guard stands at guardPath. One left by a crash (older than
+// staleMs) is cleared on the way, and still reported: the caller looks again.
+async function isGuardHeld(
+  guardPath: string,
+  staleMs: number,
+): Promise<boolean> {
+  let handle: FileHandle;
+  try {
+    handle = await fs.open(guardPath, "r");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return false;
+    }
+    // On Windows, a guard still being deleted: it stands for a moment yet.
+    if (isLockBusy(error)) {
+      return true;
+    }
+    throw error;
+  }
+  try {
+    if ((await judgeLock(handle, staleMs)).stale) {
+      await fs.unlink(guardPath).catch(ignoreError);
+    }
+  } finally {
+    await handle.close();
+  }
+  return true;
+}
+
+// Take the guard if it is free, returning whether it was taken. A guard that
+// is held is left to its holder, unless a crash left it: that one is cleared,
+// for the next attempt.
+async function tryTakeGuard(
+  guardPath: string,
+  staleMs: number,
+): Promise<boolean> {
+  let guard: FileHandle;
+  try {
+    guard = await fs.open(guardPath, "wx");
+  } catch (error) {
+    if (!isLockBusy(error)) {
+      throw error;
+    }
+    await isGuardHeld(guardPath, staleMs);
+    return false;
+  }
+  // Tracked before anything else is awaited, as a lock is (see withFileLock).
+  heldGuards.add(guardPath);
+  await guard.close().catch(ignoreError);
+  return true;
+}
+
+// Give up a guard this process took. The removal and the end of its tracking
+// are one synchronous step: were the removal awaited, an exit arriving before
+// its continuation would still find the guard tracked, and the exit hook
+// would remove, as this process's own, a guard another process had taken at
+// the same path in between.
+function dropGuard(guardPath: string): void {
+  try {
+    unlinkSync(guardPath);
+  } catch {
+    // Already gone: cleared as stale, or removed by the exit hook.
+  }
+  heldGuards.delete(guardPath);
+}
+
+// Remove an abandoned lock, returning whether it did. Breaking happens under
+// the guard, so only one waiter breaks at a time and re-checks the lock under
+// it: two waiters can never both judge the same abandoned lock stale and one
+// then remove the lock the other has just taken in its place.
+//
+// The guard keeps every writer that takes part in it from changing the lock
+// meanwhile, but not a server older than #5565, whose release ignores it, nor
+// a breaker that stalled past staleMs and lost its guard to another. So the
+// file at lockPath can still be replaced by a successor's live lock after the
 // re-check has judged it stale. Removing by path would then delete that live
 // lock and let a third writer in beside its holder (#5560). So the lock is
 // never deleted where it stands. It is renamed aside to a name nobody else
@@ -337,33 +464,21 @@ async function isLockStale(
 // then, so the judged file's inode number cannot be reused by a successor's
 // file and the comparison cannot be fooled.
 //
-// What remains is the moment a live lock spends aside before it is put back:
-// a writer that creates the lock in exactly that moment is overwritten by the
-// restored one and runs beside its holder. Reaching it takes a replacement
-// between the judgement and the rename, then a create between the two
-// renames; a lock file cannot close that without the kernel's help.
+// While a live lock is aside the lock path is free. The guard is still held
+// then, which is what covers that moment: a writer that creates the lock in
+// it waits for the guard to go, finds the restored lock's token in place of
+// its own, and does not run; and the live lock's holder cannot release until
+// its lock is back, so no lock is restored after its holder has finished.
 async function breakStaleLock(
   lockPath: string,
   staleMs: number,
 ): Promise<boolean> {
-  const breakerPath = `${lockPath}.break`;
-  let breaker: FileHandle;
-  try {
-    breaker = await fs.open(breakerPath, "wx");
-  } catch (error) {
-    if (!isLockBusy(error)) {
-      throw error;
-    }
-    // Another waiter is breaking the lock. Its guard is held for a moment
-    // only, so one that outlives staleMs was left by a crash: clear it.
-    const stats = await fs.stat(breakerPath).catch(() => null);
-    if (stats && Date.now() - stats.mtimeMs > staleMs) {
-      await fs.unlink(breakerPath).catch(ignoreError);
-    }
+  const guardPath = guardPathOf(lockPath);
+  if (!(await tryTakeGuard(guardPath, staleMs))) {
+    // Another waiter is breaking the lock, or its holder is releasing it.
     return false;
   }
   try {
-    await breaker.close();
     const judged = await fs.open(lockPath, "r");
     try {
       const { stale, dev, ino } = await judgeLock(judged, staleMs);
@@ -385,7 +500,7 @@ async function breakStaleLock(
       await judged.close();
     }
   } finally {
-    await fs.unlink(breakerPath).catch(ignoreError);
+    dropGuard(guardPath);
   }
 }
 
@@ -407,10 +522,24 @@ export function heldLockPaths(): string[] {
   return [...heldLocks.keys()];
 }
 
+// Stop tracking held, unless lockPath is tracked for another lock by now: one
+// that a later withFileLock call in this process took at the same path.
+function untrackLock(lockPath: string, held: HeldLock): void {
+  if (heldLocks.get(lockPath) === held) {
+    heldLocks.delete(lockPath);
+  }
+}
+
 // Synchronously remove every lock this process still holds, as the process
 // exits: an `exit` listener cannot wait on a promise. As in withFileLock's own
 // release, a lock is removed only while it still holds this process's token,
-// so a lock broken as stale and re-taken by another process stays in place.
+// so a lock broken as stale and re-taken by another process stays in place,
+// and only under the guard, so it cannot be broken and re-taken between the
+// comparison and the removal (#5565). An exit cannot wait for a guard either:
+// when another process holds it (it is breaking this lock, or a crash left
+// the guard behind), the lock is left where it is, to be broken as the lock
+// of a process that has exited. A guard this process itself holds, because
+// the exit interrupted its own release or break, is used and then removed.
 // A lock is tracked from the moment its exclusive create returns, before its
 // token is written. Until that write finishes, a file holding only the start
 // of the token (or none of it) is ours too: the exit interrupted the write.
@@ -420,16 +549,30 @@ export function heldLockPaths(): string[] {
 // is being written, is left alone.
 export function releaseHeldLocks(): void {
   for (const [lockPath, { token, written }] of heldLocks) {
+    const guardPath = guardPathOf(lockPath);
     try {
+      if (!heldGuards.has(guardPath)) {
+        closeSync(openSync(guardPath, "wx"));
+        heldGuards.add(guardPath);
+      }
       const contents = readFileSync(lockPath, "utf-8");
       if (written ? contents === token : token.startsWith(contents)) {
         unlinkSync(lockPath);
       }
     } catch {
-      // Already gone, or unreadable: there is nothing of ours to remove.
+      // The guard is held elsewhere, or the lock is already gone or
+      // unreadable: there is nothing here that is safely ours to remove.
     }
   }
   heldLocks.clear();
+  for (const guardPath of heldGuards) {
+    try {
+      unlinkSync(guardPath);
+    } catch {
+      // Already gone.
+    }
+  }
+  heldGuards.clear();
 }
 
 // The exit codes a shell reports for a process its signal ended: 128 + the
@@ -469,13 +612,97 @@ export function installLockCleanup(): void {
   }
 }
 
+// Remove the lock at lockPath if it still holds token: if it was broken as
+// stale while this process held it, the file may now belong to another
+// process. The comparison and the removal happen under the guard, so no
+// breaker can replace the lock between them, and a lock a breaker has aside
+// is back in place before it is looked for (#5565). The wait for the guard is
+// short: its holders keep it for a few file-system calls, and one left by a
+// crash is cleared once it is staleMs old. If the guard cannot be created at
+// all (the directory has gone, say), the lock is still compared and removed,
+// unguarded, rather than left for every other writer to wait out.
+async function releaseLock(
+  lockPath: string,
+  token: string,
+  staleMs: number,
+  retryMs: number,
+): Promise<void> {
+  const guardPath = guardPathOf(lockPath);
+  let guarded = false;
+  try {
+    while (!(await tryTakeGuard(guardPath, staleMs))) {
+      await pause(retryMs);
+    }
+    guarded = true;
+  } catch {
+    // Released without the guard, below.
+  }
+  const current = await fs.readFile(lockPath, "utf-8").catch(() => null);
+  if (current === token) {
+    await fs.unlink(lockPath).catch(ignoreError);
+  }
+  if (guarded) {
+    dropGuard(guardPath);
+  }
+}
+
+// Refresh the lock at lockPath, if it still holds token, so it does not go
+// stale while its holder is alive. Returns false once the lock holds another
+// token: it changed hands, and keeping it fresh would stop a crashed new
+// owner's lock from ever going stale.
+async function refreshLock(lockPath: string, token: string): Promise<boolean> {
+  if ((await fs.readFile(lockPath, "utf-8")) !== token) {
+    return false;
+  }
+  const now = new Date();
+  await fs.utimes(lockPath, now, now);
+  return true;
+}
+
+// Whether the lock this writer has just created at lockPath is still its own
+// once no break is in progress. A breaker that took a live lock aside by
+// mistake puts it back over whatever stands at lockPath, and it holds the
+// guard until it has. So the creator waits for the guard to go, then reads
+// the token: its own means no restored lock displaced it, and none can now,
+// since a breaker that starts later judges this fresh lock live and leaves
+// it. The wait is not bounded by the caller's timeout, because a lock held
+// meanwhile cannot be given up safely by path; it ends within a few
+// file-system calls, or once a guard left by a crash is staleMs old. The lock
+// is refreshed on every turn of that wait: its heartbeat has not started, and
+// a lock that aged alongside a crash-left guard would otherwise look
+// abandoned the moment the guard is cleared.
+async function confirmLock(
+  lockPath: string,
+  token: string,
+  staleMs: number,
+  retryMs: number,
+): Promise<boolean> {
+  while (await isGuardHeld(guardPathOf(lockPath), staleMs)) {
+    // A failure here (the lock is aside, or gone) is left to the check below.
+    await refreshLock(lockPath, token).catch(ignoreError);
+    await pause(retryMs);
+  }
+  try {
+    return (await fs.readFile(lockPath, "utf-8")) === token;
+  } catch (error) {
+    // Renamed aside and deleted: not ours any more. Anything else is a
+    // failure to read our own lock, and fails the acquisition.
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return false;
+    }
+    throw error;
+  }
+}
+
 // Run operation while holding an exclusive lock file at lockPath, so that
 // mutations from separate server processes sharing one graph file take turns
 // and each one loads the graph the previous one saved (#4797). The lock is a
 // file created with O_EXCL, which is atomic on local filesystems: exactly one
 // creator wins. The holder refreshes the lock's mtime every staleMs / 2 while
 // it runs. A lock left behind by a crashed process is broken once its owner
-// is known to be dead, or once it has gone unrefreshed for staleMs.
+// is known to be dead, or once it has gone unrefreshed for staleMs. How
+// acquiring, releasing and breaking are ordered against each other is
+// described above guardPathOf().
 export async function withFileLock<T>(
   lockPath: string,
   operation: () => Promise<T>,
@@ -503,19 +730,35 @@ export async function withFileLock<T>(
       // line, so from here on the exit hook can remove it (#5485).
       const held: HeldLock = { token, written: false };
       heldLocks.set(lockPath, held);
+      let confirmed: boolean;
       try {
         await handle.writeFile(token);
         held.written = true;
         await handle.close();
+        confirmed = await confirmLock(lockPath, token, staleMs, retryMs);
       } catch (error) {
-        // The lock was created but not written: remove it rather than leave
-        // every other writer waiting for it to go stale.
+        // The lock was created but not written, or could not be confirmed:
+        // remove it rather than leave every other writer waiting for it to
+        // go stale. Before its token is written the file can only be ours.
+        // After, a breaker may have put another holder's lock back over it,
+        // so it is released like any held lock: only if it still holds our
+        // token.
         await handle.close().catch(ignoreError);
-        await fs.unlink(lockPath).catch(ignoreError);
-        heldLocks.delete(lockPath);
+        if (held.written) {
+          await releaseLock(lockPath, token, staleMs, retryMs);
+        } else {
+          await fs.unlink(lockPath).catch(ignoreError);
+        }
+        untrackLock(lockPath, held);
         throw error;
       }
-      break;
+      if (confirmed) {
+        break;
+      }
+      // A lock put back by a breaker displaced ours, so it was never held:
+      // stop tracking it and wait for the lock like any other writer.
+      untrackLock(lockPath, held);
+      continue;
     }
 
     // Someone else holds the lock. Break it if it is abandoned; otherwise
@@ -543,9 +786,7 @@ export async function withFileLock<T>(
         `Timed out after ${timeoutMs} ms waiting for the memory file lock ${lockPath}`,
       );
     }
-    await new Promise((resolve) =>
-      setTimeout(resolve, retryMs + Math.random() * retryMs),
-    );
+    await pause(retryMs);
   }
 
   // Keep the lock fresh while the operation runs, so a mutation that outlasts
@@ -554,18 +795,14 @@ export async function withFileLock<T>(
   // as stale and re-taken, the file belongs to another process, and keeping
   // it fresh would stop a crashed new owner's lock from ever going stale.
   const heartbeat = setInterval(() => {
-    const now = new Date();
     // Not awaited: an interval callback has no caller to await it, and every
     // failure (the lock already gone) is caught and ignored here.
-    void fs
-      .readFile(lockPath, "utf-8")
-      .then((current) => {
-        if (current !== token) {
+    void refreshLock(lockPath, token)
+      .then((ours) => {
+        if (!ours) {
           // The lock changed hands: stop refreshing it, for good.
           clearInterval(heartbeat);
-          return;
         }
-        return fs.utimes(lockPath, now, now);
       })
       .catch(ignoreError);
   }, staleMs / 2);
@@ -575,12 +812,7 @@ export async function withFileLock<T>(
     return await operation();
   } finally {
     clearInterval(heartbeat);
-    // Release only our own lock: if it was broken as stale while we held it,
-    // the file may now belong to another process.
-    const current = await fs.readFile(lockPath, "utf-8").catch(() => null);
-    if (current === token) {
-      await fs.unlink(lockPath).catch(ignoreError);
-    }
+    await releaseLock(lockPath, token, staleMs, retryMs);
     // Stop tracking the lock only once the release is done, so an exit during
     // it still removes the lock. A lock this same process broke as stale and
     // re-took in another withFileLock call carries that call's token, and
