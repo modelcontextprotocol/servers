@@ -19,6 +19,16 @@
 #              `id-token: write` and the `release` environment. No checkout,
 #              no dependency install, no build.
 #
+# AFTER THE PACKAGES, THE MCP REGISTRY (#3047). `publish-mcp-registry` lists
+# each server in the official MCP Registry (registry.modelcontextprotocol.io)
+# at the version just published. A registry entry is a `server.json` that
+# points at a package, and the registry accepts one only for a package version
+# that already exists on npm or PyPI and names the server itself (`mcpName`,
+# or the README's `mcp-name:` marker), so the job runs after both sets of
+# publish legs. What it registers comes from `detect-packages`
+# (`scripts/mcp-registry-entries.mjs`), as a job output, and it is one more
+# `release` environment deployment for a maintainer to approve.
+#
 # The split is about what runs next to the OIDC token. Installing dependencies
 # runs their lifecycle scripts, and a build runs the toolchain; in a job that
 # can mint a publish credential, any of that code can publish. Here the only
@@ -34,7 +44,8 @@
 # the next release with no special handling, and one that did not change costs
 # a skipped leg. For npm the build leg decides (`npm-publish-guard.mjs`) and
 # uploads a `SKIP` marker instead of a tarball; for PyPI the registry decides
-# at upload (`skip-existing`).
+# at upload (`skip-existing`). The MCP Registry job asks the registry for each
+# entry's version and publishes only the ones it does not have.
 #
 # The trigger is `release: published` and nothing else, so editing a
 # published Release's notes never re-runs publishing. A release event runs the
@@ -44,7 +55,11 @@
 # Authentication is OIDC trusted publishing on both registries: there are no
 # registry tokens. Each trusted publisher is bound to this workflow's filename
 # (`release.yml`) and the `release` environment, so the publish jobs must stay
-# in this file and keep that environment.
+# in this file and keep that environment. The MCP Registry takes the same kind
+# of token (`mcp-publisher login github-oidc`) and grants the
+# `io.github.modelcontextprotocol/*` namespace to any workflow in this
+# organization: it is bound to neither the file nor the environment, so there
+# the environment is the maintainer's approval and nothing else.
 #
 # Only a commit that is on `main` is published. A Release can be created for
 # any tag on any commit, and the environment approval shows a reviewer a tag
@@ -73,7 +88,7 @@ concurrency:
   group: release
   queue: max
 
-# Nothing in this workflow needs more than read access by default; the two
+# Nothing in this workflow needs more than read access by default; the three
 # publish jobs add `id-token: write` for themselves.
 permissions:
   contents: read
@@ -88,6 +103,7 @@ jobs:
       pypi_packages: ${{ steps.find-packages.outputs.pypi_packages }}
       npm_expected: ${{ steps.expected.outputs.npm_expected }}
       pypi_expected: ${{ steps.expected.outputs.pypi_expected }}
+      mcp_registry: ${{ steps.registry.outputs.mcp_registry }}
     steps:
       # On a release event the default ref is the release's tag: the exact
       # commit the maintainer released. Full history, for the check below.
@@ -123,6 +139,14 @@ jobs:
       - name: Record what each package should be published as
         id: expected
         run: node scripts/release-manifest.mjs
+
+      # Each server's MCP Registry entry: its committed `server.json`, checked
+      # against the package it points at and stamped with that package's
+      # version. Read here for the same reason as the step above, and a
+      # problem with any entry stops the release before anything is built.
+      - name: Record each server's MCP Registry entry
+        id: registry
+        run: node scripts/mcp-registry-entries.mjs
 
   build-npm:
     timeout-minutes: 15
@@ -476,3 +500,98 @@ jobs:
         with:
           packages-dir: dist
           skip-existing: true
+
+  publish-mcp-registry:
+    timeout-minutes: 10
+    needs: [detect-packages, publish-npm, publish-pypi]
+    # After the package publish legs, whatever their results: an entry is only
+    # accepted for a package version that is on npm or PyPI, so one package's
+    # failed leg fails that entry alone and the rest are still registered.
+    if: ${{ !cancelled() && needs.detect-packages.result == 'success' }}
+    name: Publish to the MCP Registry
+    # The registry does not look at the environment (see the header). It is
+    # here so that registering, like publishing, waits for a maintainer.
+    environment: release
+    permissions:
+      # Required for `mcp-publisher login github-oidc`. Like the other publish
+      # jobs, this one has no checkout and installs no dependency.
+      id-token: write
+    runs-on: ubuntu-latest
+    env:
+      # The registry's publisher CLI, pinned to one release and to the SHA-256
+      # of that release's archive: a release asset can be replaced, and this
+      # binary runs next to the OIDC token. Bump both together, taking the
+      # digest from the release's asset list (RELEASING.md has the command).
+      MCP_PUBLISHER_VERSION: v1.8.9
+      MCP_PUBLISHER_SHA256: 4d527ca8f1ced0394c962dc925c2a4a4addef441cbefd62501c875e9481823a8
+    steps:
+      - name: Download the pinned mcp-publisher
+        run: |
+          ARCHIVE=mcp-publisher_linux_amd64.tar.gz
+          curl --fail --location --silent --show-error --output "$ARCHIVE" \
+            "https://github.com/modelcontextprotocol/registry/releases/download/$MCP_PUBLISHER_VERSION/$ARCHIVE"
+          echo "$MCP_PUBLISHER_SHA256  $ARCHIVE" | sha256sum --check --strict -
+          tar -xzf "$ARCHIVE" mcp-publisher
+
+      # One `entries/<server>/server.json` per server, and `plan.tsv` naming
+      # each for the shell below. An empty or unreadable output fails here:
+      # nothing is registered from a release that recorded no entries.
+      - name: Write the entries the released commit declares
+        env:
+          ENTRIES: ${{ needs.detect-packages.outputs.mcp_registry }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const entries = Object.entries(JSON.parse(process.env.ENTRIES));
+            if (entries.length === 0) throw new Error("no MCP Registry entries were recorded");
+            const plan = [];
+            for (const [dir, entry] of entries) {
+              const { name, version } = entry;
+              // These three reach a URL and a path in the next step.
+              if (!/^[a-z0-9-]+$/.test(dir)) throw new Error("unexpected server directory " + JSON.stringify(dir));
+              if (typeof name !== "string" || !/^io\.github\.modelcontextprotocol\/[a-zA-Z0-9._-]+$/.test(name)) throw new Error("unexpected server name " + JSON.stringify(name));
+              if (typeof version !== "string" || !/^[0-9A-Za-z.-]+$/.test(version)) throw new Error("unexpected version " + JSON.stringify(version));
+              fs.mkdirSync("entries/" + dir, { recursive: true });
+              fs.writeFileSync("entries/" + dir + "/server.json", JSON.stringify(entry, null, 2) + "\n");
+              plan.push([dir, name, version].join("\t"));
+            }
+            fs.writeFileSync("plan.tsv", plan.join("\n") + "\n");
+          '
+          cat plan.tsv
+
+      # The registry-diff guard for the MCP Registry: a version it already
+      # lists is skipped, not failed, and a published entry cannot be changed,
+      # so a re-run or a later release registers only what is missing. An
+      # answer that is neither "there" nor "not there" fails that entry rather
+      # than guessing. The token is asked for only when there is something to
+      # publish. One entry's failure does not stop the others; it fails the
+      # job at the end, and the next release (or a re-run) picks it up.
+      - name: Publish each entry the registry does not have
+        run: |
+          pending=""
+          failed=0
+          while IFS="$(printf '\t')" read -r dir name version; do
+            url="https://registry.modelcontextprotocol.io/v0/servers/$(printf '%s' "$name" | sed 's|/|%2F|')/versions/$version"
+            code="$(curl -sS -o /dev/null -w '%{http_code}' "$url")" || code="no answer"
+            case "$code" in
+              200) echo "$name@$version is already in the MCP Registry; nothing to publish." ;;
+              404) pending="$pending $dir" ;;
+              *)
+                echo "::error::Could not tell whether $name@$version is in the MCP Registry ($code from $url)"
+                failed=1
+                ;;
+            esac
+          done < plan.tsv
+          if [ -z "$pending" ]; then
+            exit "$failed"
+          fi
+          ./mcp-publisher login github-oidc
+          for dir in $pending; do
+            if ./mcp-publisher publish "entries/$dir/server.json"; then
+              echo "Registered src/$dir."
+            else
+              echo "::error::The MCP Registry refused the entry for src/$dir (see the output above). If its package failed to publish in this run, fix that first."
+              failed=1
+            fi
+          done
+          exit "$failed"
