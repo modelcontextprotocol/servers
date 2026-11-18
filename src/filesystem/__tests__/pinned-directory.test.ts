@@ -16,6 +16,7 @@ import {
   moveFileAcrossDevices,
   openFileForReading,
   overwriteFileInDirectory,
+  readDirectoryInPlace,
   readFileInDirectory,
   renameIntoDirectory,
   statInDirectory,
@@ -1394,4 +1395,94 @@ describe("the anchored reads", () => {
     }
     expect(chdir).not.toHaveBeenCalled();
   });
+});
+
+describe("readDirectoryInPlace", () => {
+  // Run as root, the process enters a directory without search permission.
+  const enforcesModes =
+    process.platform !== "win32" && process.getuid?.() !== 0;
+
+  it("lists the entries with their types, and restores the working directory", () => {
+    fs.mkdirSync(path.join(dir, "sub"));
+    fs.writeFileSync(path.join(dir, "f.txt"), "");
+    const entries = readDirectoryInPlace(dir)
+      .map((entry) => `${entry.name}:${entry.isDirectory()}`)
+      .sort();
+    expect(entries).toEqual(["f.txt:false", "sub:true"]);
+    // parentPath names the directory, as fs.readdir(dir) would, not ".".
+    expect(readDirectoryInPlace(dir).map((entry) => entry.parentPath)).toEqual([
+      dir,
+      dir,
+    ]);
+    expect(process.cwd()).toBe(cwd);
+  });
+
+  it.skipIf(!symlinks)(
+    "refuses a path that no longer leads to the directory validated",
+    () => {
+      fs.writeFileSync(path.join(outside, "secret.txt"), "");
+      fs.symlinkSync(outside, path.join(dir, "link"));
+      expect(() => readDirectoryInPlace(path.join(dir, "link"))).toThrow(
+        /^Access denied - a directory on the path changed during the operation/,
+      );
+      expect(process.cwd()).toBe(cwd);
+    },
+  );
+
+  it("reports a missing directory as readdir would, without the working directory", () => {
+    const missing = path.join(dir, "missing");
+    let error: NodeJS.ErrnoException | undefined;
+    try {
+      readDirectoryInPlace(missing);
+    } catch (e) {
+      error = e as NodeJS.ErrnoException;
+    }
+    expect(error?.message).toBe(
+      `ENOENT: no such file or directory, scandir '${missing}'`,
+    );
+    expect(error?.code).toBe("ENOENT");
+    expect(error?.message).not.toContain(cwd);
+  });
+
+  it("keeps the code of an enter failure that carries no errno", () => {
+    vi.spyOn(process, "chdir").mockImplementationOnce(() => {
+      throw errno("EIO");
+    });
+    expect(() => readDirectoryInPlace(dir)).toThrow(
+      `EIO: cannot enter directory, scandir '${dir}'`,
+    );
+  });
+
+  it("names the directory, not '.', when the listing itself fails", () => {
+    vi.spyOn(fs, "readdirSync").mockImplementationOnce(() => {
+      throw Object.assign(new Error("EACCES: permission denied, scandir '.'"), {
+        code: "EACCES",
+        path: ".",
+      });
+    });
+    expect(() => readDirectoryInPlace(dir)).toThrow(
+      `EACCES: permission denied, scandir '${dir}'`,
+    );
+    expect(process.cwd()).toBe(cwd);
+  });
+
+  it.skipIf(!enforcesModes)(
+    "refuses a directory it can read but not enter (r without x)",
+    () => {
+      const locked = path.join(dir, "locked");
+      fs.mkdirSync(locked);
+      fs.writeFileSync(path.join(locked, "f.txt"), "");
+      fs.chmodSync(locked, 0o600);
+      try {
+        // A plain readdir by path still lists it; the anchored listing
+        // cannot enter it, and refuses.
+        expect(fs.readdirSync(locked)).toEqual(["f.txt"]);
+        expect(() => readDirectoryInPlace(locked)).toThrow(
+          `EACCES: permission denied, scandir '${locked}'`,
+        );
+      } finally {
+        fs.chmodSync(locked, 0o755);
+      }
+    },
+  );
 });
