@@ -2122,7 +2122,7 @@ describe("search_files", () => {
       path: dir,
       pattern: "*.none",
     });
-    expect(textOf(result)).toBe("No matches found");
+    expect(textOf(result)).toMatch(/^No matches found for pattern '\*\.none' /);
   });
 
   it("silently skips a symlink that leaves the allowed directories", async () => {
