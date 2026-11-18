@@ -190,8 +190,7 @@ const SearchFilesArgsSchema = z.object({
     .string()
     .describe(
       "Glob matched against each entry's path relative to path, never its content: " +
-        "'*.ts' matches directly under path, '**/*.ts' at any depth, " +
-        "'**/*report*' any name containing 'report'.",
+        "'*.ts' matches directly under path, '**/*.ts' at any depth.",
     ),
   excludePatterns: z
     .array(z.string())
@@ -1031,8 +1030,7 @@ export function createServer(
       description:
         "Find files and directories by NAME, not by content: this tool never reads or searches inside files. " +
         "It walks the tree under 'path' and matches a glob pattern against each entry's path relative to 'path' (case-sensitive). " +
-        "Use '*.ext' to match entries directly under 'path', and '**/*.ext' or '**/name' to match at any depth: " +
-        "for example, '**/*.json' finds every JSON file and '**/*report*' every entry with 'report' in its name. " +
+        "Use '*.ext' to match entries directly under 'path', and '**/*.ext' or '**/name' to match at any depth. " +
         "Returns full paths to all matching items. Great for finding files when you don't know their exact location. " +
         "Only searches within allowed directories.",
       inputSchema: jsonSchema2020(SearchFilesArgsSchema.shape),

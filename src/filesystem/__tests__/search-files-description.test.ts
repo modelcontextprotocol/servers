@@ -5,9 +5,8 @@
 // contents. These tests pin that wording and each matching rule it states, so
 // the description cannot drift from the behavior again.
 //
-// They also pin the realistic example patterns the description carries next to
-// the generic ones, and what an empty result says (#5553): a bare "No matches
-// found" gave a model nothing to correct a pattern with, so it repeated
+// They also pin what an empty result says (#5553): a bare "No matches found"
+// gave a model nothing to correct a pattern with, so it repeated
 // '*.ext' patterns that cannot reach a subdirectory. The empty result now
 // names the pattern and the directory, restates how the pattern is read, and
 // suggests the '**/' form when the pattern has no '**'.
@@ -66,27 +65,6 @@ describe("search_files description (#896, #3419)", () => {
     expect(description).toContain("never reads or searches inside files");
     expect(description).toContain("relative to 'path'");
     expect(description).not.toContain("working directory");
-  });
-
-  it("gives realistic example patterns, each of which matches as described", async () => {
-    const { tools } = await client.listTools();
-    const tool = tools.find((t) => t.name === "search_files");
-    expect(tool?.description).toContain("'**/*.json'");
-    expect(tool?.description).toContain("'**/*report*'");
-    const properties = tool?.inputSchema.properties as Record<
-      string,
-      { description?: string }
-    >;
-    expect(properties.pattern.description).toContain("'**/*report*'");
-
-    await fs.writeFile(path.join(dir, "src", "config", "app.json"), "");
-    await fs.writeFile(path.join(dir, "src", "q3-report-final.txt"), "");
-    expect(await search("**/*.json")).toEqual([
-      path.join(dir, "src", "config", "app.json"),
-    ]);
-    expect(await search("**/*report*")).toEqual([
-      path.join(dir, "src", "q3-report-final.txt"),
-    ]);
   });
 
   it("does not match a file's contents", async () => {

@@ -283,9 +283,7 @@ Files inside the allowed directories are also [resources](https://modelcontextpr
     - `path` (string): Starting directory
     - `pattern` (string): Glob matched, case-sensitively, against each entry's
       path relative to `path`: `*.ext` matches entries directly under `path`,
-      `**/*.ext` or `**/name` matches at any depth. For example, `**/*.json`
-      finds every JSON file and `**/*report*` every entry with `report` in its
-      name
+      `**/*.ext` or `**/name` matches at any depth
     - `excludePatterns` (string[]): Entries to leave out, read the same way as
       `directory_tree`'s. A bare name such as `node_modules` excludes an entry
       of that name at any depth and everything below it; it matches whole
