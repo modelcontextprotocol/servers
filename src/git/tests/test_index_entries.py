@@ -222,9 +222,11 @@ async def test_untracked_cache_naming_outside_is_ignored(tmp_path: Path):
         data = data[:at] + b"..\0" + data[at + 3 :]
         forged = data + hashlib.sha1(data).digest()
         index.write_bytes(forged)
-        # Git honors the forged cache by default: the precondition.
+        # Git honors the forged cache by default: the precondition. It names
+        # the directory above the working tree either whole (`../`) or file
+        # by file, depending on the git, so the check is on the `../` prefix.
         plain = repo.git.execute(["git", *own, "status", "--porcelain"])
-        assert "outside/secret.txt" in str(plain)
+        assert any(line[3:].startswith("../") for line in str(plain).splitlines())
         index.write_bytes(forged)
     finally:
         repo.close()
@@ -233,6 +235,7 @@ async def test_untracked_cache_naming_outside_is_ignored(tmp_path: Path):
     text = result["content"][0]["text"]
     assert "zz/" in text
     assert "outside" not in text
+    assert "../" not in text
 
 
 @pytest.mark.parametrize(
