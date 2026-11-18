@@ -53,7 +53,7 @@ servers/
 ├── .claude/skills/            On-demand procedures (see the Skills index above)
 ├── .claude/settings.json     The SessionStart hook that checks this session's instructions are current
 ├── .changeset/               Pending changesets for the TypeScript servers, and the changesets config
-├── scripts/                  The pre-push gate (gate-lease, smoke-servers, validate-py, coverage-py, interface-diff), its guards (verify-*),
+├── scripts/                  The pre-push gate (gate-lease, smoke-servers, validate-py, coverage-py, interface-diff, image-smoke), its guards (verify-*),
 │                             the skills tooling, release tooling (npm-publish-guard, prepare-python-release,
 │                             pack-and-verify, release-manifest, release-notes), and the issue-filing sweeps
 │                             (dependency-refresh, dependabot-alerts, sdk-watch), and the session-start
@@ -65,6 +65,7 @@ servers/
 │                             version-packages.yml (the changesets PR), prepare-python-release.yml (the CalVer PR),
 │                             everything-mcp-diff.yml (each changed server's interface diff on PRs),
 │                             mcp-interface-diff.yml (a dispatch-only placeholder for that file's new name, #5463),
+│                             image-smoke.yml (each changed server's Docker image, built and booted),
 │                             main-source.yml (a PR into main must bring nothing that is not on v2/main),
 │                             and the scheduled sweeps that file issues: dependency-refresh.yml, dependabot-alerts.yml, sdk-watch.yml
 ├── .github/ISSUE_TEMPLATE/   Bug and feature issue forms; config.yml routes security and new servers away
@@ -139,14 +140,17 @@ TypeScript workspace's per-file coverage gate), `validate:py`
 (each Python server's locked sync, `ruff check`, `ruff format --check`,
 pyright, pytest and build), `coverage:py` (each Python server's per-file
 coverage gate), `verify:skills:cli`, `smoke` (every server booted over each
-transport it implements), and `interface-diff` (the MCP interface of each
-server the change touches, diffed against the base it branched from). The stage-by-stage
+transport it implements), `interface-diff` (the MCP interface of each
+server the change touches, diffed against the base it branched from), and
+`image-smoke` (the Docker image of each server the change touches, built,
+booted and stopped; it needs a running Docker daemon when a change touches
+one). The stage-by-stage
 reference, and what CI runs where, is [`docs/quality-gate.md`](./docs/quality-gate.md);
 diagnosing a red stage is the `pre-push-gate` skill.
 
 - **`npm run validate` and the per-package commands above are the inner loop,
   not a substitute.** They skip the other language, the pinned skills validator,
-  the boot smoke and the interface diff.
+  the boot smoke, the interface diff and the image smoke.
 - **Format before committing**: `npm run format` at the root (TypeScript), and
   `uv run --frozen ruff format .` in a Python server you changed. The gate only
   checks formatting; it never rewrites files.

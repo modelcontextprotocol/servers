@@ -173,7 +173,9 @@ fails its first step.
 
 ## Docker
 
-Each server has a `Dockerfile`, and no gate builds them. The build context
+Each server has a `Dockerfile`. The gate's `image-smoke` stage builds and
+boots the image of each server a change touches (`npm run image-smoke -- --all`
+for all seven; `docs/quality-gate.md`). The build context
 differs by language. The TypeScript images build from the **repo root**,
 because they copy the root `tsconfig.json`:
 `docker build -t mcp/<server> -f src/<server>/Dockerfile .`. The Python images
