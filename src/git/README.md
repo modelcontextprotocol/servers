@@ -178,6 +178,8 @@ A tool call's `repo_path` must be inside that repository, and so must the direct
 - names alternate object stores (`objects/info/alternates` or `objects/info/http-alternates` with any entry), wherever they are. A clone made with `--reference` or `--shared` therefore cannot be used under `--repository`; `git repack -a -d` and then deleting `objects/info/alternates` makes it self-contained.
 - holds a symbolic link (at `objects`, `refs`, `index`, `HEAD` or anywhere else in it) that resolves outside both the allowed repository and that Git directory. A link that stays inside is followed, and what it leads to is checked the same way. A `hooks` directory linked elsewhere is allowed, since no hook runs.
 
+It also refuses a repository whose index (`.git/index`) names a path Git would read outside the working tree: an entry that is absolute, or has an empty, `.`, `..` or `.git` component (on Windows also one with a `:`, or with `\` as a separator), which is what `git add` refuses to write. Git reads an index as it finds it, so a hand-written one could otherwise make `git_diff_unstaged`, `git_diff` and `git_status` show files outside the repository. For the same reason, every Git command the server runs, with or without `--repository`, sets `core.untrackedCache` to `false`: the untracked cache is kept in the index and names the directories `git status` lists, so Git scans the working tree instead.
+
 ### A repository's own programs
 
 A repository's configuration and hooks travel with it (an unpacked archive, a shared folder, a vendored tree), so the server never runs a program they name, with or without `--repository`. Every Git command it runs overrides, through `GIT_CONFIG_COUNT`, the settings that would start one:

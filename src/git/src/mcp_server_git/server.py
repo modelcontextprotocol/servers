@@ -131,6 +131,10 @@ def _git_text(repo: git.Repo, command: str, *args: str) -> str:
 # - `submodule.recurse` would carry checkout and merge into submodules, whose
 #   own configuration this override cannot neutralize (see `_LISTED_KEYS`).
 # - `merge.autoStash` keeps git_merge from stashing behind the tool's back.
+# - `core.untrackedCache` names no program, but the cache it turns on lives
+#   in the repository's own index and lists directories by name for git
+#   status to read: a forged one names `..` and lists what is outside the
+#   working tree. Off, git ignores the cache and scans the working tree.
 # - `diff.submodule` set to `diff` makes git diff run a nested git diff inside
 #   each changed submodule, without `_DIFF_FLAGS`, so the submodule's own
 #   `diff.external` and textconv drivers would run; `short` starts nothing.
@@ -155,6 +159,7 @@ HARDENED_CONFIG: tuple[tuple[str, str], ...] = (
     ("submodule.recurse", "false"),
     ("status.submoduleSummary", "false"),
     ("merge.autoStash", "false"),
+    ("core.untrackedCache", "false"),
     ("diff.submodule", "short"),
     ("maintenance.auto", "false"),
     ("gc.auto", "0"),
@@ -930,7 +935,8 @@ def validate_opened_repo(
     not apply `core.worktree`, so the two can differ.
 
     Git also reaches past those directories from inside them, so
-    `_check_git_dir_contents` holds what they contain to the same boundary.
+    `_check_git_dir_contents` holds what they contain to the same boundary,
+    and `_check_index_entries` the paths the index names in the working tree.
     """
     if allowed_repository is None:
         return
@@ -976,6 +982,51 @@ def validate_opened_repo(
 
     for directory in {p.resolve() for p in git_dirs + common_dirs}:
         _check_git_dir_contents(repo_path, directory, allowed, outside)
+
+    if bare != "true":
+        _check_index_entries(repo, repo_path)
+
+
+def _unsafe_index_entry(entry: bytes, windows: bool = os.name == "nt") -> bool:
+    """Whether git would read index entry `entry` from outside the working tree.
+
+    Git reads each entry's file at the working tree joined with the entry, and
+    checks the entry only when it writes one (`git add`), never when it reads
+    the index. An entry is refused the way `git add` refuses it: absolute, or
+    with an empty, `.`, `..` or `.git` component. On Windows `\\` separates
+    components too, a `:` makes a drive or stream path, and a component's
+    trailing dots and spaces are dropped by the file system, so `...` or
+    `.git.` count as well.
+    """
+    for component in re.split(rb"[/\\]" if windows else rb"/", entry):
+        if windows:
+            if b":" in component:
+                return True
+            component = component.rstrip(b". ")
+        if component in (b"", b".", b"..") or component.lower() == b".git":
+            return True
+    return False
+
+
+def _check_index_entries(repo: git.Repo, repo_path: Path) -> None:
+    """Refuse an index naming a path outside the working tree.
+
+    The index is read through `git ls-files`, so a split index's shared part
+    and a sparse index's collapsed directories are listed as git uses them.
+    `:(top)` lists the whole index wherever GitPython runs git from.
+    """
+    listed = repo.git.ls_files(
+        "-z", "--full-name", "--", ":(top)", stdout_as_string=False
+    )
+    for entry in listed.split(b"\0"):
+        if entry and _unsafe_index_entry(entry):
+            # repr: the name is the repository's own, and escaped it carries
+            # no line breaks or terminal control sequences into the result.
+            name = entry.decode("utf-8", errors="replace")
+            raise ValueError(
+                f"Repository path '{repo_path}' has an index entry {name!r} "
+                "that git would read outside the working tree"
+            )
 
 
 # Files in a git directory that name more object stores for git to read: an
