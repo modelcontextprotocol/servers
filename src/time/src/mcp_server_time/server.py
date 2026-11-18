@@ -117,11 +117,21 @@ def load_zoneinfo(timezone_name: str) -> ZoneInfo:
 
 
 def get_zoneinfo(timezone_name: str) -> ZoneInfo:
-    """`load_zoneinfo`, failing with a `ToolError` the model can read."""
+    """`load_zoneinfo`, failing with a `ToolError` the model can read.
+
+    The message is fixed and names only the input. zoneinfo raises a
+    different type per kind of bad key, and some of its messages carry the
+    host's path to the tz database: a key that names a tzdata directory
+    (`America`) is an `OSError` quoting that directory's absolute path
+    (#5559). So none of zoneinfo's own text reaches the client, as at startup
+    (`serve`).
+    """
     try:
         return load_zoneinfo(timezone_name)
     except Exception as e:
-        raise ToolError(f"Invalid timezone: {e!s}") from e
+        raise ToolError(
+            f"Invalid timezone: {timezone_name!r} is not a known IANA timezone name"
+        ) from e
 
 
 class TimeServer:
