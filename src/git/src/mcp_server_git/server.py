@@ -1049,10 +1049,17 @@ def _check_git_dir_contents(
       `directory` itself: a link at `objects`, `refs`, `index`, `HEAD` or
       anything else in a git directory is followed by git, for reading and
       for writing (a linked `index` takes git_add's writes elsewhere).
+    - A directory that resolves outside them, which is what a Windows
+      directory junction is: `is_symlink()` is false for one and `is_dir()`
+      true, and git follows it as it follows a link. Every directory is
+      judged by where it resolves rather than by detecting a junction
+      (`is_junction()` exists only from Python 3.12): an ordinary directory
+      resolves to itself, inside the directory being walked, and passes.
 
-    A link that is allowed and names a directory is walked too, since git
-    follows it into that directory and on into any link inside it; each
-    directory is walked once, so a cycle of links ends.
+    A link or directory that is allowed is walked where it resolves, since
+    git follows it there and on into any link inside it; each directory is
+    walked once, so a cycle of links ends, and one whose target is gone
+    (a dangling link or junction) is not walked.
 
     `hooks` is not walked: no hook runs (`HARDENED_CONFIG`), so a hooks
     directory linked to a shared one elsewhere is harmless.
@@ -1076,21 +1083,16 @@ def _check_git_dir_contents(
             for entry in entries:
                 if current == directory and entry.name == "hooks":
                     continue
-                if entry.is_symlink():
-                    target = Path(entry.path).resolve()
-                    if not (
-                        target.is_relative_to(allowed)
-                        or target.is_relative_to(directory)
-                    ):
-                        raise outside(target)
-                    if target.is_dir() and target not in visited:
-                        visited.add(target)
-                        pending.append(target)
-                elif entry.is_dir():
-                    real = Path(entry.path).resolve()
-                    if real not in visited:
-                        visited.add(real)
-                        pending.append(real)
+                if not (entry.is_symlink() or entry.is_dir()):
+                    continue
+                target = Path(entry.path).resolve()
+                if not (
+                    target.is_relative_to(allowed) or target.is_relative_to(directory)
+                ):
+                    raise outside(target)
+                if target.is_dir() and target not in visited:
+                    visited.add(target)
+                    pending.append(target)
 
 
 def git_branch(
