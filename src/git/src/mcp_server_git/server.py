@@ -176,6 +176,49 @@ _DIFF_FLAGS = ("--no-ext-diff", "--no-textconv")
 # `submodule.<name>.ignore`, which the repository could set to `none`.
 _NO_SUBMODULE_STATUS = "--ignore-submodules=dirty"
 
+# A repository that declares a promisor remote has git fetch any object it is
+# missing from that remote, by itself, on a read-only command (git show, git
+# status with HEAD's tree gone). The fetch runs a transport program the
+# repository's configuration names (`remote.<name>.uploadpack`,
+# `core.sshCommand`, an `ext::` URL), and no override can pin it by name,
+# since the remote's name is the repository's choice; `protocol.allow=never`
+# is no help either, as a repository-level `protocol.<name>.allow` outranks
+# it. GIT_NO_LAZY_FETCH=1 turns the fetch off, so a missing object is an
+# error. Git honors it from 2.45.1 and the maintenance releases made with it
+# (2.39.4, 2.40.2, ..., 2.44.1), mapped here as minor -> first patch; an
+# older git ignores it, so `harden_repo` refuses a repository with a promisor
+# remote there. Any of these keys declares one.
+_NO_LAZY_FETCH_SINCE = {39: 4, 40: 2, 41: 1, 42: 2, 43: 4, 44: 1, 45: 1}
+_PROMISOR_KEYS = (
+    r"^(extensions\.partialclone|remote\..+\.(promisor|partialclonefilter))$"
+)
+
+
+def _honors_no_lazy_fetch(version: tuple[int, ...]) -> bool:
+    """Whether git at `version` honors GIT_NO_LAZY_FETCH."""
+    major, minor, patch = (tuple(version) + (0, 0, 0))[:3]
+    if (major, minor) > (2, 45):
+        return True
+    since = _NO_LAZY_FETCH_SINCE.get(minor) if major == 2 else None
+    return since is not None and patch >= since
+
+
+def _refuse_promisor_remote(repo: git.Repo) -> None:
+    """Refuse a repository with a promisor remote, for a git that would fetch."""
+    try:
+        repo.git.config("--get-regexp", _PROMISOR_KEYS)
+    except git.GitCommandError as e:
+        # Exit 1 is "nothing matched": no promisor remote, nothing to fetch.
+        if e.status == 1:
+            return
+        raise
+    raise git.GitError(
+        "Git 2.45.1 or later (or 2.39.4, 2.40.2, 2.41.1, 2.42.2, 2.43.4, "
+        "2.44.1) is required for a repository with a promisor remote (a "
+        "partial clone): an older git fetches missing objects from it, and "
+        "the fetch runs a program the repository's configuration names"
+    )
+
 
 def _config_env(entries: list[tuple[str, str]]) -> dict[str, str]:
     """GIT_CONFIG_COUNT variables for `entries`, after any the user set."""
@@ -195,10 +238,12 @@ def harden_repo(repo: git.Repo) -> None:
     a worktree's `config.worktree`, and files they include) defines, and
     overrides each with an empty command. The same read checks that git
     applied the overrides: git older than 2.31 ignores GIT_CONFIG_COUNT, and
-    is refused rather than run unprotected.
+    is refused rather than run unprotected. Lazy fetching is turned off
+    (GIT_NO_LAZY_FETCH), and a repository with a promisor remote is refused
+    on a git too old to honor that (`_PROMISOR_KEYS`).
     """
     entries = list(HARDENED_CONFIG)
-    repo.git.update_environment(**_config_env(entries))
+    repo.git.update_environment(GIT_NO_LAZY_FETCH="1", **_config_env(entries))
     try:
         listed = repo.git.config("--show-scope", "-z", "--get-regexp", _LISTED_KEYS)
     except git.GitCommandError as e:
@@ -226,6 +271,8 @@ def harden_repo(repo: git.Repo) -> None:
     if drivers:
         entries += [(key, "") for key in sorted(drivers)]
         repo.git.update_environment(**_config_env(entries))
+    if not _honors_no_lazy_fetch(repo.git.version_info):
+        _refuse_promisor_remote(repo)
 
 
 def git_status(repo: git.Repo) -> str:
