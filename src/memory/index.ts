@@ -275,20 +275,44 @@ function isLockOwnerDead(contents: string): boolean {
   }
 }
 
-// Whether the lock at lockPath is abandoned. Its owner and its mtime are read
-// through one open handle, so both describe the same lock file even if it is
+// What a waiter learns from one look at a lock file: whether it is abandoned,
+// and which file it looked at. The device and inode numbers identify the file
+// itself rather than its path, so a later check can tell that file from one
+// that has replaced it at the same path. They are read as bigints because a
+// Windows file id does not fit in a double.
+interface LockJudgement {
+  stale: boolean;
+  dev: bigint;
+  ino: bigint;
+}
+
+// Judge the lock file open at handle. Its owner and its mtime are read
+// through that one handle, so both describe the same lock file even if it is
 // replaced meanwhile.
+async function judgeLock(
+  handle: FileHandle,
+  staleMs: number,
+): Promise<LockJudgement> {
+  const [contents, stats] = await Promise.all([
+    handle.readFile("utf-8"),
+    handle.stat({ bigint: true }),
+  ]);
+  return {
+    stale:
+      isLockOwnerDead(contents) || Date.now() - Number(stats.mtimeMs) > staleMs,
+    dev: stats.dev,
+    ino: stats.ino,
+  };
+}
+
+// Whether the lock at lockPath is abandoned.
 async function isLockStale(
   lockPath: string,
   staleMs: number,
 ): Promise<boolean> {
   const handle = await fs.open(lockPath, "r");
   try {
-    const [contents, stats] = await Promise.all([
-      handle.readFile("utf-8"),
-      handle.stat(),
-    ]);
-    return isLockOwnerDead(contents) || Date.now() - stats.mtimeMs > staleMs;
+    return (await judgeLock(handle, staleMs)).stale;
   } finally {
     await handle.close();
   }
@@ -299,6 +323,25 @@ async function isLockStale(
 // re-checks the lock under that guard: two waiters can never both judge the
 // same abandoned lock stale and one then remove the lock the other has just
 // taken in its place.
+//
+// The guard orders breakers only. The lock's own holder can still release it,
+// and a breaker that stalls past staleMs loses its guard to another, so the
+// file at lockPath can be replaced by a successor's live lock after the
+// re-check has judged it stale. Removing by path would then delete that live
+// lock and let a third writer in beside its holder (#5560). So the lock is
+// never deleted where it stands. It is renamed aside to a name nobody else
+// uses, which is atomic and takes whichever file is at lockPath at that
+// instant, and what was taken is then compared with the file that was judged:
+// the judged file is deleted, and anything else is a live lock and is renamed
+// straight back. The handle the judgement was read through stays open until
+// then, so the judged file's inode number cannot be reused by a successor's
+// file and the comparison cannot be fooled.
+//
+// What remains is the moment a live lock spends aside before it is put back:
+// a writer that creates the lock in exactly that moment is overwritten by the
+// restored one and runs beside its holder. Reaching it takes a replacement
+// between the judgement and the rename, then a create between the two
+// renames; a lock file cannot close that without the kernel's help.
 async function breakStaleLock(
   lockPath: string,
   staleMs: number,
@@ -321,12 +364,26 @@ async function breakStaleLock(
   }
   try {
     await breaker.close();
-    if (!(await isLockStale(lockPath, staleMs))) {
-      return false;
+    const judged = await fs.open(lockPath, "r");
+    try {
+      const { stale, dev, ino } = await judgeLock(judged, staleMs);
+      if (!stale) {
+        return false;
+      }
+      const asidePath = `${lockPath}.${randomBytes(8).toString("hex")}.stale`;
+      await fs.rename(lockPath, asidePath);
+      const taken = await fs.stat(asidePath, { bigint: true });
+      if (taken.dev !== dev || taken.ino !== ino) {
+        // Not the lock that was judged: a successor's live one. Put it back.
+        await fs.rename(asidePath, lockPath);
+        return false;
+      }
+      console.error(`Breaking stale memory file lock ${lockPath}`);
+      await fs.unlink(asidePath);
+      return true;
+    } finally {
+      await judged.close();
     }
-    console.error(`Breaking stale memory file lock ${lockPath}`);
-    await fs.unlink(lockPath);
-    return true;
   } finally {
     await fs.unlink(breakerPath).catch(ignoreError);
   }

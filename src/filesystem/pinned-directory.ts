@@ -40,6 +40,9 @@
 // relative to the anchor and must be the file the descriptor opened, which
 // narrows the race without closing it. A listing there has no such check, and
 // is no more anchored than a readdir by path.
+// That gap is a decided limit of the implementation, not pending work:
+// closing it needs handle-relative opens, so native code (#5260, closed as
+// not planned). The README states it for users, under "Access Control".
 
 import { randomBytes } from "crypto";
 import fs from "fs";

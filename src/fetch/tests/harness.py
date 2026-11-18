@@ -115,6 +115,9 @@ def web(monkeypatch: pytest.MonkeyPatch) -> FakeWeb:
     # patching the attribute on the httpx module is what it picks up.
     monkeypatch.setattr(httpx, "AsyncClient", factory)
     monkeypatch.setattr(server_module, "_resolve_host", fake.resolve)
+    # The mock transport opens no connection, so there is nothing to pin, and
+    # pinning would replace it with a real transport (test_pinning.py covers it).
+    monkeypatch.setattr(server_module, "pin_direct_connections", lambda *_: None)
     return fake
 
 
