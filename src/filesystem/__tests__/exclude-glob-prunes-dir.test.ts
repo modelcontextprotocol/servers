@@ -140,7 +140,7 @@ describe('excludePatterns ending in "/**" (#5445)', () => {
       excludePatterns: ["**/node_modules/**"],
     });
     expect(result.isError).toBeFalsy();
-    expect(textOf(result)).toBe("No matches found");
+    expect(textOf(result)).toMatch(/^No matches found for pattern /);
   });
 
   it("directory_tree does not list the excluded directory, even as empty", async () => {
