@@ -180,6 +180,8 @@ A tool call's `repo_path` must be inside that repository, and so must the direct
 
 It also refuses a repository whose index (`.git/index`) names a path Git would read outside the working tree: an entry that is absolute, or has an empty, `.`, `..` or `.git` component (on Windows also one with a `:`, or with `\` as a separator), which is what `git add` refuses to write. Git reads an index as it finds it, so a hand-written one could otherwise make `git_diff_unstaged`, `git_diff` and `git_status` show files outside the repository. For the same reason, every Git command the server runs, with or without `--repository`, sets `core.untrackedCache` to `false`: the untracked cache is kept in the index and names the directories `git status` lists, so Git scans the working tree instead.
 
+These checks run when a tool call opens the repository, and again after each Git command in the call that writes the working tree (`git_checkout`, `git_merge` and the `git merge --abort` after a conflict, and the autostash `git_commit` reapplies when it concludes a merge), since such a write can change the repository's configuration (a `.git/config` linked to a tracked file that gains a `core.worktree`). If the repository no longer passes, the call stops with an error before it runs another Git command, and the working tree stays as that command wrote it; a merge that conflicted is then still in progress rather than aborted.
+
 ### A repository's own programs
 
 A repository's configuration and hooks travel with it (an unpacked archive, a shared folder, a vendored tree), so the server never runs a program they name, with or without `--repository`. Every Git command it runs overrides, through `GIT_CONFIG_COUNT`, the settings that would start one:
