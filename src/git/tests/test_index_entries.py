@@ -102,6 +102,42 @@ async def test_index_entry_in_a_nested_repository_is_refused(tmp_path: Path):
     assert MARKER not in text
 
 
+async def test_index_is_checked_whole_when_the_worktree_is_a_parent(
+    tmp_path: Path,
+):
+    # GitPython runs git from the directory holding `.git`, ignoring
+    # `core.worktree`. With the working tree a parent of it, a bare `ls-files`
+    # would list only the entries under that subdirectory, and miss one that
+    # git joins to the parent: the check lists the index from its top.
+    outside_marker(tmp_path)
+    root = tmp_path / "repo"
+    make_repo(root).close()
+    nested = root / "sub"
+    repo = forged_repo(nested, ["../outside/secret.txt"])
+    try:
+        with repo.config_writer() as config:
+            config.set_value("core", "worktree", "../..")
+    finally:
+        repo.close()
+    result = await call(root, "git_diff_unstaged", {"repo_path": str(nested)})
+    assert result["isError"] is True
+    text = result["content"][0]["text"]
+    assert f"'../outside/secret.txt' {REFUSED}" in text
+    assert MARKER not in text
+
+
+async def test_refusal_escapes_the_entry_name(tmp_path: Path):
+    # The name is the repository's own: no line break or escape sequence of it
+    # reaches the result as is.
+    root = tmp_path / "repo"
+    forged_repo(root, ["../x\n\x1b[31mred"]).close()
+    result = await call(root, "git_status", {"repo_path": str(root)})
+    assert result["isError"] is True
+    text = result["content"][0]["text"]
+    assert "'../x\\n\\x1b[31mred'" in text
+    assert "\n" not in text and "\x1b" not in text
+
+
 @pytest.mark.parametrize(
     "entry", ["/abs/path", "./test.txt", "a//b", ".git/config", "sub/.GIT/x"]
 )
@@ -153,6 +189,7 @@ async def test_split_and_sparse_indexes_are_accepted(tmp_path: Path):
         assert result["isError"] is False
         repo.git.update_index("--no-split-index")
         repo.git.sparse_checkout("set", "--cone", "--sparse-index", "other")
+        assert "dir/" in repo.git.ls_files("--sparse").splitlines()
         assert not (root / "dir").exists()
         result = await call(root, "git_status", {"repo_path": str(root)})
         assert result["isError"] is False

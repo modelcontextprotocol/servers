@@ -833,10 +833,12 @@ def _check_index_entries(repo: git.Repo, repo_path: Path) -> None:
     )
     for entry in listed.split(b"\0"):
         if entry and _unsafe_index_entry(entry):
+            # repr: the name is the repository's own, and escaped it carries
+            # no line breaks or terminal control sequences into the result.
+            name = entry.decode("utf-8", errors="replace")
             raise ValueError(
-                f"Repository path '{repo_path}' has an index entry "
-                f"'{entry.decode('utf-8', errors='replace')}' that git would "
-                "read outside the working tree"
+                f"Repository path '{repo_path}' has an index entry {name!r} "
+                "that git would read outside the working tree"
             )
 
 
