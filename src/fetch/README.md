@@ -216,6 +216,10 @@ repeated). Each entry is one of:
   (`api.github.com`, `a.b.github.com`) but not `github.com` itself: list both to allow both;
 - an IP address, such as `203.0.113.7` or `2001:db8::7`, which matches a URL that uses that address literally.
 
+A wildcard applies to domain names only. An entry that puts `*.` in front of an IP address or of a numeric suffix of
+one, such as `*.10.0.0.1` or `*.0.0.1`, is refused at startup, and a URL that uses an IP address is only ever matched
+by an entry naming that exact address.
+
 Matching ignores case and a trailing dot, and an internationalized name may be given in either its Unicode or its
 `xn--` form. An entry names a host only, so it carries no scheme, port or path. The list is checked before every request
 the server sends, by the host name in the URL rather than by the addresses it resolves to: the requested page, its
