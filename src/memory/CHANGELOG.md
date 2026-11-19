@@ -1,5 +1,13 @@
 # @modelcontextprotocol/server-memory
 
+## 2.2.2
+
+### Patch Changes
+
+- [#5623](https://github.com/modelcontextprotocol/servers/pull/5623) [`0f3ff98`](https://github.com/modelcontextprotocol/servers/commit/0f3ff986d092533a3b713ed9b8223e3eac488f92) [@cliffhall](https://github.com/cliffhall) - Close three narrow gaps in how the memory file lock changes hands between server processes: a writer could start while a live lock was momentarily moved aside by a server checking a stale one, a lock could be put back after its holder had finished (delaying later writes by up to 30 seconds), and a server releasing a lock it had held past the stale timeout could remove the lock of the server that took over. The momentary `<memory file>.lock.break` file now orders every release and stale-lock break, and a server that has just created the lock waits for it to go before writing. Servers on this version and on 2.2.1 or earlier can still share a memory file; the older server's own releases and acquisitions keep those gaps.
+
+- [#5637](https://github.com/modelcontextprotocol/servers/pull/5637) [`7e0a6c4`](https://github.com/modelcontextprotocol/servers/commit/7e0a6c46853c82158c6cb80f81cfc995cf893c5f) [@cliffhall](https://github.com/cliffhall) - Keep the memory file lock exclusive on Windows when a stale-lock break takes a live lock aside by mistake: putting it back is retried while Windows briefly refuses to replace the lock another writer created in the gap, instead of giving up and letting that writer run beside the live lock's holder ([#5635](https://github.com/modelcontextprotocol/servers/issues/5635)).
+
 ## 2.2.1
 
 ### Patch Changes
