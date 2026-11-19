@@ -325,8 +325,11 @@ function run(command, args, cwd, env) {
 
 const git = (...args) => run("git", args, repoRoot).trim();
 
-/** The commit to compare against, as a full SHA. */
-function resolveBase(base) {
+/**
+ * The commit to compare against, as a full SHA. Exported for the image smoke
+ * (`scripts/image-smoke.mjs`), which selects from the same change.
+ */
+export function resolveBase(base) {
   if (base) return git("rev-parse", "--verify", `${base}^{commit}`);
   try {
     git("rev-parse", "--verify", DEFAULT_BASE_BRANCH);
@@ -342,9 +345,10 @@ function resolveBase(base) {
  * What changed between `sha` and this checkout as it stands: the files
  * (committed, staged, unstaged and untracked alike, since the head probed is
  * the working tree's build, both sides of a rename included) and the root
- * lockfile on each side (`null` where there is none).
+ * lockfile on each side (`null` where there is none). Exported for the image
+ * smoke, as `resolveBase` is.
  */
-function changesSince(sha) {
+export function changesSince(sha) {
   // NUL-delimited, so a path holding a non-ASCII character, a tab or a
   // newline comes back as written rather than C-quoted (`"src/time/…`), which
   // would match no server's directory.

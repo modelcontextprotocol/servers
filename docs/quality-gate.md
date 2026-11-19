@@ -13,7 +13,7 @@ out; everything else points here.
 | --- | --- | --- | --- |
 | Inner loop | `npm run validate -w src/<server>`, `npm run validate:py -- <server>` | Your machine | While iterating on one server |
 | Pre-push gate | `npm run local:gate` | Your machine, under a lease | Before every push |
-| CI | `.github/workflows/typescript.yml`, `python.yml`, `mcp-interface-diff.yml`; `dco.yml`; `main-source.yml` | GitHub, on every push and pull request (`mcp-interface-diff.yml` diffs only the servers the change touches); `dco.yml` on pull requests only; `main-source.yml` on pull requests into `main` only, and not mirrored by a gate stage, since no local push targets `main` | Before merge |
+| CI | `.github/workflows/typescript.yml`, `python.yml`, `mcp-interface-diff.yml`, `image-smoke.yml`; `dco.yml`; `main-source.yml` | GitHub, on every push and pull request (`mcp-interface-diff.yml` diffs, and `image-smoke.yml` builds, only the servers the change touches); `dco.yml` on pull requests only; `main-source.yml` on pull requests into `main` only, and not mirrored by a gate stage, since no local push targets `main` | Before merge |
 
 **`npm run local:gate` runs every check CI runs.** CI splits the same checks
 into parallel jobs on a fresh install; the gate runs them in sequence on your
@@ -58,6 +58,7 @@ in this order, and the first failure stops the run.
 | 8 | `verify:skills:cli` | `claude plugin validate` on `.claude/skills`, at the pinned CLI version | `typescript.yml` → **Root guards** |
 | 9 | `smoke` | Every server boots over each transport it implements and answers one tool call | `typescript.yml` → **Boot smoke** |
 | 10 | `interface-diff` | For each server the change touches, its MCP interface (capabilities, tools, prompts, resources, resource templates) in this checkout's build, diffed against the same server built from the base. It fails only when a diff cannot run; a changed interface is reported, not failed | `mcp-interface-diff.yml` → **Choose the servers to diff**, then **Diff \<server\>** (one leg each, and a PR comment each) |
+| 11 | `image-smoke` | For each server the change touches, its Docker image: it builds, a client lists its tools over `docker run -i`, and `docker stop` ends `everything` and `memory` without killing them, `memory` leaving no lock file behind | `image-smoke.yml` → **Choose the images to build**, then **Image \<server\>** (one leg each) |
 
 Notes on the stages:
 
@@ -100,9 +101,10 @@ Notes on the stages:
   when a server's environment is missing or behind its lockfile, since
   `uv sync --locked` then downloads packages (and the pinned interpreter, if
   `uv` does not have it); `coverage:py` begins with the same sync, which is a
-  no-op once `validate:py` has run; and `interface-diff` needs it for the
-  base's `npm ci` and `uv sync`. With warm caches those are the only stages that can fail
-  offline.
+  no-op once `validate:py` has run; `interface-diff` needs it for the
+  base's `npm ci` and `uv sync`; and `image-smoke` needs it for a build whose
+  layers Docker has not cached (base images, `npm ci`, `uv sync`, `apt-get`).
+  With warm caches those are the only stages that can fail offline.
 - **`smoke` launches what a user launches**: the built `dist/index.js` for a
   TypeScript server, the console script through `uv run --no-sync` for a Python
   one. stdio and Streamable HTTP for all seven; HTTP+SSE as well for
@@ -133,6 +135,28 @@ Notes on the stages:
   `mcp-server-diff` changes. A change that touches no server diffs nothing
   and passes. `-- --server <name>` or `-- --all` diffs servers regardless,
   and `-- --list` prints the selection without diffing.
+- **`image-smoke` needs a running Docker daemon, but only when the change
+  touches an image** (#5598). It selects as `interface-diff` does
+  (`selectImages` in `scripts/image-smoke.mjs`): a file under `src/<server>/`;
+  for a TypeScript server, the root `.npmrc` or `tsconfig.json`, which its
+  image copies, or a `package-lock.json` edit that changes a package the
+  server installs; and every image when the image tooling changes. A change
+  that touches none builds nothing and passes with no Docker at all. One that
+  does, with no daemon answering, **fails rather than skips**: start Docker
+  and re-run. It builds from the working tree, with the command each
+  Dockerfile documents (the repository root as the context for a TypeScript
+  server, the server's directory for a Python one), under the tag
+  `mcp-image-smoke/<server>:local`, which each run reuses. A build with warm
+  layers takes a few seconds per image. `-- --server <name>` or `-- --all`
+  builds images regardless, and `-- --list` prints the selection without
+  building. In CI a manual run of `image-smoke.yml` builds all seven.
+- **`image-smoke` asserts a clean stop only where an image has one**:
+  `everything` and `memory`, the two whose Dockerfiles declare a `STOPSIGNAL`.
+  A container Docker has to kill exits 137, and that fails. For `memory` it
+  also makes a write first and checks that the graph's directory holds the
+  graph and nothing else after the stop, so the lock #5485 removes on a
+  signal is gone. The other five images are killed at the timeout today
+  (#5611) and are not checked for it.
 - `python.yml` also has a **Build \<server\>** job per server that re-runs
   pyright and `uv build` and uploads the built distribution. It checks nothing
   stage 6 does not.
