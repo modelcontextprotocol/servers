@@ -606,6 +606,116 @@ describe("withFileLock", () => {
       expect(await fs.readdir(dir)).toEqual(["memory.jsonl.lock"]);
     });
 
+    // Stage a successor's live lock in place of the stale one before the
+    // breaker takes it aside, as onceBeforeRemoval does, and fail the first
+    // `failures` attempts to put it back with `code`. Returns a count of
+    // those attempts.
+    function stageSuccessorAndFailRestore(
+      failures: number,
+      code: string,
+    ): () => number {
+      const realRename = fs.rename;
+      let staged = false;
+      let restores = 0;
+      vi.spyOn(fs, "rename").mockImplementation(async (from, to) => {
+        if (!staged && from === lockPath) {
+          staged = true;
+          await fs.unlink(lockPath);
+          await fs.writeFile(lockPath, "successor");
+        }
+        if (String(from).endsWith(".stale") && to === lockPath) {
+          restores += 1;
+          if (restores <= failures) {
+            throw Object.assign(new Error(code), { code });
+          }
+        }
+        return realRename(from, to);
+      });
+      return () => restores;
+    }
+
+    // On Windows a rename over a file that anything holds open fails, and the
+    // writer that created the lock in the gap keeps opening it while it waits
+    // out the break. Giving up then left the live lock aside and let that
+    // writer run beside its holder (#5635).
+    it("keeps putting a live lock back while Windows refuses to replace the lock created in the gap", async () => {
+      await writeStaleLock();
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+      const opens = watchOpens();
+      const restores = stageSuccessorAndFailRestore(2, "EPERM");
+      let thirdRan!: () => void;
+      const thirdStarted = new Promise<void>((resolve) => (thirdRan = resolve));
+      const third = vi.fn(async () => {
+        thirdRan();
+        return "third ran";
+      });
+      let thirdOutcome: Promise<unknown> | undefined;
+      onceLockAside(async () => {
+        const sawBreak = opens.opened(guardPath(), "r");
+        thirdOutcome = withFileLock(lockPath, third, fast).catch(
+          (error: unknown) => error,
+        );
+        await Promise.race([thirdStarted, sawBreak]);
+      });
+
+      await expect(
+        withFileLock(lockPath, async () => "breaker ran", fast),
+      ).rejects.toThrow("Timed out");
+      const outcome = await thirdOutcome;
+
+      expect(restores()).toBe(3);
+      expect(third).not.toHaveBeenCalled();
+      expect((outcome as Error).message).toContain("Timed out");
+      expect(await fs.readFile(lockPath, "utf-8")).toBe("successor");
+      expect(heldLockPaths()).toEqual([]);
+      expect(await fs.readdir(dir)).toEqual(["memory.jsonl.lock"]);
+    });
+
+    it("does not retry a failed put-back off Windows, where the failure lasts", async () => {
+      await writeStaleLock();
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      vi.spyOn(process, "platform", "get").mockReturnValue("linux");
+      const restores = stageSuccessorAndFailRestore(1, "EPERM");
+
+      await expect(
+        withFileLock(lockPath, async () => "ran", fast),
+      ).rejects.toThrow("EPERM");
+
+      expect(restores()).toBe(1);
+      expect(heldLockPaths()).toEqual([]);
+      expect(await exists(guardPath())).toBe(false);
+    });
+
+    // Windows' EPERM also means a busy lock to the acquire loop, so a put-back
+    // that never lands must fail with an error of its own, or the breaker
+    // would go back to acquiring with the live lock still aside.
+    it("fails the acquisition on Windows once a live lock cannot be put back before the guard would be taken for a crash's", async () => {
+      await writeStaleLock();
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+      const restores = stageSuccessorAndFailRestore(Infinity, "EPERM");
+      const operation = vi.fn(async () => "ran");
+
+      const error: unknown = await withFileLock(lockPath, operation, {
+        staleMs: 50,
+        timeoutMs: 5_000,
+        retryMs: 5,
+      }).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toContain(
+        "Could not put back the live memory file lock",
+      );
+      expect(((error as Error).cause as NodeJS.ErrnoException).code).toBe(
+        "EPERM",
+      );
+      expect(operation).not.toHaveBeenCalled();
+      expect(restores()).toBeGreaterThan(1);
+      expect(heldLockPaths()).toEqual([]);
+      expect(await exists(guardPath())).toBe(false);
+    });
+
     it("does not restore a lock its holder released while it was aside", async () => {
       await writeStaleLock();
       vi.spyOn(console, "error").mockImplementation(() => {});
