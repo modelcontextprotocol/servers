@@ -445,6 +445,46 @@ function dropGuard(guardPath: string): void {
   heldGuards.delete(guardPath);
 }
 
+// Whether a rename that replaces a file failed only because the file being
+// replaced is open right now. On Windows, renaming over a file that anything
+// holds open fails with EPERM (or EACCES, or EBUSY) until that handle closes.
+// Elsewhere a rename never fails for that reason, and these codes are lasting.
+function isReplaceBusy(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException).code;
+  return (
+    process.platform === "win32" &&
+    (code === "EPERM" || code === "EACCES" || code === "EBUSY")
+  );
+}
+
+// Put a live lock that breakStaleLock took aside by mistake back at lockPath.
+// A writer that created the lock in the gap keeps opening its file while it
+// waits for the guard to go (confirmLock), so on Windows the rename over that
+// file can fail for a moment. Giving up then would drop the guard with the
+// live lock still aside, and that writer would run beside its holder (#5635).
+// So the rename is retried, still under the guard, until it lands. It stops
+// after staleMs, past which the guard is taken to be left by a crash and
+// protects nothing.
+async function restoreLock(
+  asidePath: string,
+  lockPath: string,
+  staleMs: number,
+  retryMs: number,
+): Promise<void> {
+  const deadline = Date.now() + staleMs;
+  for (;;) {
+    try {
+      await fs.rename(asidePath, lockPath);
+      return;
+    } catch (error) {
+      if (!isReplaceBusy(error) || Date.now() >= deadline) {
+        throw error;
+      }
+    }
+    await pause(retryMs);
+  }
+}
+
 // Remove an abandoned lock, returning whether it did. Breaking happens under
 // the guard, so only one waiter breaks at a time and re-checks the lock under
 // it: two waiters can never both judge the same abandoned lock stale and one
@@ -472,6 +512,7 @@ function dropGuard(guardPath: string): void {
 async function breakStaleLock(
   lockPath: string,
   staleMs: number,
+  retryMs: number,
 ): Promise<boolean> {
   const guardPath = guardPathOf(lockPath);
   if (!(await tryTakeGuard(guardPath, staleMs))) {
@@ -490,7 +531,7 @@ async function breakStaleLock(
       const taken = await fs.stat(asidePath, { bigint: true });
       if (taken.dev !== dev || taken.ino !== ino) {
         // Not the lock that was judged: a successor's live one. Put it back.
-        await fs.rename(asidePath, lockPath);
+        await restoreLock(asidePath, lockPath, staleMs, retryMs);
         return false;
       }
       console.error(`Breaking stale memory file lock ${lockPath}`);
@@ -766,7 +807,7 @@ export async function withFileLock<T>(
     try {
       if (
         (await isLockStale(lockPath, staleMs)) &&
-        (await breakStaleLock(lockPath, staleMs))
+        (await breakStaleLock(lockPath, staleMs, retryMs))
       ) {
         continue;
       }
