@@ -63,13 +63,13 @@ Please note that mcp-server-git is currently in early development. The functiona
    - Returns: Confirmation of reset operation
 
 8. `git_log`
-   - Shows the commit logs with optional date filtering
+   - Shows the commit log, newest commit first. With only `repo_path` it returns the latest commits; the two timestamps are optional filters for a date range
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `max_count` (number, optional): Maximum number of commits to show, at least 1 (default: 10)
-     - `start_timestamp` (string, optional): Start timestamp for filtering commits. Accepts ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')
-     - `end_timestamp` (string, optional): End timestamp for filtering commits. Accepts ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')
-   - Returns: Array of commit entries with hash, author, date, and message
+     - `start_timestamp` (string, optional): Only show commits at or after this time; omit for no lower bound. Accepts ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')
+     - `end_timestamp` (string, optional): Only show commits at or before this time; omit for no upper bound. Accepts ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')
+   - Returns: `Commit history:` followed by one entry per commit (hash, author, date and message), newest first. When a timestamp filter matches no commits, the text says so and suggests omitting both timestamps, rather than returning an empty history
 
 9. `git_create_branch`
    - Creates a new branch
@@ -177,8 +177,11 @@ A tool call's `repo_path` must be inside that repository, and so must the direct
 
 - names alternate object stores (`objects/info/alternates` or `objects/info/http-alternates` with any entry), wherever they are. A clone made with `--reference` or `--shared` therefore cannot be used under `--repository`; `git repack -a -d` and then deleting `objects/info/alternates` makes it self-contained.
 - holds a symbolic link (at `objects`, `refs`, `index`, `HEAD` or anywhere else in it) that resolves outside both the allowed repository and that Git directory. A link that stays inside is followed, and what it leads to is checked the same way. A `hooks` directory linked elsewhere is allowed, since no hook runs.
+- holds a Windows directory junction that resolves outside both, anywhere in it. A junction is judged like a symbolic link: one that stays inside is followed and what it leads to is checked, and a `hooks` junction is allowed.
 
 It also refuses a repository whose index (`.git/index`) names a path Git would read outside the working tree: an entry that is absolute, or has an empty, `.`, `..` or `.git` component (on Windows also one with a `:`, or with `\` as a separator), which is what `git add` refuses to write. Git reads an index as it finds it, so a hand-written one could otherwise make `git_diff_unstaged`, `git_diff` and `git_status` show files outside the repository. For the same reason, every Git command the server runs, with or without `--repository`, sets `core.untrackedCache` to `false`: the untracked cache is kept in the index and names the directories `git status` lists, so Git scans the working tree instead.
+
+These checks run when a tool call opens the repository, and again after each Git command in the call that writes the working tree (`git_checkout`, `git_merge` and the `git merge --abort` after a conflict, and the autostash `git_commit` reapplies when it concludes a merge), since such a write can change the repository's configuration (a `.git/config` linked to a tracked file that gains a `core.worktree`). If the repository no longer passes, the call stops with an error before it runs another Git command, and the working tree stays as that command wrote it; a merge that conflicted is then still in progress rather than aborted.
 
 ### A repository's own programs
 
