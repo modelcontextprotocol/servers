@@ -348,32 +348,38 @@ describe("withFileLock", () => {
     const realUtimes = fs.utimes;
     let replaced!: () => void;
     const replacement = new Promise<void>((resolve) => (replaced = resolve));
+    const readFile = vi.spyOn(fs, "readFile");
+    const lockReads = () =>
+      readFile.mock.calls.filter(([file]) => file === lockPath).length;
     // Our first heartbeat refreshes our own lock; right after it, another
     // process breaks the lock as stale and re-takes it with its own token.
+    // Reads are counted from that moment, inside the heartbeat, not from when
+    // the operation resumes: on a slow runner the next beat can read the lock
+    // before then, and clearing later would wipe that read (#5634).
     const utimes = vi
       .spyOn(fs, "utimes")
       .mockImplementationOnce(async (...args) => {
         await realUtimes(...args);
         await fs.writeFile(lockPath, "someone else");
         await realUtimes(lockPath, old, old);
+        readFile.mockClear();
         replaced();
       });
-    const readFile = vi.spyOn(fs, "readFile");
-    const lockReads = () =>
-      readFile.mock.calls.filter(([file]) => file === lockPath).length;
 
     await withFileLock(
       lockPath,
       async () => {
         await replacement;
-        readFile.mockClear();
-        // Several heartbeats later, only the first one, on our own lock, has
-        // touched the file: the next one read the new owner's token and stopped
-        // the interval, so the beats after it do not even read the file.
-        await new Promise((resolve) => setTimeout(resolve, 250));
+        // Only the first heartbeat, on our own lock, refreshes the file: the
+        // next one reads the new owner's token and stops the interval, so the
+        // beats after it do not even read the file. The next beat is waited
+        // for rather than timed, so a slow runner only makes this take longer.
+        await vi.waitFor(() => expect(lockReads()).toBeGreaterThan(0), {
+          timeout: 5_000,
+          interval: 10,
+        });
         expect(utimes).toHaveBeenCalledTimes(1);
         const reads = lockReads();
-        expect(reads).toBeGreaterThan(0);
         await new Promise((resolve) => setTimeout(resolve, 350));
         expect(lockReads()).toBe(reads);
       },
