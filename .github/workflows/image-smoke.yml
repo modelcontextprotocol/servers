@@ -15,7 +15,7 @@
 #   on every change and the `changes` job asks the script which images to
 #   build (`--list`, the same selection the gate makes). `image` fans out over
 #   that list, one matrix leg per image. This is the interface diff's shape
-#   (everything-mcp-diff.yml), for the same reasons.
+#   (mcp-interface-diff.yml), for the same reasons.
 # - The base is the PR's base, or the branch as it was before a push.
 # - A manual run (`workflow_dispatch`) builds every image, changed or not: the
 #   way to check all seven on a branch, for a release verification or after a
