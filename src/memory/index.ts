@@ -445,6 +445,57 @@ function dropGuard(guardPath: string): void {
   heldGuards.delete(guardPath);
 }
 
+// Whether a rename that replaces a file failed only because the file being
+// replaced is open right now. On Windows, renaming over a file that anything
+// holds open fails with EPERM (or EACCES, or EBUSY) until that handle closes.
+// Elsewhere a rename never fails for that reason, and these codes are lasting.
+function isReplaceBusy(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException).code;
+  return (
+    process.platform === "win32" &&
+    (code === "EPERM" || code === "EACCES" || code === "EBUSY")
+  );
+}
+
+// Put a live lock that breakStaleLock took aside by mistake back at lockPath.
+// A writer that created the lock in the gap keeps opening its file while it
+// waits for the guard to go (confirmLock), so on Windows the rename over that
+// file can fail for a moment. Giving up then would drop the guard with the
+// live lock still aside, and that writer would run beside its holder (#5635).
+// So the rename is retried, still under the guard, until it lands. No attempt
+// starts once half of staleMs has passed since the guard was taken: past
+// staleMs the guard is taken to be left by a crash and protects nothing, and
+// the other half is the margin for the attempt in flight. A put-back that
+// cannot be made fails with an error of its own rather than the rename's
+// code, which on Windows would read as a busy lock and send this writer back
+// to acquiring with the live lock still aside.
+async function restoreLock(
+  asidePath: string,
+  lockPath: string,
+  guardTakenAt: number,
+  staleMs: number,
+  retryMs: number,
+): Promise<void> {
+  const deadline = guardTakenAt + staleMs / 2;
+  for (;;) {
+    try {
+      await fs.rename(asidePath, lockPath);
+      return;
+    } catch (error) {
+      if (!isReplaceBusy(error)) {
+        throw error;
+      }
+      await pause(retryMs);
+      if (Date.now() >= deadline) {
+        throw new Error(
+          `Could not put back the live memory file lock ${lockPath}, left at ${asidePath}`,
+          { cause: error },
+        );
+      }
+    }
+  }
+}
+
 // Remove an abandoned lock, returning whether it did. Breaking happens under
 // the guard, so only one waiter breaks at a time and re-checks the lock under
 // it: two waiters can never both judge the same abandoned lock stale and one
@@ -472,8 +523,12 @@ function dropGuard(guardPath: string): void {
 async function breakStaleLock(
   lockPath: string,
   staleMs: number,
+  retryMs: number,
 ): Promise<boolean> {
   const guardPath = guardPathOf(lockPath);
+  // Read before the guard is created, so it is never later than the time the
+  // guard's age is counted from.
+  const guardTakenAt = Date.now();
   if (!(await tryTakeGuard(guardPath, staleMs))) {
     // Another waiter is breaking the lock, or its holder is releasing it.
     return false;
@@ -490,7 +545,7 @@ async function breakStaleLock(
       const taken = await fs.stat(asidePath, { bigint: true });
       if (taken.dev !== dev || taken.ino !== ino) {
         // Not the lock that was judged: a successor's live one. Put it back.
-        await fs.rename(asidePath, lockPath);
+        await restoreLock(asidePath, lockPath, guardTakenAt, staleMs, retryMs);
         return false;
       }
       console.error(`Breaking stale memory file lock ${lockPath}`);
@@ -766,7 +821,7 @@ export async function withFileLock<T>(
     try {
       if (
         (await isLockStale(lockPath, staleMs)) &&
-        (await breakStaleLock(lockPath, staleMs))
+        (await breakStaleLock(lockPath, staleMs, retryMs))
       ) {
         continue;
       }
