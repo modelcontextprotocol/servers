@@ -687,20 +687,30 @@ describe("withFileLock", () => {
       expect(await exists(guardPath())).toBe(false);
     });
 
-    it("stops putting a live lock back on Windows once the guard would be taken for a crash's", async () => {
+    // Windows' EPERM also means a busy lock to the acquire loop, so a put-back
+    // that never lands must fail with an error of its own, or the breaker
+    // would go back to acquiring with the live lock still aside.
+    it("fails the acquisition on Windows once a live lock cannot be put back before the guard would be taken for a crash's", async () => {
       await writeStaleLock();
       vi.spyOn(console, "error").mockImplementation(() => {});
       vi.spyOn(process, "platform", "get").mockReturnValue("win32");
-      const restores = stageSuccessorAndFailRestore(Infinity, "EBUSY");
+      const restores = stageSuccessorAndFailRestore(Infinity, "EPERM");
+      const operation = vi.fn(async () => "ran");
 
-      await expect(
-        withFileLock(lockPath, async () => "ran", {
-          staleMs: 50,
-          timeoutMs: 5_000,
-          retryMs: 5,
-        }),
-      ).rejects.toThrow("EBUSY");
+      const error: unknown = await withFileLock(lockPath, operation, {
+        staleMs: 50,
+        timeoutMs: 5_000,
+        retryMs: 5,
+      }).catch((e: unknown) => e);
 
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toContain(
+        "Could not put back the live memory file lock",
+      );
+      expect(((error as Error).cause as NodeJS.ErrnoException).code).toBe(
+        "EPERM",
+      );
+      expect(operation).not.toHaveBeenCalled();
       expect(restores()).toBeGreaterThan(1);
       expect(heldLockPaths()).toEqual([]);
       expect(await exists(guardPath())).toBe(false);
