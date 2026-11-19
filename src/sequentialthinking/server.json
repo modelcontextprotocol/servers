@@ -1,0 +1,20 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.modelcontextprotocol/server-sequential-thinking",
+  "title": "Sequential Thinking",
+  "description": "Step-by-step problem solving through a sequence of thoughts that can be revised and branched",
+  "repository": {
+    "url": "https://github.com/modelcontextprotocol/servers",
+    "source": "github",
+    "subfolder": "src/sequentialthinking"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@modelcontextprotocol/server-sequential-thinking",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

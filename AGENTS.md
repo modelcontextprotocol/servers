@@ -55,13 +55,13 @@ servers/
 ├── .changeset/               Pending changesets for the TypeScript servers, and the changesets config
 ├── scripts/                  The pre-push gate (gate-lease, smoke-servers, validate-py, coverage-py, interface-diff, image-smoke), its guards (verify-*),
 │                             the skills tooling, release tooling (npm-publish-guard, prepare-python-release,
-│                             pack-and-verify, release-manifest, release-notes), and the issue-filing sweeps
+│                             pack-and-verify, release-manifest, mcp-registry-entries, release-notes), and the issue-filing sweeps
 │                             (dependency-refresh, dependabot-alerts, sdk-watch), and the session-start
 │                             instructions check (session-instructions-check)
 ├── docs/                     Design documents; quality-gate.md is the gate's reference (stages, CI vs local, the lease);
 │                             contribution-model.md holds the outside-PR backlog plan; ai-software-factory.md is the
 │                             overview of how the rules, skills, gates and sweeps fit together
-├── .github/workflows/        typescript.yml, python.yml (per-package CI), release.yml (publishes on a GitHub Release),
+├── .github/workflows/        typescript.yml, python.yml (per-package CI), release.yml (publishes on a GitHub Release, then lists each server in the MCP Registry),
 │                             version-packages.yml (the changesets PR), prepare-python-release.yml (the CalVer PR),
 │                             mcp-interface-diff.yml (each changed server's interface diff on PRs),
 │                             image-smoke.yml (each changed server's Docker image, built and booted),
@@ -317,6 +317,15 @@ maintainer publishes a GitHub Release), never a side effect of a merge.
 - **A TypeScript server reports its version from its `package.json`** (the
   `SERVER_VERSION` its `version.ts` exports), never from a literal in the
   source: the version PR edits `package.json` only.
+- **A server's `server.json` is its MCP Registry entry, and carries no
+  version.** `release.yml` stamps it from the manifest and registers it after
+  the package publishes (`scripts/mcp-registry-entries.mjs`). Its `name` is the
+  `mcpName` in the server's `package.json`, or the `mcp-name:` marker in a
+  Python server's `README.md`: the registry verifies the entry against the
+  published package, so the two change together, and the script tests fail
+  when they differ. **Never rename a registered server**: a published
+  entry cannot be edited, so the old name would stay behind as a separate
+  entry that nothing updates.
 
 ## Contributing
 

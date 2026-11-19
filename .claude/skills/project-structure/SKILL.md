@@ -24,7 +24,8 @@ entry point is `index.ts`, sources sit at the workspace root (there is no
 `src/` inside a server), tests are in `__tests__/`, and `tsc` writes `dist/`.
 Each has the same four config files: `package.json`, `tsconfig.json` (the
 build), `tsconfig.test.json` (the no-emit typecheck program, which also
-includes the tests) and `vitest.config.ts`.
+includes the tests) and `vitest.config.ts`. Each also has a `server.json`, its
+MCP Registry entry, which carries no version: `release.yml` stamps it.
 
 | Server | Layout | Where its features are registered |
 | --- | --- | --- |
@@ -66,6 +67,7 @@ in-process harness.
 src/<server>/
 ├── pyproject.toml            dependencies, the console script, pytest and coverage config
 ├── uv.lock, .python-version
+├── server.json               the server's MCP Registry entry (no version: release.yml stamps it)
 ├── src/mcp_server_<name>/
 │   ├── __init__.py           main(): the command-line flags, then asyncio.run(serve(...))
 │   ├── __main__.py           python -m mcp_server_<name>
