@@ -353,16 +353,16 @@ describe("withFileLock", () => {
       readFile.mock.calls.filter(([file]) => file === lockPath).length;
     // Our first heartbeat refreshes our own lock; right after it, another
     // process breaks the lock as stale and re-takes it with its own token.
-    // Reads are counted from that moment, inside the heartbeat, not from when
+    // Reads are counted from just before it, inside the heartbeat, not from when
     // the operation resumes: on a slow runner the next beat can read the lock
     // before then, and clearing later would wipe that read (#5634).
     const utimes = vi
       .spyOn(fs, "utimes")
       .mockImplementationOnce(async (...args) => {
         await realUtimes(...args);
+        readFile.mockClear();
         await fs.writeFile(lockPath, "someone else");
         await realUtimes(lockPath, old, old);
-        readFile.mockClear();
         replaced();
       });
 
