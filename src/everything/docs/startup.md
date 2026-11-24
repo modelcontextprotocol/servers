@@ -49,7 +49,7 @@
     - `logging: {}`
     - `prompts: { listChanged: true }`
     - `resources: { subscribe: true, listChanged: true }`
-    - `extensions: { "io.modelcontextprotocol/tasks": {} }` (2026-07-28 only)
+    - `extensions: { "io.modelcontextprotocol/tasks": {}, "io.modelcontextprotocol/events": {} }` (2026-07-28 only)
   - **Server Instructions**
     - Loaded from the docs folder (`instructions.md`).
   - **Options**
@@ -57,7 +57,7 @@
     - The `requestState` verifier for multi-round tools (`roundStateCodec`).
   - **Registrations**
     - Builds a per-instance **context** (`server/context.ts`): the era, where change notifications go, the 2025-era resource subscriptions, and a cleanup registry.
-    - Registers **tools** via `registerTools(server, context)`, and then by era: `registerModernTools` and the tasks extension (`server/tasks.ts`) for 2026-07-28; `registerLegacyTools` now and `registerConditionalTools` once the client has initialized, for the 2025 era.
+    - Registers **tools** via `registerTools(server, context)`, and then by era: `registerModernTools` and the tasks and events extensions (`server/tasks.ts`, `server/events.ts`) for 2026-07-28; `registerLegacyTools` now and `registerConditionalTools` once the client has initialized, for the 2025 era.
     - Registers **resources** via `registerResources(server, context)`.
     - Registers **prompts** via `registerPrompts(server)`.
   - **Other Request Handlers** (2025 era)

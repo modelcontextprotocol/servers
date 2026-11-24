@@ -23,7 +23,7 @@ The `get-env` tool returns the server's environment variables, but masks the val
 
 The server serves both protocol eras, over stdio and Streamable HTTP, from one process:
 
-- **2026-07-28** clients connect with `server/discover`, send their protocol version, identity and capabilities with each request, and have no session. The server demonstrates the revision's new features for them: multi-round-trip requests (`input_required`) with `requestState`, `subscriptions/listen` change notifications, per-request log levels, cache hints (`ttlMs` / `cacheScope`), the tasks extension (`io.modelcontextprotocol/tasks`) under the `extensions` capability, and `x-mcp-header` with JSON Schema 2020-12 tool schemas.
+- **2026-07-28** clients connect with `server/discover`, send their protocol version, identity and capabilities with each request, and have no session. The server demonstrates the revision's new features for them: multi-round-trip requests (`input_required`) with `requestState`, `subscriptions/listen` change notifications, per-request log levels, cache hints (`ttlMs` / `cacheScope`), the tasks (`io.modelcontextprotocol/tasks`) and events (`io.modelcontextprotocol/events`, poll and push delivery) extensions under the `extensions` capability, and `x-mcp-header` with JSON Schema 2020-12 tool schemas.
 - **2025-era** clients connect with the `initialize` handshake, as before. Elicitation, sampling and roots are served to them from the same multi-round-trip handlers through the SDK's legacy shim.
 
 Roots, sampling and logging are deprecated as of 2026-07-28 and stay available, labelled deprecated. [Server Features](docs/features.md) marks which era each feature belongs to.

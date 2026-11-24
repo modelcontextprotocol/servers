@@ -35,6 +35,14 @@
 - Serves the tasks extension (`io.modelcontextprotocol/tasks`) on 2026-07-28: `tasks/get`, `tasks/update` and `tasks/cancel`, with explicit schemas.
 - `createTask(behavior, options)` stores a task under a minted UUID and returns the `tools/call` result that hands its handle to the client (`resultType: "task"`). A task's `behavior` works out its state from the clock (`stateAt`) and takes the client's answers (`receive`), so nothing runs in the background. Tasks past their TTL are dropped when the store is next touched.
 
+# Events
+
+### Module: `server/events.ts`
+
+- Serves the events extension (`io.modelcontextprotocol/events`) on 2026-07-28: `events/list`, `events/poll` and `events/stream`, with explicit schemas. Webhook delivery is not offered.
+- `clock-tick` is computed from the clock (tick *k* at *k* × 5 s), so a poll or a replaying stream needs no stored history. `custom-event` is raised by `trigger-event` through `emitCustomEvent`, a process-wide bus every open `custom-event` stream listens on.
+- A `PushStream` sends one stream's notifications in order, tagged with the request id, re-arms the heartbeat after each, and ends on cancellation, on termination, on a failed send, or when its server instance is cleaned up.
+
 ## Resource Subscriptions
 
 ### Module: `resources/subscriptions.ts`

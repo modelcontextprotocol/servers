@@ -105,6 +105,7 @@ describe("Registration Index Files", () => {
         "simulate-research-query",
         "trigger-sampling-request-async",
         "trigger-elicitation-request-async",
+        "trigger-event",
       ]);
     });
 
