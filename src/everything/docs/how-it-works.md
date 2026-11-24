@@ -41,7 +41,7 @@
 
 - Serves the events extension (`io.modelcontextprotocol/events`) on 2026-07-28: `events/list`, `events/poll` and `events/stream`, with explicit schemas. Webhook delivery is not offered.
 - `clock-tick` is computed from the clock (tick *k* at *k* × 5 s), so a poll or a replaying stream needs no stored history. `custom-event` is raised by `trigger-event` through `emitCustomEvent`, a process-wide bus every open `custom-event` stream listens on.
-- A `PushStream` sends one stream's notifications in order, tagged with the request id, re-arms the heartbeat after each, and ends on cancellation, on termination, on a failed send, or when its server instance is cleaned up.
+- A `PushStream` sends one stream's notifications in order, tagged with the request id, re-arms the heartbeat after each, and ends on cancellation, on termination, on a failed send, or when its server instance is cleaned up. An abrupt end (cancellation, a failed send, cleanup) drops what is still queued; a termination sends it first.
 
 ## Resource Subscriptions
 

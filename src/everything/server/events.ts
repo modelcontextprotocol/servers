@@ -287,17 +287,37 @@ export type CustomEventSignal =
   | { kind: "error"; message: string }
   | { kind: "terminate"; message: string };
 
+/**
+ * A signal as the bus hands it to each stream: an event carries the identity
+ * and time minted once for it, so every subscription it matches receives the
+ * same `eventId` and `timestamp`, as the extension requires of one occurrence.
+ */
+type BusMessage =
+  | (Extract<CustomEventSignal, { kind: "event" }> & {
+      eventId: string;
+      timestamp: string;
+    })
+  | Exclude<CustomEventSignal, { kind: "event" }>;
+
 /** Every open `custom-event` stream, across every server instance. */
-const customListeners = new Set<(signal: CustomEventSignal) => void>();
+const customListeners = new Set<(message: BusMessage) => void>();
 
 /**
  * Hand a signal to every open `custom-event` stream, and return how many there
  * were. Each stream applies its own `minSeverity` filter to an event.
  */
 export function emitCustomEvent(signal: CustomEventSignal): number {
+  const message: BusMessage =
+    signal.kind === "event"
+      ? {
+          ...signal,
+          eventId: `custom-${randomUUID()}`,
+          timestamp: new Date().toISOString(),
+        }
+      : signal;
   // Copied first: a terminate closes each stream, which removes its listener.
   const listeners = [...customListeners];
-  for (const listener of listeners) listener(signal);
+  for (const listener of listeners) listener(message);
   return listeners.length;
 }
 
@@ -332,6 +352,8 @@ export class PushStream {
   private heartbeat?: NodeJS.Timeout;
   private readonly cleanups: Array<() => void> = [];
   private closed = false;
+  /** Set by an abrupt end: notifications still queued are dropped. */
+  private discarding = false;
 
   /** Whether the stream has ended. */
   get isClosed(): boolean {
@@ -357,9 +379,11 @@ export class PushStream {
     this.armHeartbeat();
     const notification = { method, params: { ...params, _meta: this.meta } };
     this.chain = this.chain
-      .then(() => this.request.notify(notification))
+      .then(() =>
+        this.discarding ? undefined : this.request.notify(notification),
+      )
       // A send fails only when the connection is gone, so the stream is too.
-      .catch(() => this.close());
+      .catch(() => this.abort());
   }
 
   /** Run `fn` when the stream ends. */
@@ -367,7 +391,21 @@ export class PushStream {
     this.cleanups.push(fn);
   }
 
-  /** End the stream and release what it holds. Safe to call more than once. */
+  /**
+   * End the stream abruptly (the client cancelled, a send failed, or the
+   * connection ended): release it, and send nothing still queued, since the
+   * extension says delivery stops at cancellation.
+   */
+  abort(): void {
+    this.discarding = true;
+    this.close();
+  }
+
+  /**
+   * End the stream gracefully: release it, but send what is already queued
+   * (a `terminated` goes out before the final result). Safe to call more than
+   * once.
+   */
   close(): void {
     if (this.closed) return;
     this.closed = true;
@@ -411,6 +449,18 @@ function runClockTick(
   // backlog, on the first call), then wait for the next one.
   const catchUp = () => {
     const head = headAt(Date.now());
+    // A timer that fires late (the process was suspended, or the clock jumped
+    // forward) replays no more than a new stream would, and reports the gap
+    // as the extension asks: a fresh `active` with `truncated: true`.
+    const oldest = head - RETAINED_TICKS + 1;
+    if (position.checked + 1 < oldest) {
+      position.checked = oldest - 1;
+      stream.send("notifications/events/active", {
+        cursor: formatCursor(position.checked),
+        truncated: true,
+        heartbeatMs,
+      });
+    }
     for (let tick = position.checked + 1; tick <= head; tick++) {
       position.checked = tick;
       if (tickMatches(tick, args)) {
@@ -440,14 +490,14 @@ function runCustomEvent(
     truncated: false,
     heartbeatMs,
   });
-  const listener = (signal: CustomEventSignal) => {
+  const listener = (signal: BusMessage) => {
     switch (signal.kind) {
       case "event":
         if (SEVERITY_RANK[signal.severity] >= SEVERITY_RANK[args.minSeverity]) {
           stream.send("notifications/events/event", {
-            eventId: `custom-${randomUUID()}`,
+            eventId: signal.eventId,
             name: "custom-event",
-            timestamp: new Date().toISOString(),
+            timestamp: signal.timestamp,
             data: { message: signal.message, severity: signal.severity },
             cursor: null,
           });
@@ -539,7 +589,7 @@ export function registerEventsExtension(
 ): void {
   const streams = new Set<PushStream>();
   context.onCleanup(() => {
-    for (const stream of streams) stream.close();
+    for (const stream of streams) stream.abort();
   });
 
   server.server.setRequestHandler(
@@ -654,12 +704,12 @@ export function registerEventsExtension(
       // Cancellation (notifications/cancelled on stdio, an abort on HTTP)
       // ends the stream and releases its timers and listener.
       const signal = ctx.mcpReq.signal;
-      const abort = () => stream.close();
+      const abort = () => stream.abort();
       signal.addEventListener("abort", abort, { once: true });
       stream.onClose(() => signal.removeEventListener("abort", abort));
       // An already-aborted signal never fires its abort event, so check it.
       /* v8 ignore next -- the SDK dispatches no request it has already seen cancelled */
-      if (signal.aborted) stream.close();
+      if (signal.aborted) stream.abort();
       else run(stream);
       await stream.ended();
       // The final frame, when the server ends the stream; the SDK sends no

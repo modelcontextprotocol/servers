@@ -471,6 +471,33 @@ describe("events/stream: clock-tick", () => {
     );
   });
 
+  it("replays no more than the retained ticks when its timer fires late, and reports the gap", async () => {
+    const session = await raw();
+    void session.request("events/stream", {
+      name: "clock-tick",
+      heartbeatMs: MAX_HEARTBEAT_MS,
+    });
+    await settle();
+    // The process sleeps through 1000 ticks: the clock jumps, and the tick
+    // timer fires once, late.
+    // (Faking the clock moves Date but not the timer queue, so the jump is
+    // set short by the time left until the timer is due.)
+    const untilDue = TICK_PERIOD_MS - OFFSET_MS;
+    vi.setSystemTime((HEAD + 1_000) * TICK_PERIOD_MS + OFFSET_MS - untilDue);
+    await vi.advanceTimersByTimeAsync(untilDue);
+    expect(sent(session, "notifications/events/active")).toEqual([
+      expect.objectContaining({ cursor: cursor(HEAD), truncated: false }),
+      expect.objectContaining({
+        cursor: cursor(HEAD + 1_000 - RETAINED_TICKS),
+        truncated: true,
+        heartbeatMs: MAX_HEARTBEAT_MS,
+      }),
+    ]);
+    const events = sent(session, "notifications/events/event");
+    expect(events).toHaveLength(RETAINED_TICKS);
+    expect(events[0].eventId).toBe(`tick-${HEAD + 1_000 - RETAINED_TICKS + 1}`);
+  });
+
   it("reports a cursor outside the retained window as truncated on active", async () => {
     const session = await raw();
     void session.request("events/stream", {
@@ -598,7 +625,18 @@ describe("events/stream: custom-event and trigger-event", () => {
       "Sent custom-event (info) to 2 open custom-event streams",
     );
     await settle();
-    expect(sent(listener, "notifications/events/event")).toHaveLength(2);
+    // One occurrence: the same eventId and timestamp on every subscription.
+    const [first, second] = sent(listener, "notifications/events/event");
+    expect(second.eventId).toBe(first.eventId);
+    expect(second.timestamp).toBe(first.timestamp);
+    expect(second._meta).not.toEqual(first._meta);
+
+    // A second call is a new occurrence.
+    await caller.call("trigger-event", {});
+    await settle();
+    expect(sent(listener, "notifications/events/event")[2].eventId).not.toBe(
+      first.eventId,
+    );
   });
 
   it("sends a recoverable error and keeps the stream open", async () => {
@@ -715,5 +753,56 @@ describe("PushStream", () => {
     await vi.advanceTimersByTimeAsync(5_000);
     expect(notify).toHaveBeenCalledOnce();
     expect(released).toHaveBeenCalledOnce();
+  });
+
+  /** A notify whose sends stay pending until released, one at a time. */
+  function slowNotify() {
+    const pending: Array<() => void> = [];
+    const notify = vi.fn(
+      () => new Promise<void>((resolve) => pending.push(resolve)),
+    );
+    const release = async () => {
+      pending.shift()?.();
+      await settle();
+    };
+    return { notify, release };
+  }
+
+  it("drops what is still queued when it ends abruptly", async () => {
+    const { notify, release } = slowNotify();
+    const stream = new PushStream({ id: 1, notify }, 1_000, () => null);
+    stream.send("notifications/events/event", { n: 1 });
+    stream.send("notifications/events/event", { n: 2 });
+    stream.send("notifications/events/event", { n: 3 });
+    await settle();
+    stream.abort();
+    await release();
+    await stream.ended();
+    expect(notify).toHaveBeenCalledOnce();
+  });
+
+  it("drops what is still queued after a failed send", async () => {
+    const notify = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("connection gone"))
+      .mockResolvedValue(undefined);
+    const stream = new PushStream({ id: 1, notify }, 1_000, () => null);
+    stream.send("notifications/events/event", { n: 1 });
+    stream.send("notifications/events/event", { n: 2 });
+    await stream.ended();
+    expect(notify).toHaveBeenCalledOnce();
+  });
+
+  it("sends what is already queued when it ends gracefully", async () => {
+    const { notify, release } = slowNotify();
+    const stream = new PushStream({ id: 1, notify }, 1_000, () => null);
+    stream.send("notifications/events/terminated", { n: 1 });
+    stream.send("notifications/events/terminated", { n: 2 });
+    await settle();
+    stream.close();
+    await release();
+    await release();
+    await stream.ended();
+    expect(notify).toHaveBeenCalledTimes(2);
   });
 });
