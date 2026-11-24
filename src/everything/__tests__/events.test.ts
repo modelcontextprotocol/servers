@@ -41,7 +41,7 @@ const OFFSET_MS = 2_000;
 
 const cursor = (tick: number) => `clock-tick:${tick}`;
 
-let open: Array<{ close: () => Promise<void> }> = [];
+const open: Array<{ close: () => Promise<void> }> = [];
 
 async function raw(): Promise<RawSession> {
   const session = await connectRaw(CAPABILITIES);
