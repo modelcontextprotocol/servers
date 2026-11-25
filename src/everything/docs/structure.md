@@ -37,6 +37,7 @@ src/everything
      ├── server
      │   ├── index.ts
      │   ├── context.ts
+     │   ├── events.ts
      │   ├── icons.ts
      │   ├── logging.ts
      │   ├── roots.ts
@@ -59,6 +60,7 @@ src/everything
      │   ├── toggle-subscriber-updates.ts
      │   ├── trigger-elicitation-request-async.ts
      │   ├── trigger-elicitation-request.ts
+     │   ├── trigger-event.ts
      │   ├── trigger-list-changed.ts
      │   ├── trigger-log-messages.ts
      │   ├── trigger-long-running-operation.ts
@@ -157,6 +159,8 @@ src/everything
   - Exposes `{ server, cleanup }` to the chosen transport. Cleanup stops any running intervals in the server when the connection ends.
 - `context.ts`
   - The per-instance context features receive: the era, the change publisher, the 2025-era subscriptions and a cleanup registry.
+- `events.ts`
+  - 2026-07-28: the server side of the events extension (`events/list`, `events/poll`, `events/stream`), its two event types (`clock-tick`, `custom-event`) and the process-wide bus `trigger-event` raises `custom-event` on.
 - `icons.ts`
   - The light- and dark-themed icon pairs (SEP-973) attached to the server info and to every tool, prompt, resource and resource template, one pair per kind, as inline SVG `data:` URIs.
 - `logging.ts`
@@ -202,6 +206,8 @@ src/everything
   - 2026-07-28: registers a `trigger-elicitation-request-async` tool that runs as a task waiting in `input_required` for a form elicitation.
 - `trigger-list-changed.ts`
   - Registers a `trigger-list-changed` tool that publishes a tools, prompts or resources list change.
+- `trigger-event.ts`
+  - 2026-07-28: registers a `trigger-event` tool that raises `custom-event` on the open `events/stream` subscriptions, or sends them a recoverable error or a termination.
 - `trigger-log-messages.ts`
   - Registers a `trigger-log-messages` tool that sends one log message per level, filtered by the request's or session's log level.
 - `trigger-multi-step-elicitation.ts`

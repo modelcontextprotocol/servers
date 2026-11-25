@@ -19,7 +19,10 @@
  * `connectRaw()` serves the same way to a raw JSON-RPC peer that puts the
  * 2026-07-28 envelope on each request, for what the SDK client hides or
  * refuses: the wire fields it consumes (`resultType`, the cache fields), a
- * tampered `requestState`, and task handles.
+ * tampered `requestState`, task handles, and the Events extension's methods,
+ * which the SDK client has no helpers for. It records every notification the
+ * server sends and can send notifications of its own (`notifications/cancelled`
+ * ends an `events/stream`).
  *
  * `connectModern()` serves a 2026-07-28 client: it hands the factory to the
  * SDK's `serveStdio` entry over the in-memory pair, as the stdio transport
@@ -207,6 +210,12 @@ export type RawSession = {
   call: (name: string, args?: Json) => Promise<Json>;
   /** The result of a `tasks/get`. */
   get: (taskId: string) => Promise<Json>;
+  /** Send a notification, with the 2026-07-28 envelope. */
+  notify: (method: string, params?: Json) => Promise<void>;
+  /** Every notification the server has sent, in order. */
+  notifications: Json[];
+  /** The JSON-RPC id of the request sent last. */
+  lastRequestId: () => number;
   close: () => Promise<void>;
 };
 
@@ -226,31 +235,32 @@ export async function connectRaw(capabilities: Json): Promise<RawSession> {
     { transport: serverTransport },
   );
   const waiting = new Map<number, (message: JSONRPCMessage) => void>();
+  const notifications: Json[] = [];
   peer.onmessage = (message) => {
     if ("id" in message && typeof message.id === "number") {
       waiting.get(message.id)?.(message);
+    } else if ("method" in message) {
+      notifications.push({ ...message });
     }
   };
   await peer.start();
   let nextId = 1;
 
+  const envelope = (params: Json): Json => ({
+    ...params,
+    _meta: {
+      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+      "io.modelcontextprotocol/clientCapabilities": capabilities,
+      ...(params._meta as Json | undefined),
+    },
+  });
   const request = (method: string, params: Json = {}) => {
     const id = nextId++;
     return new Promise<Json>((resolve) => {
       waiting.set(id, (m) => resolve({ ...m }));
-      void peer.send({
-        jsonrpc: "2.0",
-        id,
-        method,
-        params: {
-          ...params,
-          _meta: {
-            "io.modelcontextprotocol/protocolVersion": "2026-07-28",
-            "io.modelcontextprotocol/clientCapabilities": capabilities,
-            ...(params._meta as Json | undefined),
-          },
-        },
-      });
+      // The in-memory send settles at once; a failure surfaces as the
+      // response never arriving, which fails the awaiting test.
+      void peer.send({ jsonrpc: "2.0", id, method, params: envelope(params) });
     });
   };
   const result = async (method: string, params: Json = {}) => {
@@ -263,6 +273,10 @@ export async function connectRaw(capabilities: Json): Promise<RawSession> {
     result,
     call: (name, args = {}) => result("tools/call", { name, arguments: args }),
     get: (taskId) => result("tasks/get", { taskId }),
+    notify: (method, params = {}) =>
+      peer.send({ jsonrpc: "2.0", method, params: envelope(params) }),
+    notifications,
+    lastRequestId: () => nextId - 1,
     close: async () => {
       await handle.close();
       for (const cleanup of cleanups) cleanup();
