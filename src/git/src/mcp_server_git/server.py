@@ -994,6 +994,11 @@ def record_root_git_dirs(allowed_repository: Path) -> tuple[Path, Path] | None:
     own: tuple[Path, Path] | None = None
     try:
         with git.Repo(allowed, expand_vars=False) as repo:
+            # GitPython's `Git` expands `$NAME` and `~` in a str working
+            # directory whatever `expand_vars` says, and runs in the current
+            # directory when the expansion does not exist; a `Path` is used
+            # as it is. So the commands below run in the root itself.
+            repo.git = git.Git(allowed)
             harden_repo(repo)
             git_dir, common_dir = (
                 Path(p).resolve()

@@ -18,6 +18,7 @@ from conftest import connect, make_repo, rmtree, wire
 
 from mcp_server_git import server as git_server
 from mcp_server_git.server import (
+    create_server,
     record_root_git_dirs,
     validate_opened_repo,
 )
@@ -270,3 +271,28 @@ async def test_a_root_whose_git_dir_is_not_its_own_is_logged_at_startup(
         )
     finally:
         other.close()
+
+
+@pytest.mark.parametrize("target", ["another repository", "nothing"])
+def test_a_root_named_like_an_environment_variable_is_recorded_as_itself(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, target: str
+) -> None:
+    # A linked worktree root whose directory name is literally `$NAME`: its
+    # git directories are recorded from the root itself, not from wherever
+    # `$NAME` expands to.
+    other = outside_repo(tmp_path / "other")
+    other.close()
+    named = tmp_path / "other" if target == "another repository" else tmp_path / "x"
+    monkeypatch.setenv("GHSA_ROOT_NAME", str(named))
+    main = make_repo(tmp_path / "main")
+    worktree = tmp_path / "$GHSA_ROOT_NAME"
+    main.git.worktree("add", str(worktree))
+    record = (Path(main.git_dir) / "worktrees" / "$GHSA_ROOT_NAME").resolve()
+    try:
+        create_server(worktree)
+        assert git_server._ROOT_GIT_DIRS[worktree] == (
+            record,
+            Path(main.git_dir).resolve(),
+        )
+    finally:
+        main.close()
