@@ -125,7 +125,7 @@ async def test_restricted_tools_ignore_alternates_written_after_the_check(
         )
 
     # The entry really was in place when the tool read objects.
-    assert alternates.read_text() == f"{objects_of(other)}\n"
+    assert alternates.read_bytes() == f"{objects_of(other)}\n".encode()
     assert result["isError"] is True, result
     text = result["content"][0]["text"]
     assert "ONLY_IN_THE_OTHER_REPOSITORY" not in text
@@ -145,7 +145,7 @@ async def test_restricted_prompt_ignores_alternates_written_after_the_check(
     with alternates_planted_after_check(alternates, f"{objects_of(other)}\n"):
         text = await summarize(root, root, other.head.commit.hexsha)
 
-    assert alternates.read_text() == f"{objects_of(other)}\n"
+    assert alternates.read_bytes() == f"{objects_of(other)}\n".encode()
     assert text.startswith("refused: ")
     assert "ONLY_IN_THE_OTHER_REPOSITORY" not in text
 
