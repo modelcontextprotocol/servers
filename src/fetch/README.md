@@ -185,9 +185,12 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 
 By default, the server will obey a websites robots.txt file if the request came from the model (via a tool), but not if
 the request was user initiated (via a prompt). Every redirect hop of a tool fetch is checked against the robots.txt of
-the host it leads to, the same way as the requested URL. A path is matched against the rules both as it is spelled and
-as an origin typically resolves it (`%2F` and `%2E` decoded, repeated slashes merged, `.` and `..` segments removed),
-and the fetch is refused if either is disallowed, so `//private` or `/x/../private` cannot get past `Disallow: /private`.
+the host it leads to, the same way as the requested URL. A path is matched against the rules as it is spelled, as an
+origin typically resolves it (`%2F` and `%2E` decoded, repeated slashes merged, `.` and `..` segments removed), as an
+origin with Windows path semantics resolves it (the same, with a backslash or `%5C` also read as a separator), and as a
+servlet container resolves it (the same, with a `;` parameter dropped from each segment). The fetch is refused if any
+of these is disallowed, so
+`//private`, `/x/../private`, `/x%5C..%5Cprivate` or `/x/..;/private` cannot get past `Disallow: /private`.
 Matching stays case-sensitive, as RFC 9309 specifies. If the robots.txt request fails to connect, or is answered
 with 401, 403 or a server error (5xx), the tool refuses the fetch rather than reading the response as rules (RFC 9309
 treats a 5xx robots.txt as complete disallow); any other 4xx is treated as no rules. This can be disabled by adding the

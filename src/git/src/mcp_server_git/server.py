@@ -179,10 +179,28 @@ HARDENED_CONFIG: tuple[tuple[str, str], ...] = (
 # value shows that git applied the overrides. A driver's name may be empty
 # (`[filter ""]`, read back as `filter..clean`, selected by `filter=`), so
 # the name is matched with `.*`, not `.+`.
+#
+# A trusted driver can still read the repository's configuration itself.
+# Git LFS's does: it runs `lfs.extension.<name>.clean` and `.smudge` on every
+# file it filters, and a transfer agent (`lfs.customtransfer.<name>.path`
+# and `.args`, picked by `lfs.standalonetransferagent`) when it downloads an
+# object, so those keys are emptied the same way. An emptied extension makes
+# Git LFS fail the command rather than run anything. A download also runs
+# programs no key in this list names (`core.sshCommand`, `credential.helper`
+# and `core.askpass`, for an endpoint the repository picks), so `harden_repo`
+# turns downloads off (`_LFS_ENV`) instead.
 _LISTED_KEYS = (
     r"^(core\.hookspath|filter\..*\.(clean|smudge|process)|merge\..*\.driver"
-    r"|branch\..+\.mergeoptions)$"
+    r"|branch\..+\.mergeoptions|lfs\.extension\..*\.(clean|smudge)"
+    r"|lfs\.customtransfer\..*\.(path|args)|lfs\.standalonetransferagent)$"
 )
+
+# GIT_LFS_SKIP_SMUDGE=1 makes Git LFS's smudge filter write each file's
+# pointer instead of its content, so a checkout or merge never downloads an
+# object, and never starts the programs a download runs. The repository's
+# configuration cannot turn it back on: Git LFS reads it from the environment
+# only.
+_LFS_ENV = {"GIT_LFS_SKIP_SMUDGE": "1"}
 
 # Scopes whose configuration the user wrote rather than the repository.
 _TRUSTED_SCOPES = frozenset({"system", "global", "command"})
@@ -332,8 +350,9 @@ def _submodule_drivers(repo: git.Repo) -> set[str]:
 def harden_repo(repo: git.Repo) -> None:
     """Keep every git command run for `repo` from running a program it names.
 
-    Sets `HARDENED_CONFIG` on the repository's git, then reads which filter
-    and merge drivers the repository's own configuration (its `.git/config`,
+    Sets `HARDENED_CONFIG` and `_LFS_ENV` on the repository's git, then reads
+    which filter and merge drivers (and Git LFS programs, `_LISTED_KEYS`) the
+    repository's own configuration (its `.git/config`,
     a worktree's `config.worktree`, and files they include) defines, and
     overrides each with an empty command. The same read checks that git
     applied the overrides: git older than 2.31 ignores GIT_CONFIG_COUNT, and
@@ -344,7 +363,9 @@ def harden_repo(repo: git.Repo) -> None:
     (`_PROMISOR_KEYS`).
     """
     entries = list(HARDENED_CONFIG)
-    repo.git.update_environment(GIT_NO_LAZY_FETCH="1", **_config_env(entries))
+    repo.git.update_environment(
+        GIT_NO_LAZY_FETCH="1", **_LFS_ENV, **_config_env(entries)
+    )
     try:
         listed = repo.git.config("--show-scope", "-z", "--get-regexp", _LISTED_KEYS)
     except git.GitCommandError as e:
@@ -663,8 +684,11 @@ def _rewrite_tree(
     command: str,
     *args: str,
     allowed_repository: Path | None = None,
+    config: str | None = None,
 ) -> str:
     """Run `git <command> <args>`, which writes the working tree, then re-check.
+
+    `config`, a `name=value`, is passed as `git -c` for this command only.
 
     `harden_repo` reads the repository's configuration when the call opens
     the repository, but that configuration can depend on the working tree: an
@@ -694,7 +718,8 @@ def _rewrite_tree(
     stay inside, the cleanup included, so the tree stays as written.
     """
     try:
-        return getattr(repo.git, command)(*args)
+        runner = repo.git(c=config) if config is not None else repo.git
+        return getattr(runner, command)(*args)
     finally:
         try:
             harden_repo(repo)
@@ -787,6 +812,98 @@ def _merge_failure(
     return f"{what} failed. {unchanged} Git reported:\n{_git_stderr(error)}"
 
 
+def _on_disk_spelling(root: Path, path: str) -> str:
+    """`path`, an existing entry under `root`, as the directory listings spell it.
+
+    On a case-insensitive or normalization-insensitive filesystem (macOS,
+    Windows) the path a source tracks can name an entry whose name is spelled
+    differently (`.ENV` for `.env`, or decomposed for precomposed Unicode).
+    Git matches a pathspec to its own spelling, so each component is replaced
+    with the listed name of the same file (by device and inode).
+    """
+    parent = root
+    spelled: list[str] = []
+    for name in path.split("/"):
+        names = os.listdir(parent)
+        if name not in names:
+            wanted = os.lstat(parent / name)
+            name = next(
+                entry
+                for entry in names
+                if os.path.samestat(os.lstat(parent / entry), wanted)
+            )
+        spelled.append(name)
+        parent = parent / name
+    return "/".join(spelled)
+
+
+def _ignored_files_overwritten(repo: git.Repo, head: str, source: str) -> list[str]:
+    """The ignored files in the working tree a merge of `source` would replace.
+
+    Git does not honor `--no-overwrite-ignore` when it makes a merge commit (a
+    fast-forward does), so `git_merge` checks before it runs. The tree is
+    clean, so every untracked path is one HEAD does not track, and the merge
+    writes only such a path when it is one of:
+
+    - a path the source tracks and HEAD does not. This includes one HEAD
+      deleted since the merge base: if the source changed it, the
+      modify/delete conflict writes the source's version, so it must be
+      counted, not filtered out against the merge base. (The merge runs with
+      `merge.directoryRenames=false`, so git does not move a path the source
+      adds into a directory HEAD renamed, a path in neither tree.)
+    - the side name of a file/directory conflict: HEAD's file `<path>` moved
+      to `<path>~HEAD`, or the source's to `<path>~<source sha>`.
+
+    For each, what is in the way is whatever exists there (a file, a link, or
+    a directory and everything in it) or the nearest existing ancestor that is
+    not a directory. The ignored files among those are returned; an untracked
+    file that is not ignored is left for git to refuse, as it does.
+    """
+    root = Path(repo.working_dir)
+    changes = repo.git.diff_tree(
+        "-r", "-z", "--no-renames", "--name-status", "--diff-filter=AD", head, source
+    ).split("\0")
+    added: set[str] = set()
+    deleted: set[str] = set()
+    for status, path in zip(changes[0::2], changes[1::2]):
+        (added if status == "A" else deleted).add(path)
+    deleted_dirs = {
+        "/".join(parts[:depth])
+        for parts in (path.split("/") for path in deleted)
+        for depth in range(1, len(parts))
+    }
+    written = set(added)
+    for path in added:
+        parts = path.split("/")
+        for depth in range(1, len(parts)):
+            if (prefix := "/".join(parts[:depth])) in deleted:
+                written.add(f"{prefix}~HEAD")
+        if path in deleted_dirs:
+            written.add(f"{path}~{source}")
+    in_the_way: set[str] = set()
+    for path in written:
+        parts = path.split("/")
+        for depth in range(1, len(parts) + 1):
+            prefix = "/".join(parts[:depth])
+            target = root / prefix
+            if not os.path.lexists(target):
+                break
+            if depth == len(parts) or target.is_symlink() or not target.is_dir():
+                in_the_way.add(_on_disk_spelling(root, prefix))
+                break
+    if not in_the_way:
+        return []
+    listed = repo.git.ls_files(
+        "-z",
+        "--others",
+        "--ignored",
+        "--exclude-standard",
+        "--",
+        *(f":(top,literal){path}" for path in sorted(in_the_way)),
+    )
+    return sorted(filter(None, listed.split("\0")))
+
+
 def git_merge(
     repo: git.Repo,
     source_branch: str,
@@ -852,6 +969,9 @@ def git_merge(
     # for it (see `_LISTED_KEYS`). --no-overwrite-ignore refuses to
     # replace an ignored local file (a `.env`, say) that the source tracks:
     # `is_dirty()` cannot see one, and git would overwrite it unrecoverably.
+    # Git honors it only on a fast-forward, so a merge commit is checked
+    # first (`_ignored_files_overwritten`), and runs with directory-rename
+    # detection off, so it writes no path that check cannot predict.
     #
     # Git is given the commit validated above, not the name: a name can stand
     # for more than one commit (`git merge FETCH_HEAD` merges every head
@@ -859,6 +979,15 @@ def git_merge(
     # With a sha, git's default message would name the sha, so the message
     # names what the caller asked for.
     mode = "--ff-only" if fast_forward_only else "--ff"
+    what = f"Merge of '{source_branch}' into '{target}'"
+    if not fast_forward:
+        ignored = _ignored_files_overwritten(repo, head.hexsha, source.hexsha)
+        if ignored:
+            raise ValueError(
+                f"{what} refused: it would overwrite ignored local files: "
+                f"{', '.join(ignored)}. Nothing was changed. Move or remove "
+                "them first."
+            )
     try:
         _rewrite_tree(
             repo,
@@ -874,9 +1003,9 @@ def git_merge(
             f"Merge '{source_branch}' into '{target}'",
             source.hexsha,
             allowed_repository=allowed_repository,
+            config="merge.directoryRenames=false",
         )
     except git.GitCommandError as e:
-        what = f"Merge of '{source_branch}' into '{target}'"
         raise ValueError(_merge_failure(repo, e, what, allowed_repository)) from e
     merged = repo.head.commit
     if fast_forward:
@@ -1314,13 +1443,18 @@ _URL_USERINFO = re.compile(
 # after the `::` is a URL of its own, and is redacted as one.
 _REMOTE_HELPER = re.compile(r"^(?P<transport>[A-Za-z][A-Za-z0-9+.-]*)::")
 
-# One line of `git remote -v`: `<name>\t<url> (fetch|push)`, and on a
-# partial clone's fetch line the promisor filter after it (` [blob:none]`).
-# `.` matches everything but '\n', so a URL holding another line separator
-# (U+2028, say) stays whole.
-_REMOTE_LINE = re.compile(
-    r"^(?P<name>[^\t]*)\t(?P<url>.*) \((?P<direction>fetch|push)\)"
-    r"(?P<filter> \[.*\])?$"
+# A scheme followed by `://` anywhere in a value. A value holding one that
+# `_URL_SCHEME` does not find at its start (after a space or a tab, say) holds
+# a URL that cannot be split from what precedes it.
+_EMBEDDED_URL = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://")
+
+# What follows `<name>\t` on a line of `git remote -v`: `<url> (fetch|push)`,
+# and on a partial clone's fetch line the promisor filter after it
+# (` [blob:none]`). `.` matches everything but '\n', so a URL holding another
+# line separator (U+2028, say) stays whole. The name is not matched here: it
+# may hold a tab itself, so it is taken from the configured names instead.
+_REMOTE_ENTRY = re.compile(
+    r"^(?P<url>.*) \((?P<direction>fetch|push)\)(?P<filter> \[.*\])?$"
 )
 
 # Schemes whose username is an account name rather than a secret, so it is kept
@@ -1370,15 +1504,16 @@ def redact_url(url: str) -> str:
     kept: a token there cannot be told apart from a repository name. A URL
     whose userinfo would hold a '?' or '#' cannot be split safely and is
     shown as `scheme://<redacted>`. A remote-helper address (`<transport>::<url>`) has its inner URL redacted.
-    An scp-like address (`git@host:path`) or a local path is not a URL and is
-    returned as is.
+    A value holding `scheme://` anywhere but at its start (` https://...`)
+    cannot be split safely either, and is withheld whole. An scp-like address
+    (`git@host:path`) or a local path is not a URL and is returned as is.
     """
     helper = _REMOTE_HELPER.match(url)
     if helper is not None:
         return url[: helper.end()] + redact_url(url[helper.end() :])
     authority = _URL_SCHEME.match(url)
     if authority is None:
-        return url
+        return REDACTED if _EMBEDDED_URL.search(url) else url
     scheme = authority["scheme"]
     match = _URL_USERINFO.match(url)
     if match is None:
@@ -1432,6 +1567,13 @@ def git_remote(repo: git.Repo) -> str:
     '\\n' alone, the only separator git prints, not on every separator
     `str.splitlines` knows, which would cut a URL holding U+2028 in two. A
     URL holding a newline itself is refused (`_remote_url_has_newline`).
+
+    A remote name may hold a tab, so the tab that ends it is not the first one
+    on the line. Each line's name is the longest configured name (from
+    `git remote`, one per line: git allows no newline in a name) that the line
+    starts with, followed by a tab. Whatever a shorter name would have left in
+    the URL column is then left to `redact_url`, which withholds a value with
+    a URL that does not start it.
     """
     if _remote_url_has_newline(repo):
         raise ValueError(
@@ -1439,21 +1581,24 @@ def git_remote(repo: git.Repo) -> str:
             "be listed without risking a credential in it; git refuses such "
             "URLs as well"
         )
+    names = sorted(
+        filter(None, _git_text(repo, "remote").split("\n")), key=len, reverse=True
+    )
     output = _git_text(repo, "remote", "-v").rstrip("\n")
     if not output:
         return "No remotes configured"
     lines = []
     for line in output.split("\n"):
-        match = _REMOTE_LINE.match(line)
-        if match is None:
+        name = next((n for n in names if line.startswith(n + "\t")), None)
+        match = None if name is None else _REMOTE_ENTRY.match(line[len(name) + 1 :])
+        if name is None or match is None:
             # Not a line in the shape `git remote -v` prints (a URL holding a
-            # newline, say): it cannot be parsed, so none of it is returned.
+            # newline, say, or a name not configured): it cannot be parsed,
+            # so none of it is returned.
             lines.append(REDACTED)
             continue
         url = redact_url(match["url"])
-        lines.append(
-            f"{match['name']}\t{url} ({match['direction']}){match['filter'] or ''}"
-        )
+        lines.append(f"{name}\t{url} ({match['direction']}){match['filter'] or ''}")
     return "\n".join(lines)
 
 
@@ -1623,6 +1768,30 @@ def reported_as_invalid_params() -> Iterator[None]:
         raise MCPError(code=INVALID_PARAMS, message=str(e)) from e
 
 
+class _LiteralGit(git.Git):
+    """A `git.Git` whose working directory is taken literally.
+
+    `git.Git` runs `os.path.expandvars` on a `str` working directory, and
+    `git.Repo` hands it one, whatever `expand_vars` the repository was opened
+    with. A `Path` is only resolved, so a `$NAME` in it stays as written.
+    """
+
+    def __init__(self, working_dir: str | os.PathLike[str] | None = None) -> None:
+        super().__init__(None if working_dir is None else Path(working_dir))
+
+
+class _LiteralRepo(git.Repo):
+    """A `git.Repo` whose git commands run in the directory it was opened at.
+
+    Opened with `expand_vars=False` and an absolute path, a repository path is
+    taken literally: neither a `$NAME` nor a leading `~` in it becomes the
+    value of the server's environment, in the directory opened, in where its
+    commands run, or in an error.
+    """
+
+    GitCommandWrapperType = _LiteralGit
+
+
 def create_server(repository: Path | None) -> MCPServer:
     """The git server, confined to `repository` when one is given."""
 
@@ -1664,7 +1833,10 @@ def create_server(repository: Path | None) -> MCPServer:
     def open_repo(repo_path: str) -> git.Repo:
         path = Path(repo_path)
         validate_repo_path(path, repository)
-        repo = git.Repo(path)
+        # Opened at exactly the path checked above. GitPython expands a leading
+        # `~` in a relative path whatever `expand_vars` says, so it is made
+        # absolute first, which leaves nothing for it to expand.
+        repo = _LiteralRepo(path.absolute(), expand_vars=False)
         try:
             # First, so that no git command run for the repository, the
             # confinement checks' included, runs a program it names.
@@ -1985,7 +2157,9 @@ async def serve(repository: Path | None, transport: str = "stdio") -> None:
             # Walk up to the enclosing working tree, like `git rev-parse
             # --show-toplevel`, so `--repository .` works from a subdirectory.
             root = Path(
-                git.Repo(repository, search_parent_directories=True).working_dir
+                git.Repo(
+                    repository, search_parent_directories=True, expand_vars=False
+                ).working_dir
             )
         except git.NoSuchPathError:
             logger.error(f"{repository} does not exist")
