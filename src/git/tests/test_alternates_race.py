@@ -17,6 +17,8 @@ the repository's store. Without `--repository`, alternates keep working,
 since a `--shared` or `--reference` clone is a supported repository there.
 """
 
+import os
+import sys
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -213,6 +215,53 @@ async def test_restricted_writes_land_in_the_repositorys_own_store(tmp_path: Pat
     assert len(repo.git.rev_list("--objects", "HEAD").splitlines()) >= 9
     repo.git.fsck("--no-dangling")
     assert repo.commit(head).parents[1].message.rstrip() == "on side"
+
+
+async def test_restricted_read_only_calls_write_nothing_to_the_store(
+    test_repository: git.Repo,
+):
+    # A link to a loose-object directory the store lacks reads as absent, so
+    # a call that only reads creates none of them.
+    root = root_of(test_repository)
+    objects = objects_of(test_repository)
+    before = sorted(p.name for p in objects.iterdir())
+    for tool, arguments in [
+        ("git_status", {}),
+        ("git_log", {}),
+        ("git_show", {"revision": "HEAD"}),
+        ("git_diff", {"target": "HEAD"}),
+        ("git_branch", {"branch_type": "local"}),
+    ]:
+        result = await call(root, tool, {"repo_path": str(root)} | arguments)
+        assert result["isError"] is False, (tool, result)
+    await summarize(root, root, "HEAD")
+    assert sorted(p.name for p in objects.iterdir()) == before
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32" or os.geteuid() == 0,
+    reason="needs a directory that chmod can make unwritable",
+)
+async def test_restricted_server_works_on_a_store_it_cannot_write(
+    test_repository: git.Repo,
+):
+    root = root_of(test_repository)
+    objects = objects_of(test_repository)
+    objects.chmod(0o555)
+    try:
+        for tool, arguments, expected in [
+            ("git_status", {}, "Repository status"),
+            ("git_log", {}, "initial commit"),
+            ("git_show", {"revision": "HEAD:test.txt"}, "test"),
+            # A tool that writes but adds no object: the loose-object
+            # directories it cannot create are left out.
+            ("git_create_branch", {"branch_name": "side"}, "side"),
+        ]:
+            result = await call(root, tool, {"repo_path": str(root)} | arguments)
+            assert result["isError"] is False, (tool, result)
+            assert expected in result["content"][0]["text"]
+    finally:
+        objects.chmod(0o755)
 
 
 async def test_restricted_calls_leave_no_object_directory_behind(

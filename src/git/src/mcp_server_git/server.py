@@ -1090,7 +1090,7 @@ _ALTERNATES = ("alternates", "http-alternates")
 
 
 @contextmanager
-def _own_object_store(repo: git.Repo) -> Iterator[None]:
+def _own_object_store(repo: git.Repo, *, writes: bool = False) -> Iterator[None]:
     """Run `repo`'s git on its own objects only, whatever its alternates say.
 
     `_check_git_dir_contents` refuses an alternates entry when the repository
@@ -1102,12 +1102,17 @@ def _own_object_store(repo: git.Repo) -> Iterator[None]:
     directory's `info/alternates`, which does not exist. On Windows the links
     are directory junctions, which need no privilege.
 
+    A link to a directory the store lacks yet reads as absent, so a call
+    that only reads writes nothing to the repository, and works on a store
+    it cannot write to.
+
     Git follows the links for writing too: a new loose object is written to
     a temporary file in its own `xx` directory and renamed there, and a pack
     in `pack`, so what git writes lands in the repository's store. A link to
-    a missing directory could not be written through, so each loose-object
-    directory the store lacks is created first, as git would on its first
-    write to it.
+    a missing directory cannot be written through, so for a call that
+    `writes`, each loose-object directory the store lacks is created first,
+    as git would on its first write to it. One that cannot be created is
+    left out: a write into it would fail in the store itself as well.
 
     GitPython's persistent `git cat-file` processes are stopped before and
     after, so none reads with the environment it does not belong to.
@@ -1117,7 +1122,11 @@ def _own_object_store(repo: git.Repo) -> Iterator[None]:
     links: list[Path] = []
     try:
         for name in [f"{i:02x}" for i in range(256)] + ["pack"]:
-            (objects / name).mkdir(exist_ok=True)
+            if writes:
+                try:
+                    (objects / name).mkdir(exist_ok=True)
+                except OSError:
+                    pass
             link = own / name
             if sys.platform != "win32":
                 os.symlink(objects / name, link, target_is_directory=True)
@@ -1144,6 +1153,8 @@ def _own_object_store(repo: git.Repo) -> Iterator[None]:
 # repository's `_own_object_store` here, since most tools never close the
 # repository they open.
 _CALL: ContextVar[ExitStack | None] = ContextVar("_CALL", default=None)
+# Whether the running tool can write objects (`writes_objects`).
+_WRITES: ContextVar[bool] = ContextVar("_WRITES", default=False)
 
 
 @contextmanager
@@ -1162,7 +1173,7 @@ def _read_own_objects_for_call(repo: git.Repo) -> None:
     stack = _CALL.get()
     if stack is None:
         raise RuntimeError("a repository opened under --repository needs _one_call()")
-    stack.enter_context(_own_object_store(repo))
+    stack.enter_context(_own_object_store(repo, writes=_WRITES.get()))
 
 
 def _check_git_dir_contents(
@@ -1484,6 +1495,20 @@ def reports_failures(fn: Callable[_P, str]) -> Callable[_P, str]:
     return wrapper
 
 
+def writes_objects(fn: Callable[_P, str]) -> Callable[_P, str]:
+    """Mark a tool that writes to the repository, so its object store can be."""
+
+    @wraps(fn)
+    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> str:
+        token = _WRITES.set(True)
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            _WRITES.reset(token)
+
+    return wrapper
+
+
 READ_ONLY = ToolAnnotations(
     read_only_hint=True,
     destructive_hint=False,
@@ -1742,6 +1767,7 @@ def create_server(repository: Path | None) -> MCPServer:
         structured_output=False,
     )
     @reports_failures
+    @writes_objects
     def commit(repo_path: str, message: str) -> str:
         return git_commit(open_repo(repo_path), message, allowed_repository=repository)
 
@@ -1752,6 +1778,7 @@ def create_server(repository: Path | None) -> MCPServer:
         structured_output=False,
     )
     @reports_failures
+    @writes_objects
     def add(repo_path: str, files: Annotated[list[str], Field(min_length=1)]) -> str:
         return git_add(open_repo(repo_path), files)
 
@@ -1762,6 +1789,7 @@ def create_server(repository: Path | None) -> MCPServer:
         structured_output=False,
     )
     @reports_failures
+    @writes_objects
     def reset(repo_path: str) -> str:
         return git_reset(open_repo(repo_path))
 
@@ -1829,6 +1857,7 @@ def create_server(repository: Path | None) -> MCPServer:
         structured_output=False,
     )
     @reports_failures
+    @writes_objects
     def create_branch(
         repo_path: str,
         branch_name: str,
@@ -1852,6 +1881,7 @@ def create_server(repository: Path | None) -> MCPServer:
         structured_output=False,
     )
     @reports_failures
+    @writes_objects
     def checkout(repo_path: str, branch_name: str) -> str:
         return git_checkout(
             open_repo(repo_path), branch_name, allowed_repository=repository
@@ -1868,6 +1898,7 @@ def create_server(repository: Path | None) -> MCPServer:
         structured_output=False,
     )
     @reports_failures
+    @writes_objects
     def merge(
         repo_path: str,
         source_branch: Annotated[
