@@ -294,7 +294,7 @@ When `MEMORY_FILE_PATH` is not set and the server directory still holds a legacy
 - The directory must already exist: the server creates the memory file, not the directories above it.
 - The default stays where it is so that existing graphs keep loading. The [Docker](#docker) setup above keeps it in a named volume mounted over `/app/dist`, so the graph there survives restarts and draws no warning.
 
-Saves are atomic. Every write tool writes the whole graph to a temporary file in the same directory and renames it over the memory file, so a server stopped or killed mid-save leaves the previous graph intact rather than a half-written file. The file's permission bits are kept across the rename. Writes from several processes are serialized by a lock, described next.
+Saves are atomic. Every write tool writes the whole graph to a temporary file in the same directory and renames it over the memory file, so a server stopped or killed mid-save leaves the previous graph intact rather than a half-written file. The file's permission bits are kept across the rename. The temporary file is always newly created by the save, and if something else replaces it before the rename, the save is refused with an error and the memory file is left as it was. Writes from several processes are serialized by a lock, described next.
 
 #### Sharing one memory file between clients
 
