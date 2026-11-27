@@ -475,6 +475,14 @@ PRIVATE_ROBOTS = "User-agent: *\nDisallow: /private"
         "/%2e/private",
         "/x/%2E%2E/private",
         "//private//report",
+        # An origin that reads a backslash as a separator (IIS) serves
+        # /private for these.
+        "/public%5c..%5cprivate",
+        "/public%5C..%5Cprivate",
+        # A servlet container drops ;parameters from each segment first.
+        "/public/..;/private",
+        "/public;x/..;y/private",
+        "/;x/private",
     ],
 )
 async def test_robots_disallow_matches_the_resolved_path(
@@ -503,6 +511,11 @@ async def test_robots_disallow_matches_the_resolved_path(
         "/x/..%2Fprivate",
         "/x/%2e%2e//private",
         "/x//%2e%2e/private",
+        # A redirect carries a literal backslash as it is, where a tool
+        # argument would have it read as a separator first.
+        "/public\\..\\private",
+        "/public%5c..%5cprivate",
+        "/public/..;/private",
     ],
 )
 async def test_redirect_to_a_disallowed_path_spelled_otherwise_is_refused(
@@ -528,6 +541,8 @@ async def test_redirect_to_a_disallowed_path_spelled_otherwise_is_refused(
         "/pri%20vate",
         # Matching stays case-sensitive (RFC 9309 2.2.2).
         "//Private",
+        "/public%5cprivate",
+        "/public;private",
     ],
 )
 async def test_robots_allows_a_path_that_resolves_outside_the_rule(
@@ -541,6 +556,44 @@ async def test_robots_allows_a_path_that_resolves_outside_the_rule(
     assert wire(result)["isError"] is False
     assert "public-page" in text_of(result)
     assert web.urls() == [ROBOTS, url]
+
+
+async def test_robots_disallow_still_matches_the_dot_resolved_spelling(
+    web: FakeWeb,
+) -> None:
+    # Dropping ;parameters is matched in addition to the dot-resolved
+    # spelling, so a rule naming a parameter still refuses a path that only
+    # resolves to it once its dot segments are removed.
+    url = "https://example.com/x/%2e%2e/a;b"
+    web.add(ROBOTS, plain("User-agent: *\nDisallow: /a;b"))
+    web.add(url, plain("private-page"))
+    async with connect() as (session, _):
+        result = await call(session, {"url": url})
+    assert wire(result)["isError"] is True
+    assert "private-page" not in text_of(result)
+    assert web.urls() == [ROBOTS]
+
+
+@pytest.mark.parametrize(
+    ("rule", "path"),
+    [
+        # An origin that reads a backslash as a separator keeps ;parameters,
+        # and one that drops ;parameters keeps backslashes.
+        ("/a;b", "/x%5c..%5ca;b"),
+        ("/a%5Cb", "/x/..;/a%5Cb"),
+    ],
+)
+async def test_robots_disallow_matches_each_resolution_on_its_own(
+    web: FakeWeb, rule: str, path: str
+) -> None:
+    url = f"https://example.com{path}"
+    web.add(ROBOTS, plain(f"User-agent: *\nDisallow: {rule}"))
+    web.add(url, plain("private-page"))
+    async with connect() as (session, _):
+        result = await call(session, {"url": url})
+    assert wire(result)["isError"] is True
+    assert "private-page" not in text_of(result)
+    assert web.urls() == [ROBOTS]
 
 
 async def test_robots_disallow_still_matches_the_literal_spelling(
