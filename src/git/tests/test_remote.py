@@ -173,6 +173,12 @@ async def test_not_a_repository(tmp_path: Path):
         ("file://u:p@host/srv/r?x", "file://<redacted>@host/srv/r?x"),
         # A password holding a line separator other than '\n'.
         ("https://u:s3cret\u2028tok@example.com/r", "https://<redacted>@example.com/r"),
+        # A value holding a URL that does not start it cannot be split safely,
+        # so it is withheld whole.
+        (" https://bob:token@example.com/r.git", "<redacted>"),
+        ("d\thttps://alice:token@example.com/r.git", "<redacted>"),
+        ("x https://example.com/r.git", "<redacted>"),
+        ("https:: https://alice:token@example.com/r", "https::<redacted>"),
     ],
 )
 def test_redact_url(url: str, expected: str):
@@ -183,14 +189,16 @@ def test_unparseable_line_is_withheld(repo: git.Repo):
     # `git remote -v` always prints `<name>\t<url> (<direction>)`. A line in
     # any other shape (a URL holding a raw newline is split across two) cannot
     # be parsed, so none of it is returned.
-    with mock.patch.object(
-        server,
-        "_git_text",
-        return_value=(
+    outputs = {
+        ("remote",): "origin\nup\n",
+        ("remote", "-v"): (
             "origin\thttps://u:pa\nss@example.com/r (fetch)\n"
             "origin\tno-direction\n"
             "up\thttps://example.com/r (push)\n"
         ),
+    }
+    with mock.patch.object(
+        server, "_git_text", side_effect=lambda _repo, *args: outputs[args]
     ):
         assert git_remote(repo) == (
             "<redacted>\n<redacted>\n<redacted>\nup\thttps://example.com/r (push)"
@@ -261,3 +269,60 @@ async def test_query_and_fragment_credentials_are_redacted_over_the_wire(
         "origin\thttps://git.example.com/g/r.git?private_token=<redacted> (fetch)\n"
         "origin\thttps://git.example.com/g/r.git#<redacted> (push)"
     )
+
+
+async def test_tab_in_remote_name_keeps_the_url_whole(
+    tmp_path: Path, repo: git.Repo, monkeypatch: pytest.MonkeyPatch
+):
+    # A remote name may hold a tab, which `git remote -v` prints as is before
+    # the tab that ends the name. The name is matched against the configured
+    # names, so the URL after it, rewritten by a credential-bearing `insteadOf`
+    # in the user's global config, is still redacted.
+    global_config = tmp_path / "global.gitconfig"
+    global_config.write_text(
+        '[url "https://alice:HOSTTOKEN@srv.example.com/"]\n'
+        "\tinsteadOf = https://srv.example.com/\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(global_config))
+    repo.git.config("remote.c\td.url", "https://srv.example.com/org/r.git")
+    result = await call_remote(None, repo)
+    assert result == text_result(
+        "c\td\thttps://<redacted>@srv.example.com/org/r.git (fetch)\n"
+        "c\td\thttps://<redacted>@srv.example.com/org/r.git (push)"
+    )
+    assert "HOSTTOKEN" not in result["content"][0]["text"]
+
+
+async def test_url_not_starting_with_its_scheme_is_withheld(repo: git.Repo):
+    # A configured value with leading whitespace is printed as is by git; the
+    # URL inside it does not start the value, so it is withheld whole.
+    repo.git.config("remote.lead.url", " https://bob:REPOTOKEN@example.com/r.git")
+    result = await call_remote(None, repo)
+    assert result == text_result("lead\t<redacted> (fetch)\nlead\t<redacted> (push)")
+    assert "REPOTOKEN" not in result["content"][0]["text"]
+
+
+def test_longest_configured_name_is_matched(repo: git.Repo):
+    # With remotes `c` and `c<TAB>d` both configured, a line starting
+    # `c<TAB>d<TAB>` is read as the longer name, and whichever remote it came
+    # from, a URL left holding a tab and another URL is withheld.
+    outputs = {
+        ("remote",): "c\nc\td\n",
+        ("remote", "-v"): (
+            "c\td\thttps://u:p@example.com/r (fetch)\n"
+            "c\td\thttps://u:p@example.com/r (push)\n"
+            "unknown\thttps://u:p@example.com/r (fetch)\n"
+        ),
+    }
+    with (
+        mock.patch.object(server, "_remote_url_has_newline", return_value=False),
+        mock.patch.object(
+            server, "_git_text", side_effect=lambda _repo, *args: outputs[args]
+        ),
+    ):
+        assert git_remote(repo) == (
+            "c\td\thttps://<redacted>@example.com/r (fetch)\n"
+            "c\td\thttps://<redacted>@example.com/r (push)\n"
+            "<redacted>"
+        )

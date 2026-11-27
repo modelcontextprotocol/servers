@@ -1204,13 +1204,18 @@ _URL_USERINFO = re.compile(
 # after the `::` is a URL of its own, and is redacted as one.
 _REMOTE_HELPER = re.compile(r"^(?P<transport>[A-Za-z][A-Za-z0-9+.-]*)::")
 
-# One line of `git remote -v`: `<name>\t<url> (fetch|push)`, and on a
-# partial clone's fetch line the promisor filter after it (` [blob:none]`).
-# `.` matches everything but '\n', so a URL holding another line separator
-# (U+2028, say) stays whole.
-_REMOTE_LINE = re.compile(
-    r"^(?P<name>[^\t]*)\t(?P<url>.*) \((?P<direction>fetch|push)\)"
-    r"(?P<filter> \[.*\])?$"
+# A scheme followed by `://` anywhere in a value. A value holding one that
+# `_URL_SCHEME` does not find at its start (after a space or a tab, say) holds
+# a URL that cannot be split from what precedes it.
+_EMBEDDED_URL = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://")
+
+# What follows `<name>\t` on a line of `git remote -v`: `<url> (fetch|push)`,
+# and on a partial clone's fetch line the promisor filter after it
+# (` [blob:none]`). `.` matches everything but '\n', so a URL holding another
+# line separator (U+2028, say) stays whole. The name is not matched here: it
+# may hold a tab itself, so it is taken from the configured names instead.
+_REMOTE_ENTRY = re.compile(
+    r"^(?P<url>.*) \((?P<direction>fetch|push)\)(?P<filter> \[.*\])?$"
 )
 
 # Schemes whose username is an account name rather than a secret, so it is kept
@@ -1260,15 +1265,16 @@ def redact_url(url: str) -> str:
     kept: a token there cannot be told apart from a repository name. A URL
     whose userinfo would hold a '?' or '#' cannot be split safely and is
     shown as `scheme://<redacted>`. A remote-helper address (`<transport>::<url>`) has its inner URL redacted.
-    An scp-like address (`git@host:path`) or a local path is not a URL and is
-    returned as is.
+    A value holding `scheme://` anywhere but at its start (` https://...`)
+    cannot be split safely either, and is withheld whole. An scp-like address
+    (`git@host:path`) or a local path is not a URL and is returned as is.
     """
     helper = _REMOTE_HELPER.match(url)
     if helper is not None:
         return url[: helper.end()] + redact_url(url[helper.end() :])
     authority = _URL_SCHEME.match(url)
     if authority is None:
-        return url
+        return REDACTED if _EMBEDDED_URL.search(url) else url
     scheme = authority["scheme"]
     match = _URL_USERINFO.match(url)
     if match is None:
@@ -1322,6 +1328,13 @@ def git_remote(repo: git.Repo) -> str:
     '\\n' alone, the only separator git prints, not on every separator
     `str.splitlines` knows, which would cut a URL holding U+2028 in two. A
     URL holding a newline itself is refused (`_remote_url_has_newline`).
+
+    A remote name may hold a tab, so the tab that ends it is not the first one
+    on the line. Each line's name is the longest configured name (from
+    `git remote`, one per line: git allows no newline in a name) that the line
+    starts with, followed by a tab. Whatever a shorter name would have left in
+    the URL column is then left to `redact_url`, which withholds a value with
+    a URL that does not start it.
     """
     if _remote_url_has_newline(repo):
         raise ValueError(
@@ -1329,21 +1342,24 @@ def git_remote(repo: git.Repo) -> str:
             "be listed without risking a credential in it; git refuses such "
             "URLs as well"
         )
+    names = sorted(
+        filter(None, _git_text(repo, "remote").split("\n")), key=len, reverse=True
+    )
     output = _git_text(repo, "remote", "-v").rstrip("\n")
     if not output:
         return "No remotes configured"
     lines = []
     for line in output.split("\n"):
-        match = _REMOTE_LINE.match(line)
-        if match is None:
+        name = next((n for n in names if line.startswith(n + "\t")), None)
+        match = None if name is None else _REMOTE_ENTRY.match(line[len(name) + 1 :])
+        if name is None or match is None:
             # Not a line in the shape `git remote -v` prints (a URL holding a
-            # newline, say): it cannot be parsed, so none of it is returned.
+            # newline, say, or a name not configured): it cannot be parsed,
+            # so none of it is returned.
             lines.append(REDACTED)
             continue
         url = redact_url(match["url"])
-        lines.append(
-            f"{match['name']}\t{url} ({match['direction']}){match['filter'] or ''}"
-        )
+        lines.append(f"{name}\t{url} ({match['direction']}){match['filter'] or ''}")
     return "\n".join(lines)
 
 
