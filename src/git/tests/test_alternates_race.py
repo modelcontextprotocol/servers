@@ -49,7 +49,7 @@ def root_of(repo: git.Repo) -> Path:
 def other(tmp_path: Path) -> git.Repo:
     """A repository outside the allowed one, with a commit of its own."""
     repo = make_repo(tmp_path / "other")
-    (root_of(repo) / "only-here.txt").write_text(MARKER)
+    (root_of(repo) / "only-here.txt").write_text(MARKER, newline="\n")
     repo.index.add(["only-here.txt"])
     repo.index.commit(MESSAGE)
     return repo
