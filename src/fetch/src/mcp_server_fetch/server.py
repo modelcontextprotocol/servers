@@ -721,6 +721,9 @@ def decode_page(response: httpx.Response, content: bytes) -> str:
 _ENCODED_SLASH = re.compile("%2f", re.IGNORECASE)
 _ENCODED_DOT = re.compile("%2e", re.IGNORECASE)
 _REPEATED_SLASHES = re.compile("/{2,}")
+# A backslash, literal or escaped, which some origins (IIS, Windows-backed
+# servers) read as a path separator.
+_BACKSLASH = re.compile(r"\\|%5c", re.IGNORECASE)
 
 
 def _remove_dot_segments(path: str) -> str:
@@ -742,7 +745,7 @@ def _remove_dot_segments(path: str) -> str:
     return "/" + "/".join(resolved) + trailing
 
 
-def _resolved_path_url(url: str) -> str:
+def _resolved_path_url(url: str, *, windows_and_servlet: bool = False) -> str:
     """``url`` with its path spelled the way a typical origin resolves it.
 
     robots.txt rules match the path a crawler requests, but an origin such as
@@ -751,9 +754,19 @@ def _resolved_path_url(url: str) -> str:
     repeated slashes merged and dot segments removed before rules are matched
     against it, as well as against the path as spelled. The query is kept as
     it is, and matching stays case-sensitive (RFC 9309 2.2.2).
+
+    With ``windows_and_servlet``, the path is also resolved the way origins
+    with other path semantics resolve it: a backslash (literal or ``%5C``) is
+    a separator, as on IIS, and a ``;`` path parameter is dropped from each
+    segment, as in a Java servlet container. That spelling is matched in
+    addition to the others rather than in place of one, so it only ever adds
+    refusals.
     """
     parts = urlsplit(url)
     path = _ENCODED_DOT.sub(".", _ENCODED_SLASH.sub("/", parts.path))
+    if windows_and_servlet:
+        path = _BACKSLASH.sub("/", path)
+        path = "/".join(segment.split(";", 1)[0] for segment in path.split("/"))
     path = _remove_dot_segments(_REPEATED_SLASHES.sub("/", path))
     return urlunsplit(parts._replace(path=path))
 
@@ -804,12 +817,14 @@ async def check_may_autonomously_fetch_url(
         line for line in robot_txt.splitlines() if not line.strip().startswith("#")
     )
     robot_parser = Protego.parse(processed_robot_txt)
-    # Refused when either spelling of the path is disallowed: resolving the
+    # Refused when any spelling of the path is disallowed: resolving the
     # path only ever adds refusals.
-    if not (
-        robot_parser.can_fetch(url, user_agent)
-        and robot_parser.can_fetch(_resolved_path_url(url), user_agent)
-    ):
+    spellings = (
+        url,
+        _resolved_path_url(url),
+        _resolved_path_url(url, windows_and_servlet=True),
+    )
+    if not all(robot_parser.can_fetch(spelling, user_agent) for spelling in spellings):
         raise ToolError(
             f"The sites robots.txt ({robot_txt_url}), specifies that autonomous fetching of this page is not allowed, "
             f"<useragent>{user_agent}</useragent>\n"
