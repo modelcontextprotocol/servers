@@ -1163,11 +1163,11 @@ export class KnowledgeGraphManager {
       if (mode !== undefined) {
         await handle.chmod(mode);
       }
-      const written = await handle.stat({ bigint: true });
-      await handle.close();
-      handle = undefined;
       // The rename moves whatever the name holds now, onto the graph path,
-      // so refuse unless that is still the file written above.
+      // so refuse unless that is still the file written above. Compare while
+      // the handle is open: the open file's inode number cannot be reused by
+      // another file until it is closed.
+      const written = await handle.stat({ bigint: true });
       const named = await fs.lstat(tempFilePath, { bigint: true });
       if (named.ino !== written.ino || named.dev !== written.dev) {
         throw new Error(
@@ -1175,6 +1175,8 @@ export class KnowledgeGraphManager {
             "being written to it. Nothing was saved.",
         );
       }
+      await handle.close();
+      handle = undefined;
       await fs.rename(tempFilePath, this.memoryFilePath);
     } catch (error) {
       await handle?.close().catch(() => {});
