@@ -298,7 +298,8 @@ def test_a_root_named_like_an_environment_variable_is_recorded_as_itself(
         # The repository the recording opens runs its commands, and reads
         # its objects, in the root itself.
         with _RootRepo(worktree.resolve(), expand_vars=False) as opened:
-            assert opened.git.rev_parse("--show-toplevel") == str(worktree.resolve())
+            toplevel = Path(opened.git.rev_parse("--show-toplevel")).resolve()
+            assert toplevel == worktree.resolve()
             assert opened.odb.info(opened.head.commit.binsha).type == b"commit"
             assert opened.head.commit.hexsha == main.head.commit.hexsha
     finally:
