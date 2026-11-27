@@ -745,7 +745,9 @@ def _remove_dot_segments(path: str) -> str:
     return "/" + "/".join(resolved) + trailing
 
 
-def _resolved_path_url(url: str, *, windows_and_servlet: bool = False) -> str:
+def _resolved_path_url(
+    url: str, *, backslash_separator: bool = False, drop_parameters: bool = False
+) -> str:
     """``url`` with its path spelled the way a typical origin resolves it.
 
     robots.txt rules match the path a crawler requests, but an origin such as
@@ -755,17 +757,19 @@ def _resolved_path_url(url: str, *, windows_and_servlet: bool = False) -> str:
     against it, as well as against the path as spelled. The query is kept as
     it is, and matching stays case-sensitive (RFC 9309 2.2.2).
 
-    With ``windows_and_servlet``, the path is also resolved the way origins
-    with other path semantics resolve it: a backslash (literal or ``%5C``) is
-    a separator, as on IIS, and a ``;`` path parameter is dropped from each
-    segment, as in a Java servlet container. That spelling is matched in
-    addition to the others rather than in place of one, so it only ever adds
-    refusals.
+    Origins with other path semantics are covered by further spellings, each
+    matched in addition to the others rather than in place of one, so each
+    only ever adds refusals: with ``backslash_separator`` a backslash (literal
+    or ``%5C``) is a separator, as on IIS; with ``drop_parameters`` a ``;``
+    path parameter is dropped from each segment, as in a Java servlet
+    container. They are separate spellings because no origin is assumed to
+    do both.
     """
     parts = urlsplit(url)
     path = _ENCODED_DOT.sub(".", _ENCODED_SLASH.sub("/", parts.path))
-    if windows_and_servlet:
+    if backslash_separator:
         path = _BACKSLASH.sub("/", path)
+    if drop_parameters:
         path = "/".join(segment.split(";", 1)[0] for segment in path.split("/"))
     path = _remove_dot_segments(_REPEATED_SLASHES.sub("/", path))
     return urlunsplit(parts._replace(path=path))
@@ -822,7 +826,8 @@ async def check_may_autonomously_fetch_url(
     spellings = (
         url,
         _resolved_path_url(url),
-        _resolved_path_url(url, windows_and_servlet=True),
+        _resolved_path_url(url, backslash_separator=True),
+        _resolved_path_url(url, drop_parameters=True),
     )
     if not all(robot_parser.can_fetch(spelling, user_agent) for spelling in spellings):
         raise ToolError(

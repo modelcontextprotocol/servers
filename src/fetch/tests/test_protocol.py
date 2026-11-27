@@ -574,6 +574,28 @@ async def test_robots_disallow_still_matches_the_dot_resolved_spelling(
     assert web.urls() == [ROBOTS]
 
 
+@pytest.mark.parametrize(
+    ("rule", "path"),
+    [
+        # An origin that reads a backslash as a separator keeps ;parameters,
+        # and one that drops ;parameters keeps backslashes.
+        ("/a;b", "/x%5c..%5ca;b"),
+        ("/a%5Cb", "/x/..;/a%5Cb"),
+    ],
+)
+async def test_robots_disallow_matches_each_resolution_on_its_own(
+    web: FakeWeb, rule: str, path: str
+) -> None:
+    url = f"https://example.com{path}"
+    web.add(ROBOTS, plain(f"User-agent: *\nDisallow: {rule}"))
+    web.add(url, plain("private-page"))
+    async with connect() as (session, _):
+        result = await call(session, {"url": url})
+    assert wire(result)["isError"] is True
+    assert "private-page" not in text_of(result)
+    assert web.urls() == [ROBOTS]
+
+
 async def test_robots_disallow_still_matches_the_literal_spelling(
     web: FakeWeb,
 ) -> None:
