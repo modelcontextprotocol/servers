@@ -96,11 +96,14 @@ async def test_repository_named_with_a_dollar_sign_opens(tmp_path: Path):
 async def test_repository_with_separate_git_dir_named_with_a_dollar_sign(
     tmp_path: Path,
 ):
-    # A git dir outside the working tree makes the --repository check open
-    # the allowed root a second time, to compare it with its own git dir.
+    # A git dir outside the working tree makes the --repository check compare
+    # it with the allowed root's own. Its `core.worktree` names the root back,
+    # as a submodule's git dir does, so the root is one the check accepts.
     root = tmp_path / f"${NAME}"
     root.mkdir()
-    git.Git(root).init(f"--separate-git-dir={tmp_path / 'gitdir'}")
+    git_dir = tmp_path / "gitdir"
+    git.Git(root).init(f"--separate-git-dir={git_dir}")
+    git.Git(root).config("core.worktree", str(root))
     result = await status(root, str(root))
     assert result["isError"] is False, result
     assert "No commits yet" in text_of(result)
