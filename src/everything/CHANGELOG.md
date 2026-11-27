@@ -1,5 +1,13 @@
 # @modelcontextprotocol/server-everything
 
+## 2.4.0
+
+### Minor Changes
+
+- [#5652](https://github.com/modelcontextprotocol/servers/pull/5652) [`21f18cb`](https://github.com/modelcontextprotocol/servers/commit/21f18cb4c695893f644d29ec512edf9e4d41c9df) [@cliffhall](https://github.com/cliffhall) - Serve the Events extension (`io.modelcontextprotocol/events`, SEP-3415) on protocol version 2026-07-28: `events/list`, `events/poll` and `events/stream`, with a replayable `clock-tick` event type (poll and push) and an emit-only `custom-event` (push), raised by the new `trigger-event` tool. Webhook delivery is not offered.
+
+- [#5630](https://github.com/modelcontextprotocol/servers/pull/5630) [`a1137b8`](https://github.com/modelcontextprotocol/servers/commit/a1137b8e3be028baa193e4c03d396c6e78ec78ef) [@cliffhall](https://github.com/cliffhall) - The Streamable HTTP transport now evicts a 2025-era session that has been idle for 30 minutes: one with no request in flight and no stream open. Until now a session whose client never sent a DELETE stayed in memory, with its server instance, for the life of the process. An evicted session's next request is answered `404 Session not found`, the spec's signal for the client to initialize again. Set the new `SESSION_IDLE_TIMEOUT_MILLIS` environment variable to change the timeout, or to `0` to keep sessions until their client ends them. 2026-07-28 clients have no sessions and are unaffected. Thanks to [Pierpaolo1223](https://github.com/Pierpaolo1223) for the report and the measurements in [#5558](https://github.com/modelcontextprotocol/servers/issues/5558).
+
 ## 2.3.1
 
 ### Patch Changes
