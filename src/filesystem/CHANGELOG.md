@@ -1,5 +1,15 @@
 # @modelcontextprotocol/server-filesystem
 
+## 2.4.1
+
+### Patch Changes
+
+- [#5618](https://github.com/modelcontextprotocol/servers/pull/5618) [`37a1f2f`](https://github.com/modelcontextprotocol/servers/commit/37a1f2f8dd72a6912969ac990f556422caa801fa) [@cliffhall](https://github.com/cliffhall) - `move_file` now refuses to move a directory into itself with `Cannot move a directory into itself: <destination> is inside <source>`, instead of reporting `Parent directory does not exist` for a destination directory that does exist.
+
+- [#5622](https://github.com/modelcontextprotocol/servers/pull/5622) [`062b32a`](https://github.com/modelcontextprotocol/servers/commit/062b32a52fb8d6bfab96ae7085aeca6bae06eade) [@cliffhall](https://github.com/cliffhall) - On Windows, `list_directory`, `list_directory_with_sizes`, `directory_tree` and `search_files` now check the directory they list before and after reading it: its path must have no junction or symlink on it and must name the same directory both times, or the call is refused with "Access denied - a directory on the path changed during the operation". A directory swapped for a junction after the path was validated is no longer listed. A swap made and undone while the directory is being read is still not detected; the README's "Limit on Windows" entry says what holds. macOS and Linux are unchanged.
+
+- [#5620](https://github.com/modelcontextprotocol/servers/pull/5620) [`731abb0`](https://github.com/modelcontextprotocol/servers/commit/731abb0a1ea3e5dc0075c0ff95f0e21a27691b50) [@cliffhall](https://github.com/cliffhall) - `search_files` no longer answers a search that matched nothing with a bare `No matches found`. The result still begins with those words, and now names the pattern and the directory searched, says the pattern is a case-sensitive glob over names relative to that directory (never file contents), and, for a pattern with no `**`, suggests the `**/` form that reaches subdirectories.
+
 ## 2.4.0
 
 ### Minor Changes

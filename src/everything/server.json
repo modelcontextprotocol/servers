@@ -1,0 +1,20 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.modelcontextprotocol/server-everything",
+  "title": "Everything",
+  "description": "Reference server that exercises every MCP feature: tools, resources, prompts, sampling and more",
+  "repository": {
+    "url": "https://github.com/modelcontextprotocol/servers",
+    "source": "github",
+    "subfolder": "src/everything"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@modelcontextprotocol/server-everything",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

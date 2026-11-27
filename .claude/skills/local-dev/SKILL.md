@@ -88,9 +88,18 @@ node src/filesystem/dist/index.js --transport streamable-http /tmp/scratch   # d
 (cd src/time && uv run mcp-server-time --transport streamable-http)
 ```
 
-Each one's endpoint is stateless for 2025-era clients (a fresh server per
-request; GET and DELETE answer 405), so nothing the server asks of the client
-mid-session (filesystem's Roots) reaches it over HTTP.
+What a 2025-era client gets from that endpoint differs by language (#5593):
+
+- **`memory`, `filesystem`, `sequentialthinking` (TypeScript) are stateless**: a
+  fresh server per request, no `Mcp-Session-Id` on the `initialize` response,
+  and GET and DELETE answer 405. So nothing the server asks of the client
+  mid-session (filesystem's Roots) reaches it over HTTP.
+- **`fetch`, `git`, `time` (Python) keep a session**, through the SDK's
+  Streamable HTTP app. `initialize` returns an `Mcp-Session-Id` header and
+  every later request must carry it: without it a POST, GET or DELETE answers
+  400 "Missing session ID". With it, GET opens the session's stream and DELETE
+  ends the session, after which its id answers 404. A hand-written `curl`
+  probe therefore sends `initialize` first and passes the header on.
 
 ## Run the local package the way a user would
 
@@ -173,7 +182,9 @@ fails its first step.
 
 ## Docker
 
-Each server has a `Dockerfile`, and no gate builds them. The build context
+Each server has a `Dockerfile`. The gate's `image-smoke` stage builds and
+boots the image of each server a change touches (`npm run image-smoke -- --all`
+for all seven; `docs/quality-gate.md`). The build context
 differs by language. The TypeScript images build from the **repo root**,
 because they copy the root `tsconfig.json`:
 `docker build -t mcp/<server> -f src/<server>/Dockerfile .`. The Python images

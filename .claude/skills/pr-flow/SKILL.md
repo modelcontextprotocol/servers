@@ -252,7 +252,7 @@ gh pr view "$PR" --repo modelcontextprotocol/servers \
 ```
 
 The link does **not** make the issue close on merge into `v2/main`; that is
-still done by hand in step 9.
+still done by hand in step 10.
 
 Then move the card to **In Review** (`/board-ops`). The PR itself never goes on
 the board.
@@ -406,6 +406,108 @@ the PR shows why the loop ended.
 ## 10. Merge and close out
 
 Merging is a maintainer's decision. Do not merge on your own initiative.
+
+### Before the merge: catch up if `v2/main` moved
+
+The rule is in `AGENTS.md` **Issue-driven work style**: a PR is caught up and
+re-tested before it merges when `v2/main` moved in a way that can interact
+with it. CI here runs on **push**, on the branch's head commit, and the gate
+ran in your worktree, so neither has seen anything that landed on `v2/main`
+after the branch last took it in. GitHub's "no conflicts with the base branch"
+compares text and tests nothing: #5564 and #5567 were each green and cleanly
+mergeable, merged ten minutes apart, and left `v2/main` failing `ruff check`
+(#5569).
+
+**1. List what the PR's head lacks.** From any checkout of this repo:
+
+```sh
+PR=<PR>
+git fetch origin v2/main "refs/pull/$PR/head"
+HEAD_SHA=$(gh pr view "$PR" --repo modelcontextprotocol/servers \
+  --json headRefOid --jq .headRefOid)
+
+# Commits on v2/main that the head does not hold. Nothing printed: the PR was
+# tested on the current tip, so there is nothing to catch up.
+git log --oneline "$HEAD_SHA..origin/v2/main"
+
+# The files each side changed since the two diverged.
+LANDED=$(git diff --name-only "$HEAD_SHA...origin/v2/main")
+MINE=$(git diff --name-only "origin/v2/main...$HEAD_SHA")
+
+# Check A: servers that both sides touched.
+comm -12 <(grep -oE '^src/[^/]+/' <<<"$LANDED" | sort -u) \
+         <(grep -oE '^src/[^/]+/' <<<"$MINE" | sort -u)
+
+# Check B: repository-wide configuration, on either side: a root manifest,
+# lockfile, config file or dotfile, scripts/, or a workflow.
+WIDE='^([^/]+\.(json|js|mjs|cjs|ts|toml|ya?ml)|\.[^/]+|scripts/.*|\.github/workflows/.*)$'
+grep -E "$WIDE" <<<"$LANDED" | sed 's/^/landed: /'
+grep -E "$WIDE" <<<"$MINE" | sed 's/^/mine:   /'
+```
+
+**2. Decide.**
+
+| The listing shows | Then |
+| --- | --- |
+| No commits | Nothing to do. Merge on green CI |
+| Commits, and checks A and B both print nothing | What landed cannot interact with the PR. No catch-up needed |
+| Check A prints a server, or check B prints any path | **Catch up** (below) |
+| Anything you are unsure of | **Catch up**. The checks are deliberately coarse, and a gate run is cheaper than a red `v2/main` |
+
+A server's own configuration (`pyproject.toml`, `uv.lock`, `tsconfig.json`,
+`vitest.config.ts`) is inside its directory, so check A covers it: that is the
+#5569 case, where a `requires-python` bump changed which lint rules applied to
+code another PR was adding.
+
+**3. Catch up**, in the PR's worktree:
+
+```sh
+git fetch origin v2/main
+git merge --no-edit origin/v2/main
+npm install                       # the merge may have moved package-lock.json
+npm run local:gate && git push    # the push runs only on a green gate
+```
+
+- **Merge, never rebase.** A rebase rewrites the commits that were reviewed,
+  outdates every review thread and needs a force-push. The merge commit is
+  exempt from the DCO check (step 3).
+- **The gate runs on the merged tree before the push**, as before any push
+  (step 4), and a red gate pushes nothing. A red stage here is the interaction
+  this step exists to find: fix it on the branch, signed off, and run that
+  last line again.
+- **Then wait for CI on the new head**, with one backgrounded command, as
+  `AGENTS.md` **Waiting on long-running work** says. The `sleep` gives the push
+  runs time to register; `--watch` on a head with no checks yet exits at once.
+
+  ```sh
+  sleep 60; gh pr checks "$PR" --repo modelcontextprotocol/servers \
+    --watch --interval 30; echo "EXIT=$?"
+  ```
+
+- **A catch-up that merged without conflicts and passed the gate unchanged
+  needs no new Copilot round.** Nothing the PR adds changed. One that needed a
+  conflict resolved or a fix pushed changed the PR, so request a round (step 9).
+- **If `v2/main` moves again before the merge, run step 1 again.** It costs
+  one fetch, and most of the time it prints nothing that interacts.
+
+**Fan-outs.** When several PRs for one server are open at once, a PR that
+changes that server's **configuration** (a language floor, lint or compiler
+settings, a dependency major) interacts with every one of them. Merge it
+**last**, after catching it up on the others, or merge it first and catch up
+and re-test each of the others after it. The open PRs that touch a server:
+
+```sh
+gh pr list --repo modelcontextprotocol/servers --base v2/main --state open \
+  --limit 200 --json number,title,files \
+  --jq '.[] | select(any(.files[]; .path | startswith("src/fetch/")))
+        | "\(.number) \(.title)"'
+```
+
+Nothing enforces this step: `v2/main`'s ruleset requires no status checks, so
+it is done by hand by whoever merges. Whether a merge queue or a required
+up-to-date check should take it over is #5588.
+
+### After the merge
 
 **On merge into `v2/main`, close the issue by hand and move its card to
 Done**, since auto-close does not fire there:

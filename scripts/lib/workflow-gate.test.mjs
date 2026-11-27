@@ -393,6 +393,7 @@ describe("the gate's name", () => {
     "verify:skills:cli",
     "smoke",
     "interface-diff",
+    "image-smoke",
   ]) {
     it(`runs \`${stage}\``, () => {
       assert.ok(

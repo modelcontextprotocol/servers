@@ -1,0 +1,144 @@
+# Builds and boots the Docker image of each server a change touches (#5598).
+#
+# Every server ships a Dockerfile, and before this workflow nothing built one:
+# an image that no longer built, could not find its server, or had to be killed
+# by `docker stop` reached a release unnoticed, and the release verification
+# found it by hand. The check is `npm run image-smoke`
+# (scripts/image-smoke.mjs, whose header holds what it asserts and why). The
+# same script is a `local:gate` stage, as `scripts/lib/workflow-gate.test.mjs`
+# requires of every npm script a workflow runs.
+#
+# - An image is built only when the change touches it: its server's directory,
+#   a root file it copies, a package it installs from the root lockfile, or
+#   the image tooling itself (every image). A `paths` filter cannot say "the
+#   lockfile changed in a way that reaches this server", so the workflow runs
+#   on every change and the `changes` job asks the script which images to
+#   build (`--list`, the same selection the gate makes). `image` fans out over
+#   that list, one matrix leg per image. This is the interface diff's shape
+#   (mcp-interface-diff.yml), for the same reasons.
+# - The base is the PR's base, or the branch as it was before a push.
+# - A manual run (`workflow_dispatch`) builds every image, changed or not: the
+#   way to check all seven on a branch, for a release verification or after a
+#   base image moves.
+# - Untrusted code (the PR's Dockerfiles and the selection script) runs with a
+#   read-only token and no persisted credentials. No job here holds a
+#   credential, pushes an image or logs in to a registry.
+#
+# The version PRs are opened with the workflow token, whose events start no
+# `pull_request` run here. They change version metadata only, and nothing
+# dispatches this workflow for them: GitHub dispatches only a workflow whose
+# file is on the default branch, which this one is not until a milestone merge.
+name: Image smoke
+
+on:
+  push:
+    branches: [main, v2/main]
+  # No branch filter: PRs to v2/main and to main both run, and so does a PR
+  # stacked on another PR's branch. The base is the PR's own base either way.
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Superseded runs on the same PR are cancelled. Every other run gets a group
+# of its own, so a push's run is never dropped behind two queued ones.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    name: Choose the images to build
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.list.outputs.images }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          # The base is found in history, so all of it is needed.
+          fetch-depth: 0
+          # The event's own commit (the merge commit for a PR), not a branch
+          # ref that a later push could move before this step runs.
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      # No install: the selection imports nothing outside Node.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: List the images the change touches
+        id: list
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          case "$EVENT" in
+            # The checkout is the PR's merge commit, so its base tip is
+            # exactly what the PR changes.
+            pull_request) base="$PR_BASE" ;;
+            # The branch as it was before this push; a new branch has none.
+            push)
+              if [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ]; then
+                base="$BEFORE"
+              else
+                base=$(git rev-parse HEAD^)
+              fi ;;
+            workflow_dispatch) base="" ;;
+            *) echo "unexpected event: $EVENT" >&2; exit 1 ;;
+          esac
+          # The reasons go to the log on stderr; stdout is the JSON list.
+          if [ -n "$base" ]; then
+            echo "Comparing against $base"
+            images=$(npm run --silent image-smoke -- --base "$base" --list)
+          else
+            images=$(npm run --silent image-smoke -- --all --list)
+          fi
+          echo "Images to build: $images"
+          echo "images=$images" >> "$GITHUB_OUTPUT"
+          {
+            if [ "$images" = "[]" ]; then
+              echo "The change touches no server's image; there is nothing to build."
+            else
+              echo "Building: $(jq -r 'map("`" + .server + "`") | join(", ")' <<<"$images")"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  image:
+    name: Image ${{ matrix.server }}
+    needs: changes
+    if: needs.changes.outputs.images != '[]'
+    # A cold build is about a minute; the slack is for a slow registry pull.
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    strategy:
+      # One image's failure must not hide another's verdict.
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.changes.outputs.images) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      # Only for the MCP client the smoke drives the container with, a root
+      # devDependency. The image builds from the checkout's source inside
+      # Docker, so no workspace is built here.
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build, boot and stop the image
+        env:
+          SERVER: ${{ matrix.server }}
+        run: npm run image-smoke -- --server "$SERVER"

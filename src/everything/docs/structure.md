@@ -37,6 +37,7 @@ src/everything
      ├── server
      │   ├── index.ts
      │   ├── context.ts
+     │   ├── events.ts
      │   ├── icons.ts
      │   ├── logging.ts
      │   ├── roots.ts
@@ -59,6 +60,7 @@ src/everything
      │   ├── toggle-subscriber-updates.ts
      │   ├── trigger-elicitation-request-async.ts
      │   ├── trigger-elicitation-request.ts
+     │   ├── trigger-event.ts
      │   ├── trigger-list-changed.ts
      │   ├── trigger-log-messages.ts
      │   ├── trigger-long-running-operation.ts
@@ -68,6 +70,7 @@ src/everything
      │   ├── trigger-sampling-request.ts
      │   └── trigger-url-elicitation.ts
      └── transports
+         ├── idle-sessions.ts
          ├── in-memory-event-store.ts
          ├── listen.ts
          ├── sse.ts
@@ -156,6 +159,8 @@ src/everything
   - Exposes `{ server, cleanup }` to the chosen transport. Cleanup stops any running intervals in the server when the connection ends.
 - `context.ts`
   - The per-instance context features receive: the era, the change publisher, the 2025-era subscriptions and a cleanup registry.
+- `events.ts`
+  - 2026-07-28: the server side of the events extension (`events/list`, `events/poll`, `events/stream`), its two event types (`clock-tick`, `custom-event`) and the process-wide bus `trigger-event` raises `custom-event` on.
 - `icons.ts`
   - The light- and dark-themed icon pairs (SEP-973) attached to the server info and to every tool, prompt, resource and resource template, one pair per kind, as inline SVG `data:` URIs.
 - `logging.ts`
@@ -201,6 +206,8 @@ src/everything
   - 2026-07-28: registers a `trigger-elicitation-request-async` tool that runs as a task waiting in `input_required` for a form elicitation.
 - `trigger-list-changed.ts`
   - Registers a `trigger-list-changed` tool that publishes a tools, prompts or resources list change.
+- `trigger-event.ts`
+  - 2026-07-28: registers a `trigger-event` tool that raises `custom-event` on the open `events/stream` subscriptions, or sends them a recoverable error or a termination.
 - `trigger-log-messages.ts`
   - Registers a `trigger-log-messages` tool that sends one log message per level, filtered by the request's or session's log level.
 - `trigger-multi-step-elicitation.ts`
@@ -228,6 +235,9 @@ src/everything
 
 ### `transports/`
 
+- `idle-sessions.ts`
+  - `watchIdleSessions(timeoutMillis, evict)`: decides when a 2025-era Streamable HTTP session has been idle too long. A request counts as activity until its response closes, so an open stream or a running call keeps its session; `evict` is called once for a session with no open response for the timeout.
+  - `sessionIdleTimeoutMillis()`: reads `SESSION_IDLE_TIMEOUT_MILLIS` (default 30 minutes; `0` disables eviction).
 - `in-memory-event-store.ts`
   - `InMemoryEventStore`: the Streamable HTTP transport's event store for resumability. Replays only the events of the stream a `Last-Event-ID` belongs to, and reports an unknown event ID as having no stream, so the SDK refuses the resume.
 - `listen.ts`
@@ -250,4 +260,5 @@ src/everything
   - 2025 era: POST (JSON‑RPC), GET (SSE stream), and DELETE (session termination) using `NodeStreamableHTTPServerTransport` from `@modelcontextprotocol/node`.
   - Uses an `InMemoryEventStore` for resumable sessions and tracks transports by `sessionId`.
   - Answers a request for an unknown or ended `Mcp-Session-Id` with `404 Not Found`, and closes every open session on `SIGINT`.
+  - Closes a session that has been idle for `SESSION_IDLE_TIMEOUT_MILLIS` (`idle-sessions.ts`), which removes it and runs its `cleanup()` as a DELETE does.
   - Connects a fresh server instance on initialization POST and reuses the transport for subsequent requests.

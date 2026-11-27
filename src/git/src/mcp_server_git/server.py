@@ -22,9 +22,12 @@
 import logging
 import os
 import re
+import sys
+import tempfile
 import threading
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
+from contextvars import ContextVar
 from enum import Enum
 from functools import wraps
 from importlib.metadata import version
@@ -42,6 +45,9 @@ from mcp.types import INVALID_PARAMS, ToolAnnotations
 from pydantic import Field
 
 from .transport import run
+
+if sys.platform == "win32":  # pragma: no cover  # the coverage gate runs on Linux
+    import _winapi
 
 # The version this server reports in serverInfo, read from the installed
 # distribution's metadata (pyproject.toml) so it cannot drift from the
@@ -179,10 +185,28 @@ HARDENED_CONFIG: tuple[tuple[str, str], ...] = (
 # value shows that git applied the overrides. A driver's name may be empty
 # (`[filter ""]`, read back as `filter..clean`, selected by `filter=`), so
 # the name is matched with `.*`, not `.+`.
+#
+# A trusted driver can still read the repository's configuration itself.
+# Git LFS's does: it runs `lfs.extension.<name>.clean` and `.smudge` on every
+# file it filters, and a transfer agent (`lfs.customtransfer.<name>.path`
+# and `.args`, picked by `lfs.standalonetransferagent`) when it downloads an
+# object, so those keys are emptied the same way. An emptied extension makes
+# Git LFS fail the command rather than run anything. A download also runs
+# programs no key in this list names (`core.sshCommand`, `credential.helper`
+# and `core.askpass`, for an endpoint the repository picks), so `harden_repo`
+# turns downloads off (`_LFS_ENV`) instead.
 _LISTED_KEYS = (
     r"^(core\.hookspath|filter\..*\.(clean|smudge|process)|merge\..*\.driver"
-    r"|branch\..+\.mergeoptions)$"
+    r"|branch\..+\.mergeoptions|lfs\.extension\..*\.(clean|smudge)"
+    r"|lfs\.customtransfer\..*\.(path|args)|lfs\.standalonetransferagent)$"
 )
+
+# GIT_LFS_SKIP_SMUDGE=1 makes Git LFS's smudge filter write each file's
+# pointer instead of its content, so a checkout or merge never downloads an
+# object, and never starts the programs a download runs. The repository's
+# configuration cannot turn it back on: Git LFS reads it from the environment
+# only.
+_LFS_ENV = {"GIT_LFS_SKIP_SMUDGE": "1"}
 
 # Scopes whose configuration the user wrote rather than the repository.
 _TRUSTED_SCOPES = frozenset({"system", "global", "command"})
@@ -332,8 +356,9 @@ def _submodule_drivers(repo: git.Repo) -> set[str]:
 def harden_repo(repo: git.Repo) -> None:
     """Keep every git command run for `repo` from running a program it names.
 
-    Sets `HARDENED_CONFIG` on the repository's git, then reads which filter
-    and merge drivers the repository's own configuration (its `.git/config`,
+    Sets `HARDENED_CONFIG` and `_LFS_ENV` on the repository's git, then reads
+    which filter and merge drivers (and Git LFS programs, `_LISTED_KEYS`) the
+    repository's own configuration (its `.git/config`,
     a worktree's `config.worktree`, and files they include) defines, and
     overrides each with an empty command. The same read checks that git
     applied the overrides: git older than 2.31 ignores GIT_CONFIG_COUNT, and
@@ -344,7 +369,9 @@ def harden_repo(repo: git.Repo) -> None:
     (`_PROMISOR_KEYS`).
     """
     entries = list(HARDENED_CONFIG)
-    repo.git.update_environment(GIT_NO_LAZY_FETCH="1", **_config_env(entries))
+    repo.git.update_environment(
+        GIT_NO_LAZY_FETCH="1", **_LFS_ENV, **_config_env(entries)
+    )
     try:
         listed = repo.git.config("--show-scope", "-z", "--get-regexp", _LISTED_KEYS)
     except git.GitCommandError as e:
@@ -459,7 +486,9 @@ def _has_staged_changes(repo: git.Repo) -> bool:
     return bool(repo.index.diff(repo.head.commit))
 
 
-def git_commit(repo: git.Repo, message: str) -> str:
+def git_commit(
+    repo: git.Repo, message: str, *, allowed_repository: Path | None = None
+) -> str:
     # repo.index.commit() writes a tree unconditionally, so without this check
     # a caller that forgot to stage gets a hash back for an empty commit and no
     # way to tell it apart from a real one.
@@ -480,7 +509,7 @@ def git_commit(repo: git.Repo, message: str) -> str:
         commit = repo.index.commit(message, parent_commits=parents, skip_hooks=True)
         for name in ("MERGE_HEAD", "MERGE_MSG", "MERGE_MODE", "AUTO_MERGE"):
             (git_dir / name).unlink(missing_ok=True)
-        autostash_note = _apply_merge_autostash(repo)
+        autostash_note = _apply_merge_autostash(repo, allowed_repository)
     else:
         # skip_hooks: GitPython runs the repository's hooks itself, ignoring
         # the core.hooksPath override (`harden_repo`).
@@ -489,7 +518,9 @@ def git_commit(repo: git.Repo, message: str) -> str:
     return f"Changes committed successfully with hash {commit.hexsha}{autostash_note}"
 
 
-def _apply_merge_autostash(repo: git.Repo) -> str:
+def _apply_merge_autostash(
+    repo: git.Repo, allowed_repository: Path | None = None
+) -> str:
     """Reapply a `git merge --autostash` stash, as `git commit` does.
 
     Mirrors git's sequencer: apply the stash, store it in the stash list if
@@ -503,7 +534,9 @@ def _apply_merge_autostash(repo: git.Repo) -> str:
     try:
         # Through _rewrite_tree although nothing after it runs a driver today
         # (`git stash store` runs none): any later git command must be safe.
-        _rewrite_tree(repo, "stash", "apply", stash_oid)
+        _rewrite_tree(
+            repo, "stash", "apply", stash_oid, allowed_repository=allowed_repository
+        )
         note = "\nApplied autostash."
     except git.GitCommandError:
         repo.git.stash("store", "-m", "autostash", "-q", stash_oid)
@@ -652,8 +685,16 @@ def git_create_branch(
     return f"Created branch '{branch_name}' from {base_label}"
 
 
-def _rewrite_tree(repo: git.Repo, command: str, *args: str) -> str:
-    """Run `git <command> <args>`, which writes the working tree, then re-harden.
+def _rewrite_tree(
+    repo: git.Repo,
+    command: str,
+    *args: str,
+    allowed_repository: Path | None = None,
+    config: str | None = None,
+) -> str:
+    """Run `git <command> <args>`, which writes the working tree, then re-check.
+
+    `config`, a `name=value`, is passed as `git -c` for this command only.
 
     `harden_repo` reads the repository's configuration when the call opens
     the repository, but that configuration can depend on the working tree: an
@@ -671,9 +712,20 @@ def _rewrite_tree(repo: git.Repo, command: str, *args: str) -> str:
     If that read fails, the overrides may be incomplete, so the call stops
     with a `GitError`, which a caller's `except GitCommandError` cleanup does
     not catch, and no further git command runs.
+
+    The same holds for where git operates (#5599). `open_repo` checked the
+    directories git uses against `allowed_repository` (`--repository`) before
+    the write, and the write can move them: a `.git/config` that is a link to
+    a tracked file gains a `core.worktree` naming a directory outside, and
+    the next git command that writes the tree (the `git merge --abort` after
+    a conflict) writes there instead. So `validate_opened_repo` runs again
+    too, after the drivers are read, as at open. A repository that no longer
+    passes stops the call the same way: no git command can be trusted to
+    stay inside, the cleanup included, so the tree stays as written.
     """
     try:
-        return getattr(repo.git, command)(*args)
+        runner = repo.git(c=config) if config is not None else repo.git
+        return getattr(runner, command)(*args)
     finally:
         try:
             harden_repo(repo)
@@ -684,9 +736,22 @@ def _rewrite_tree(repo: git.Repo, command: str, *args: str) -> str:
                 f"tree was left as git {command} wrote it (a merge may still be in "
                 f"progress), and no further git command was run: {e}"
             ) from e
+        if allowed_repository is not None:
+            try:
+                validate_opened_repo(repo, Path(repo.working_dir), allowed_repository)
+            except (ValueError, OSError, git.GitError) as e:
+                raise git.GitError(
+                    f"Stopped: after git {command} changed the working tree, the "
+                    "repository no longer passes the --repository check. The "
+                    f"working tree was left as git {command} wrote it (a merge may "
+                    "still be in progress), and no further git command was run: "
+                    f"{e}"
+                ) from e
 
 
-def git_checkout(repo: git.Repo, branch_name: str) -> str:
+def git_checkout(
+    repo: git.Repo, branch_name: str, *, allowed_repository: Path | None = None
+) -> str:
     # Defense in depth: reject branch names starting with '-' to prevent flag injection,
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
     if branch_name.startswith("-"):
@@ -699,7 +764,9 @@ def git_checkout(repo: git.Repo, branch_name: str) -> str:
     # --quiet: without it, git checks each checked-out submodule of the new
     # branch for local changes, running git inside it under its own
     # configuration; the reply below does not use git's output.
-    _rewrite_tree(repo, "checkout", "--quiet", branch_name)
+    _rewrite_tree(
+        repo, "checkout", "--quiet", branch_name, allowed_repository=allowed_repository
+    )
     # rev_parse accepts any revision, so branch_name may have been a sha, tag or
     # remote-tracking ref rather than a branch. Report what actually happened instead of
     # claiming a branch switch; a detached HEAD is easy to commit onto by mistake.
@@ -717,7 +784,12 @@ def _git_stderr(error: git.GitCommandError) -> str:
     return message or str(error)
 
 
-def _merge_failure(repo: git.Repo, error: git.GitCommandError, what: str) -> str:
+def _merge_failure(
+    repo: git.Repo,
+    error: git.GitCommandError,
+    what: str,
+    allowed_repository: Path | None = None,
+) -> str:
     """Why `git merge` failed, after undoing whatever it left behind.
 
     A merge that stops on conflicts, or fails to write its merge commit,
@@ -737,7 +809,7 @@ def _merge_failure(repo: git.Repo, error: git.GitCommandError, what: str) -> str
     ).splitlines()
     # Through _rewrite_tree although it is the last git command here, so a git
     # command added after it reads drivers the restored tree defines.
-    _rewrite_tree(repo, "merge", "--abort")
+    _rewrite_tree(repo, "merge", "--abort", allowed_repository=allowed_repository)
     if conflicts:
         return (
             f"{what} stopped on conflicts in: {', '.join(conflicts)}. {unchanged} "
@@ -746,8 +818,104 @@ def _merge_failure(repo: git.Repo, error: git.GitCommandError, what: str) -> str
     return f"{what} failed. {unchanged} Git reported:\n{_git_stderr(error)}"
 
 
+def _on_disk_spelling(root: Path, path: str) -> str:
+    """`path`, an existing entry under `root`, as the directory listings spell it.
+
+    On a case-insensitive or normalization-insensitive filesystem (macOS,
+    Windows) the path a source tracks can name an entry whose name is spelled
+    differently (`.ENV` for `.env`, or decomposed for precomposed Unicode).
+    Git matches a pathspec to its own spelling, so each component is replaced
+    with the listed name of the same file (by device and inode).
+    """
+    parent = root
+    spelled: list[str] = []
+    for name in path.split("/"):
+        names = os.listdir(parent)
+        if name not in names:
+            wanted = os.lstat(parent / name)
+            name = next(
+                entry
+                for entry in names
+                if os.path.samestat(os.lstat(parent / entry), wanted)
+            )
+        spelled.append(name)
+        parent = parent / name
+    return "/".join(spelled)
+
+
+def _ignored_files_overwritten(repo: git.Repo, head: str, source: str) -> list[str]:
+    """The ignored files in the working tree a merge of `source` would replace.
+
+    Git does not honor `--no-overwrite-ignore` when it makes a merge commit (a
+    fast-forward does), so `git_merge` checks before it runs. The tree is
+    clean, so every untracked path is one HEAD does not track, and the merge
+    writes only such a path when it is one of:
+
+    - a path the source tracks and HEAD does not. This includes one HEAD
+      deleted since the merge base: if the source changed it, the
+      modify/delete conflict writes the source's version, so it must be
+      counted, not filtered out against the merge base. (The merge runs with
+      `merge.directoryRenames=false`, so git does not move a path the source
+      adds into a directory HEAD renamed, a path in neither tree.)
+    - the side name of a file/directory conflict: HEAD's file `<path>` moved
+      to `<path>~HEAD`, or the source's to `<path>~<source sha>`.
+
+    For each, what is in the way is whatever exists there (a file, a link, or
+    a directory and everything in it) or the nearest existing ancestor that is
+    not a directory. The ignored files among those are returned; an untracked
+    file that is not ignored is left for git to refuse, as it does.
+    """
+    root = Path(repo.working_dir)
+    changes = repo.git.diff_tree(
+        "-r", "-z", "--no-renames", "--name-status", "--diff-filter=AD", head, source
+    ).split("\0")
+    added: set[str] = set()
+    deleted: set[str] = set()
+    for status, path in zip(changes[0::2], changes[1::2]):
+        (added if status == "A" else deleted).add(path)
+    deleted_dirs = {
+        "/".join(parts[:depth])
+        for parts in (path.split("/") for path in deleted)
+        for depth in range(1, len(parts))
+    }
+    written = set(added)
+    for path in added:
+        parts = path.split("/")
+        for depth in range(1, len(parts)):
+            if (prefix := "/".join(parts[:depth])) in deleted:
+                written.add(f"{prefix}~HEAD")
+        if path in deleted_dirs:
+            written.add(f"{path}~{source}")
+    in_the_way: set[str] = set()
+    for path in written:
+        parts = path.split("/")
+        for depth in range(1, len(parts) + 1):
+            prefix = "/".join(parts[:depth])
+            target = root / prefix
+            if not os.path.lexists(target):
+                break
+            if depth == len(parts) or target.is_symlink() or not target.is_dir():
+                in_the_way.add(_on_disk_spelling(root, prefix))
+                break
+    if not in_the_way:
+        return []
+    listed = repo.git.ls_files(
+        "-z",
+        "--others",
+        "--ignored",
+        "--exclude-standard",
+        "--",
+        *(f":(top,literal){path}" for path in sorted(in_the_way)),
+    )
+    return sorted(filter(None, listed.split("\0")))
+
+
 def git_merge(
-    repo: git.Repo, source_branch: str, fast_forward_only: bool = True
+    repo: git.Repo,
+    source_branch: str,
+    fast_forward_only: bool = True,
+    *,
+    allowed_repository: Path | None = None,
 ) -> str:
     """Merge `source_branch` into the current branch, or change nothing.
 
@@ -757,6 +925,9 @@ def git_merge(
     The conflicts are reported for the caller to resolve by hand. By default
     only a fast-forward is allowed; `fast_forward_only=False` lets git create
     a merge commit when the branches have diverged.
+
+    `allowed_repository` is the `--repository` the call was opened under,
+    checked again after each write to the working tree (`_rewrite_tree`).
     """
     # Defense in depth: reject sources starting with '-' to prevent flag
     # injection, even if a malicious ref with that name exists.
@@ -804,6 +975,9 @@ def git_merge(
     # for it (see `_LISTED_KEYS`). --no-overwrite-ignore refuses to
     # replace an ignored local file (a `.env`, say) that the source tracks:
     # `is_dirty()` cannot see one, and git would overwrite it unrecoverably.
+    # Git honors it only on a fast-forward, so a merge commit is checked
+    # first (`_ignored_files_overwritten`), and runs with directory-rename
+    # detection off, so it writes no path that check cannot predict.
     #
     # Git is given the commit validated above, not the name: a name can stand
     # for more than one commit (`git merge FETCH_HEAD` merges every head
@@ -811,6 +985,15 @@ def git_merge(
     # With a sha, git's default message would name the sha, so the message
     # names what the caller asked for.
     mode = "--ff-only" if fast_forward_only else "--ff"
+    what = f"Merge of '{source_branch}' into '{target}'"
+    if not fast_forward:
+        ignored = _ignored_files_overwritten(repo, head.hexsha, source.hexsha)
+        if ignored:
+            raise ValueError(
+                f"{what} refused: it would overwrite ignored local files: "
+                f"{', '.join(ignored)}. Nothing was changed. Move or remove "
+                "them first."
+            )
     try:
         _rewrite_tree(
             repo,
@@ -825,10 +1008,11 @@ def git_merge(
             "-m",
             f"Merge '{source_branch}' into '{target}'",
             source.hexsha,
+            allowed_repository=allowed_repository,
+            config="merge.directoryRenames=false",
         )
     except git.GitCommandError as e:
-        what = f"Merge of '{source_branch}' into '{target}'"
-        raise ValueError(_merge_failure(repo, e, what)) from e
+        raise ValueError(_merge_failure(repo, e, what, allowed_repository)) from e
     merged = repo.head.commit
     if fast_forward:
         return f"Fast-forwarded '{target}' to '{source_branch}' ({merged.hexsha[:7]})"
@@ -914,6 +1098,113 @@ def validate_repo_path(repo_path: Path, allowed_repository: Path | None) -> None
         )
 
 
+# The git directory and common directory of each `--repository` root, as
+# `record_root_git_dirs` found them when its server was created, or None when
+# the root may use no git directory outside itself. Fixing the pair then, rather
+# than reopening the root on every call, keeps a `.git` or `commondir` written
+# into the root afterwards from naming a different repository as its own.
+_ROOT_GIT_DIRS: dict[Path, tuple[Path, Path] | None] = {}
+
+
+class _RootGit(git.Git):
+    """`git.Git` run in its working directory as given, never env-expanded.
+
+    `git.Git` expands `$NAME` and `~` in a str working directory whatever
+    `expand_vars` says, and runs in the current directory when the expansion
+    does not exist; it takes a `Path` as it is.
+    """
+
+    def __init__(self, working_dir: str | os.PathLike[str] | None = None) -> None:
+        super().__init__(None if working_dir is None else Path(working_dir))
+
+
+class _RootRepo(git.Repo):
+    """`git.Repo` whose git commands and object reads run through `_RootGit`.
+
+    Set as the wrapper type, so the object database and the environment
+    `git.Repo` sets up use it too.
+    """
+
+    GitCommandWrapperType = _RootGit
+
+
+def record_root_git_dirs(allowed_repository: Path) -> tuple[Path, Path] | None:
+    """Record the git directories the `--repository` root may use outside itself.
+
+    A root's git directory and common directory are its own when both lie
+    inside it, or when the git directory outside names the root back, which
+    only its owner can write:
+
+    - a linked worktree: its git directory is `<common dir>/worktrees/<name>`,
+      and that directory's `gitdir` file, which `git worktree add` writes in
+      the main repository, names the root's `.git`;
+    - a git directory that is its own common directory and whose own
+      `config` sets `core.worktree` to the root, as `git submodule` writes it
+      for a submodule checkout (`<super>/.git/modules/<name>`).
+
+    Any other git directory outside the root (a `.git` file naming another
+    repository, a `commondir` outside, `git init --separate-git-dir`) is not
+    the root's own, since nothing outside the root confirms it: None is
+    recorded, and every call that would use it is refused.
+    """
+    allowed = allowed_repository.resolve()
+    own: tuple[Path, Path] | None = None
+    try:
+        with _RootRepo(allowed, expand_vars=False) as repo:
+            harden_repo(repo)
+            git_dir, common_dir = (
+                Path(p).resolve()
+                for p in repo.git.rev_parse(
+                    "--path-format=absolute", "--git-dir", "--git-common-dir"
+                ).splitlines()
+            )
+            seen_by_gitpython = (
+                Path(repo.git_dir).resolve(),
+                Path(repo.common_dir).resolve(),
+            )
+            if seen_by_gitpython == (git_dir, common_dir) and (
+                (git_dir.is_relative_to(allowed) and common_dir.is_relative_to(allowed))
+                or _is_linked_worktree_of(allowed, git_dir, common_dir)
+                or _is_submodule_of(repo, allowed, git_dir, common_dir)
+            ):
+                own = (git_dir, common_dir)
+    except (git.GitError, OSError, ValueError):
+        pass
+    _ROOT_GIT_DIRS[allowed_repository] = own
+    return own
+
+
+def _is_linked_worktree_of(allowed: Path, git_dir: Path, common_dir: Path) -> bool:
+    """Whether `git_dir` is the main repository's record of worktree `allowed`."""
+    if git_dir.parent != common_dir / "worktrees":
+        return False
+    try:
+        named = (git_dir / "gitdir").read_text(encoding="utf-8").strip()
+    except OSError:
+        return False
+    # Relative when written with `worktree.useRelativePaths`.
+    return (git_dir / named).resolve() == allowed / ".git"
+
+
+def _is_submodule_of(
+    repo: git.Repo, allowed: Path, git_dir: Path, common_dir: Path
+) -> bool:
+    """Whether `git_dir` is a submodule's git directory checked out at `allowed`.
+
+    Only `git_dir`'s own `config` is read (`--file`, so no other scope and no
+    include contributes); `core.worktree` there is relative to `git_dir`.
+    """
+    if git_dir != common_dir:
+        return False
+    try:
+        named = repo.git.config(
+            "--file", str(git_dir / "config"), "--get", "core.worktree"
+        )
+    except git.GitCommandError:
+        return False
+    return (git_dir / named).resolve() == allowed
+
+
 def validate_opened_repo(
     repo: git.Repo, repo_path: Path, allowed_repository: Path | None
 ) -> None:
@@ -924,8 +1215,9 @@ def validate_opened_repo(
     a directory anywhere else, so the working tree, git directory and common
     directory git actually uses are checked too. The working tree must lie
     inside the allowed repository. The two git directories must lie inside it,
-    or be the allowed repository's own as a pair, opened from the allowed
-    repository itself: a linked worktree's git directory lives under the main
+    or be the allowed repository's own as a pair (`record_root_git_dirs`,
+    fixed when the server is created), opened from the allowed repository
+    itself: a linked worktree's git directory lives under the main
     repository's `.git`, outside the worktree it serves, and only that
     worktree may use it. A repository nested inside a linked worktree whose
     `.git` names the main repository's git directory is refused.
@@ -968,14 +1260,16 @@ def validate_opened_repo(
         p for p in git_dirs + common_dirs if not p.resolve().is_relative_to(allowed)
     ]
     if escaped:
-        with git.Repo(allowed) as allowed_repo:
-            own_git_dir = Path(allowed_repo.git_dir).resolve()
-            own_common_dir = Path(allowed_repo.common_dir).resolve()
+        if allowed_repository in _ROOT_GIT_DIRS:
+            own = _ROOT_GIT_DIRS[allowed_repository]
+        else:
+            own = record_root_git_dirs(allowed_repository)
         is_own = (
-            bool(working_trees)
+            own is not None
+            and bool(working_trees)
             and all(Path(w).resolve() == allowed for w in working_trees)
-            and all(p.resolve() == own_git_dir for p in git_dirs)
-            and all(p.resolve() == own_common_dir for p in common_dirs)
+            and all(p.resolve() == own[0] for p in git_dirs)
+            and all(p.resolve() == own[1] for p in common_dirs)
         )
         if not is_own:
             raise outside(escaped[0])
@@ -1034,6 +1328,107 @@ def _check_index_entries(repo: git.Repo, repo_path: Path) -> None:
 _ALTERNATES = ("alternates", "http-alternates")
 
 
+@contextmanager
+def _own_object_store(repo: git.Repo, *, writes: bool = False) -> Iterator[None]:
+    """Run `repo`'s git on its own objects only, whatever its alternates say.
+
+    `_check_git_dir_contents` refuses an alternates entry when the repository
+    is opened, but the file can be rewritten before git reads an object, and
+    git has no setting that turns alternates off. So git is pointed
+    (`GIT_OBJECT_DIRECTORY`) at a new, private directory holding a link to
+    each of the repository's loose-object directories and to its `pack`
+    directory, and nothing else: git reads the alternates list from that
+    directory's `info/alternates`, which does not exist. On Windows the links
+    are directory junctions, which need no privilege.
+
+    A loose-object directory the repository lacks yet gets no entry for a
+    call that only reads, so git finds nothing there, as in the store
+    itself: such a call writes nothing to the repository, and works on a
+    store it cannot write to. (`_GIT_LOCK` keeps another call from creating
+    one meanwhile.)
+
+    Git follows the links for writing too: a new loose object is written to
+    a temporary file in its own `xx` directory and renamed there, and a pack
+    in `pack`, so what git writes lands in the repository's store. Git would
+    create a missing `xx` inside the private directory, where the object
+    would be lost, so for a call that `writes`, every name has an entry:
+    each directory the repository lacks is created first, as git would on
+    its first write to it, and one that cannot be created is held by an
+    empty file, so that a write into it fails as it would in the store.
+
+    GitPython's persistent `git cat-file` processes are stopped before and
+    after, so none reads with the environment it does not belong to.
+    """
+    # Resolved: a linked worktree's common directory reads `<git dir>/../..`,
+    # and a junction's target is not a path Windows collapses `..` in.
+    objects = Path(repo.common_dir).resolve() / "objects"
+    own = Path(tempfile.mkdtemp(prefix="mcp-git-objects-"))
+    links: list[Path] = []
+    placeholders: list[Path] = []
+    try:
+        for name in [f"{i:02x}" for i in range(256)] + ["pack"]:
+            target = objects / name
+            entry = own / name
+            if writes:
+                try:
+                    target.mkdir(exist_ok=True)
+                except OSError:
+                    pass
+            if not target.is_dir():
+                if writes:
+                    entry.touch()
+                    placeholders.append(entry)
+                continue
+            if sys.platform != "win32":
+                os.symlink(target, entry, target_is_directory=True)
+            else:  # pragma: no cover  # Windows only; the coverage gate runs on Linux
+                _winapi.CreateJunction(str(target), str(entry))
+            links.append(entry)
+        repo.git.clear_cache()
+        with repo.git.custom_environment(GIT_OBJECT_DIRECTORY=str(own)):
+            try:
+                yield
+            finally:
+                repo.git.clear_cache()
+    finally:
+        # Each link is removed as a link, so what it names is never touched.
+        for link in links:
+            if sys.platform != "win32":
+                os.unlink(link)
+            else:  # pragma: no cover  # Windows only; the coverage gate runs on Linux
+                os.rmdir(link)
+        for placeholder in placeholders:
+            os.unlink(placeholder)
+        os.rmdir(own)
+
+
+# What a tool call or prompt has to undo when it ends: `open_repo` enters a
+# repository's `_own_object_store` here, since most tools never close the
+# repository they open.
+_CALL: ContextVar[ExitStack | None] = ContextVar("_CALL", default=None)
+# Whether the running tool can write objects (`writes_objects`).
+_WRITES: ContextVar[bool] = ContextVar("_WRITES", default=False)
+
+
+@contextmanager
+def _one_call() -> Iterator[None]:
+    """Scope one tool call or prompt; what it entered in `_CALL` ends with it."""
+    with ExitStack() as stack:
+        token = _CALL.set(stack)
+        try:
+            yield
+        finally:
+            _CALL.reset(token)
+
+
+def _read_own_objects_for_call(repo: git.Repo) -> None:
+    """Run `repo`'s git through `_own_object_store` until the call ends."""
+    stack = _CALL.get()
+    if stack is None:
+        raise RuntimeError("a repository opened under --repository needs _one_call()")
+    stack.enter_context(_own_object_store(repo, writes=_WRITES.get()))
+
+
 def _check_git_dir_contents(
     repo_path: Path,
     directory: Path,
@@ -1049,10 +1444,17 @@ def _check_git_dir_contents(
       `directory` itself: a link at `objects`, `refs`, `index`, `HEAD` or
       anything else in a git directory is followed by git, for reading and
       for writing (a linked `index` takes git_add's writes elsewhere).
+    - A directory that resolves outside them, which is what a Windows
+      directory junction is: `is_symlink()` is false for one and `is_dir()`
+      true, and git follows it as it follows a link. Every directory is
+      judged by where it resolves rather than by detecting a junction
+      (`is_junction()` exists only from Python 3.12): an ordinary directory
+      resolves to itself, inside the directory being walked, and passes.
 
-    A link that is allowed and names a directory is walked too, since git
-    follows it into that directory and on into any link inside it; each
-    directory is walked once, so a cycle of links ends.
+    A link or directory that is allowed is walked where it resolves, since
+    git follows it there and on into any link inside it; each directory is
+    walked once, so a cycle of links ends, and one whose target is gone
+    (a dangling link or junction) is not walked.
 
     `hooks` is not walked: no hook runs (`HARDENED_CONFIG`), so a hooks
     directory linked to a shared one elsewhere is harmless.
@@ -1076,21 +1478,16 @@ def _check_git_dir_contents(
             for entry in entries:
                 if current == directory and entry.name == "hooks":
                     continue
-                if entry.is_symlink():
-                    target = Path(entry.path).resolve()
-                    if not (
-                        target.is_relative_to(allowed)
-                        or target.is_relative_to(directory)
-                    ):
-                        raise outside(target)
-                    if target.is_dir() and target not in visited:
-                        visited.add(target)
-                        pending.append(target)
-                elif entry.is_dir():
-                    real = Path(entry.path).resolve()
-                    if real not in visited:
-                        visited.add(real)
-                        pending.append(real)
+                if not (entry.is_symlink() or entry.is_dir()):
+                    continue
+                target = Path(entry.path).resolve()
+                if not (
+                    target.is_relative_to(allowed) or target.is_relative_to(directory)
+                ):
+                    raise outside(target)
+                if target.is_dir() and target not in visited:
+                    visited.add(target)
+                    pending.append(target)
 
 
 def git_branch(
@@ -1153,13 +1550,18 @@ _URL_USERINFO = re.compile(
 # after the `::` is a URL of its own, and is redacted as one.
 _REMOTE_HELPER = re.compile(r"^(?P<transport>[A-Za-z][A-Za-z0-9+.-]*)::")
 
-# One line of `git remote -v`: `<name>\t<url> (fetch|push)`, and on a
-# partial clone's fetch line the promisor filter after it (` [blob:none]`).
-# `.` matches everything but '\n', so a URL holding another line separator
-# (U+2028, say) stays whole.
-_REMOTE_LINE = re.compile(
-    r"^(?P<name>[^\t]*)\t(?P<url>.*) \((?P<direction>fetch|push)\)"
-    r"(?P<filter> \[.*\])?$"
+# A scheme followed by `://` anywhere in a value. A value holding one that
+# `_URL_SCHEME` does not find at its start (after a space or a tab, say) holds
+# a URL that cannot be split from what precedes it.
+_EMBEDDED_URL = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://")
+
+# What follows `<name>\t` on a line of `git remote -v`: `<url> (fetch|push)`,
+# and on a partial clone's fetch line the promisor filter after it
+# (` [blob:none]`). `.` matches everything but '\n', so a URL holding another
+# line separator (U+2028, say) stays whole. The name is not matched here: it
+# may hold a tab itself, so it is taken from the configured names instead.
+_REMOTE_ENTRY = re.compile(
+    r"^(?P<url>.*) \((?P<direction>fetch|push)\)(?P<filter> \[.*\])?$"
 )
 
 # Schemes whose username is an account name rather than a secret, so it is kept
@@ -1209,15 +1611,16 @@ def redact_url(url: str) -> str:
     kept: a token there cannot be told apart from a repository name. A URL
     whose userinfo would hold a '?' or '#' cannot be split safely and is
     shown as `scheme://<redacted>`. A remote-helper address (`<transport>::<url>`) has its inner URL redacted.
-    An scp-like address (`git@host:path`) or a local path is not a URL and is
-    returned as is.
+    A value holding `scheme://` anywhere but at its start (` https://...`)
+    cannot be split safely either, and is withheld whole. An scp-like address
+    (`git@host:path`) or a local path is not a URL and is returned as is.
     """
     helper = _REMOTE_HELPER.match(url)
     if helper is not None:
         return url[: helper.end()] + redact_url(url[helper.end() :])
     authority = _URL_SCHEME.match(url)
     if authority is None:
-        return url
+        return REDACTED if _EMBEDDED_URL.search(url) else url
     scheme = authority["scheme"]
     match = _URL_USERINFO.match(url)
     if match is None:
@@ -1271,6 +1674,13 @@ def git_remote(repo: git.Repo) -> str:
     '\\n' alone, the only separator git prints, not on every separator
     `str.splitlines` knows, which would cut a URL holding U+2028 in two. A
     URL holding a newline itself is refused (`_remote_url_has_newline`).
+
+    A remote name may hold a tab, so the tab that ends it is not the first one
+    on the line. Each line's name is the longest configured name (from
+    `git remote`, one per line: git allows no newline in a name) that the line
+    starts with, followed by a tab. Whatever a shorter name would have left in
+    the URL column is then left to `redact_url`, which withholds a value with
+    a URL that does not start it.
     """
     if _remote_url_has_newline(repo):
         raise ValueError(
@@ -1278,21 +1688,24 @@ def git_remote(repo: git.Repo) -> str:
             "be listed without risking a credential in it; git refuses such "
             "URLs as well"
         )
+    names = sorted(
+        filter(None, _git_text(repo, "remote").split("\n")), key=len, reverse=True
+    )
     output = _git_text(repo, "remote", "-v").rstrip("\n")
     if not output:
         return "No remotes configured"
     lines = []
     for line in output.split("\n"):
-        match = _REMOTE_LINE.match(line)
-        if match is None:
+        name = next((n for n in names if line.startswith(n + "\t")), None)
+        match = None if name is None else _REMOTE_ENTRY.match(line[len(name) + 1 :])
+        if name is None or match is None:
             # Not a line in the shape `git remote -v` prints (a URL holding a
-            # newline, say): it cannot be parsed, so none of it is returned.
+            # newline, say, or a name not configured): it cannot be parsed,
+            # so none of it is returned.
             lines.append(REDACTED)
             continue
         url = redact_url(match["url"])
-        lines.append(
-            f"{match['name']}\t{url} ({match['direction']}){match['filter'] or ''}"
-        )
+        lines.append(f"{name}\t{url} ({match['direction']}){match['filter'] or ''}")
     return "\n".join(lines)
 
 
@@ -1345,8 +1758,22 @@ def reports_failures(fn: Callable[_P, str]) -> Callable[_P, str]:
 
     @wraps(fn)
     def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> str:
-        with _GIT_LOCK, reported_to_model():
+        with _GIT_LOCK, _one_call(), reported_to_model():
             return fn(*args, **kwargs)
+
+    return wrapper
+
+
+def writes_objects(fn: Callable[_P, str]) -> Callable[_P, str]:
+    """Mark a tool that writes to the repository, so its object store can be."""
+
+    @wraps(fn)
+    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> str:
+        token = _WRITES.set(True)
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            _WRITES.reset(token)
 
     return wrapper
 
@@ -1462,6 +1889,30 @@ def reported_as_invalid_params() -> Iterator[None]:
         raise MCPError(code=INVALID_PARAMS, message=str(e)) from e
 
 
+class _LiteralGit(git.Git):
+    """A `git.Git` whose working directory is taken literally.
+
+    `git.Git` runs `os.path.expandvars` on a `str` working directory, and
+    `git.Repo` hands it one, whatever `expand_vars` the repository was opened
+    with. A `Path` is only resolved, so a `$NAME` in it stays as written.
+    """
+
+    def __init__(self, working_dir: str | os.PathLike[str] | None = None) -> None:
+        super().__init__(None if working_dir is None else Path(working_dir))
+
+
+class _LiteralRepo(git.Repo):
+    """A `git.Repo` whose git commands run in the directory it was opened at.
+
+    Opened with `expand_vars=False` and an absolute path, a repository path is
+    taken literally: neither a `$NAME` nor a leading `~` in it becomes the
+    value of the server's environment, in the directory opened, in where its
+    commands run, or in an error.
+    """
+
+    GitCommandWrapperType = _LiteralGit
+
+
 def create_server(repository: Path | None) -> MCPServer:
     """The git server, confined to `repository` when one is given."""
 
@@ -1491,15 +1942,30 @@ def create_server(repository: Path | None) -> MCPServer:
         subscriptions=False,
     )
 
+    # The git directories the root may use outside itself are fixed now, not
+    # read again from the root on each call.
+    if repository is not None and record_root_git_dirs(repository) is None:
+        logging.getLogger(__name__).warning(
+            f"{repository}: its Git directory is outside it and is not a "
+            "linked worktree's or a submodule's, so tool calls that use it "
+            "will be refused"
+        )
+
     def open_repo(repo_path: str) -> git.Repo:
         path = Path(repo_path)
         validate_repo_path(path, repository)
-        repo = git.Repo(path)
+        # Opened at exactly the path checked above. GitPython expands a leading
+        # `~` in a relative path whatever `expand_vars` says, so it is made
+        # absolute first, which leaves nothing for it to expand.
+        repo = _LiteralRepo(path.absolute(), expand_vars=False)
         try:
             # First, so that no git command run for the repository, the
             # confinement checks' included, runs a program it names.
             harden_repo(repo)
             validate_opened_repo(repo, path, repository)
+            if repository is not None:
+                # Last, once the directories it links to have been checked.
+                _read_own_objects_for_call(repo)
         except Exception:
             repo.close()
             raise
@@ -1516,7 +1982,12 @@ def create_server(repository: Path | None) -> MCPServer:
     def commit_message(
         repo_path: Annotated[str, Field(description="The path to the Git repository.")],
     ) -> str:
-        with _GIT_LOCK, reported_as_invalid_params(), open_repo(repo_path) as repo:
+        with (
+            _GIT_LOCK,
+            _one_call(),
+            reported_as_invalid_params(),
+            open_repo(repo_path) as repo,
+        ):
             return commit_message_prompt(repo)
 
     @server.prompt(
@@ -1539,7 +2010,12 @@ def create_server(repository: Path | None) -> MCPServer:
             ),
         ] = None,
     ) -> str:
-        with _GIT_LOCK, reported_as_invalid_params(), open_repo(repo_path) as repo:
+        with (
+            _GIT_LOCK,
+            _one_call(),
+            reported_as_invalid_params(),
+            open_repo(repo_path) as repo,
+        ):
             return summarize_changes_prompt(repo, target)
 
     @server.tool(
@@ -1596,8 +2072,9 @@ def create_server(repository: Path | None) -> MCPServer:
         structured_output=False,
     )
     @reports_failures
+    @writes_objects
     def commit(repo_path: str, message: str) -> str:
-        return git_commit(open_repo(repo_path), message)
+        return git_commit(open_repo(repo_path), message, allowed_repository=repository)
 
     @server.tool(
         name=GitTools.ADD.value,
@@ -1606,6 +2083,7 @@ def create_server(repository: Path | None) -> MCPServer:
         structured_output=False,
     )
     @reports_failures
+    @writes_objects
     def add(repo_path: str, files: Annotated[list[str], Field(min_length=1)]) -> str:
         return git_add(open_repo(repo_path), files)
 
@@ -1616,12 +2094,22 @@ def create_server(repository: Path | None) -> MCPServer:
         structured_output=False,
     )
     @reports_failures
+    @writes_objects
     def reset(repo_path: str) -> str:
         return git_reset(open_repo(repo_path))
 
     @server.tool(
         name=GitTools.LOG.value,
-        description="Shows the commit logs",
+        # #5552: small models read the old one-line description as "a time
+        # window is required" and filtered to an empty one. Say the order and
+        # that the filters are optional, where the model picks its arguments.
+        description=(
+            "Shows the commit log, newest commit first. For the latest "
+            "commits, pass only repo_path (and optionally max_count). "
+            "start_timestamp and end_timestamp are optional filters for a "
+            "date range: omit them unless a specific period is asked for, "
+            "because a range that holds no commits returns none."
+        ),
         annotations=READ_ONLY,
         structured_output=False,
     )
@@ -1638,19 +2126,33 @@ def create_server(repository: Path | None) -> MCPServer:
         start_timestamp: Annotated[
             str | None,
             Field(
-                description=f"Start timestamp for filtering commits. {TIMESTAMP_FORMATS}"
+                description=(
+                    "Optional: only show commits at or after this time. "
+                    f"Omit for no lower bound. {TIMESTAMP_FORMATS}"
+                )
             ),
         ] = None,
         end_timestamp: Annotated[
             str | None,
             Field(
-                description=f"End timestamp for filtering commits. {TIMESTAMP_FORMATS}"
+                description=(
+                    "Optional: only show commits at or before this time. "
+                    f"Omit for no upper bound. {TIMESTAMP_FORMATS}"
+                )
             ),
         ] = None,
     ) -> str:
         entries = git_log(
             open_repo(repo_path), max_count, start_timestamp, end_timestamp
         )
+        if not entries and (start_timestamp or end_timestamp):
+            # #5552: an empty history under a filter reads as "the repository
+            # has no commits". Name the filter as the cause and the way out.
+            return (
+                "Commit history:\n"
+                "No commits match the given start_timestamp/end_timestamp. "
+                "Omit both to see the latest commits."
+            )
         return "Commit history:\n" + "\n".join(entries)
 
     @server.tool(
@@ -1660,6 +2162,7 @@ def create_server(repository: Path | None) -> MCPServer:
         structured_output=False,
     )
     @reports_failures
+    @writes_objects
     def create_branch(
         repo_path: str,
         branch_name: str,
@@ -1683,8 +2186,11 @@ def create_server(repository: Path | None) -> MCPServer:
         structured_output=False,
     )
     @reports_failures
+    @writes_objects
     def checkout(repo_path: str, branch_name: str) -> str:
-        return git_checkout(open_repo(repo_path), branch_name)
+        return git_checkout(
+            open_repo(repo_path), branch_name, allowed_repository=repository
+        )
 
     @server.tool(
         name=GitTools.MERGE.value,
@@ -1697,6 +2203,7 @@ def create_server(repository: Path | None) -> MCPServer:
         structured_output=False,
     )
     @reports_failures
+    @writes_objects
     def merge(
         repo_path: str,
         source_branch: Annotated[
@@ -1715,7 +2222,12 @@ def create_server(repository: Path | None) -> MCPServer:
             ),
         ] = True,
     ) -> str:
-        return git_merge(open_repo(repo_path), source_branch, fast_forward_only)
+        return git_merge(
+            open_repo(repo_path),
+            source_branch,
+            fast_forward_only,
+            allowed_repository=repository,
+        )
 
     @server.tool(
         name=GitTools.SHOW.value,
@@ -1785,7 +2297,9 @@ async def serve(repository: Path | None, transport: str = "stdio") -> None:
             # Walk up to the enclosing working tree, like `git rev-parse
             # --show-toplevel`, so `--repository .` works from a subdirectory.
             root = Path(
-                git.Repo(repository, search_parent_directories=True).working_dir
+                git.Repo(
+                    repository, search_parent_directories=True, expand_vars=False
+                ).working_dir
             )
         except git.NoSuchPathError:
             logger.error(f"{repository} does not exist")

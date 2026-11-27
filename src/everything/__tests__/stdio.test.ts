@@ -66,6 +66,7 @@ describe("stdio transport", () => {
     expect(client.getProtocolEra()).toBe("modern");
     expect(client.getServerCapabilities()?.extensions).toEqual({
       "io.modelcontextprotocol/tasks": {},
+      "io.modelcontextprotocol/events": {},
     });
     const result = await client.callTool({
       name: "echo",

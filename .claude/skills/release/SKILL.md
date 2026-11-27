@@ -216,7 +216,7 @@ Then, on the PR:
    (that fires `pull_request`; they run on `push`). If a status does not
    appear, dispatch its workflow by hand:
    `gh workflow run typescript.yml --ref changeset-release/v2/main` (or
-   `python.yml`, `dco.yml`, `everything-mcp-diff.yml`).
+   `python.yml`, `dco.yml`, `mcp-interface-diff.yml`).
 3. **Read it**: each bump matches the semver policy in `RELEASING.md`, each
    `CHANGELOG.md` entry says what a user of the server needs to know, the
    consumed changeset files are deleted, and `package-lock.json` records the
@@ -721,6 +721,12 @@ skip. Approve the packages whose build leg passed. One failed build leg does
 not hold the others back; that package is handled as a failed publish
 (`RELEASING.md` **When a publish fails**).
 
+**One more approval arrives after the packages publish**: `Publish to the MCP
+Registry`, which lists each published version in the MCP Registry. It cannot
+be approved with the others, because it only starts once they finish, so come
+back for it. Its failure does not touch the packages (`RELEASING.md` **The MCP
+Registry**).
+
 ## 6. After it publishes
 
 ```sh
@@ -737,6 +743,16 @@ done
 
 A freshly published npm version can take a few minutes to appear. Query the
 exact version, as above, never `dist-tags`.
+
+Then each server's MCP Registry entry at that version: 200 means listed.
+
+```sh
+node scripts/mcp-registry-entries.mjs | jq -r '.[] | "\(.name) \(.version)"' |
+  while read -r name version; do
+    echo "$name $version $(curl -s -o /dev/null -w '%{http_code}' \
+      "https://registry.modelcontextprotocol.io/v0/servers/${name/\//%2F}/versions/$version")"
+  done
+```
 
 ### The first semver release only: deprecate the date-stamped versions
 

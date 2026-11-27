@@ -275,7 +275,7 @@ of the server's stderr. Re-run a subset with
 
 ### `interface-diff`
 
-The last stage diffs the MCP interface (capabilities, tools, prompts,
+This stage diffs the MCP interface (capabilities, tools, prompts,
 resources, resource templates) of each server the change touches, in this
 checkout's build, against the same server built from the merge-base with
 `origin/v2/main`, and prints one report per server. Each report says why that
@@ -307,6 +307,39 @@ would select and why. What
 it compares against in CI, and why it is a script rather than an action, is
 in [`docs/quality-gate.md`](../../../docs/quality-gate.md) and the header of
 `scripts/interface-diff.mjs`.
+
+### `image-smoke`
+
+The last stage builds the Docker image of each server the change touches,
+boots it with `docker run -i`, lists its tools, and (for `everything` and
+`memory`) stops it with `docker stop`. A change that touches no image prints
+`nothing to build` and passes without Docker. What selects an image is in
+[`docs/quality-gate.md`](../../../docs/quality-gate.md). A failure is
+`image-smoke — FAIL  <server>` and the reason:
+
+- **"no Docker daemon answered"**: the change touches an image and Docker is
+  not running. Start it and re-run; the stage never skips.
+- **"`docker build …` failed"**, with the tail of the build log: the
+  Dockerfile no longer builds from this checkout. The usual causes are a file
+  the Dockerfile copies that moved or is excluded by its
+  `Dockerfile.dockerignore`, a lockfile out of step with a manifest
+  (`npm ci`, `uv sync --locked`), or, offline, a layer Docker has not cached.
+- **"Connection closed"** or a timeout, with the container's stderr: the
+  image built but its entrypoint did not start the server. Run it by hand:
+  `docker run -i --rm mcp-image-smoke/<server>:local`.
+- **"tools/list does not include …"**: as for `smoke`; the tool the image is
+  checked for is in `IMAGES` in `scripts/image-smoke.mjs`.
+- **"`docker stop` had to kill it"**: the server did not exit on the image's
+  stop signal. Check the Dockerfile's `STOPSIGNAL` and the server's signal
+  handlers.
+- **"/data holds […] after the stop"**: `memory` left a lock or temporary
+  file behind, or lost the write.
+- **A new Dockerfile fails `test:scripts`** with "every Dockerfile in the
+  repo has an image entry": add it to `IMAGES`.
+
+Re-run it on its own with `npm run image-smoke`, `-- --server <name>` for one
+image, `-- --all` for all seven, or `-- --list` to see what it would select
+and why.
 
 ## Waiting on the lease
 

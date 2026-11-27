@@ -17,7 +17,8 @@
 // - 2026-07-28: there is no `initialize`, and each request carries the
 //   client's capabilities in its `_meta`, so the capability-gated tools are
 //   registered up front and the SDK refuses an embedded request the client
-//   did not declare (-32021). The tasks extension is served here only.
+//   did not declare (-32021). The tasks and events extensions are served here
+//   only.
 
 import {
   createRequestStateCodec,
@@ -33,6 +34,7 @@ import {
 } from "../tools/index.js";
 import { registerResources, readInstructions } from "../resources/index.js";
 import { registerPrompts } from "../prompts/index.js";
+import { EVENTS_EXTENSION, registerEventsExtension } from "./events.js";
 import {
   guardTaskTools,
   registerTasksExtension,
@@ -148,9 +150,13 @@ export const createServer = (
         // eras: 2025-era clients set the level with `logging/setLevel`,
         // 2026-07-28 clients per request in `_meta`.
         logging: {},
-        // The tasks extension (`io.modelcontextprotocol/tasks`) is
-        // advertised on 2026-07-28 only, where it is served.
-        ...(era === "modern" && { extensions: { [TASKS_EXTENSION]: {} } }),
+        // The tasks (`io.modelcontextprotocol/tasks`) and events
+        // (`io.modelcontextprotocol/events`) extensions are advertised on
+        // 2026-07-28 only, where they are served. Events sends no
+        // list_changed notifications: its event types never change.
+        ...(era === "modern" && {
+          extensions: { [TASKS_EXTENSION]: {}, [EVENTS_EXTENSION]: {} },
+        }),
       },
       instructions,
       cacheHints: CACHE_HINTS,
@@ -185,9 +191,11 @@ export const createServer = (
 
   if (era === "modern") {
     // Each request carries the client's capabilities, so the tools that need
-    // one are registered up front, along with the tasks extension.
+    // one are registered up front, along with the tasks and events
+    // extensions.
     registerModernTools(server, context);
     registerTasksExtension(server);
+    registerEventsExtension(server, context);
   } else {
     registerLegacyTools(server, context);
     setSubscriptionHandlers(server, context.subscribed);

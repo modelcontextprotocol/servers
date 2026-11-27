@@ -78,9 +78,18 @@ describe("KnowledgeGraphManager persistence durability", () => {
     expect(before).toContain("Alice");
 
     // Simulate the process being interrupted while persisting the next write.
-    vi.spyOn(fs, "writeFile").mockImplementationOnce(async () => {
-      throw new Error("ENOSPC: simulated interruption");
-    });
+    const realOpen = fs.open;
+    vi.spyOn(fs, "open").mockImplementation((async (
+      ...args: Parameters<typeof fs.open>
+    ) => {
+      const handle = await realOpen(...args);
+      if (String(args[0]).endsWith(".tmp")) {
+        handle.writeFile = async () => {
+          throw new Error("ENOSPC: simulated interruption");
+        };
+      }
+      return handle;
+    }) as typeof fs.open);
 
     await expect(
       manager.createEntities([

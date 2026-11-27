@@ -9,7 +9,8 @@
 // - `registerModernTools`: 2026-07-28 clients. Their capabilities arrive with
 //   each request, so the capability-gated tools are registered up front and the
 //   SDK refuses an embedded request the client did not declare (-32021); the
-//   task tools are served only here, on the tasks extension.
+//   task tools are served only here, on the tasks extension, and so is
+//   `trigger-event`, which drives the events extension.
 
 import { McpServer } from "@modelcontextprotocol/server";
 import type { ServerContext } from "../server/context.js";
@@ -29,6 +30,7 @@ import { registerToggleSimulatedLoggingTool } from "./toggle-simulated-logging.j
 import { registerToggleSubscriberUpdatesTool } from "./toggle-subscriber-updates.js";
 import { registerTriggerElicitationRequestAsyncTool } from "./trigger-elicitation-request-async.js";
 import { registerTriggerElicitationRequestTool } from "./trigger-elicitation-request.js";
+import { registerTriggerEventTool } from "./trigger-event.js";
 import { registerTriggerListChangedTool } from "./trigger-list-changed.js";
 import { registerTriggerLogMessagesTool } from "./trigger-log-messages.js";
 import { registerTriggerLongRunningOperationTool } from "./trigger-long-running-operation.js";
@@ -108,7 +110,8 @@ export const registerConditionalTools = (
 
 /**
  * Register the tools a 2026-07-28 client gets beyond the common ones: the
- * capability-gated tools, registered up front, and the task tools.
+ * capability-gated tools, registered up front, the task tools, and the
+ * events extension's trigger-event.
  * @param server
  * @param context
  */
@@ -124,4 +127,5 @@ export const registerModernTools = (
   registerSimulateResearchQueryTool(server);
   registerTriggerSamplingRequestAsyncTool(server);
   registerTriggerElicitationRequestAsyncTool(server);
+  registerTriggerEventTool(server);
 };

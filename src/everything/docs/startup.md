@@ -34,6 +34,7 @@
   - **Streamable HTTP**: one `/mcp` endpoint for both eras.
     - **2026-07-28**: a session-less **POST** carrying the per-request `_meta` envelope is served by the SDK's `createMcpHandler`, which builds a fresh server per request with `createServer({ era: "modern", publish })`. There are no sessions. Change notifications are published on the handler's subscription bus (`publish`), which reaches every open `subscriptions/listen` stream.
     - **2025 era**: everything else, classified by the SDK's `isLegacyRequest`, keeps the sessionful wiring: a server per session, created on the `initialize` **POST**, with **GET** for the standalone SSE stream and **DELETE** to end the session. Transports are stored by `sessionId`, an event store makes streams resumable, and the session's `cleanup()` runs when it closes. Sessionful serving keeps the server-to-client channel the legacy shim needs for elicitation, sampling and roots.
+    - A 2025-era session with no request in flight and no stream open for `SESSION_IDLE_TIMEOUT_MILLIS` (default 30 minutes; `0` disables it) is closed by the server, as if its client had sent the DELETE; its next request is answered `404`.
     - A session-less POST's body is parsed once (up to 4 MiB) to classify it and serve it.
   - **SSE** and **Streamable HTTP** bind their port (`PORT`, default `3001`) through `listenOrExit()` in `transports/listen.ts`.
     - The listening line is printed only once the port is bound.
@@ -48,7 +49,7 @@
     - `logging: {}`
     - `prompts: { listChanged: true }`
     - `resources: { subscribe: true, listChanged: true }`
-    - `extensions: { "io.modelcontextprotocol/tasks": {} }` (2026-07-28 only)
+    - `extensions: { "io.modelcontextprotocol/tasks": {}, "io.modelcontextprotocol/events": {} }` (2026-07-28 only)
   - **Server Instructions**
     - Loaded from the docs folder (`instructions.md`).
   - **Options**
@@ -56,7 +57,7 @@
     - The `requestState` verifier for multi-round tools (`roundStateCodec`).
   - **Registrations**
     - Builds a per-instance **context** (`server/context.ts`): the era, where change notifications go, the 2025-era resource subscriptions, and a cleanup registry.
-    - Registers **tools** via `registerTools(server, context)`, and then by era: `registerModernTools` and the tasks extension (`server/tasks.ts`) for 2026-07-28; `registerLegacyTools` now and `registerConditionalTools` once the client has initialized, for the 2025 era.
+    - Registers **tools** via `registerTools(server, context)`, and then by era: `registerModernTools` and the tasks and events extensions (`server/tasks.ts`, `server/events.ts`) for 2026-07-28; `registerLegacyTools` now and `registerConditionalTools` once the client has initialized, for the 2025 era.
     - Registers **resources** via `registerResources(server, context)`.
     - Registers **prompts** via `registerPrompts(server)`.
   - **Other Request Handlers** (2025 era)

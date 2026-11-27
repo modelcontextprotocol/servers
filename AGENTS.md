@@ -53,18 +53,18 @@ servers/
 ├── .claude/skills/            On-demand procedures (see the Skills index above)
 ├── .claude/settings.json     The SessionStart hook that checks this session's instructions are current
 ├── .changeset/               Pending changesets for the TypeScript servers, and the changesets config
-├── scripts/                  The pre-push gate (gate-lease, smoke-servers, validate-py, coverage-py, interface-diff), its guards (verify-*),
+├── scripts/                  The pre-push gate (gate-lease, smoke-servers, validate-py, coverage-py, interface-diff, image-smoke), its guards (verify-*),
 │                             the skills tooling, release tooling (npm-publish-guard, prepare-python-release,
-│                             pack-and-verify, release-manifest, release-notes), and the issue-filing sweeps
+│                             pack-and-verify, release-manifest, mcp-registry-entries, release-notes), and the issue-filing sweeps
 │                             (dependency-refresh, dependabot-alerts, sdk-watch), and the session-start
 │                             instructions check (session-instructions-check)
 ├── docs/                     Design documents; quality-gate.md is the gate's reference (stages, CI vs local, the lease);
 │                             contribution-model.md holds the outside-PR backlog plan; ai-software-factory.md is the
 │                             overview of how the rules, skills, gates and sweeps fit together
-├── .github/workflows/        typescript.yml, python.yml (per-package CI), release.yml (publishes on a GitHub Release),
+├── .github/workflows/        typescript.yml, python.yml (per-package CI), release.yml (publishes on a GitHub Release, then lists each server in the MCP Registry),
 │                             version-packages.yml (the changesets PR), prepare-python-release.yml (the CalVer PR),
-│                             everything-mcp-diff.yml (each changed server's interface diff on PRs),
-│                             mcp-interface-diff.yml (a dispatch-only placeholder for that file's new name, #5463),
+│                             mcp-interface-diff.yml (each changed server's interface diff on PRs),
+│                             image-smoke.yml (each changed server's Docker image, built and booted),
 │                             main-source.yml (a PR into main must bring nothing that is not on v2/main),
 │                             and the scheduled sweeps that file issues: dependency-refresh.yml, dependabot-alerts.yml, sdk-watch.yml
 ├── .github/ISSUE_TEMPLATE/   Bug and feature issue forms; config.yml routes security and new servers away
@@ -139,14 +139,17 @@ TypeScript workspace's per-file coverage gate), `validate:py`
 (each Python server's locked sync, `ruff check`, `ruff format --check`,
 pyright, pytest and build), `coverage:py` (each Python server's per-file
 coverage gate), `verify:skills:cli`, `smoke` (every server booted over each
-transport it implements), and `interface-diff` (the MCP interface of each
-server the change touches, diffed against the base it branched from). The stage-by-stage
+transport it implements), `interface-diff` (the MCP interface of each
+server the change touches, diffed against the base it branched from), and
+`image-smoke` (the Docker image of each server the change touches, built,
+booted and stopped; it needs a running Docker daemon when a change touches
+one). The stage-by-stage
 reference, and what CI runs where, is [`docs/quality-gate.md`](./docs/quality-gate.md);
 diagnosing a red stage is the `pre-push-gate` skill.
 
 - **`npm run validate` and the per-package commands above are the inner loop,
   not a substitute.** They skip the other language, the pinned skills validator,
-  the boot smoke and the interface diff.
+  the boot smoke, the interface diff and the image smoke.
 - **Format before committing**: `npm run format` at the root (TypeScript), and
   `uv run --frozen ruff format .` in a Python server you changed. The gate only
   checks formatting; it never rewrites files.
@@ -314,6 +317,15 @@ maintainer publishes a GitHub Release), never a side effect of a merge.
 - **A TypeScript server reports its version from its `package.json`** (the
   `SERVER_VERSION` its `version.ts` exports), never from a literal in the
   source: the version PR edits `package.json` only.
+- **A server's `server.json` is its MCP Registry entry, and carries no
+  version.** `release.yml` stamps it from the manifest and registers it after
+  the package publishes (`scripts/mcp-registry-entries.mjs`). Its `name` is the
+  `mcpName` in the server's `package.json`, or the `mcp-name:` marker in a
+  Python server's `README.md`: the registry verifies the entry against the
+  published package, so the two change together, and the script tests fail
+  when they differ. **Never rename a registered server**: a published
+  entry cannot be edited, so the old name would stay behind as a separate
+  entry that nothing updates.
 
 ## Contributing
 
@@ -600,6 +612,19 @@ here.
     declined finding that is worth doing gets its own issue, linked in the
     reply. The rule is under
     [Responding to code reviews](#responding-to-code-reviews).
+- **Before a PR merges, it is caught up and re-tested if `v2/main` moved in a
+  way that can interact with it.** GitHub reporting no conflicts is not that
+  test: it compares text, and the gate and CI ran on the PR's head, which
+  holds nothing that landed on `v2/main` after the branch last took it in. Two
+  fetch PRs that were each green left `v2/main` red that way (#5569). What
+  landed **can interact** when it touches a server directory
+  (`src/<server>/`) the PR also touches, or when either side touches
+  repository-wide configuration: a root manifest, lockfile or configuration
+  file, `scripts/`, or `.github/workflows/`. When in doubt, re-test. Catching
+  up is a merge of `origin/v2/main` into the branch, never a rebase, then the
+  gate, a push, and green CI on the new head. `v2/main`'s ruleset requires no
+  status checks, so this is on whoever merges. The recipe is the `pr-flow`
+  skill (step 10).
 - **If new tasks are discovered during development, create issues** for them
   and put them on the board, rather than widening the current PR.
 
