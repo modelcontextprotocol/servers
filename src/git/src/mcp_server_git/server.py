@@ -963,6 +963,65 @@ def validate_repo_path(repo_path: Path, allowed_repository: Path | None) -> None
         )
 
 
+# The git directory and common directory of each `--repository` root, as
+# `record_root_git_dirs` found them when its server was created, or None when
+# the root may use no git directory outside itself. Fixing the pair then, rather
+# than reopening the root on every call, keeps a `.git` or `commondir` written
+# into the root afterwards from naming a different repository as its own.
+_ROOT_GIT_DIRS: dict[Path, tuple[Path, Path] | None] = {}
+
+
+def record_root_git_dirs(allowed_repository: Path) -> tuple[Path, Path] | None:
+    """Record the git directories the `--repository` root may use outside itself.
+
+    A root's git directory and common directory are its own when both lie
+    inside it, or when it is a linked worktree: its git directory is
+    `<common dir>/worktrees/<name>`, and that directory's `gitdir` file, which
+    `git worktree add` writes in the main repository, names the root's `.git`.
+    Any other git directory outside the root (a `.git` file naming another
+    repository, a `commondir` outside, `git init --separate-git-dir`) is not
+    the root's own, since nothing outside the root confirms it: None is
+    recorded, and every call that would use it is refused.
+    """
+    allowed = allowed_repository.resolve()
+    own: tuple[Path, Path] | None = None
+    try:
+        with git.Repo(allowed, expand_vars=False) as repo:
+            harden_repo(repo)
+            git_dir, common_dir = (
+                Path(p).resolve()
+                for p in repo.git.rev_parse(
+                    "--path-format=absolute", "--git-dir", "--git-common-dir"
+                ).splitlines()
+            )
+            seen_by_gitpython = (
+                Path(repo.git_dir).resolve(),
+                Path(repo.common_dir).resolve(),
+            )
+    except (git.GitError, OSError, ValueError):
+        pass
+    else:
+        if seen_by_gitpython == (git_dir, common_dir) and (
+            (git_dir.is_relative_to(allowed) and common_dir.is_relative_to(allowed))
+            or _is_linked_worktree_of(allowed, git_dir, common_dir)
+        ):
+            own = (git_dir, common_dir)
+    _ROOT_GIT_DIRS[allowed_repository] = own
+    return own
+
+
+def _is_linked_worktree_of(allowed: Path, git_dir: Path, common_dir: Path) -> bool:
+    """Whether `git_dir` is the main repository's record of worktree `allowed`."""
+    if git_dir.parent != common_dir / "worktrees":
+        return False
+    try:
+        named = (git_dir / "gitdir").read_text(encoding="utf-8").strip()
+    except OSError:
+        return False
+    # Relative when written with `worktree.useRelativePaths`.
+    return (git_dir / named).resolve() == allowed / ".git"
+
+
 def validate_opened_repo(
     repo: git.Repo, repo_path: Path, allowed_repository: Path | None
 ) -> None:
@@ -973,8 +1032,9 @@ def validate_opened_repo(
     a directory anywhere else, so the working tree, git directory and common
     directory git actually uses are checked too. The working tree must lie
     inside the allowed repository. The two git directories must lie inside it,
-    or be the allowed repository's own as a pair, opened from the allowed
-    repository itself: a linked worktree's git directory lives under the main
+    or be the allowed repository's own as a pair (`record_root_git_dirs`,
+    fixed when the server is created), opened from the allowed repository
+    itself: a linked worktree's git directory lives under the main
     repository's `.git`, outside the worktree it serves, and only that
     worktree may use it. A repository nested inside a linked worktree whose
     `.git` names the main repository's git directory is refused.
@@ -1017,14 +1077,16 @@ def validate_opened_repo(
         p for p in git_dirs + common_dirs if not p.resolve().is_relative_to(allowed)
     ]
     if escaped:
-        with git.Repo(allowed) as allowed_repo:
-            own_git_dir = Path(allowed_repo.git_dir).resolve()
-            own_common_dir = Path(allowed_repo.common_dir).resolve()
+        if allowed_repository in _ROOT_GIT_DIRS:
+            own = _ROOT_GIT_DIRS[allowed_repository]
+        else:
+            own = record_root_git_dirs(allowed_repository)
         is_own = (
-            bool(working_trees)
+            own is not None
+            and bool(working_trees)
             and all(Path(w).resolve() == allowed for w in working_trees)
-            and all(p.resolve() == own_git_dir for p in git_dirs)
-            and all(p.resolve() == own_common_dir for p in common_dirs)
+            and all(p.resolve() == own[0] for p in git_dirs)
+            and all(p.resolve() == own[1] for p in common_dirs)
         )
         if not is_own:
             raise outside(escaped[0])
@@ -1541,6 +1603,11 @@ def create_server(repository: Path | None) -> MCPServer:
         # served, and the 2026-07-28 capabilities say so (listChanged false).
         subscriptions=False,
     )
+
+    if repository is not None:
+        # The git directories the root may use outside itself are fixed now,
+        # not read again from the root on each call.
+        record_root_git_dirs(repository)
 
     def open_repo(repo_path: str) -> git.Repo:
         path = Path(repo_path)
