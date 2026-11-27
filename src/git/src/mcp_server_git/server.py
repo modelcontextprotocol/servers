@@ -663,8 +663,11 @@ def _rewrite_tree(
     command: str,
     *args: str,
     allowed_repository: Path | None = None,
+    config: str | None = None,
 ) -> str:
     """Run `git <command> <args>`, which writes the working tree, then re-check.
+
+    `config`, a `name=value`, is passed as `git -c` for this command only.
 
     `harden_repo` reads the repository's configuration when the call opens
     the repository, but that configuration can depend on the working tree: an
@@ -694,7 +697,8 @@ def _rewrite_tree(
     stay inside, the cleanup included, so the tree stays as written.
     """
     try:
-        return getattr(repo.git, command)(*args)
+        runner = repo.git(c=config) if config is not None else repo.git
+        return getattr(runner, command)(*args)
     finally:
         try:
             harden_repo(repo)
@@ -787,6 +791,98 @@ def _merge_failure(
     return f"{what} failed. {unchanged} Git reported:\n{_git_stderr(error)}"
 
 
+def _on_disk_spelling(root: Path, path: str) -> str:
+    """`path`, an existing entry under `root`, as the directory listings spell it.
+
+    On a case-insensitive or normalization-insensitive filesystem (macOS,
+    Windows) the path a source tracks can name an entry whose name is spelled
+    differently (`.ENV` for `.env`, or decomposed for precomposed Unicode).
+    Git matches a pathspec to its own spelling, so each component is replaced
+    with the listed name of the same file (by device and inode).
+    """
+    parent = root
+    spelled: list[str] = []
+    for name in path.split("/"):
+        names = os.listdir(parent)
+        if name not in names:
+            wanted = os.lstat(parent / name)
+            name = next(
+                entry
+                for entry in names
+                if os.path.samestat(os.lstat(parent / entry), wanted)
+            )
+        spelled.append(name)
+        parent = parent / name
+    return "/".join(spelled)
+
+
+def _ignored_files_overwritten(repo: git.Repo, head: str, source: str) -> list[str]:
+    """The ignored files in the working tree a merge of `source` would replace.
+
+    Git does not honor `--no-overwrite-ignore` when it makes a merge commit (a
+    fast-forward does), so `git_merge` checks before it runs. The tree is
+    clean, so every untracked path is one HEAD does not track, and the merge
+    writes only such a path when it is one of:
+
+    - a path the source tracks and HEAD does not. This includes one HEAD
+      deleted since the merge base: if the source changed it, the
+      modify/delete conflict writes the source's version, so it must be
+      counted, not filtered out against the merge base. (The merge runs with
+      `merge.directoryRenames=false`, so git does not move a path the source
+      adds into a directory HEAD renamed, a path in neither tree.)
+    - the side name of a file/directory conflict: HEAD's file `<path>` moved
+      to `<path>~HEAD`, or the source's to `<path>~<source sha>`.
+
+    For each, what is in the way is whatever exists there (a file, a link, or
+    a directory and everything in it) or the nearest existing ancestor that is
+    not a directory. The ignored files among those are returned; an untracked
+    file that is not ignored is left for git to refuse, as it does.
+    """
+    root = Path(repo.working_dir)
+    changes = repo.git.diff_tree(
+        "-r", "-z", "--no-renames", "--name-status", "--diff-filter=AD", head, source
+    ).split("\0")
+    added: set[str] = set()
+    deleted: set[str] = set()
+    for status, path in zip(changes[0::2], changes[1::2]):
+        (added if status == "A" else deleted).add(path)
+    deleted_dirs = {
+        "/".join(parts[:depth])
+        for parts in (path.split("/") for path in deleted)
+        for depth in range(1, len(parts))
+    }
+    written = set(added)
+    for path in added:
+        parts = path.split("/")
+        for depth in range(1, len(parts)):
+            if (prefix := "/".join(parts[:depth])) in deleted:
+                written.add(f"{prefix}~HEAD")
+        if path in deleted_dirs:
+            written.add(f"{path}~{source}")
+    in_the_way: set[str] = set()
+    for path in written:
+        parts = path.split("/")
+        for depth in range(1, len(parts) + 1):
+            prefix = "/".join(parts[:depth])
+            target = root / prefix
+            if not os.path.lexists(target):
+                break
+            if depth == len(parts) or target.is_symlink() or not target.is_dir():
+                in_the_way.add(_on_disk_spelling(root, prefix))
+                break
+    if not in_the_way:
+        return []
+    listed = repo.git.ls_files(
+        "-z",
+        "--others",
+        "--ignored",
+        "--exclude-standard",
+        "--",
+        *(f":(top,literal){path}" for path in sorted(in_the_way)),
+    )
+    return sorted(filter(None, listed.split("\0")))
+
+
 def git_merge(
     repo: git.Repo,
     source_branch: str,
@@ -852,6 +948,9 @@ def git_merge(
     # for it (see `_LISTED_KEYS`). --no-overwrite-ignore refuses to
     # replace an ignored local file (a `.env`, say) that the source tracks:
     # `is_dirty()` cannot see one, and git would overwrite it unrecoverably.
+    # Git honors it only on a fast-forward, so a merge commit is checked
+    # first (`_ignored_files_overwritten`), and runs with directory-rename
+    # detection off, so it writes no path that check cannot predict.
     #
     # Git is given the commit validated above, not the name: a name can stand
     # for more than one commit (`git merge FETCH_HEAD` merges every head
@@ -859,6 +958,15 @@ def git_merge(
     # With a sha, git's default message would name the sha, so the message
     # names what the caller asked for.
     mode = "--ff-only" if fast_forward_only else "--ff"
+    what = f"Merge of '{source_branch}' into '{target}'"
+    if not fast_forward:
+        ignored = _ignored_files_overwritten(repo, head.hexsha, source.hexsha)
+        if ignored:
+            raise ValueError(
+                f"{what} refused: it would overwrite ignored local files: "
+                f"{', '.join(ignored)}. Nothing was changed. Move or remove "
+                "them first."
+            )
     try:
         _rewrite_tree(
             repo,
@@ -874,9 +982,9 @@ def git_merge(
             f"Merge '{source_branch}' into '{target}'",
             source.hexsha,
             allowed_repository=allowed_repository,
+            config="merge.directoryRenames=false",
         )
     except git.GitCommandError as e:
-        what = f"Merge of '{source_branch}' into '{target}'"
         raise ValueError(_merge_failure(repo, e, what, allowed_repository)) from e
     merged = repo.head.commit
     if fast_forward:

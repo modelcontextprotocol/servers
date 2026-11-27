@@ -8,6 +8,8 @@ real server through a client (`conftest.connect`) and checks both the reply
 and the repository afterwards.
 """
 
+import os
+import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -263,6 +265,200 @@ async def test_ignored_file_the_source_tracks_is_not_overwritten(repo: git.Repo)
     assert "would be overwritten by merge" in result["content"][0]["text"]
     assert repo.head.commit.hexsha == head
     assert (root_of(repo) / ".env").read_text() == "SECRET=local\n"
+
+
+def ignored_local(repo: git.Repo, ignore: str, tracked: dict[str, str]) -> str:
+    """Ignore `ignore` on main, track `tracked` on a diverged `feature`.
+
+    Leaves `main` checked out with one commit of its own, so merging
+    `feature` makes a merge commit. Returns main's head sha.
+    """
+    commit_file(repo, ".gitignore", ignore)
+    repo.git.checkout("-b", "feature")
+    for name, content in tracked.items():
+        path = root_of(repo) / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, newline="\n")
+        repo.git.add("-f", name)
+    repo.index.commit("track ignored paths")
+    repo.git.checkout("main")
+    return commit_file(repo, "main.txt", "main\n").hexsha
+
+
+async def test_merge_commit_refuses_to_overwrite_an_ignored_file(repo: git.Repo):
+    # Git does not honor --no-overwrite-ignore when it makes a merge commit,
+    # so the tool checks the incoming paths itself before git runs.
+    head = ignored_local(repo, ".env\n", {".env": "tracked\n"})
+    (root_of(repo) / ".env").write_text("SECRET=local\n")
+
+    result = await merge(repo, "feature", fast_forward_only=False)
+
+    assert result == tool_error(
+        "git_merge",
+        "Merge of 'feature' into 'main' refused: it would overwrite ignored "
+        "local files: .env. Nothing was changed. Move or remove them first.",
+    )
+    assert repo.head.commit.hexsha == head
+    assert not (Path(repo.git_dir) / "MERGE_HEAD").exists()
+    assert (root_of(repo) / ".env").read_text() == "SECRET=local\n"
+
+
+async def test_merge_commit_refuses_ignored_files_in_a_directory_it_replaces(
+    repo: git.Repo,
+):
+    # The source tracks a file where an ignored directory is, and a file
+    # under an ignored file: both would destroy the ignored content.
+    head = ignored_local(
+        repo, "cache\nlocal.cfg\n", {"cache": "file\n", "local.cfg/x": "x\n"}
+    )
+    (root_of(repo) / "cache").mkdir()
+    (root_of(repo) / "cache" / "data").write_text("keep\n")
+    (root_of(repo) / "local.cfg").write_text("keep\n")
+
+    result = await merge(repo, "feature", fast_forward_only=False)
+
+    assert result == tool_error(
+        "git_merge",
+        "Merge of 'feature' into 'main' refused: it would overwrite ignored "
+        "local files: cache/data, local.cfg. Nothing was changed. Move or "
+        "remove them first.",
+    )
+    assert repo.head.commit.hexsha == head
+    assert (root_of(repo) / "cache" / "data").read_text() == "keep\n"
+    assert (root_of(repo) / "local.cfg").read_text() == "keep\n"
+
+
+async def test_merge_commit_into_an_ignored_directory_is_allowed(repo: git.Repo):
+    # A new file inside an ignored directory replaces nothing that is there.
+    ignored_local(repo, "build/\n", {"build/tracked.txt": "tracked\n"})
+    (root_of(repo) / "build").mkdir()
+    (root_of(repo) / "build" / "local.txt").write_text("keep\n")
+
+    result = await merge(repo, "feature", fast_forward_only=False)
+
+    assert result == text_result(
+        f"Merged 'feature' into 'main' with merge commit {repo.head.commit.hexsha[:7]}"
+    )
+    assert (root_of(repo) / "build" / "local.txt").read_text() == "keep\n"
+    assert (root_of(repo) / "build" / "tracked.txt").read_text() == "tracked\n"
+
+
+def refused(*paths: str) -> dict[str, Any]:
+    return tool_error(
+        "git_merge",
+        "Merge of 'feature' into 'main' refused: it would overwrite ignored "
+        f"local files: {', '.join(paths)}. Nothing was changed. Move or remove "
+        "them first.",
+    )
+
+
+@pytest.mark.parametrize("renames", [None, "true"])
+async def test_merge_commit_does_not_follow_a_directory_rename_onto_an_ignored_file(
+    repo: git.Repo, renames: str | None
+):
+    # HEAD renamed d/ to e/ since the fork, and the source adds d/new. With
+    # directory-rename detection git would write e/new, a path in neither
+    # tree; the tool turns it off, so the file lands at d/new.
+    commit_file(repo, ".gitignore", "new\n")
+    (root_of(repo) / "d").mkdir()
+    commit_file(repo, "d/kept.txt", "kept\n")
+    repo.git.checkout("-b", "feature")
+    commit_file(repo, "d/new", "feature\n")
+    repo.git.checkout("main")
+    repo.git.mv("d", "e")
+    repo.index.commit("rename d to e")
+    if renames is not None:
+        with repo.config_writer() as config:
+            config.set_value("merge", "directoryRenames", renames)
+    (root_of(repo) / "e" / "new").write_text("LOCAL\n")
+
+    result = await merge(repo, "feature", fast_forward_only=False)
+
+    assert result == text_result(
+        f"Merged 'feature' into 'main' with merge commit {repo.head.commit.hexsha[:7]}"
+    )
+    assert (root_of(repo) / "e" / "new").read_text() == "LOCAL\n"
+    assert (root_of(repo) / "d" / "new").read_text() == "feature\n"
+
+
+async def test_merge_commit_refuses_an_ignored_file_at_a_file_directory_side_name(
+    repo: git.Repo,
+):
+    # HEAD tracks a file p where the source tracks a directory p/: git moves
+    # HEAD's file to p~HEAD, which would replace an ignored file of that name.
+    commit_file(repo, ".gitignore", "*~*\n")
+    repo.git.checkout("-b", "feature")
+    (root_of(repo) / "p").mkdir()
+    commit_file(repo, "p/x", "feature\n")
+    repo.git.checkout("main")
+    head = commit_file(repo, "p", "main\n").hexsha
+    (root_of(repo) / "p~HEAD").write_text("LOCAL\n")
+
+    assert await merge(repo, "feature", fast_forward_only=False) == refused("p~HEAD")
+    assert repo.head.commit.hexsha == head
+    assert (root_of(repo) / "p~HEAD").read_text() == "LOCAL\n"
+
+
+async def test_merge_commit_refuses_an_ignored_file_at_the_source_side_name(
+    repo: git.Repo,
+):
+    # The other way round: the source's file q moves to q~<source sha>.
+    commit_file(repo, ".gitignore", "*~*\n")
+    repo.git.checkout("-b", "feature")
+    sha = commit_file(repo, "q", "feature\n").hexsha
+    repo.git.checkout("main")
+    (root_of(repo) / "q").mkdir()
+    head = commit_file(repo, "q/y", "main\n").hexsha
+    (root_of(repo) / f"q~{sha}").write_text("LOCAL\n")
+
+    assert await merge(repo, "feature", fast_forward_only=False) == refused(f"q~{sha}")
+    assert repo.head.commit.hexsha == head
+    assert (root_of(repo) / f"q~{sha}").read_text() == "LOCAL\n"
+
+
+def spelling_insensitive(directory: Path, stored: str, other: str) -> bool:
+    """Whether the filesystem under `directory` finds `stored` as `other`."""
+    probe = directory / stored
+    probe.write_text("")
+    try:
+        return (directory / other).exists() and other not in os.listdir(directory)
+    finally:
+        probe.unlink()
+
+
+NFC = unicodedata.normalize("NFC", "caf\u00e9.env")
+NFD = unicodedata.normalize("NFD", NFC)
+
+
+@pytest.mark.parametrize(
+    ("local", "tracked"), [(".env", ".ENV"), (NFC, NFD)], ids=["case", "unicode"]
+)
+async def test_merge_commit_refuses_an_ignored_file_spelled_differently(
+    repo: git.Repo, local: str, tracked: str
+):
+    # On a case- or normalization-insensitive filesystem the source's spelling
+    # names the same file; the check matches it by identity, not by name.
+    if not spelling_insensitive(root_of(repo), local, tracked):
+        pytest.skip("the filesystem tells these spellings apart")
+    commit_file(repo, ".gitignore", "*.env\n.env\n")
+    repo.git.checkout("-b", "feature")
+    (root_of(repo) / tracked).write_text("feature\n")
+    repo.git.add("-f", "--", tracked)
+    repo.index.commit("track")
+    (root_of(repo) / tracked).unlink()
+    repo.git.checkout("main")
+    head = commit_file(repo, "main.txt", "main\n").hexsha
+    (root_of(repo) / local).write_text("LOCAL\n")
+
+    result = await merge(repo, "feature", fast_forward_only=False)
+
+    assert result["isError"] is True
+    assert (
+        "refused: it would overwrite ignored local files"
+        in (result["content"][0]["text"])
+    )
+    assert repo.head.commit.hexsha == head
+    assert (root_of(repo) / local).read_text() == "LOCAL\n"
 
 
 @pytest.mark.parametrize("options", ["--no-commit", "--squash"])
