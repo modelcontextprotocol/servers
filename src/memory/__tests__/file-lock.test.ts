@@ -670,7 +670,11 @@ describe("withFileLock", () => {
       ).rejects.toThrow("Timed out");
       const outcome = await thirdOutcome;
 
-      expect(restores()).toBe(3);
+      // The two injected refusals were retried and a third attempt went to
+      // the real rename. On a real Windows host that rename can itself be
+      // refused while the third writer has the lock open, and is retried
+      // again, so three is the floor, not the count (#5683).
+      expect(restores()).toBeGreaterThanOrEqual(3);
       expect(third).not.toHaveBeenCalled();
       expect((outcome as Error).message).toContain("Timed out");
       expect(await fs.readFile(lockPath, "utf-8")).toBe("successor");
