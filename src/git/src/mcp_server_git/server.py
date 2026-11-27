@@ -975,9 +975,16 @@ def record_root_git_dirs(allowed_repository: Path) -> tuple[Path, Path] | None:
     """Record the git directories the `--repository` root may use outside itself.
 
     A root's git directory and common directory are its own when both lie
-    inside it, or when it is a linked worktree: its git directory is
-    `<common dir>/worktrees/<name>`, and that directory's `gitdir` file, which
-    `git worktree add` writes in the main repository, names the root's `.git`.
+    inside it, or when the git directory outside names the root back, which
+    only its owner can write:
+
+    - a linked worktree: its git directory is `<common dir>/worktrees/<name>`,
+      and that directory's `gitdir` file, which `git worktree add` writes in
+      the main repository, names the root's `.git`;
+    - a submodule checkout: its git directory (`<super>/.git/modules/<name>`)
+      is its own common directory, and that directory's own `config` sets
+      `core.worktree` to the root, as `git submodule` writes it.
+
     Any other git directory outside the root (a `.git` file naming another
     repository, a `commondir` outside, `git init --separate-git-dir`) is not
     the root's own, since nothing outside the root confirms it: None is
@@ -998,14 +1005,14 @@ def record_root_git_dirs(allowed_repository: Path) -> tuple[Path, Path] | None:
                 Path(repo.git_dir).resolve(),
                 Path(repo.common_dir).resolve(),
             )
+            if seen_by_gitpython == (git_dir, common_dir) and (
+                (git_dir.is_relative_to(allowed) and common_dir.is_relative_to(allowed))
+                or _is_linked_worktree_of(allowed, git_dir, common_dir)
+                or _is_submodule_of(repo, allowed, git_dir, common_dir)
+            ):
+                own = (git_dir, common_dir)
     except (git.GitError, OSError, ValueError):
         pass
-    else:
-        if seen_by_gitpython == (git_dir, common_dir) and (
-            (git_dir.is_relative_to(allowed) and common_dir.is_relative_to(allowed))
-            or _is_linked_worktree_of(allowed, git_dir, common_dir)
-        ):
-            own = (git_dir, common_dir)
     _ROOT_GIT_DIRS[allowed_repository] = own
     return own
 
@@ -1020,6 +1027,25 @@ def _is_linked_worktree_of(allowed: Path, git_dir: Path, common_dir: Path) -> bo
         return False
     # Relative when written with `worktree.useRelativePaths`.
     return (git_dir / named).resolve() == allowed / ".git"
+
+
+def _is_submodule_of(
+    repo: git.Repo, allowed: Path, git_dir: Path, common_dir: Path
+) -> bool:
+    """Whether `git_dir` is a submodule's git directory checked out at `allowed`.
+
+    Only `git_dir`'s own `config` is read (`--file`, so no other scope and no
+    include contributes); `core.worktree` there is relative to `git_dir`.
+    """
+    if git_dir != common_dir:
+        return False
+    try:
+        named = repo.git.config(
+            "--file", str(git_dir / "config"), "--get", "core.worktree"
+        )
+    except git.GitCommandError:
+        return False
+    return (git_dir / named).resolve() == allowed
 
 
 def validate_opened_repo(
@@ -1604,10 +1630,14 @@ def create_server(repository: Path | None) -> MCPServer:
         subscriptions=False,
     )
 
-    if repository is not None:
-        # The git directories the root may use outside itself are fixed now,
-        # not read again from the root on each call.
-        record_root_git_dirs(repository)
+    # The git directories the root may use outside itself are fixed now, not
+    # read again from the root on each call.
+    if repository is not None and record_root_git_dirs(repository) is None:
+        logging.getLogger(__name__).warning(
+            f"{repository}: its Git directory is outside it and is not a "
+            "linked worktree's or a submodule's, so tool calls that use it "
+            "will be refused"
+        )
 
     def open_repo(repo_path: str) -> git.Repo:
         path = Path(repo_path)

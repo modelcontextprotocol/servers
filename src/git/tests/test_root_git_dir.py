@@ -206,3 +206,67 @@ def test_the_root_is_recorded_on_first_use_without_a_server(tmp_path: Path) -> N
 
 def test_a_root_that_is_not_a_repository_records_nothing(tmp_path: Path) -> None:
     assert record_root_git_dirs(tmp_path) is None
+
+
+def add_submodule(tmp_path: Path) -> tuple[git.Repo, Path]:
+    """A superproject with a submodule checked out at `<super>/mod`."""
+    source = make_repo(tmp_path / "source")
+    source.close()
+    superproject = make_repo(tmp_path / "super")
+    superproject.git.execute(
+        [
+            "git",
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "add",
+            str(tmp_path / "source"),
+            "mod",
+        ]
+    )
+    return superproject, tmp_path / "super" / "mod"
+
+
+async def test_a_submodule_root_is_served(tmp_path: Path) -> None:
+    superproject, module = add_submodule(tmp_path)
+    try:
+        result = await show(module, module, "HEAD:test.txt")
+        assert result["isError"] is False, result
+    finally:
+        superproject.close()
+
+
+async def test_a_root_naming_another_submodules_git_dir_is_refused(
+    tmp_path: Path,
+) -> None:
+    # The submodule's git directory sets `core.worktree` to the submodule's
+    # own checkout, not this root, so the root cannot claim it.
+    superproject, _ = add_submodule(tmp_path)
+    modules = (tmp_path / "super" / ".git" / "modules" / "mod").resolve()
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / ".git").write_text(f"gitdir: {modules}\n")
+    try:
+        result = await show(root, root, "HEAD:test.txt")
+        assert result["isError"] is True, result
+        assert git_server._ROOT_GIT_DIRS[root] is None
+    finally:
+        superproject.close()
+
+
+async def test_a_root_whose_git_dir_is_not_its_own_is_logged_at_startup(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    other = outside_repo(tmp_path / "other")
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / ".git").write_text(f"gitdir: {other.git_dir}\n")
+    try:
+        with caplog.at_level("WARNING", logger="mcp_server_git.server"):
+            await show(root, root, "HEAD:test.txt")
+        assert any(
+            "is not a linked worktree's or a submodule's" in record.getMessage()
+            for record in caplog.records
+        )
+    finally:
+        other.close()
