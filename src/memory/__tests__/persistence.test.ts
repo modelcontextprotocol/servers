@@ -6,6 +6,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { promises as fs } from "fs";
 import path from "path";
+import os from "os";
 import {
   call,
   connect,
@@ -255,9 +256,20 @@ describe("memory persistence over the protocol", () => {
 
     it("keeps serving after a failed save", async () => {
       const { client } = await open();
-      vi.spyOn(fs, "writeFile").mockRejectedValueOnce(
-        new Error("ENOSPC: simulated full disk"),
-      );
+      const realOpen = fs.open;
+      let refused = false;
+      vi.spyOn(fs, "open").mockImplementation((async (
+        ...args: Parameters<typeof fs.open>
+      ) => {
+        const handle = await realOpen(...args);
+        if (!refused && String(args[0]).endsWith(".tmp")) {
+          refused = true;
+          handle.writeFile = async () => {
+            throw new Error("ENOSPC: simulated full disk");
+          };
+        }
+        return handle;
+      }) as typeof fs.open);
       const failed = await call(client, "create_entities", {
         entities: [alice],
       });
@@ -296,15 +308,15 @@ describe("memory persistence over the protocol", () => {
       // the original mode must differ from a new file's for a loss to show.
       const original = (await newFileMode()) === 0o600 ? 0o640 : 0o600;
       await fs.chmod(filePath, original);
-      const writeFile = vi.spyOn(fs, "writeFile");
+      const openSpy = vi.spyOn(fs, "open");
 
       await call(client, "create_entities", { entities: [bob] });
 
       // The temp file is created with that mode, never a wider one first.
-      expect(writeFile).toHaveBeenCalledWith(
+      expect(openSpy).toHaveBeenCalledWith(
         expect.stringMatching(/\.tmp$/),
-        expect.any(String),
-        { mode: original },
+        "wx",
+        original,
       );
       expect(await modeOf(filePath)).toBe(original);
       expect((await call(client, "read_graph")).structuredContent).toEqual({
@@ -333,6 +345,125 @@ describe("memory persistence over the protocol", () => {
         expect(await fs.readdir(dir)).toEqual(["memory.jsonl"]);
       },
     );
+  });
+
+  // The temp file's name is in a directory others may write, so anything can
+  // appear at it while a save runs. The save creates it exclusively and then
+  // works only through its own handle: whatever stands at the name (a symlink
+  // to another file, say) is never written, chmodded or renamed onto the
+  // graph path. POSIX only: creating a symlink on Windows needs privileges.
+  describe.skipIf(process.platform === "win32")("the temp file's name", () => {
+    let outsideDir: string;
+    let outside: string;
+    const outsideText = "not part of the graph\n";
+
+    beforeEach(async () => {
+      outsideDir = await fs.mkdtemp(path.join(os.tmpdir(), "memory-outside-"));
+      outside = path.join(outsideDir, "outside.txt");
+      await fs.writeFile(outside, outsideText);
+      await fs.chmod(outside, 0o600);
+    });
+
+    afterEach(async () => {
+      await fs.rm(outsideDir, { recursive: true, force: true });
+    });
+
+    function isTempPath(target: unknown): target is string {
+      return (
+        typeof target === "string" &&
+        path.dirname(target) === dir &&
+        target.endsWith(".tmp")
+      );
+    }
+
+    // Runs hook on the temp path when the save creates its temp file,
+    // before the creating call (when: "before") or after it (when: "after").
+    function onTempCreate(
+      when: "before" | "after",
+      hook: (tempPath: string) => Promise<void>,
+    ): void {
+      const realOpen = fs.open;
+      const realWriteFile = fs.writeFile;
+      vi.spyOn(fs, "open").mockImplementation((async (
+        ...args: Parameters<typeof fs.open>
+      ) => {
+        if (!isTempPath(args[0])) return realOpen(...args);
+        if (when === "before") await hook(args[0]);
+        const handle = await realOpen(...args);
+        if (when === "after") await hook(args[0]);
+        return handle;
+      }) as typeof fs.open);
+      vi.spyOn(fs, "writeFile").mockImplementation((async (
+        ...args: Parameters<typeof fs.writeFile>
+      ) => {
+        if (!isTempPath(args[0])) return realWriteFile(...args);
+        if (when === "before") await hook(args[0]);
+        await realWriteFile(...args);
+        if (when === "after") await hook(args[0]);
+      }) as typeof fs.writeFile);
+    }
+
+    async function seed(): Promise<{
+      client: Connection["client"];
+      before: string;
+    }> {
+      const { client } = await open();
+      await call(client, "create_entities", { entities: [alice] });
+      await fs.chmod(filePath, 0o644);
+      return { client, before: await readFileText(filePath) };
+    }
+
+    async function expectOnlyTheGraphUntouched(before: string): Promise<void> {
+      expect((await fs.stat(outside)).mode & 0o777).toBe(0o600);
+      expect(await readFileText(outside)).toBe(outsideText);
+      expect((await fs.lstat(filePath)).isFile()).toBe(true);
+      expect(await readFileText(filePath)).toBe(before);
+      expect(await fs.readdir(dir)).toEqual(["memory.jsonl"]);
+    }
+
+    it("never writes through a link already at the temp name", async () => {
+      const { client, before } = await seed();
+      onTempCreate("before", (tempPath) => fs.symlink(outside, tempPath));
+
+      const result = await call(client, "create_entities", {
+        entities: [bob],
+      });
+
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toMatch(/EEXIST/);
+      await expectOnlyTheGraphUntouched(before);
+    });
+
+    it("refuses the save when the temp name is replaced after it is created", async () => {
+      const { client, before } = await seed();
+      onTempCreate("after", async (tempPath) => {
+        await fs.unlink(tempPath);
+        await fs.symlink(outside, tempPath);
+      });
+
+      const result = await call(client, "create_entities", {
+        entities: [bob],
+      });
+
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toMatch(/was replaced/);
+      await expectOnlyTheGraphUntouched(before);
+    });
+
+    it("saves normally when nothing else touches the temp name", async () => {
+      const { client } = await seed();
+      onTempCreate("after", async () => {});
+
+      await call(client, "create_entities", { entities: [bob] });
+
+      expect((await fs.stat(outside)).mode & 0o777).toBe(0o600);
+      expect((await fs.lstat(filePath)).isFile()).toBe(true);
+      expect((await fs.stat(filePath)).mode & 0o777).toBe(0o644);
+      expect((await call(client, "read_graph")).structuredContent).toEqual({
+        entities: [alice, bob],
+        relations: [],
+      });
+    });
   });
 
   // #4797: two servers on one file (two client processes in practice) used to

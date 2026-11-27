@@ -1146,22 +1146,42 @@ export class KnowledgeGraphManager {
       `${path.basename(this.memoryFilePath)}.${randomBytes(16).toString("hex")}.tmp`,
     );
 
+    // The directory may be writable by others, so anything can appear at
+    // the temp file's name while the save runs. Create it exclusively ("wx",
+    // O_CREAT | O_EXCL), which fails rather than open whatever is already
+    // there, a symlink included, and then write and chmod it only through
+    // the handle, which keeps reaching the file this call created whatever
+    // happens to the name. Only the rename has to go by name.
+    let handle: FileHandle | undefined;
     try {
       // Create the temp file with the existing mode, so the graph is never
       // readable through it more widely than through the file it replaces;
       // the umask can only narrow that. The chmod then restores any bits the
       // umask removed.
-      await fs.writeFile(
-        tempFilePath,
-        content,
-        mode === undefined ? undefined : { mode },
-      );
+      handle = await fs.open(tempFilePath, "wx", mode);
+      await handle.writeFile(content);
       if (mode !== undefined) {
-        await fs.chmod(tempFilePath, mode);
+        await handle.chmod(mode);
       }
+      // The rename moves whatever the name holds now, onto the graph path,
+      // so refuse unless that is still the file written above. Compare while
+      // the handle is open: the open file's inode number cannot be reused by
+      // another file until it is closed.
+      const written = await handle.stat({ bigint: true });
+      const named = await fs.lstat(tempFilePath, { bigint: true });
+      if (named.ino !== written.ino || named.dev !== written.dev) {
+        throw new Error(
+          `Refused to save: ${tempFilePath} was replaced while the graph was ` +
+            "being written to it. Nothing was saved.",
+        );
+      }
+      await handle.close();
+      handle = undefined;
       await fs.rename(tempFilePath, this.memoryFilePath);
     } catch (error) {
-      // Never leave a stray temp file behind on failure.
+      await handle?.close().catch(() => {});
+      // Never leave a stray temp file behind on failure. When the name was
+      // replaced this removes the replacement, never what a link points at.
       await fs.unlink(tempFilePath).catch(() => {});
       throw error;
     }
