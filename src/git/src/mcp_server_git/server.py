@@ -22,6 +22,8 @@
 import logging
 import os
 import re
+import sys
+import tempfile
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -42,6 +44,9 @@ from mcp.types import INVALID_PARAMS, ToolAnnotations
 from pydantic import Field
 
 from .transport import run
+
+if sys.platform == "win32":  # pragma: no cover  # the coverage gate runs on Linux
+    import _winapi
 
 # The version this server reports in serverInfo, read from the installed
 # distribution's metadata (pyproject.toml) so it cannot drift from the
@@ -887,13 +892,27 @@ def git_merge(
     )
 
 
-def git_show(repo: git.Repo, revision: str) -> str:
+def git_show(
+    repo: git.Repo, revision: str, allowed_repository: Path | None = None
+) -> str:
+    """Show `revision`: a commit with its patch, a blob's text or a tree's names.
+
+    Under `--repository` (`allowed_repository` set) git reads objects through
+    `_own_object_store`, so only the repository's own objects are shown.
+    """
     # Defense in depth: reject revisions starting with '-' to prevent flag injection,
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
     if revision.startswith("-"):
         raise FlagInjectionError(
             f"Invalid revision: '{revision}' - cannot start with '-'"
         )
+    if allowed_repository is None:
+        return _show(repo, revision)
+    with _own_object_store(repo):
+        return _show(repo, revision)
+
+
+def _show(repo: git.Repo, revision: str) -> str:
     obj = repo.rev_parse(revision)
     if isinstance(obj, git.Blob):
         return obj.data_stream.read().decode("utf-8", errors="replace")
@@ -1081,6 +1100,51 @@ def _check_index_entries(repo: git.Repo, repo_path: Path) -> None:
 # Files in a git directory that name more object stores for git to read: an
 # alternate's objects are read as the repository's own, from wherever it is.
 _ALTERNATES = ("alternates", "http-alternates")
+
+
+@contextmanager
+def _own_object_store(repo: git.Repo) -> Iterator[None]:
+    """Run `repo`'s git on its own objects only, whatever its alternates say.
+
+    `_check_git_dir_contents` refuses an alternates entry when the repository
+    is opened, but the file can be rewritten before git reads an object, and
+    git has no setting that turns alternates off. So git is pointed
+    (`GIT_OBJECT_DIRECTORY`) at a new, private directory holding a link to
+    each of the repository's loose-object directories and to its `pack`
+    directory, and nothing else: git reads the alternates list from that
+    directory's `info/alternates`, which does not exist. Links are followed
+    for reading. Nothing is written there, so this is for reading objects
+    only. On Windows the links are directory junctions, which need no
+    privilege.
+
+    GitPython's persistent `git cat-file` processes are stopped before and
+    after, so none reads with the environment it does not belong to.
+    """
+    objects = Path(repo.common_dir) / "objects"
+    own = Path(tempfile.mkdtemp(prefix="mcp-git-objects-"))
+    links: list[Path] = []
+    try:
+        for name in [f"{i:02x}" for i in range(256)] + ["pack"]:
+            link = own / name
+            if sys.platform != "win32":
+                os.symlink(objects / name, link, target_is_directory=True)
+            else:  # pragma: no cover  # Windows only; the coverage gate runs on Linux
+                _winapi.CreateJunction(str(objects / name), str(link))
+            links.append(link)
+        repo.git.clear_cache()
+        with repo.git.custom_environment(GIT_OBJECT_DIRECTORY=str(own)):
+            try:
+                yield
+            finally:
+                repo.git.clear_cache()
+    finally:
+        # Each link is removed as a link, so what it names is never touched.
+        for link in links:
+            if sys.platform != "win32":
+                os.unlink(link)
+            else:  # pragma: no cover  # Windows only; the coverage gate runs on Linux
+                os.rmdir(link)
+        os.rmdir(own)
 
 
 def _check_git_dir_contents(
@@ -1806,7 +1870,7 @@ def create_server(repository: Path | None) -> MCPServer:
     )
     @reports_failures
     def show(repo_path: str, revision: str) -> str:
-        return git_show(open_repo(repo_path), revision)
+        return git_show(open_repo(repo_path), revision, allowed_repository=repository)
 
     @server.tool(
         name=GitTools.BRANCH.value,
