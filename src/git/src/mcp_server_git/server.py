@@ -1102,17 +1102,20 @@ def _own_object_store(repo: git.Repo, *, writes: bool = False) -> Iterator[None]
     directory's `info/alternates`, which does not exist. On Windows the links
     are directory junctions, which need no privilege.
 
-    A link to a directory the store lacks yet reads as absent, so a call
-    that only reads writes nothing to the repository, and works on a store
-    it cannot write to.
+    A loose-object directory the repository lacks yet gets no entry for a
+    call that only reads, so git finds nothing there, as in the store
+    itself: such a call writes nothing to the repository, and works on a
+    store it cannot write to. (`_GIT_LOCK` keeps another call from creating
+    one meanwhile.)
 
     Git follows the links for writing too: a new loose object is written to
     a temporary file in its own `xx` directory and renamed there, and a pack
-    in `pack`, so what git writes lands in the repository's store. A link to
-    a missing directory cannot be written through, so for a call that
-    `writes`, each loose-object directory the store lacks is created first,
-    as git would on its first write to it. One that cannot be created is
-    left out: a write into it would fail in the store itself as well.
+    in `pack`, so what git writes lands in the repository's store. Git would
+    create a missing `xx` inside the private directory, where the object
+    would be lost, so for a call that `writes`, every name has an entry:
+    each directory the repository lacks is created first, as git would on
+    its first write to it, and one that cannot be created is held by an
+    empty file, so that a write into it fails as it would in the store.
 
     GitPython's persistent `git cat-file` processes are stopped before and
     after, so none reads with the environment it does not belong to.
@@ -1120,19 +1123,26 @@ def _own_object_store(repo: git.Repo, *, writes: bool = False) -> Iterator[None]
     objects = Path(repo.common_dir) / "objects"
     own = Path(tempfile.mkdtemp(prefix="mcp-git-objects-"))
     links: list[Path] = []
+    placeholders: list[Path] = []
     try:
         for name in [f"{i:02x}" for i in range(256)] + ["pack"]:
+            target = objects / name
+            entry = own / name
             if writes:
                 try:
-                    (objects / name).mkdir(exist_ok=True)
+                    target.mkdir(exist_ok=True)
                 except OSError:
                     pass
-            link = own / name
+            if not target.is_dir():
+                if writes:
+                    entry.touch()
+                    placeholders.append(entry)
+                continue
             if sys.platform != "win32":
-                os.symlink(objects / name, link, target_is_directory=True)
+                os.symlink(target, entry, target_is_directory=True)
             else:  # pragma: no cover  # Windows only; the coverage gate runs on Linux
-                _winapi.CreateJunction(str(objects / name), str(link))
-            links.append(link)
+                _winapi.CreateJunction(str(target), str(entry))
+            links.append(entry)
         repo.git.clear_cache()
         with repo.git.custom_environment(GIT_OBJECT_DIRECTORY=str(own)):
             try:
@@ -1146,6 +1156,8 @@ def _own_object_store(repo: git.Repo, *, writes: bool = False) -> Iterator[None]
                 os.unlink(link)
             else:  # pragma: no cover  # Windows only; the coverage gate runs on Linux
                 os.rmdir(link)
+        for placeholder in placeholders:
+            os.unlink(placeholder)
         os.rmdir(own)
 
 

@@ -238,6 +238,65 @@ async def test_restricted_read_only_calls_write_nothing_to_the_store(
     assert sorted(p.name for p in objects.iterdir()) == before
 
 
+@contextmanager
+def private_store_seen_by(
+    tool_function: str, seen: dict[str, set[str]]
+) -> Iterator[None]:
+    """Record the private object directory's entries while `tool_function` runs.
+
+    Each entry is recorded as its name, with `/` after a link to a directory
+    and nothing after a placeholder file, so the result is the same whether
+    the platform links with symbolic links or with junctions.
+    """
+    original = getattr(server, tool_function)
+
+    def recording(repo: git.Repo, *args: Any, **kwargs: Any) -> str:
+        own = Path(repo.git.environment()["GIT_OBJECT_DIRECTORY"])
+        seen[tool_function] = {
+            p.name + ("/" if p.is_dir() else "") for p in own.iterdir()
+        }
+        return original(repo, *args, **kwargs)
+
+    with mock.patch.object(server, tool_function, recording):
+        yield
+
+
+async def test_restricted_private_store_links_only_what_the_call_can_use(
+    tmp_path: Path,
+):
+    # A repository with only a few loose-object directories. A read links
+    # just those (on Windows a junction cannot name a missing directory); a
+    # write has an entry for every name, so git never creates one inside the
+    # private directory, where what it wrote would be lost.
+    repo = make_repo(tmp_path / "few")
+    root = root_of(repo)
+    (root / "a.txt").write_text("A\n")
+    repo.index.add(["a.txt"])
+    repo.index.commit("one")
+    objects = objects_of(repo)
+    existing = {p.name for p in objects.iterdir() if len(p.name) == 2}
+    assert 0 < len(existing) < 256
+    every = {f"{i:02x}/" for i in range(256)} | {"pack/"}
+
+    seen: dict[str, set[str]] = {}
+    with (
+        private_store_seen_by("git_status", seen),
+        private_store_seen_by("git_create_branch", seen),
+    ):
+        status = await call(root, "git_status", {"repo_path": str(root)})
+        branch = await call(
+            root, "git_create_branch", {"repo_path": str(root), "branch_name": "b"}
+        )
+
+    assert status["isError"] is False and branch["isError"] is False
+    assert seen["git_status"] == {f"{n}/" for n in existing} | {"pack/"}
+    assert seen["git_create_branch"] == every
+    # The write call created the directories it linked, as git would.
+    assert {p.name for p in objects.iterdir() if len(p.name) == 2} == {
+        f"{i:02x}" for i in range(256)
+    }
+
+
 @pytest.mark.skipif(
     sys.platform == "win32" or os.geteuid() == 0,
     reason="needs a directory that chmod can make unwritable",
@@ -247,6 +306,7 @@ async def test_restricted_server_works_on_a_store_it_cannot_write(
 ):
     root = root_of(test_repository)
     objects = objects_of(test_repository)
+    seen: dict[str, set[str]] = {}
     objects.chmod(0o555)
     try:
         for tool, arguments, expected in [
@@ -257,9 +317,15 @@ async def test_restricted_server_works_on_a_store_it_cannot_write(
             # directories it cannot create are left out.
             ("git_create_branch", {"branch_name": "side"}, "side"),
         ]:
-            result = await call(root, tool, {"repo_path": str(root)} | arguments)
+            with private_store_seen_by("git_create_branch", seen):
+                result = await call(root, tool, {"repo_path": str(root)} | arguments)
             assert result["isError"] is False, (tool, result)
             assert expected in result["content"][0]["text"]
+        # Each directory the write call could not create is held by a file,
+        # so a write into it fails instead of landing in the private store.
+        missing = {f"{i:02x}" for i in range(256)} - {p.name for p in objects.iterdir()}
+        assert missing
+        assert missing <= seen["git_create_branch"]
     finally:
         objects.chmod(0o755)
 
