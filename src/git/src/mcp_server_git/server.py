@@ -1120,7 +1120,9 @@ def _own_object_store(repo: git.Repo, *, writes: bool = False) -> Iterator[None]
     GitPython's persistent `git cat-file` processes are stopped before and
     after, so none reads with the environment it does not belong to.
     """
-    objects = Path(repo.common_dir) / "objects"
+    # Resolved: a linked worktree's common directory reads `<git dir>/../..`,
+    # and a junction's target is not a path Windows collapses `..` in.
+    objects = Path(repo.common_dir).resolve() / "objects"
     own = Path(tempfile.mkdtemp(prefix="mcp-git-objects-"))
     links: list[Path] = []
     placeholders: list[Path] = []

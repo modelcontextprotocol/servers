@@ -62,7 +62,7 @@ def alternates_planted_after_check(alternates: Path, entry: str) -> Iterator[Non
 
     def check_then_plant(*args: Any, **kwargs: Any) -> None:
         check(*args, **kwargs)
-        alternates.write_text(entry)
+        alternates.write_text(entry, newline="\n")
 
     with mock.patch.object(server, "_check_git_dir_contents", check_then_plant):
         yield
@@ -126,7 +126,7 @@ async def test_restricted_tools_ignore_alternates_written_after_the_check(
 
     # The entry really was in place when the tool read objects.
     assert alternates.read_text() == f"{objects_of(other)}\n"
-    assert result["isError"] is True
+    assert result["isError"] is True, result
     text = result["content"][0]["text"]
     assert "ONLY_IN_THE_OTHER_REPOSITORY" not in text
     assert MESSAGE not in text
@@ -179,7 +179,8 @@ async def test_restricted_tools_still_read_the_repositorys_own_objects(
 async def test_restricted_writes_land_in_the_repositorys_own_store(tmp_path: Path):
     # A repository with no loose-object directories yet, so every object the
     # tools write is the first in its directory.
-    repo = git.Repo.init(tmp_path / "fresh")
+    # Named, since git's default branch name is configurable.
+    repo = git.Repo.init(tmp_path / "fresh", initial_branch="main")
     root = root_of(repo)
     for config in [("user.name", "t"), ("user.email", "t@example.com")]:
         repo.git.config(*config)
@@ -297,6 +298,37 @@ async def test_restricted_private_store_links_only_what_the_call_can_use(
     }
 
 
+async def test_restricted_private_store_of_a_linked_worktree_names_real_paths(
+    tmp_path: Path,
+):
+    # GitPython gives a linked worktree's common directory as
+    # `<git dir>/../..`. A junction's target is not a path Windows collapses
+    # `..` in, so each link names the main repository's objects directly.
+    main = make_repo(tmp_path / "main")
+    worktree = tmp_path / "worktree"
+    main.git.worktree("add", str(worktree))
+    expected = (Path(main.git_dir).resolve() / "objects").resolve()
+    targets: list[Path] = []
+    original = server.git_status
+
+    def recording(repo: git.Repo) -> str:
+        own = Path(repo.git.environment()["GIT_OBJECT_DIRECTORY"])
+        targets.extend(Path(os.readlink(p)) for p in own.iterdir())
+        return original(repo)
+
+    try:
+        with mock.patch.object(server, "git_status", recording):
+            result = await call(worktree, "git_status", {"repo_path": str(worktree)})
+    finally:
+        main.close()
+
+    assert result["isError"] is False, result
+    assert targets
+    for target in targets:
+        assert ".." not in target.parts, target
+        assert Path(str(target).removeprefix("\\\\?\\")).parent == expected
+
+
 @pytest.mark.skipif(
     sys.platform == "win32" or os.geteuid() == 0,
     reason="needs a directory that chmod can make unwritable",
@@ -363,7 +395,7 @@ async def test_unrestricted_git_show_follows_alternates(
     root = root_of(test_repository)
     alternates = objects_of(test_repository) / "info" / "alternates"
     alternates.parent.mkdir(parents=True, exist_ok=True)
-    alternates.write_text(f"{objects_of(other)}\n")
+    alternates.write_text(f"{objects_of(other)}\n", newline="\n")
 
     result = await call(
         None,
@@ -371,5 +403,5 @@ async def test_unrestricted_git_show_follows_alternates(
         {"repo_path": str(root), "revision": other.git.rev_parse("HEAD:only-here.txt")},
     )
 
-    assert result["isError"] is False
+    assert result["isError"] is False, result
     assert result["content"][0]["text"] == MARKER
