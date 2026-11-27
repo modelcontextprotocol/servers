@@ -179,10 +179,28 @@ HARDENED_CONFIG: tuple[tuple[str, str], ...] = (
 # value shows that git applied the overrides. A driver's name may be empty
 # (`[filter ""]`, read back as `filter..clean`, selected by `filter=`), so
 # the name is matched with `.*`, not `.+`.
+#
+# A trusted driver can still read the repository's configuration itself.
+# Git LFS's does: it runs `lfs.extension.<name>.clean` and `.smudge` on every
+# file it filters, and a transfer agent (`lfs.customtransfer.<name>.path`
+# and `.args`, picked by `lfs.standalonetransferagent`) when it downloads an
+# object, so those keys are emptied the same way. An emptied extension makes
+# Git LFS fail the command rather than run anything. A download also runs
+# programs no key in this list names (`core.sshCommand`, `credential.helper`
+# and `core.askpass`, for an endpoint the repository picks), so `harden_repo`
+# turns downloads off (`_LFS_ENV`) instead.
 _LISTED_KEYS = (
     r"^(core\.hookspath|filter\..*\.(clean|smudge|process)|merge\..*\.driver"
-    r"|branch\..+\.mergeoptions)$"
+    r"|branch\..+\.mergeoptions|lfs\.extension\..*\.(clean|smudge)"
+    r"|lfs\.customtransfer\..*\.(path|args)|lfs\.standalonetransferagent)$"
 )
+
+# GIT_LFS_SKIP_SMUDGE=1 makes Git LFS's smudge filter write each file's
+# pointer instead of its content, so a checkout or merge never downloads an
+# object, and never starts the programs a download runs. The repository's
+# configuration cannot turn it back on: Git LFS reads it from the environment
+# only.
+_LFS_ENV = {"GIT_LFS_SKIP_SMUDGE": "1"}
 
 # Scopes whose configuration the user wrote rather than the repository.
 _TRUSTED_SCOPES = frozenset({"system", "global", "command"})
@@ -332,8 +350,9 @@ def _submodule_drivers(repo: git.Repo) -> set[str]:
 def harden_repo(repo: git.Repo) -> None:
     """Keep every git command run for `repo` from running a program it names.
 
-    Sets `HARDENED_CONFIG` on the repository's git, then reads which filter
-    and merge drivers the repository's own configuration (its `.git/config`,
+    Sets `HARDENED_CONFIG` and `_LFS_ENV` on the repository's git, then reads
+    which filter and merge drivers (and Git LFS programs, `_LISTED_KEYS`) the
+    repository's own configuration (its `.git/config`,
     a worktree's `config.worktree`, and files they include) defines, and
     overrides each with an empty command. The same read checks that git
     applied the overrides: git older than 2.31 ignores GIT_CONFIG_COUNT, and
@@ -344,7 +363,9 @@ def harden_repo(repo: git.Repo) -> None:
     (`_PROMISOR_KEYS`).
     """
     entries = list(HARDENED_CONFIG)
-    repo.git.update_environment(GIT_NO_LAZY_FETCH="1", **_config_env(entries))
+    repo.git.update_environment(
+        GIT_NO_LAZY_FETCH="1", **_LFS_ENV, **_config_env(entries)
+    )
     try:
         listed = repo.git.config("--show-scope", "-z", "--get-regexp", _LISTED_KEYS)
     except git.GitCommandError as e:
