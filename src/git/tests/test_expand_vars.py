@@ -1,12 +1,13 @@
-"""A repository path is taken literally: `$NAME` in it is never expanded.
+"""A tool's `repo_path` is taken literally: no `$NAME` or `~` in it is expanded.
 
 GitPython's `Repo()` expands environment variables in the path it is given
-unless it is passed `expand_vars=False`. The server opens a repository from a
-tool's `repo_path` and from `--repository`, so a `$NAME` or `${NAME}` in
-either must name a file whose name holds those characters, and nothing a tool
-returns (its errors included) may hold the value of a variable of the server
-process. These tests set a variable, name it in a path, and assert on what a
-client receives over the wire.
+unless it is passed `expand_vars=False`, and expands a leading `~` (from
+`HOME`) in any relative path. A `$NAME`, `${NAME}` or `~` in `repo_path` must
+name a file whose name holds those characters, so the result of a tool call
+(its errors included) never holds the value of `HOME` or of a variable the
+path names. A `$NAME` in `--repository` is taken literally too. These tests
+set a variable, name it in a path, and assert on what a client receives over
+the wire.
 """
 
 from pathlib import Path
@@ -59,6 +60,21 @@ async def test_repo_path_under_repository_is_not_expanded(
         result = await status(root, repo_path)
         assert result["isError"] is True
         assert VALUE not in text_of(result)
+
+
+@pytest.mark.parametrize("reference", ["~", "~/repo"])
+async def test_tilde_in_repo_path_is_not_expanded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, reference: str
+):
+    home = tmp_path / VALUE
+    make_repo(home / "repo").close()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.chdir(tmp_path)
+    result = await status(None, reference)
+    assert result["isError"] is True
+    assert VALUE not in text_of(result)
+    assert str(tmp_path / reference) in text_of(result)
 
 
 async def test_repository_named_with_a_dollar_sign_opens(tmp_path: Path):

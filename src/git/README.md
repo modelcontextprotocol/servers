@@ -14,6 +14,8 @@ Please note that mcp-server-git is currently in early development. The functiona
 
 ### Tools
 
+Every tool's `repo_path` is taken literally: neither a leading `~` nor `$NAME` or `${NAME}` is expanded, and a relative path is relative to the server's working directory.
+
 1. `git_status`
    - Shows the working tree status
    - Input:

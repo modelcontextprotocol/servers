@@ -1528,9 +1528,10 @@ class _LiteralGit(git.Git):
 class _LiteralRepo(git.Repo):
     """A `git.Repo` whose git commands run in the directory it was opened at.
 
-    Opened with `expand_vars=False`, so a `$NAME` in a repository path never
-    becomes the value of a variable of the server process: neither in the
-    directory opened, nor in where its commands run, nor in an error.
+    Opened with `expand_vars=False` and an absolute path, a repository path is
+    taken literally: neither a `$NAME` nor a leading `~` in it becomes the
+    value of the server's environment, in the directory opened, in where its
+    commands run, or in an error.
     """
 
     GitCommandWrapperType = _LiteralGit
@@ -1568,7 +1569,10 @@ def create_server(repository: Path | None) -> MCPServer:
     def open_repo(repo_path: str) -> git.Repo:
         path = Path(repo_path)
         validate_repo_path(path, repository)
-        repo = _LiteralRepo(path, expand_vars=False)
+        # Opened at exactly the path checked above. GitPython expands a leading
+        # `~` in a relative path whatever `expand_vars` says, so it is made
+        # absolute first, which leaves nothing for it to expand.
+        repo = _LiteralRepo(path.absolute(), expand_vars=False)
         try:
             # First, so that no git command run for the repository, the
             # confinement checks' included, runs a program it names.
