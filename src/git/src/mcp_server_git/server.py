@@ -1003,9 +1003,9 @@ def record_root_git_dirs(allowed_repository: Path) -> tuple[Path, Path] | None:
     - a linked worktree: its git directory is `<common dir>/worktrees/<name>`,
       and that directory's `gitdir` file, which `git worktree add` writes in
       the main repository, names the root's `.git`;
-    - a submodule checkout: its git directory (`<super>/.git/modules/<name>`)
-      is its own common directory, and that directory's own `config` sets
-      `core.worktree` to the root, as `git submodule` writes it.
+    - a git directory that is its own common directory and whose own
+      `config` sets `core.worktree` to the root, as `git submodule` writes it
+      for a submodule checkout (`<super>/.git/modules/<name>`).
 
     Any other git directory outside the root (a `.git` file naming another
     repository, a `commondir` outside, `git init --separate-git-dir`) is not
