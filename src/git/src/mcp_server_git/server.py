@@ -971,6 +971,28 @@ def validate_repo_path(repo_path: Path, allowed_repository: Path | None) -> None
 _ROOT_GIT_DIRS: dict[Path, tuple[Path, Path] | None] = {}
 
 
+class _RootGit(git.Git):
+    """`git.Git` run in its working directory as given, never env-expanded.
+
+    `git.Git` expands `$NAME` and `~` in a str working directory whatever
+    `expand_vars` says, and runs in the current directory when the expansion
+    does not exist; it takes a `Path` as it is.
+    """
+
+    def __init__(self, working_dir: str | os.PathLike[str] | None = None) -> None:
+        super().__init__(None if working_dir is None else Path(working_dir))
+
+
+class _RootRepo(git.Repo):
+    """`git.Repo` whose git commands and object reads run through `_RootGit`.
+
+    Set as the wrapper type, so the object database and the environment
+    `git.Repo` sets up use it too.
+    """
+
+    GitCommandWrapperType = _RootGit
+
+
 def record_root_git_dirs(allowed_repository: Path) -> tuple[Path, Path] | None:
     """Record the git directories the `--repository` root may use outside itself.
 
@@ -993,12 +1015,7 @@ def record_root_git_dirs(allowed_repository: Path) -> tuple[Path, Path] | None:
     allowed = allowed_repository.resolve()
     own: tuple[Path, Path] | None = None
     try:
-        with git.Repo(allowed, expand_vars=False) as repo:
-            # GitPython's `Git` expands `$NAME` and `~` in a str working
-            # directory whatever `expand_vars` says, and runs in the current
-            # directory when the expansion does not exist; a `Path` is used
-            # as it is. So the commands below run in the root itself.
-            repo.git = git.Git(allowed)
+        with _RootRepo(allowed, expand_vars=False) as repo:
             harden_repo(repo)
             git_dir, common_dir = (
                 Path(p).resolve()

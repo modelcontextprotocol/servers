@@ -18,6 +18,7 @@ from conftest import connect, make_repo, rmtree, wire
 
 from mcp_server_git import server as git_server
 from mcp_server_git.server import (
+    _RootRepo,
     create_server,
     record_root_git_dirs,
     validate_opened_repo,
@@ -294,5 +295,11 @@ def test_a_root_named_like_an_environment_variable_is_recorded_as_itself(
             record,
             Path(main.git_dir).resolve(),
         )
+        # The repository the recording opens runs its commands, and reads
+        # its objects, in the root itself.
+        with _RootRepo(worktree.resolve(), expand_vars=False) as opened:
+            assert opened.git.rev_parse("--show-toplevel") == str(worktree.resolve())
+            assert opened.odb.info(opened.head.commit.binsha).type == b"commit"
+            assert opened.head.commit.hexsha == main.head.commit.hexsha
     finally:
         main.close()
