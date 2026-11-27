@@ -1146,7 +1146,7 @@ def validate_opened_repo(
         p for p in git_dirs + common_dirs if not p.resolve().is_relative_to(allowed)
     ]
     if escaped:
-        with git.Repo(allowed) as allowed_repo:
+        with git.Repo(allowed, expand_vars=False) as allowed_repo:
             own_git_dir = Path(allowed_repo.git_dir).resolve()
             own_common_dir = Path(allowed_repo.common_dir).resolve()
         is_own = (
@@ -1658,6 +1658,30 @@ def reported_as_invalid_params() -> Iterator[None]:
         raise MCPError(code=INVALID_PARAMS, message=str(e)) from e
 
 
+class _LiteralGit(git.Git):
+    """A `git.Git` whose working directory is taken literally.
+
+    `git.Git` runs `os.path.expandvars` on a `str` working directory, and
+    `git.Repo` hands it one, whatever `expand_vars` the repository was opened
+    with. A `Path` is only resolved, so a `$NAME` in it stays as written.
+    """
+
+    def __init__(self, working_dir: str | os.PathLike[str] | None = None) -> None:
+        super().__init__(None if working_dir is None else Path(working_dir))
+
+
+class _LiteralRepo(git.Repo):
+    """A `git.Repo` whose git commands run in the directory it was opened at.
+
+    Opened with `expand_vars=False` and an absolute path, a repository path is
+    taken literally: neither a `$NAME` nor a leading `~` in it becomes the
+    value of the server's environment, in the directory opened, in where its
+    commands run, or in an error.
+    """
+
+    GitCommandWrapperType = _LiteralGit
+
+
 def create_server(repository: Path | None) -> MCPServer:
     """The git server, confined to `repository` when one is given."""
 
@@ -1690,7 +1714,10 @@ def create_server(repository: Path | None) -> MCPServer:
     def open_repo(repo_path: str) -> git.Repo:
         path = Path(repo_path)
         validate_repo_path(path, repository)
-        repo = git.Repo(path)
+        # Opened at exactly the path checked above. GitPython expands a leading
+        # `~` in a relative path whatever `expand_vars` says, so it is made
+        # absolute first, which leaves nothing for it to expand.
+        repo = _LiteralRepo(path.absolute(), expand_vars=False)
         try:
             # First, so that no git command run for the repository, the
             # confinement checks' included, runs a program it names.
@@ -2011,7 +2038,9 @@ async def serve(repository: Path | None, transport: str = "stdio") -> None:
             # Walk up to the enclosing working tree, like `git rev-parse
             # --show-toplevel`, so `--repository .` works from a subdirectory.
             root = Path(
-                git.Repo(repository, search_parent_directories=True).working_dir
+                git.Repo(
+                    repository, search_parent_directories=True, expand_vars=False
+                ).working_dir
             )
         except git.NoSuchPathError:
             logger.error(f"{repository} does not exist")
