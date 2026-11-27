@@ -787,6 +787,49 @@ def _merge_failure(
     return f"{what} failed. {unchanged} Git reported:\n{_git_stderr(error)}"
 
 
+def _ignored_files_overwritten(repo: git.Repo, head: str, source: str) -> list[str]:
+    """The ignored files in the working tree a merge of `source` would replace.
+
+    Git does not honor `--no-overwrite-ignore` when it makes a merge commit (a
+    fast-forward does), so `git_merge` checks before it runs. The tree is
+    clean, so every untracked path is one HEAD does not track, and the merge
+    can only write such a path if the source tracks it. For each such path,
+    what is in the way is whatever exists there (a file, a link, or a
+    directory and everything in it) or the nearest existing ancestor that is
+    not a directory. The ignored files among those are returned; an untracked
+    file that is not ignored is left for git to refuse, as it does.
+
+    This is conservative: a path the merge would end up deleting again (the
+    source tracks it, HEAD deleted it) is counted too.
+    """
+    root = Path(repo.working_dir)
+    added = repo.git.diff_tree(
+        "-r", "-z", "--no-renames", "--name-only", "--diff-filter=A", head, source
+    )
+    in_the_way: set[str] = set()
+    for path in filter(None, added.split("\0")):
+        parts = path.split("/")
+        for depth in range(1, len(parts) + 1):
+            prefix = "/".join(parts[:depth])
+            target = root / prefix
+            if not os.path.lexists(target):
+                break
+            if depth == len(parts) or target.is_symlink() or not target.is_dir():
+                in_the_way.add(prefix)
+                break
+    if not in_the_way:
+        return []
+    listed = repo.git.ls_files(
+        "-z",
+        "--others",
+        "--ignored",
+        "--exclude-standard",
+        "--",
+        *(f":(top,literal){path}" for path in sorted(in_the_way)),
+    )
+    return sorted(filter(None, listed.split("\0")))
+
+
 def git_merge(
     repo: git.Repo,
     source_branch: str,
@@ -852,6 +895,8 @@ def git_merge(
     # for it (see `_LISTED_KEYS`). --no-overwrite-ignore refuses to
     # replace an ignored local file (a `.env`, say) that the source tracks:
     # `is_dirty()` cannot see one, and git would overwrite it unrecoverably.
+    # Git honors it only on a fast-forward, so a merge commit is checked
+    # first (`_ignored_files_overwritten`).
     #
     # Git is given the commit validated above, not the name: a name can stand
     # for more than one commit (`git merge FETCH_HEAD` merges every head
@@ -859,6 +904,15 @@ def git_merge(
     # With a sha, git's default message would name the sha, so the message
     # names what the caller asked for.
     mode = "--ff-only" if fast_forward_only else "--ff"
+    what = f"Merge of '{source_branch}' into '{target}'"
+    if not fast_forward:
+        ignored = _ignored_files_overwritten(repo, head.hexsha, source.hexsha)
+        if ignored:
+            raise ValueError(
+                f"{what} refused: it would overwrite ignored local files: "
+                f"{', '.join(ignored)}. Nothing was changed. Move or remove "
+                "them first."
+            )
     try:
         _rewrite_tree(
             repo,
@@ -876,7 +930,6 @@ def git_merge(
             allowed_repository=allowed_repository,
         )
     except git.GitCommandError as e:
-        what = f"Merge of '{source_branch}' into '{target}'"
         raise ValueError(_merge_failure(repo, e, what, allowed_repository)) from e
     merged = repo.head.commit
     if fast_forward:

@@ -265,6 +265,82 @@ async def test_ignored_file_the_source_tracks_is_not_overwritten(repo: git.Repo)
     assert (root_of(repo) / ".env").read_text() == "SECRET=local\n"
 
 
+def ignored_local(repo: git.Repo, ignore: str, tracked: dict[str, str]) -> str:
+    """Ignore `ignore` on main, track `tracked` on a diverged `feature`.
+
+    Leaves `main` checked out with one commit of its own, so merging
+    `feature` makes a merge commit. Returns main's head sha.
+    """
+    commit_file(repo, ".gitignore", ignore)
+    repo.git.checkout("-b", "feature")
+    for name, content in tracked.items():
+        path = root_of(repo) / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, newline="\n")
+        repo.git.add("-f", name)
+    repo.index.commit("track ignored paths")
+    repo.git.checkout("main")
+    return commit_file(repo, "main.txt", "main\n").hexsha
+
+
+async def test_merge_commit_refuses_to_overwrite_an_ignored_file(repo: git.Repo):
+    # Git does not honor --no-overwrite-ignore when it makes a merge commit,
+    # so the tool checks the incoming paths itself before git runs.
+    head = ignored_local(repo, ".env\n", {".env": "tracked\n"})
+    (root_of(repo) / ".env").write_text("SECRET=local\n")
+
+    result = await merge(repo, "feature", fast_forward_only=False)
+
+    assert result == tool_error(
+        "git_merge",
+        "Merge of 'feature' into 'main' refused: it would overwrite ignored "
+        "local files: .env. Nothing was changed. Move or remove them first.",
+    )
+    assert repo.head.commit.hexsha == head
+    assert not (Path(repo.git_dir) / "MERGE_HEAD").exists()
+    assert (root_of(repo) / ".env").read_text() == "SECRET=local\n"
+
+
+async def test_merge_commit_refuses_ignored_files_in_a_directory_it_replaces(
+    repo: git.Repo,
+):
+    # The source tracks a file where an ignored directory is, and a file
+    # under an ignored file: both would destroy the ignored content.
+    head = ignored_local(
+        repo, "cache\nlocal.cfg\n", {"cache": "file\n", "local.cfg/x": "x\n"}
+    )
+    (root_of(repo) / "cache").mkdir()
+    (root_of(repo) / "cache" / "data").write_text("keep\n")
+    (root_of(repo) / "local.cfg").write_text("keep\n")
+
+    result = await merge(repo, "feature", fast_forward_only=False)
+
+    assert result == tool_error(
+        "git_merge",
+        "Merge of 'feature' into 'main' refused: it would overwrite ignored "
+        "local files: cache/data, local.cfg. Nothing was changed. Move or "
+        "remove them first.",
+    )
+    assert repo.head.commit.hexsha == head
+    assert (root_of(repo) / "cache" / "data").read_text() == "keep\n"
+    assert (root_of(repo) / "local.cfg").read_text() == "keep\n"
+
+
+async def test_merge_commit_into_an_ignored_directory_is_allowed(repo: git.Repo):
+    # A new file inside an ignored directory replaces nothing that is there.
+    ignored_local(repo, "build/\n", {"build/tracked.txt": "tracked\n"})
+    (root_of(repo) / "build").mkdir()
+    (root_of(repo) / "build" / "local.txt").write_text("keep\n")
+
+    result = await merge(repo, "feature", fast_forward_only=False)
+
+    assert result == text_result(
+        f"Merged 'feature' into 'main' with merge commit {repo.head.commit.hexsha[:7]}"
+    )
+    assert (root_of(repo) / "build" / "local.txt").read_text() == "keep\n"
+    assert (root_of(repo) / "build" / "tracked.txt").read_text() == "tracked\n"
+
+
 @pytest.mark.parametrize("options", ["--no-commit", "--squash"])
 async def test_configured_merge_options_still_complete_the_merge(
     repo: git.Repo, options: str
