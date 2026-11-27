@@ -26,7 +26,8 @@ import sys
 import tempfile
 import threading
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
+from contextvars import ContextVar
 from enum import Enum
 from functools import wraps
 from importlib.metadata import version
@@ -892,27 +893,13 @@ def git_merge(
     )
 
 
-def git_show(
-    repo: git.Repo, revision: str, allowed_repository: Path | None = None
-) -> str:
-    """Show `revision`: a commit with its patch, a blob's text or a tree's names.
-
-    Under `--repository` (`allowed_repository` set) git reads objects through
-    `_own_object_store`, so only the repository's own objects are shown.
-    """
+def git_show(repo: git.Repo, revision: str) -> str:
     # Defense in depth: reject revisions starting with '-' to prevent flag injection,
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
     if revision.startswith("-"):
         raise FlagInjectionError(
             f"Invalid revision: '{revision}' - cannot start with '-'"
         )
-    if allowed_repository is None:
-        return _show(repo, revision)
-    with _own_object_store(repo):
-        return _show(repo, revision)
-
-
-def _show(repo: git.Repo, revision: str) -> str:
     obj = repo.rev_parse(revision)
     if isinstance(obj, git.Blob):
         return obj.data_stream.read().decode("utf-8", errors="replace")
@@ -1112,10 +1099,15 @@ def _own_object_store(repo: git.Repo) -> Iterator[None]:
     (`GIT_OBJECT_DIRECTORY`) at a new, private directory holding a link to
     each of the repository's loose-object directories and to its `pack`
     directory, and nothing else: git reads the alternates list from that
-    directory's `info/alternates`, which does not exist. Links are followed
-    for reading. Nothing is written there, so this is for reading objects
-    only. On Windows the links are directory junctions, which need no
-    privilege.
+    directory's `info/alternates`, which does not exist. On Windows the links
+    are directory junctions, which need no privilege.
+
+    Git follows the links for writing too: a new loose object is written to
+    a temporary file in its own `xx` directory and renamed there, and a pack
+    in `pack`, so what git writes lands in the repository's store. A link to
+    a missing directory could not be written through, so each loose-object
+    directory the store lacks is created first, as git would on its first
+    write to it.
 
     GitPython's persistent `git cat-file` processes are stopped before and
     after, so none reads with the environment it does not belong to.
@@ -1125,6 +1117,7 @@ def _own_object_store(repo: git.Repo) -> Iterator[None]:
     links: list[Path] = []
     try:
         for name in [f"{i:02x}" for i in range(256)] + ["pack"]:
+            (objects / name).mkdir(exist_ok=True)
             link = own / name
             if sys.platform != "win32":
                 os.symlink(objects / name, link, target_is_directory=True)
@@ -1145,6 +1138,31 @@ def _own_object_store(repo: git.Repo) -> Iterator[None]:
             else:  # pragma: no cover  # Windows only; the coverage gate runs on Linux
                 os.rmdir(link)
         os.rmdir(own)
+
+
+# What a tool call or prompt has to undo when it ends: `open_repo` enters a
+# repository's `_own_object_store` here, since most tools never close the
+# repository they open.
+_CALL: ContextVar[ExitStack | None] = ContextVar("_CALL", default=None)
+
+
+@contextmanager
+def _one_call() -> Iterator[None]:
+    """Scope one tool call or prompt; what it entered in `_CALL` ends with it."""
+    with ExitStack() as stack:
+        token = _CALL.set(stack)
+        try:
+            yield
+        finally:
+            _CALL.reset(token)
+
+
+def _read_own_objects_for_call(repo: git.Repo) -> None:
+    """Run `repo`'s git through `_own_object_store` until the call ends."""
+    stack = _CALL.get()
+    if stack is None:
+        raise RuntimeError("a repository opened under --repository needs _one_call()")
+    stack.enter_context(_own_object_store(repo))
 
 
 def _check_git_dir_contents(
@@ -1460,7 +1478,7 @@ def reports_failures(fn: Callable[_P, str]) -> Callable[_P, str]:
 
     @wraps(fn)
     def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> str:
-        with _GIT_LOCK, reported_to_model():
+        with _GIT_LOCK, _one_call(), reported_to_model():
             return fn(*args, **kwargs)
 
     return wrapper
@@ -1615,6 +1633,9 @@ def create_server(repository: Path | None) -> MCPServer:
             # confinement checks' included, runs a program it names.
             harden_repo(repo)
             validate_opened_repo(repo, path, repository)
+            if repository is not None:
+                # Last, once the directories it links to have been checked.
+                _read_own_objects_for_call(repo)
         except Exception:
             repo.close()
             raise
@@ -1631,7 +1652,12 @@ def create_server(repository: Path | None) -> MCPServer:
     def commit_message(
         repo_path: Annotated[str, Field(description="The path to the Git repository.")],
     ) -> str:
-        with _GIT_LOCK, reported_as_invalid_params(), open_repo(repo_path) as repo:
+        with (
+            _GIT_LOCK,
+            _one_call(),
+            reported_as_invalid_params(),
+            open_repo(repo_path) as repo,
+        ):
             return commit_message_prompt(repo)
 
     @server.prompt(
@@ -1654,7 +1680,12 @@ def create_server(repository: Path | None) -> MCPServer:
             ),
         ] = None,
     ) -> str:
-        with _GIT_LOCK, reported_as_invalid_params(), open_repo(repo_path) as repo:
+        with (
+            _GIT_LOCK,
+            _one_call(),
+            reported_as_invalid_params(),
+            open_repo(repo_path) as repo,
+        ):
             return summarize_changes_prompt(repo, target)
 
     @server.tool(
@@ -1870,7 +1901,7 @@ def create_server(repository: Path | None) -> MCPServer:
     )
     @reports_failures
     def show(repo_path: str, revision: str) -> str:
-        return git_show(open_repo(repo_path), revision, allowed_repository=repository)
+        return git_show(open_repo(repo_path), revision)
 
     @server.tool(
         name=GitTools.BRANCH.value,
