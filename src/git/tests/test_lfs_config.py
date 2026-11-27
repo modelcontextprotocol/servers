@@ -237,8 +237,8 @@ async def test_git_lfs_extension_never_runs(
 
     result = await call("git_status", repo)
 
-    assert result["isError"] is True
     assert payload.runs() == []
+    assert result["isError"] is True
 
 
 @real_lfs
@@ -255,11 +255,13 @@ async def test_git_lfs_transfer_agent_never_runs(
     shutil.rmtree(Path(repo.git_dir) / "lfs" / "objects")
     repo.git.config("lfs.url", "http://127.0.0.1:9/")
     repo.git.config("lfs.standalonetransferagent", "poc")
-    repo.git.config("lfs.customtransfer.poc.path", payload.command("agent"))
+    # Git LFS runs the path as one program, with the arguments split from `args`.
+    repo.git.config("lfs.customtransfer.poc.path", str(payload.script))
+    repo.git.config("lfs.customtransfer.poc.args", "agent")
 
     result = await call("git_checkout", repo, branch_name="other")
 
-    assert result["isError"] is False, result
     assert payload.runs() == []
+    assert result["isError"] is False, result
     pointer = (root_of(repo) / "b.bin").read_text()
     assert pointer.startswith("version https://git-lfs.github.com/spec/v1\n")
